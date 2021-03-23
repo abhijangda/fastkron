@@ -1,12 +1,14 @@
+#include <chrono>
 #include<iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
+#define IDX2F(i,j,ld) (((i)*(ld))+(j))
 
-#define IDX2F(i,j,ld) ((i*ld)+j)
 
+using namespace std::chrono;
 
 // suppose you need to compute Kronecker Product of A and B, i.e., C = A x B then.
 // C[0: len(B)]  = saxpy(A[0][0], B).
@@ -34,9 +36,15 @@ void debugMatrix(float *A, int N){
 }
 
 
+
 int main(int argc, char *argv []){
 	int N = 3;
-	int M = 3;
+	int M = 2;
+
+	if(argc==3){
+		 N = std::stoi(argv[1]);
+	 	 M = std::stoi(argv[2]);
+	}
 	
 	float * A = (float *)malloc (N * N * sizeof (float));
 	float * B = (float *)malloc (M * M * sizeof (float));
@@ -55,17 +63,18 @@ int main(int argc, char *argv []){
     	}
     	for (int i = 0; i < N; i++) {
         	for (int j = 0; j < N; j++) {
-            		A[IDX2F(i,j,N)] = (i+1)*j;
+            		A[IDX2F(i,j,N)] = (i)*j+1;
         	}
     	}
 	for (int i = 0; i < M; i++){
 		for(int j=0; j< M; j++){
-			B[IDX2F(i,j,M)] = (i+1)*j;
+			B[IDX2F(i,j,M)] = (i)*j+1;
 		}
 	} 
-	debugMatrix(A,N);
-	debugMatrix(B,N);
-
+	
+	//debugMatrix(A,N);
+	//debugMatrix(B,M);
+	//std::cout <<"############\n";
 
     	cudaStat = cudaMalloc ((void**)&A_dev, N*N*sizeof(float));
 	cudaStat = cudaMemcpy(A_dev,A, N*N*sizeof(float), cudaMemcpyHostToDevice);
@@ -74,14 +83,14 @@ int main(int argc, char *argv []){
         	return EXIT_FAILURE;
     	}
 	cudaStat = cudaMalloc ((void**)&B_dev, M*M*sizeof(float));
-	cudaStat = cudaMemcpy(B_dev,A, M*M*sizeof(float), cudaMemcpyHostToDevice);
+	cudaStat = cudaMemcpy(B_dev,B, M*M*sizeof(float), cudaMemcpyHostToDevice);
         if (cudaStat != cudaSuccess) {
                 printf ("device memory allocation failed");
                 return EXIT_FAILURE;
         }
 
 	cudaStat = cudaMalloc((void **)&R_dev, M * N * M * N * sizeof(float));
-		
+   	memset(res,0,sizeof(float)*M*N*M*N);		
     	
 	stat = cublasCreate(&handle);
    	if (stat != CUBLAS_STATUS_SUCCESS) {
@@ -91,21 +100,32 @@ int main(int argc, char *argv []){
 
 	float *alpha_dev;
 	cudaMalloc((void **)&alpha_dev, sizeof(float));
-	
+
+	cudaDeviceSynchronize();
+
+	auto start = high_resolution_clock::now();
 	for(int i=0; i < N; i++){
 		for(int j=0; j< N; j++){
-			for(int k=0;k<N;k++){
-			cublasSaxpy(handle, M, 
+			//if (!((i==1)&&(j==0))) {continue;}
+			for(int k=0;k<M;k++){
+//			std::cout << i*M+k<<":"<<j*M<<":"<< M*N << ":" << IDX2F(i*M+k,j*M,M*N) <<"\n";
+				cublasSaxpy(handle, M, 
 	                            &A[IDX2F(i,j,N)], 
         	                    &B_dev[IDX2F(k,0,M)], 1,
-                		    &R_dev[IDX2F(i*N,j*N,M*N)], 1);
-
-			cudaDeviceSynchronize();
+                		    &R_dev[IDX2F(i*M+k,j*M,M*N)], 1);
 			}
 		}		
 	}
+	cudaDeviceSynchronize();
+	auto stop = high_resolution_clock::now();
+	// add a test for the returned result
 	cudaMemcpy(res,R_dev,M*N*M*N*sizeof(float), cudaMemcpyDeviceToHost);
-	debugMatrix(res,M*N);
-	std::cout << "Hello World!";
+	cudaDeviceSynchronize();
+	auto duration = duration_cast<seconds>(stop - start);
+  
+    	std::cout << "Time taken by saxpy: "
+         << duration.count() << " seconds" << std::endl;
+
+	//debugMatrix(res,M*N);
    	return 0;
 }
