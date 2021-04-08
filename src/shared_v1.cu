@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 #include <cuda_runtime.h>
 #define IDX2F(i,j,ld) (((i)*(ld))+(j))
 
@@ -10,10 +11,7 @@
 using namespace std::chrono;
 
 // suppose you need to compute Kronecker Product of A and B, i.e., C = A x B then.
-// Launch blocks equal to N*N
-// Blocks equal N*N, threads N*N 
-// debug, then scale to larger matrix
-// add code for shared memory. 
+// scaling to large matrix not done.
 __global__
 void kron_prod(float *A, float *B, float *R, int N,int M){
 	int i = blockIdx.x;
@@ -25,6 +23,25 @@ void kron_prod(float *A, float *B, float *R, int N,int M){
 	}
 
 }
+
+
+__global__
+void shared_kron_prod(float *A, float *B, float *R, int N,int M){
+        int i = blockIdx.x;
+        int a_r = i/M;
+        int b_r = i%M;
+        int b_c = threadIdx.x;
+	assert(M < 200);
+        __shared__ float buffer[200];
+	buffer[b_c] = B[IDX2F(b_r,b_c,M)];
+	__syncthreads();
+	for(int a_c=0;a_c<N;a_c++){
+                R[IDX2F(i,(a_c*M)+b_c,N*M)]=A[IDX2F(a_r,a_c,N)] * buffer[b_c];
+        }
+
+}
+
+
 
 void debugMatrix(float *A, int N){
 	for(int i=0; i<N; i++){
@@ -70,8 +87,8 @@ int main(int argc, char *argv []){
 		}
 	} 
 	
-	debugMatrix(A,N);
-	debugMatrix(B,M);
+	//debugMatrix(A,N);
+	//debugMatrix(B,M);
 	//std::cout <<"############\n";
 
     	cudaStat = cudaMalloc ((void**)&A_dev, N*N*sizeof(float));
@@ -97,7 +114,8 @@ int main(int argc, char *argv []){
 
 	auto start = high_resolution_clock::now();
 	for(int loop=0;loop<1;loop++){
-		kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
+//		kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
+		shared_kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
 	}
 	cudaDeviceSynchronize();
 	auto stop = high_resolution_clock::now();
