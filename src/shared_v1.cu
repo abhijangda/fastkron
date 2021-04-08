@@ -4,28 +4,28 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cuda_runtime.h>
-#include "cublas_v2.h"
 #define IDX2F(i,j,ld) (((i)*(ld))+(j))
 
 
 using namespace std::chrono;
 
 // suppose you need to compute Kronecker Product of A and B, i.e., C = A x B then.
-// C[0: len(B)]  = saxpy(A[0][0], B).
-// C[len(B) : len(B) * 2] = saxply(A[0][1], B).
+// Launch blocks equal to N*N
+// Blocks equal N*N, threads N*N 
+// debug, then scale to larger matrix
+// add code for shared memory. 
+__global__
+void kron_prod(float *A, float *B, float *R, int N,int M){
+	int i = blockIdx.x;
+	int a_r = i/M;
+	int b_r = i%M;
+	int b_c = threadIdx.x;
+	for(int a_c=0;a_c<N;a_c++){
+		R[IDX2F(i,(a_c*M)+b_c,N*M)]=A[IDX2F(a_r,a_c,N)] * B[IDX2F(b_r,b_c,M)];
+	}
 
-// This function multiplies the vector x by the scalar α and adds it to the vector y
-// overwriting the latest vector with the result. Hence, the performed operation is
-// y [ j ] = α × x [ k ] + y [ j ] for i = 1 , … , n , k = 1 + ( i - 1 ) *  incx and j = 1 + ( i - 1 ) *  incy .
-// Notice that the last two equations reflect 1-based indexing used for compatibility with Fortran.
-// cublasStatus_t cublasSaxpy(cublasHandle_t handle, int n,
-//                            const float           *alpha,
-//                            const float           *x, int incx,
-//                            float                 *y, int incy);
-//
-//
-//
- 
+}
+
 void debugMatrix(float *A, int N){
 	for(int i=0; i<N; i++){
 		for(int j=0; j<N; j++){
@@ -39,7 +39,7 @@ void debugMatrix(float *A, int N){
 
 int main(int argc, char *argv []){
 	int N = 3;
-	int M = 2;
+	int M = 4;
 
 	if(argc==3){
 		 N = std::stoi(argv[1]);
@@ -53,9 +53,6 @@ int main(int argc, char *argv []){
 	float *A_dev,*B_dev,* R_dev;
 	
 	cudaError_t cudaStat;
-    	cublasStatus_t stat;
-	cublasHandle_t handle;
-	cublasHandle_t *handles = (cublasHandle_t *)malloc(sizeof(cublasHandle_t) * 100);
 
     	if (!A) {
         	printf ("host memory allocation failed");
@@ -68,12 +65,13 @@ int main(int argc, char *argv []){
     	}
 	for (int i = 0; i < M; i++){
 		for(int j=0; j< M; j++){
-			B[IDX2F(i,j,M)] = (i)*j+1;
+			B[IDX2F(i,j,M)] = 1;
+			//B[IDX2F(i,j,M)] = (i)*j+1;
 		}
 	} 
 	
-	//debugMatrix(A,N);
-	//debugMatrix(B,M);
+	debugMatrix(A,N);
+	debugMatrix(B,M);
 	//std::cout <<"############\n";
 
     	cudaStat = cudaMalloc ((void**)&A_dev, N*N*sizeof(float));
@@ -92,13 +90,6 @@ int main(int argc, char *argv []){
 	cudaStat = cudaMalloc((void **)&R_dev, M * N * M * N * sizeof(float));
    	memset(res,0,sizeof(float)*M*N*M*N);		
     
-	for(int i=0;i<N;i++){	
-		stat = cublasCreate(&handles[i]);
-   		if (stat != CUBLAS_STATUS_SUCCESS) {
-        		printf ("CUBLAS initialization failed\n");
-        		return EXIT_FAILURE;
-    		}
-	}
 	float *alpha_dev;
 	cudaMalloc((void **)&alpha_dev, sizeof(float));
 
@@ -106,18 +97,7 @@ int main(int argc, char *argv []){
 
 	auto start = high_resolution_clock::now();
 	for(int loop=0;loop<1;loop++){
-	    for(int i=0; i < N; i++){
-		for(int j=0; j< N; j++){
-			//if (!((i==1)&&(j==0))) {continue;}
-			for(int k=0;k<M;k++){
-//			std::cout << i*M+k<<":"<<j*M<<":"<< M*N << ":" << IDX2F(i*M+k,j*M,M*N) <<"\n";
-				cublasSaxpy(handles[i], M, 
-	                            &A[IDX2F(i,j,N)], 
-        	                    &B_dev[IDX2F(k,0,M)], 1,
-                		    &R_dev[IDX2F(i*M+k,j*M,M*N)], 1);
-			}
-		}		
-	    }
+		kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
 	}
 	cudaDeviceSynchronize();
 	auto stop = high_resolution_clock::now();
@@ -129,6 +109,6 @@ int main(int argc, char *argv []){
     	std::cout << "Time taken by saxpy: "
          << duration.count() << " milli" << std::endl;
 
-	//debugMatrix(res,M*N);
+	debugMatrix(res,M*N);
    	return 0;
 }
