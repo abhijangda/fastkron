@@ -113,20 +113,20 @@ int main(int argc, char *argv []){
 	cudaDeviceSynchronize();
 
 	auto start = high_resolution_clock::now();
-	for(int loop=0;loop<1;loop++){
-//		kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
-		shared_kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
+	for(int loop=0;loop<4;loop++){
+		kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
+//		shared_kron_prod<<<N*M,M>>>(A_dev,B_dev,R_dev,N,M);
 	}
 	cudaDeviceSynchronize();
 	auto stop = high_resolution_clock::now();
 	// add a test for the returned result
 	cudaMemcpy(res,R_dev,M*N*M*N*sizeof(float), cudaMemcpyDeviceToHost);
 	cudaDeviceSynchronize();
-	auto duration = duration_cast<milliseconds>(stop - start);
+	auto duration = duration_cast<microseconds>((stop - start));
   
-    	std::cout << "Time taken by saxpy: "
-         << duration.count() << " milli" << std::endl;
+    	std::cout << "Time taken by shared: "
+         << duration.count()/4 << " micro" << std::endl;
 
-	debugMatrix(res,M*N);
+//debugMatrix(res,M*N);
    	return 0;
 }
