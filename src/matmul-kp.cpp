@@ -3,11 +3,11 @@
 #include <cstdlib>
 #include <cassert>
 
-void setMatrix(int* mat, int M, int N, int v) 
+void setMatrix(int* mat, int M, int N, int (*fnvalue)()) 
 {
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
-      mat[i*N + j] = v;
+      mat[i*N + j] = fnvalue();
     }
   }
 }
@@ -48,7 +48,8 @@ void baselineKPThenMatmul(int* result, int* x, int* kpout, int* kpMats[NUM_KP_MA
 */
 template<int NUM_KP_MATS>
 void slicedMatmul(int* kpMatmulResult[NUM_KP_MATS], int* x, int* kpout, int* kpMats[NUM_KP_MATS],
-                  int M, int N, int K, int KP_MAT_M, int KP_MAT_N, int KP_MAT_K) {
+                  int M, int N, int K, int KP_MAT_M, int KP_MAT_N, int KP_MAT_K)
+{
   assert (M == N && N == K);
   for (int kp = 0; kp < NUM_KP_MATS; kp++) {
     int* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
@@ -65,6 +66,32 @@ void slicedMatmul(int* kpMatmulResult[NUM_KP_MATS], int* x, int* kpout, int* kpM
   }
 }
 
+bool check(int* ref, int* computed, int M, int N) {
+  for (int i = 0; i < M; i++) {
+    for (int j = 0; j < N; j++) {
+      if (ref[i*N + j] != computed[i* N + j]) {
+        printf("Mismatch for %d x %d at (%d, %d): ref = %d, computed = %d\n", M, N, i, j, ref[i*N+j], computed[i*N+j]);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+int one() {return 1;}
+int randMod() {return rand()%100;}
+
+template<int NUM_KP_MATS>
+void setValues(int* kpMats[NUM_KP_MATS], int *x, int M, int N, int K, int KP_MAT_M, int KP_MAT_N, int KP_MAT_K, int (*fnvalue)())
+{
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    setMatrix(kpMats[i], KP_MAT_K, KP_MAT_N, fnvalue);
+  }
+
+  setMatrix(x, M, K, fnvalue);
+}
+
 int main(int argc, char* argv[]) 
 {
   const int M = 4;
@@ -78,27 +105,30 @@ int main(int argc, char* argv[])
 
   int *kpout = new int[K*N];
   int *x = new int[M*K];
-  setMatrix(x, M, K, 1);
 
   int *kpMats[NUM_KP_MATS];
   int* kpMatmulResult[NUM_KP_MATS];
 
   for (int i = 0; i < NUM_KP_MATS; i++) {
     kpMats[i] = new int[KP_MAT_K * KP_MAT_N];
-    setMatrix(kpMats[i], KP_MAT_K, KP_MAT_N, 1);
     kpMatmulResult[i] = new int[M*N];
   }
 
   int* result = new int[M*N];
-
-  // baselineKPThenMatmul<NUM_KP_MATS>(result, x, kpout, kpMats, 
-  //                         M, N, K, KP_MAT_M, KP_MAT_N, KP_MAT_K);
-
   
+  int (*testCases[2])() = {&one, &randMod};
 
-  slicedMatmul<NUM_KP_MATS>(kpMatmulResult, x, kpout, kpMats,
-                  M, N, K, KP_MAT_M, KP_MAT_N, KP_MAT_K);
-  printMatrix(kpMatmulResult[1], M, N);
+  for (int test = 0; test < sizeof(testCases)/sizeof(testCases[0]); test++) {
+    setValues<NUM_KP_MATS>(kpMats, x, M, N, K, KP_MAT_M, KP_MAT_N, KP_MAT_K, testCases[test]);
+    baselineKPThenMatmul<NUM_KP_MATS>(result, x, kpout, kpMats, 
+                            M, N, K, KP_MAT_M, KP_MAT_N, KP_MAT_K);
+
+    slicedMatmul<NUM_KP_MATS>(kpMatmulResult, x, kpout, kpMats,
+                    M, N, K, KP_MAT_M, KP_MAT_N, KP_MAT_K);
+
+    printf("Results Correct for test %d\n", test);
+    // printMatrix(kpMatmulResult[1], M, N);
+  }
 
   return 0;
 }
