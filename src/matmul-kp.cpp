@@ -70,13 +70,20 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
     for (int i = 0; i < M; i++) {
       for (int j = 0; j < N; j++) {
         int r = 0;
-        for (int kp_k = 0; kp_k < KP_MAT_K[kp]; kp_k++) {
-          int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*KP_MAT_K[kp] + (j / (N/KP_MAT_N[kp]))];
-          r += prevKPMatmul[i*K + (j*KP_MAT_K[kp])%K + kp_k] * v2;
+        int kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
+        int kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
+        int numSlices = kpSecondK * (N/kpSecondN);
+
+        for (int kp_k = 0; kp_k < kpSecondK; kp_k++) {
+          int sliceSize = N/kpSecondK;
+          int slice = (j / sliceSize) % kpSecondN;
+          int jjj = j / kpSecondN;
+          int jjjj = jjj % kpSecondN;
+          int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
+          r += prevKPMatmul[i*K + (j*kpSecondK)%K + kp_k] * v2;
         }
 
         kpMatmulResult[kp][i*N + j] = r;
-
         // if (kp == 0) {
         //   printf("%d, ", kpMatmulResult[kp][i*N + j]);
         // }
@@ -125,6 +132,8 @@ int main(int argc, char* argv[])
 {
   std::vector<MatrixSizes> matrixSizes = {{4,4,4, 2, {2,2},{2,2}},
                                           {16,16,16, 4, {2,2,2,2},{2,2,2,2}},
+                                          {8,8,8, 2, {4,2},{4,2}},
+                                          // {8,8,8, 2, {4,2},{2,4}},
                                           {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           {1024,1024,1024, 2, {32,32},{32,32}}
                                           };
@@ -141,6 +150,16 @@ int main(int argc, char* argv[])
     int KP_MAT_K[NUM_KP_MATS];
 
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
+    int n=1,k=1;
+    for (int i = 0; i < NUM_KP_MATS; i++) {
+      k *= matrixSize.KP_MAT_K[i];
+      n *= matrixSize.KP_MAT_N[i];
+    }
+
+    if (n != N && k != K) {
+      printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
+    }
+
     int *kpout[NUM_KP_MATS-1];
     int *x = new int[M*K];
 
@@ -168,24 +187,24 @@ int main(int argc, char* argv[])
       if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
         printf("Results Correct for test %d\n", fnvalue);
       else {
-        // printf("x:");
-        // printMatrix(x, M, K);    
-        printf("\nA:");
-        printMatrix(kpMats[0], KP_MAT_K[0], KP_MAT_N[0]);
-        printf("\nB:");  
-        printMatrix(kpMats[1], KP_MAT_K[1], KP_MAT_N[1]);
-        printf("\nMatmul:");
-        printMatrix(result, K, N);
-        printf("\nKP Out:");
-        printMatrix(kpout[1], 8, 8);
+        printf("x:");
+        printMatrix(x, M, K);    
+        for (int kpMatId = 0; kpMatId < NUM_KP_MATS; kpMatId++) {
+          printf("\nKP Mat %d:", kpMatId);
+          printMatrix(kpMats[kpMatId], KP_MAT_K[kpMatId], KP_MAT_N[kpMatId]);
+        }
+        // printf("\nMatmul:");
+        // printMatrix(result, K, N);
+        // printf("\nKP Out:");
+        // printMatrix(kpout[1], 8, 8);
         printf("\nKP result 0:");
-        printMatrix(kpMatmulResult[0], 16, 16);
+        printMatrix(kpMatmulResult[0], M, N);
         printf("\nKP result 1:");
-        printMatrix(kpMatmulResult[1], 16, 16);
-        printf("\nKP result 2:");
-        printMatrix(kpMatmulResult[2], 16, 16);
-        printf("\nKP result 3:");
-        printMatrix(kpMatmulResult[3], 16, 16);
+        printMatrix(kpMatmulResult[1], M, N);
+        // printf("\nKP result 2:");
+        // printMatrix(kpMatmulResult[2], 16, 16);
+        // printf("\nKP result 3:");
+        // printMatrix(kpMatmulResult[3], 16, 16);
         // printf("\nKP result 1:");
         // printMatrix(kpMatmulResult[1], M, N);
         // printf("\n");
@@ -193,7 +212,7 @@ int main(int argc, char* argv[])
       }
     }
 
-    //Why is there a need to free anything, am I right?
+    //Is there really a need to free anything when you have tons of RAM, am I right?
   }
 
   return 0;
