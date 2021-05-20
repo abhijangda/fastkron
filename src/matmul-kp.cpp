@@ -64,6 +64,7 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
 void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
                   int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[])
 {
+  int secFacRowMulSize = 1;
   for (int kp = 0; kp < NUM_KP_MATS; kp++) {
     int* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     for (int i = 0; i < M; i++) {
@@ -71,11 +72,10 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
         int r = 0;
         int kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
         int kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
-        int numSlices = kpSecondK * (N/kpSecondN);
+        secFacRowMulSize = (kp == 0) ? N/kpSecondK : KP_MAT_N[NUM_KP_MATS - 1 - (kp - 1)];
 
         for (int kp_k = 0; kp_k < kpSecondK; kp_k++) {
-          int sliceSize = N/kpSecondK;
-          int slice = (j / sliceSize) % kpSecondN;
+          int slice = (j / secFacRowMulSize) % kpSecondN;
 
           int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
           
@@ -130,10 +130,10 @@ struct MatrixSizes {
 int main(int argc, char* argv[]) 
 {
   std::vector<MatrixSizes> matrixSizes = {{4,4,4, 2, {2,2},{2,2}},
-                                          {16,16,16, 4, {2,2,2,2},{2,2,2,2}},
                                           {8,8,8, 2, {4,2},{4,2}},
                                           // {8,8,8, 3, {2,2,2},{2,2,2}},
                                           {8,8,8, 2, {4,2},{2,4}},
+                                          {16,16,16, 4, {2,2,2,2},{2,2,2,2}},
                                           {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           {1024,1024,1024, 2, {32,32},{32,32}}
                                           };
