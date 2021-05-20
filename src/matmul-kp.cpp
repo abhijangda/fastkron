@@ -39,10 +39,9 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
 
     cols = kpFirstCols * KP_MAT_N[kp+1];
     rows = kpFirstRows * KP_MAT_K[kp+1];
-
     for (int i = 0; i < rows; i++) {
       for (int j = 0; j < cols; j++) {
-        int v2 = kpMats[kp+1][i%KP_MAT_K[kp+1] * KP_MAT_N[kp+1] + j%KP_MAT_N[kp+1]];
+        int v2 = kpMats[kp+1][(i%KP_MAT_K[kp+1]) * KP_MAT_N[kp+1] + j%KP_MAT_N[kp+1]];
         int v1 = kpFirst[(i/KP_MAT_K[kp+1]) * kpFirstCols + j/KP_MAT_N[kp+1]];
         kpout[kp][i*cols + j] = v1 * v2;
       }
@@ -77,9 +76,9 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
         for (int kp_k = 0; kp_k < kpSecondK; kp_k++) {
           int sliceSize = N/kpSecondK;
           int slice = (j / sliceSize) % kpSecondN;
-          int jjj = j / kpSecondN;
-          int jjjj = jjj % kpSecondN;
+
           int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
+          
           r += prevKPMatmul[i*K + (j*kpSecondK)%K + kp_k] * v2;
         }
 
@@ -133,7 +132,8 @@ int main(int argc, char* argv[])
   std::vector<MatrixSizes> matrixSizes = {{4,4,4, 2, {2,2},{2,2}},
                                           {16,16,16, 4, {2,2,2,2},{2,2,2,2}},
                                           {8,8,8, 2, {4,2},{4,2}},
-                                          // {8,8,8, 2, {4,2},{2,4}},
+                                          // {8,8,8, 3, {2,2,2},{2,2,2}},
+                                          {8,8,8, 2, {4,2},{2,4}},
                                           {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           {1024,1024,1024, 2, {32,32},{32,32}}
                                           };
@@ -187,16 +187,17 @@ int main(int argc, char* argv[])
       if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
         printf("Results Correct for test %d\n", fnvalue);
       else {
-        printf("x:");
+        // printf("\nMatmul:");
+        // printMatrix(result, K, N);
+
+        printf("\nx:");
         printMatrix(x, M, K);    
         for (int kpMatId = 0; kpMatId < NUM_KP_MATS; kpMatId++) {
           printf("\nKP Mat %d:", kpMatId);
           printMatrix(kpMats[kpMatId], KP_MAT_K[kpMatId], KP_MAT_N[kpMatId]);
         }
-        // printf("\nMatmul:");
-        // printMatrix(result, K, N);
         // printf("\nKP Out:");
-        // printMatrix(kpout[1], 8, 8);
+        // printMatrix(kpout[0], 8, 8);
         printf("\nKP result 0:");
         printMatrix(kpMatmulResult[0], M, N);
         printf("\nKP result 1:");
