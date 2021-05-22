@@ -67,11 +67,14 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
   int secFacRowMulSize = 1;
   int rowsTillNow = 1;
   int colsTillNow = 1;
+  int resultCols;
   for (int kp = 0; kp < NUM_KP_MATS; kp++) {
     int* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     int kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
     int kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
-    
+    int prevKPMatmulCols = (kp == 0) ? K : resultCols;
+    resultCols = (prevKPMatmulCols/kpSecondK) * kpSecondN;
+    // printf("resultCols %d\n", resultCols);
     secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * K/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]);
     //Number of times a column is multiplied with input matrix is equal to 
     //N/(number of column elements of this matrix * cols so far) * number of rows so far.
@@ -79,7 +82,7 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
     // printf("secFacRowMulSize %d\n", secFacRowMulSize);
     for (int i = 0; i < M; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < resultCols; j++) {
         int r = 0;
 
         for (int kp_k = 0; kp_k < kpSecondK; kp_k++) {
@@ -87,10 +90,10 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 
           int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
           
-          r += prevKPMatmul[i* ((kp == 0) ? K : N) + (j*kpSecondK)%((kp == 0) ? K : N) + kp_k] * v2;
+          r += prevKPMatmul[i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k] * v2;
         }
 
-        kpMatmulResult[kp][i*N + j] = r;
+        kpMatmulResult[kp][i*resultCols + j] = r;
         // if (kp == 0) {
         //   printf("%d, ", kpMatmulResult[kp][i*N + j]);
         // }
@@ -143,6 +146,8 @@ int main(int argc, char* argv[])
                                           {8,8,8, 2, {4,2},{4,2}},
                                           {8,8,8, 2, {4,2},{2,4}},
                                           {8,8,8, 3, {2,2,2},{2,2,2}},
+                                          {8,8,32, 3, {2,2,2},{2,4,4}},
+                                          {8,16,32, 3, {4,2,2},{2,4,4}},
                                           {8,8,16, 3, {2,2,2},{2,4,2}},
                                           {16,8,8, 3, {2,2,2},{2,2,2}},
                                           {16,16,16, 2, {4,4},{4,4}},
@@ -162,8 +167,8 @@ int main(int argc, char* argv[])
     int K = matrixSize.K;
     
     int NUM_KP_MATS = matrixSize.NUM_KP_MATS;
-    int KP_MAT_N[NUM_KP_MATS] = {0};
-    int KP_MAT_K[NUM_KP_MATS] = {0};
+    int KP_MAT_N[NUM_KP_MATS];
+    int KP_MAT_K[NUM_KP_MATS];
 
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
     int n=1,k=1;
@@ -171,8 +176,7 @@ int main(int argc, char* argv[])
       k *= matrixSize.KP_MAT_K[i];
       n *= matrixSize.KP_MAT_N[i];
     }
-
-    if (n != N && k != K) {
+    if (n != N || k != K) {
       printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
     }
 
@@ -187,7 +191,7 @@ int main(int argc, char* argv[])
       KP_MAT_N[i] = matrixSize.KP_MAT_N[i];
       kpMats[i] = new int[KP_MAT_K[i] * KP_MAT_N[i]];
       kpout[i] = new int[K*N]; //TODO: larger than needed
-      kpMatmulResult[i] = new int[M*N];
+      kpMatmulResult[i] = new int[M*std::max(N,K)];
     }
 
     int* result = new int[M*N];
