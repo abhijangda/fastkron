@@ -71,13 +71,13 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
     int* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     int kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
     int kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
-    int prevSecFacRowMulSize = secFacRowMulSize;
-    secFacRowMulSize = (kp == 0) ? N/kpSecondK : rowsTillNow * N/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]);
+    
+    secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * K/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]);
     //Number of times a column is multiplied with input matrix is equal to 
     //N/(number of column elements of this matrix * cols so far) * number of rows so far.
     rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
-
+    // printf("secFacRowMulSize %d\n", secFacRowMulSize);
     for (int i = 0; i < M; i++) {
       for (int j = 0; j < N; j++) {
         int r = 0;
@@ -87,7 +87,7 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 
           int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
           
-          r += prevKPMatmul[i*K + (j*kpSecondK)%K + kp_k] * v2;
+          r += prevKPMatmul[i* ((kp == 0) ? K : N) + (j*kpSecondK)%((kp == 0) ? K : N) + kp_k] * v2;
         }
 
         kpMatmulResult[kp][i*N + j] = r;
@@ -138,9 +138,13 @@ struct MatrixSizes {
 int main(int argc, char* argv[]) 
 {
   std::vector<MatrixSizes> matrixSizes = {{4,4,4, 2, {2,2},{2,2}},
+                                          {4,4,8, 2, {2,2},{2,4}},
+                                          {4,4,8, 2, {2,2},{4,2}},
                                           {8,8,8, 2, {4,2},{4,2}},
                                           {8,8,8, 2, {4,2},{2,4}},
                                           {8,8,8, 3, {2,2,2},{2,2,2}},
+                                          {8,8,16, 3, {2,2,2},{2,4,2}},
+                                          {16,8,8, 3, {2,2,2},{2,2,2}},
                                           {16,16,16, 2, {4,4},{4,4}},
                                           {16,16,16, 3, {4,2,2},{4,2,2}},
                                           {16,16,16, 3, {4,2,2},{2,4,2}},
