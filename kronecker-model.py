@@ -17,7 +17,7 @@ from matplotlib import pyplot as plt
 
 # model and data 
 
-inputDim = 65536//4        # takes variable 'x' 
+inputDim = 65536   # takes variable 'x' 
 outputDim = 1       # takes variable 'y'
 
 npoints = 4096
@@ -27,7 +27,7 @@ y_train = None #func(x_train)
 # train adn prediciton 
 def train_and_predict(model, x_train, y_train, verbose=False, trans=False, print_model=False):
     learningRate = 0.1
-    epochs = 100
+    epochs = 10
 
     criterion = torch.nn.MSELoss() 
     optimizer = torch.optim.SGD(model.parameters(), lr=learningRate)
@@ -70,15 +70,20 @@ def train_and_predict(model, x_train, y_train, verbose=False, trans=False, print
 from torch.nn.parameter import Parameter
 
 class NewlinearRegression(torch.nn.Module):
-    def __init__(self, inputSize, outputSize):
+    def __init__(self, inputSize, outputSize, numFactors):
         super(NewlinearRegression, self).__init__()
+        
+        self.weights = []
+        l = int(inputSize**(1./numFactors))
+        print (l, numFactors)
+        for i in range(numFactors):
+            self.weights += [Parameter(torch.ones(l,l).cuda())]    
+        
+        self.l1_weight = gp.lazy.KroneckerProductLazyTensor(*self.weights)
                 
-        self.w1 = Parameter(torch.randn(int(inputDim**0.5),int(inputDim**0.5)))
-        self.w2 = Parameter(torch.randn(int(inputDim**0.5),int(inputDim**0.5)))
-        self.l1_weight = gp.lazy.KroneckerProductLazyTensor(*[self.w1, self.w2])
-                
-        self.linear2 = torch.nn.Linear(inputDim, 1)
-    
+        self.linear2 = torch.nn.Linear(inputSize, 1)
+        self.inputSize = inputSize
+
     def count_params(self):
         return sum([p.numel() for p in self.parameters()])
 
@@ -92,8 +97,8 @@ class NewlinearRegression(torch.nn.Module):
         torch.cuda.synchronize()
         exec_time = start.elapsed_time(end)
         bandwidth = 4 * 2 * (self.count_params() + x.numel() + l1.numel())/(exec_time/1e3)/1e9 
-        flops = 2 * (inputDim * inputDim + x.shape[0] * x.shape[1] * x.shape[1])/(exec_time/1e3)/1e9
-        print("Kronecker", exec_time, "= ms", "bandwidth = ", bandwidth, " GBPS", "elements = ", (self.count_params() + x.numel() + l1.numel()))
+        flops = 2 * (self.inputSize * self.inputSize + x.shape[0] * x.shape[1] * x.shape[1])/(exec_time/1e3)/1e9
+        print(len(self.weights), "Kronecker", exec_time, "= ms", "bandwidth = ", bandwidth, " GBPS", "elements = ", (self.count_params() + x.numel() + l1.numel()))
         
         # tmpT = torch.ones((inputDim, inputDim)).cuda()
         # start.record()
@@ -108,9 +113,10 @@ class NewlinearRegression(torch.nn.Module):
         # l1_out = F.relu(l1)
         # out = self.linear2(l1.T)
         return l1 #out.squeeze()
-    
-model2 = NewlinearRegression(inputDim, outputDim)
 
-train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
+
+for i in range(1, 5):
+    model2 = NewlinearRegression(inputDim, outputDim, 2**i)
+    train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
 
 
