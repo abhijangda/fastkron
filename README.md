@@ -1,5 +1,5 @@
 
-## Current Baseline Build Instructions
+# Current Baseline Build Instructions
 
 1. scipy-sparse
 	python3 python/lib_scipy.py
