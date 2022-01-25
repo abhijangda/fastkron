@@ -115,7 +115,7 @@ class NewlinearRegression(torch.nn.Module):
         return l1 #out.squeeze()
 
 
-for i in range(1, 5):
+for i in range(4, 5):
     model2 = NewlinearRegression(inputDim, outputDim, 2**i)
     train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
 
