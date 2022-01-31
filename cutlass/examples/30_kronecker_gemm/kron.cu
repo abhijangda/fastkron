@@ -246,9 +246,9 @@ using SmArch = cutlass::arch::Sm61;
 }
 
 
-template<typename T, int TILE_Y, int TILE_X, int KP_N, int KP_K>
+template<typename T,int K, int TILE_Y, int TILE_X, int KP_N, int KP_K, int KP_K_BATCH>
 __global__ 
-void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
+void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
   /*Each threadblock compute TILE_X x KP_N of C*/
 
   //Each threadblock loads the KP_K x TILE_Y kron_fac into shared memory, loads every TILE_X x KP_K sub-matrix of A into shared memory,
@@ -256,11 +256,9 @@ void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
 
   //TODO: For now TILE_Y = 1;
 
-  assert(TILE_X % blockDim.x == 0);
-
   __shared__ int kron_fac_sh[KP_K][TILE_Y];
-  __shared__ int As[TILE_X][KP_K];
-  __shared__ int Csh[TILE_X][KP_K];
+  __shared__ int As[TILE_X][K];
+  __shared__ int Csh[TILE_X][K];
 
   int wid = threadIdx.x/warpSize;
   int lane = threadIdx.x%warpSize;
@@ -273,39 +271,41 @@ void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
   __syncthreads();
 
   int start_row = blockIdx.x * TILE_X;
-  for (int a_col_batch = 0; a_col_batch < K; a_col_batch += KP_K)  {
-    for (int a_row = wid; a_row < TILE_X; a_row += blockWarps) {
-      for (int a_col = lane; a_col < KP_K; a_col += warpSize) {
-        int a = A[(a_row + start_row) * K + (a_col_batch + a_col)];
-        As[a_row][a_col] = a;
-      }
+  for (int a_row = 0; a_row < TILE_X; a_row += 1) {
+    for (int a_col = threadIdx.x; a_col < K; a_col += blockDim.x) {
+      int a = A[(a_row + start_row) * K + a_col];
+      As[a_row][a_col] = a;
     }
+  }
 
-    __syncthreads();
+  __syncthreads();
 
-    for (int tile_y = 0; tile_y < TILE_Y; tile_y++) {
-      for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
+  for (int a_row = 0; a_row < TILE_X; a_row++) {
+    for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
+      for (int a_col_start = lane * KP_K; a_col_start < K; a_col_start += warpSize * KP_K) {
         int c = 0;
 
         for (int a_col = 0; a_col < KP_K; a_col++) {
-          int a = As[a_row][a_col];
-          int kp = kron_fac_sh[a_col][tile_y];
+          int a = As[a_row][a_col_start + a_col];
+          int kp_row = a_col;
+          int kp = kron_fac_sh[kp_row][kp_col];
+
           c += a * kp;
         }
 
-
-        Csh[a_row][a_col_batch/KP_K] = c;
+        Csh[a_row][a_col_start/KP_K + kp_col * KP_K] = c;
       }
+    }
+  }
+  
+  __syncthreads();
 
-      __syncthreads();
+  for (int a_row = 0; a_row < TILE_X; a_row++) {
+    for (int c_col = threadIdx.x; c_col < N; c_col += blockDim.x) {
+      int c_row = (a_row + start_row);
+      int c_idx = c_row * N + c_col;
 
-      for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
-        int c_row = (a_row + start_row);
-        int c_col = ((blockIdx.y * TILE_Y + tile_y) * KP_K + a_col_batch/KP_K);
-        int c_idx = c_row * N + c_col;
-
-        C[c_idx] = Csh[a_row][a_col_batch/KP_K];
-      }
+      C[c_idx] = Csh[a_row][c_col];
     }
   }
 }
@@ -318,11 +318,12 @@ void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[
     int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
     
     const int TILE_Y = 32; //Y direction corresponds to tile of column of the KP factor
-    const int TILE_X = 128; //X direction correspond to tile of row 
+    const int TILE_X = 4; //X direction correspond to tile of row 
+    const int KP_K_BATCH = 1;
 
     dim3 grid = {M/TILE_X, (N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y}; 
     dim3 block = {128,1,1};
-    cuda_gemm<int,TILE_Y,TILE_X,32,32><<<grid, block>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+    cuda_gemm<int,1024,TILE_Y,TILE_X,32,32,KP_K_BATCH><<<grid, block>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
 
     // CUDACHECK(cudaDeviceSynchronize());
   }
@@ -346,7 +347,7 @@ bool check(int* ref, int* computed, int M, int N) {
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return rand()%10;}
+int randMod(int i, int j) {return j%2;}
 
 void setValues(int NUM_KP_MATS, int* kpMats[], int *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
 {
