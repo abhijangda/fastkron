@@ -331,7 +331,7 @@ public:
     }
   };
 
-private:
+public:
 
   /// Internal storage
   Storage storage[kElements];

@@ -223,6 +223,7 @@ class PredicatedTileIterator<Shape_, Element_, layout::PitchLinear, AdvanceRank,
   TileAccessIterator address_iterator_;
 
  public:
+ bool kp;
   /// Constructs a TileIterator from its precomputed state, threadblock offset,
   /// and thread ID
   CUTLASS_HOST_DEVICE
@@ -238,7 +239,7 @@ class PredicatedTileIterator<Shape_, Element_, layout::PitchLinear, AdvanceRank,
       /// Initial offset of threadblock
       TensorCoord const &threadblock_offset)
       : address_iterator_(params.params_, pointer, extent, thread_id,
-                          threadblock_offset) {}
+                          threadblock_offset), kp(false) {}
 
   /// Construct a PredicatedTileIterator with zero threadblock offset
   CUTLASS_HOST_DEVICE
@@ -311,7 +312,10 @@ class PredicatedTileIterator<Shape_, Element_, layout::PitchLinear, AdvanceRank,
   void load_with_byte_offset(Fragment &frag, LongIndex byte_offset) {
 
     AccessType *frag_ptr = reinterpret_cast<AccessType *>(&frag);
-
+    
+    // if (kp==true && threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
+    //   printf("ThreadMap::Iterations::kStrided %d ThreadMap::Iterations::kContiguous %d kAccessesPerVector %d\n", ThreadMap::Iterations::kStrided, ThreadMap::Iterations::kContiguous, kAccessesPerVector);
+    // }
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
       CUTLASS_PRAGMA_UNROLL
@@ -319,19 +323,22 @@ class PredicatedTileIterator<Shape_, Element_, layout::PitchLinear, AdvanceRank,
 
         CUTLASS_PRAGMA_UNROLL
         for (int v = 0; v < kAccessesPerVector; ++v) {
-
+          
           int idx = v + kAccessesPerVector * (c + s * ThreadMap::Iterations::kContiguous);
           
           address_iterator_.set_iteration_index(idx);
           char const *byte_ptr = reinterpret_cast<char const *>(address_iterator_.get()) + byte_offset;
-
           AccessType const *access_ptr = reinterpret_cast<AccessType const *>(byte_ptr);
 
           cutlass::arch::global_load<AccessType,
                                      sizeof(AccessType)
                                     >(
               frag_ptr[idx], access_ptr, address_iterator_.valid());
-
+          //  if (kp==true && threadIdx.x <32 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
+          //   printf("sizeof(AccessType) %ld idx %d threadIdx.x %d byte_offset %ld %p\n", sizeof(AccessType), idx, threadIdx.x, byte_offset, address_iterator_.get());
+          // if (kp==true && threadIdx.x <8 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
+          //   printf("frag_ptr[idx] %d threadIdx.x %d\n", frag_ptr[idx], threadIdx.x);
+          // }
           ++address_iterator_;
         }
       }
@@ -681,6 +688,7 @@ private:
 
 public:
 
+  bool kp;
   /// Constructs a TileIterator from its precomputed state, threadblock offset, and thread ID
   CUTLASS_HOST_DEVICE
   PredicatedTileIterator(
@@ -696,7 +704,7 @@ public:
       layout::PitchLinearCoord(extent.column(), extent.row()),
       thread_id,
       layout::PitchLinearCoord(threadblock_offset.column(), threadblock_offset.row())
-    ) { }
+    ), kp(false) { }
 
   /// Construct a PredicatedTileIterator with zero threadblock offset
   CUTLASS_HOST_DEVICE
@@ -763,6 +771,7 @@ public:
   /// Loads a fragment from memory
   CUTLASS_DEVICE
   void load_with_pointer_offset(Fragment &frag, Index pointer_offset) {
+    iterator_.kp = kp;
     iterator_.load_with_pointer_offset(frag, pointer_offset);
   }
 

@@ -356,18 +356,25 @@ class PredicatedTileAccessIterator<Shape_, Element_, layout::PitchLinear,
 
     // Default ctor
     CUTLASS_HOST_DEVICE
-    Params() { }
+    Params() {    
+       //if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y==0)
+          // printf("%d\n", __LINE__);
+ }
 
     /// Construct the Params object given a pitch-linear tensor's layout
     CUTLASS_HOST_DEVICE
     Params(Layout const &layout) : 
       Base(layout.stride(0),
             MakePredicatedTileAccessIteratorDesc<Shape, Element, Layout, kAdvanceRank, ThreadMap>()()
-        ) { }
+        ) { //if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y==0)
+//  printf("%d\n", __LINE__);
+ }
 
     CUTLASS_HOST_DEVICE
     Params(Base const &base) : 
-      Base(base) { }
+      Base(base) { //if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y==0)
+//  printf("%d\n", __LINE__);
+ }
   };
 
  private:
@@ -427,6 +434,8 @@ class PredicatedTileAccessIterator<Shape_, Element_, layout::PitchLinear,
           
     // update internal pointers
     Layout layout(params_.stride_);
+      // if (blockIdx.x == 0 && blockIdx.y==0)
+      // printf("430: stride_ %ld %p thread_id %d the_predicates.thread_offset_[0] %d column[1] %d\n", params_.stride_, pointer_, thread_id, the_predicates.thread_offset_[0], the_predicates.thread_offset_[1]);
     add_pointer_offset(layout(the_predicates.thread_offset_));
 
   }
@@ -531,7 +540,6 @@ class PredicatedTileAccessIterator<Shape_, Element_, layout::PitchLinear,
 
     // advance to next tile
     pointer_ += params_.inc_next_;
-
     // now return to start tile - if the iterator is subsequently advanced, this
     // subtraction as well as the subsequent integer addition are both elided by
     // the compiler.
@@ -1017,7 +1025,8 @@ class PredicatedTileAccessIterator<Shape_, Element_, layout::AffineRankN<2>,
 
     // Default ctor
     CUTLASS_HOST_DEVICE
-    Params(): stride_(0), inc_contiguous_(0), inc_strided_(0), inc_next_(0), inc_advance_(0) { }
+    Params(): stride_(0), inc_contiguous_(0), inc_strided_(0), inc_next_(0), inc_advance_(0) {       
+        }
 
     /// Construct the Params object given a pitch-linear tensor's layout
     CUTLASS_HOST_DEVICE
@@ -1479,7 +1488,7 @@ class PredicatedTileAccessIterator<Shape_, Element_, layout::AffineRank2RowMajor
 
     /// Default ctor
     CUTLASS_HOST_DEVICE
-    Params() { }
+    Params() {  }
 
     /// Construct the Params object given an AffineRankN<2> tensor's layout
     CUTLASS_HOST_DEVICE

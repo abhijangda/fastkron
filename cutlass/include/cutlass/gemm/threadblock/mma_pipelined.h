@@ -200,6 +200,7 @@ public:
 
     // The last kblock is loaded in the prolog
     iterator_A.load(tb_frag_A);
+    iterator_B.kp = true;
     iterator_B.load(tb_frag_B);
 
     ++iterator_A;
@@ -309,6 +310,9 @@ public:
       }
     }
 
+    // __syncthreads();
+    // if (threadIdx.x == 0 && threadIdx.y == 0)
+    //   printf("%d %d\n", ((int*)accum.storage)[0], ((int*)accum.storage)[1]);
   }
 };
 

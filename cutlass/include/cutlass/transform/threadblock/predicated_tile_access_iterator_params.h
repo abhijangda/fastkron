@@ -227,7 +227,6 @@ struct PredicatedTileAccessIteratorParams {
 
     inc_strided_ = (LongIndex(stride_) * desc.threadmap_delta.strided()) *
                      desc.element_size_bits / 8;
-
     if (desc.advance_rank) {
       // advance along strided dimension
       inc_advance_ =

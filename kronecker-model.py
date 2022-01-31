@@ -17,10 +17,10 @@ from matplotlib import pyplot as plt
 
 # model and data 
 
-inputDim = 65536   # takes variable 'x' 
+inputDim = 1024   # takes variable 'x' 
 outputDim = 1       # takes variable 'y'
 
-npoints = 4096
+npoints = 1024
 x_train = np.zeros((npoints, inputDim)).astype(np.float32)
 y_train = None #func(x_train)
 
@@ -90,7 +90,7 @@ class NewlinearRegression(torch.nn.Module):
     def forward(self, x):
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
-        
+        print(x.shape)
         start.record()
         l1 = self.l1_weight@x
         end.record()
@@ -115,7 +115,7 @@ class NewlinearRegression(torch.nn.Module):
         return l1 #out.squeeze()
 
 
-for i in range(4, 5):
+for i in range(1, 2):
     model2 = NewlinearRegression(inputDim, outputDim, 2**i)
     train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
 
