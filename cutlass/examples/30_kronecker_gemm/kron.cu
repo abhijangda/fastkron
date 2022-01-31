@@ -249,15 +249,8 @@ using SmArch = cutlass::arch::Sm61;
 template<typename T,int K, int TILE_Y, int TILE_X, int KP_N, int KP_K, int KP_K_BATCH>
 __global__ 
 void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
-  /*Each threadblock compute TILE_X x KP_N of C*/
-
-  //Each threadblock loads the KP_K x TILE_Y kron_fac into shared memory, loads every TILE_X x KP_K sub-matrix of A into shared memory,
-  //multiplies each sub-matrix with every column of kron_fac, and stores the results.
-
-  //TODO: For now TILE_Y = 1;
-
   __shared__ int kron_fac_sh[KP_K][TILE_Y];
-  __shared__ int As[TILE_X][K];
+  __shared__ int As[TILE_X][K/KP_K][KP_K];
   __shared__ int Csh[TILE_X][K];
 
   int wid = threadIdx.x/warpSize;
@@ -274,7 +267,7 @@ void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
   for (int a_row = 0; a_row < TILE_X; a_row += 1) {
     for (int a_col = threadIdx.x; a_col < K; a_col += blockDim.x) {
       int a = A[(a_row + start_row) * K + a_col];
-      As[a_row][a_col] = a;
+      As[a_row][a_col%KP_K][a_col/KP_K] = a; //TODO: Improve on this
     }
   }
 
@@ -284,9 +277,9 @@ void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
     for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
       for (int a_col_start = lane * KP_K; a_col_start < K; a_col_start += warpSize * KP_K) {
         int c = 0;
-
+        
         for (int a_col = 0; a_col < KP_K; a_col++) {
-          int a = As[a_row][a_col_start + a_col];
+          int a = As[a_row][a_col][a_col_start/KP_K];
           int kp_row = a_col;
           int kp = kron_fac_sh[kp_row][kp_col];
 
@@ -318,7 +311,7 @@ void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[
     int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
     
     const int TILE_Y = 32; //Y direction corresponds to tile of column of the KP factor
-    const int TILE_X = 4; //X direction correspond to tile of row 
+    const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
 
     dim3 grid = {M/TILE_X, (N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y}; 
@@ -347,7 +340,7 @@ bool check(int* ref, int* computed, int M, int N) {
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return j%2;}
+int randMod(int i, int j) {return rand()%10;}
 
 void setValues(int NUM_KP_MATS, int* kpMats[], int *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
 {
