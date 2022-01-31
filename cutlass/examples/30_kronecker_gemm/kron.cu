@@ -256,9 +256,15 @@ void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
 
   //TODO: For now TILE_Y = 1;
 
+  assert(TILE_X % blockDim.x == 0);
+
   __shared__ int kron_fac_sh[KP_K][TILE_Y];
   __shared__ int As[TILE_X][KP_K];
   __shared__ int Csh[TILE_X][KP_K];
+
+  int wid = threadIdx.x/warpSize;
+  int lane = threadIdx.x%warpSize;
+  int blockWarps = blockDim.x/warpSize;
 
   for (auto i = threadIdx.x; i < KP_K * TILE_Y; i += blockDim.x) {
     kron_fac_sh[i/TILE_Y][i%TILE_Y] = kron_fac[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
@@ -268,12 +274,13 @@ void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
 
   int start_row = blockIdx.x * TILE_X;
   for (int a_col_batch = 0; a_col_batch < K; a_col_batch += KP_K)  {
-    for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
-      for (int a_col = 0; a_col < KP_K; a_col++) {
+    for (int a_row = wid; a_row < TILE_X; a_row += blockWarps) {
+      for (int a_col = lane; a_col < KP_K; a_col += warpSize) {
         int a = A[(a_row + start_row) * K + (a_col_batch + a_col)];
         As[a_row][a_col] = a;
       }
     }
+
     __syncthreads();
 
     for (int tile_y = 0; tile_y < TILE_Y; tile_y++) {
@@ -282,8 +289,7 @@ void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
 
         for (int a_col = 0; a_col < KP_K; a_col++) {
           int a = As[a_row][a_col];
-          int kp = kron_fac_sh[a_col][tile_y];// kron_fac[a_col * KP_K + blockIdx.y];
-          // printf("%d: (%d x %d)\n", threadIdx.x, (a_row + start_row) * K + (a_col_batch + a_col), a_col * KP_K + blockIdx.y);
+          int kp = kron_fac_sh[a_col][tile_y];
           c += a * kp;
         }
 
