@@ -20,7 +20,7 @@ from matplotlib import pyplot as plt
 inputDim = 1024   # takes variable 'x' 
 outputDim = 1       # takes variable 'y'
 
-npoints = 2048
+npoints = 65536
 x_train = np.zeros((npoints, inputDim)).astype(np.float32)
 y_train = None #func(x_train)
 

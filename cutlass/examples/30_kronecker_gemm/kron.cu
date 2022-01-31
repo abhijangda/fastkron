@@ -249,10 +249,6 @@ using SmArch = cutlass::arch::Sm61;
 template<typename T, int TILE_Y, int TILE_X, int KP_N, int KP_K>
 __global__ 
 void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
-  // Block index
-  int block_col = blockIdx.x;
-  int block_row = blockIdx.y;
-
   /*Each threadblock compute TILE_X x KP_N of C*/
 
   //Each threadblock loads the KP_K x TILE_Y kron_fac into shared memory, loads every TILE_X x KP_K sub-matrix of A into shared memory,
@@ -264,36 +260,38 @@ void cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C) {
   // __shared__ int As[TILE_X][KP_K];
   __shared__ int Csh[TILE_X][KP_K];
 
-  for (auto i = threadIdx.x; i < KP_K; i += blockDim.x) {
-    kron_fac_sh[i][0] = kron_fac[i * KP_N + blockIdx.y];
+  for (auto i = threadIdx.x; i < KP_K * TILE_Y; i += blockDim.x) {
+    kron_fac_sh[i/TILE_Y][i%TILE_Y] = kron_fac[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
   }
 
   __syncthreads();
 
   int start_row = blockIdx.x * TILE_X;
-  for (int a_col_batch = 0; a_col_batch < K; a_col_batch += KP_K)  {
-    for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
-      int c = 0;
+  for (int tile_y = 0; tile_y < TILE_Y; tile_y++) {
+    for (int a_col_batch = 0; a_col_batch < K; a_col_batch += KP_K)  {
+      for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
+        int c = 0;
 
-      for (int a_col = 0; a_col < KP_K; a_col++) {
-        int a = A[(a_row + start_row) * K + (a_col_batch + a_col)];
-        int kp = kron_fac_sh[a_col][0];// kron_fac[a_col * KP_K + blockIdx.y];
-        // printf("%d: (%d x %d)\n", threadIdx.x, (a_row + start_row) * K + (a_col_batch + a_col), a_col * KP_K + blockIdx.y);
-        c += a * kp;
+        for (int a_col = 0; a_col < KP_K; a_col++) {
+          int a = A[(a_row + start_row) * K + (a_col_batch + a_col)];
+          int kp = kron_fac_sh[a_col][tile_y];// kron_fac[a_col * KP_K + blockIdx.y];
+          // printf("%d: (%d x %d)\n", threadIdx.x, (a_row + start_row) * K + (a_col_batch + a_col), a_col * KP_K + blockIdx.y);
+          c += a * kp;
+        }
+
+
+        Csh[a_row][a_col_batch/KP_K] = c;
       }
 
+      __syncthreads();
 
-      Csh[a_row][a_col_batch/KP_K] = c;
-    }
+      for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
+        int c_row = (a_row + start_row);
+        int c_col = ((blockIdx.y * TILE_Y + tile_y) * KP_K + a_col_batch/KP_K);
+        int c_idx = c_row * N + c_col;
 
-    __syncthreads();
-
-    for (int a_row = threadIdx.x; a_row < TILE_X; a_row += blockDim.x) {
-      int c_row = (a_row + start_row);
-      int c_col = (blockIdx.y * KP_K + a_col_batch/KP_K);
-      int c_idx = c_row * N + c_col;
-
-      C[c_idx] = Csh[a_row][a_col_batch/KP_K];
+        C[c_idx] = Csh[a_row][a_col_batch/KP_K];
+      }
     }
   }
 }
@@ -305,11 +303,11 @@ void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[
   for (int i = 0; i < NUM_KP_MATS; i++) {
     int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
     
-    const int TILE_Y = 1; //Y direction corresponds to tile of column of the KP factor
+    const int TILE_Y = 2; //Y direction corresponds to tile of column of the KP factor
     const int TILE_X = 128; //X direction correspond to tile of row 
 
-    dim3 grid = {M/TILE_X, N/KP_MAT_N[NUM_KP_MATS-i-1]}; 
-    dim3 block = {TILE_X,1,1};
+    dim3 grid = {M/TILE_X, (N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y}; 
+    dim3 block = {128,1,1};
     cuda_gemm<int,TILE_Y,TILE_X,32,32><<<grid, block>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
 
     // CUDACHECK(cudaDeviceSynchronize());
@@ -374,7 +372,12 @@ int main(int argc, char* argv[])
                                           // {16,16,64, 4, {2,2,2,2},{2,4,2,4}},
                                           // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {256,256,256, 2, {16,16},{16,16}},
+  #ifdef EVAL
+                                          {65536,1024,1024, 2, {32,32},{32,32}},
+  #else
                                           {2048,1024,1024, 2, {32,32},{32,32}},
+  #endif
+
                                           // {1024, 1024, 1024, 2, {32,32},{32,32}}
                                           };
 
@@ -453,18 +456,24 @@ int main(int argc, char* argv[])
       }
     
       CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(int), cudaMemcpyHostToDevice));
-
+  #ifndef EVAL
       baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
                            M, N, K, KP_MAT_N, KP_MAT_K);
-
+  #endif
       // slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats,
       //              M, N, K, KP_MAT_N, KP_MAT_K);
 
       for (int i = 0; i < NUM_KP_MATS; i++)
         CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(int)));
-
+  #ifdef EVAL
+      for (int i = 0; i < 100; i++)
+        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+      CUDACHECK(cudaDeviceSynchronize());
+      return;
+  #else
       for (int i = 0; i < 1; i++)
         customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+  #endif
       CUDACHECK(cudaDeviceSynchronize());
       // return;
       int* hKpMatMulResult = new int[M*N];
