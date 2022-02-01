@@ -249,8 +249,8 @@ using SmArch = cutlass::arch::Sm61;
 template<typename T,int N_THREADS, int K, int N_COARSE_TB, int TILE_Y, int TILE_X, int TILE_K, int KP_N, int KP_K, int KP_K_BATCH>
 __global__ 
 void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
-  __shared__ int kron_fac_sh[TILE_Y][KP_K+1];//TODO: Change padding based on value of KP_K and TILE_Y
-  __shared__ int As[TILE_X][KP_K][TILE_K/KP_K+1]; //TODO: Change padding based on the value of KP_K
+  __shared__ __align__(128) int kron_fac_sh[TILE_Y][KP_K+1];//TODO: Change padding based on value of KP_K and TILE_Y
+  __shared__ __align__(128) int As[TILE_X][TILE_K/KP_K][KP_K+4]; //TODO: Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
   __shared__ int Csh[TILE_X][K];
 
   int wid = threadIdx.x/warpSize;
@@ -261,12 +261,28 @@ void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C)
     kron_fac_sh[i%TILE_Y][i/TILE_Y] = kron_fac[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
   }
 
+  typedef int4 LD_TYPE;
+  const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
+
   for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
     for (int tile_k = 0; tile_k < K; tile_k += TILE_K) {
       for (int a_row = 0; a_row < TILE_X; a_row += 1) {
-        for (int a_col = threadIdx.x; a_col < TILE_K; a_col += blockDim.x) {
-          int a = A[(a_row + start_row) * K + (a_col + tile_k)];
-          As[a_row][a_col%KP_K][a_col/KP_K] = a;
+        register int Ar[TILE_K/128]; //TODO: 128 is blockDim.x
+
+        for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < TILE_K; a_col += blockDim.x*ldNumElems, ari++) {
+          LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (a_col + tile_k)];
+          *(LD_TYPE*)&As[a_row][a_col/KP_K][a_col%KP_K] = a;
+
+          //TODO: Use warp shuffles to avoid misaligned address and have padding of 1
+
+          // int a1[4] = {a.x, a.y, a.z, a.w};
+          // __shfl_sync(0xffffffff, , a_col);
+        }
+
+        __syncwarp();
+
+        for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < TILE_K; a_col += blockDim.x*ldNumElems, ari++) {
+
         }
       }
 
@@ -276,7 +292,7 @@ void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C)
         register int Ar[KP_K];
 
         for (int a_col = 0; a_col < KP_K; a_col++) {
-          Ar[a_col] = As[a_row][a_col][lane]; //TODO: Specifically for KP_K=32
+          Ar[a_col] = As[a_row][lane][a_col]; //TODO: Specifically for KP_K=32
         }
 
         for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
