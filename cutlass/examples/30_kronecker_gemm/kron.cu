@@ -246,11 +246,11 @@ using SmArch = cutlass::arch::Sm61;
 }
 
 
-template<typename T,int K, int TILE_Y, int TILE_X, int KP_N, int KP_K, int KP_K_BATCH>
+template<typename T,int N_THREADS, int K, int TILE_Y, int TILE_X, int KP_N, int KP_K, int KP_K_BATCH>
 __global__ 
 void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
   __shared__ int kron_fac_sh[KP_K][TILE_Y];
-  __shared__ int As[TILE_X][K/KP_K][KP_K];
+  __shared__ int As[TILE_X][K/KP_K][KP_K+1]; //TODO: Change padding based on the value of KP_K
   __shared__ int Csh[TILE_X][K];
 
   int wid = threadIdx.x/warpSize;
@@ -265,9 +265,11 @@ void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
 
   int start_row = blockIdx.x * TILE_X;
   for (int a_row = 0; a_row < TILE_X; a_row += 1) {
+    int Acolr[K/N_THREADS];
+
     for (int a_col = threadIdx.x; a_col < K; a_col += blockDim.x) {
       int a = A[(a_row + start_row) * K + a_col];
-      As[a_row][a_col%KP_K][a_col/KP_K] = a; //TODO: Improve on this
+      As[a_row][a_col%KP_K][a_col/KP_K] = a;
     }
   }
 
@@ -316,7 +318,7 @@ void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[
 
     dim3 grid = {M/TILE_X, (N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y}; 
     dim3 block = {128,1,1};
-    cuda_gemm<int,1024,TILE_Y,TILE_X,32,32,KP_K_BATCH><<<grid, block>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+    cuda_gemm<int,128,1024,TILE_Y,TILE_X,32,32,KP_K_BATCH><<<grid, block>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
 
     // CUDACHECK(cudaDeviceSynchronize());
   }
