@@ -273,6 +273,12 @@ void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C)
       __syncthreads();
 
       for (int a_row = 0; a_row < TILE_X; a_row++) {
+        register int Ar[KP_K];
+
+        for (int a_col = 0; a_col < KP_K; a_col++) {
+          Ar[a_col] = As[a_row][a_col][lane]; //TODO: Specifically for KP_K=32
+        }
+
         for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
           register int kron_fac_r; //TODO: Specifically for KP_K=32 and TILE_Y=32
 
@@ -283,7 +289,7 @@ void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C)
 
             #pragma unroll
             for (int a_col = 0; a_col < KP_K; a_col++) {
-              int a = As[a_row][a_col][a_col_start/KP_K];
+              int a = Ar[a_col];
               int kp_row = a_col;
               int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col);
 
