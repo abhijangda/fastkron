@@ -246,11 +246,11 @@ using SmArch = cutlass::arch::Sm61;
 }
 
 
-template<typename T,int N_THREADS, int K, int N_COARSE_TB, int TILE_Y, int TILE_X, int KP_N, int KP_K, int KP_K_BATCH>
+template<typename T,int N_THREADS, int K, int N_COARSE_TB, int TILE_Y, int TILE_X, int TILE_K, int KP_N, int KP_K, int KP_K_BATCH>
 __global__ 
 void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
   __shared__ int kron_fac_sh[KP_K][TILE_Y];
-  __shared__ int As[TILE_X][K/KP_K][KP_K+1]; //TODO: Change padding based on the value of KP_K
+  __shared__ int As[TILE_X][KP_K][TILE_K/KP_K+1]; //TODO: Change padding based on the value of KP_K
   __shared__ int Csh[TILE_X][K];
 
   int wid = threadIdx.x/warpSize;
@@ -262,35 +262,35 @@ void cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
   }
 
   for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
-    for (int a_row = 0; a_row < TILE_X; a_row += 1) {
-      int Acolr[K/N_THREADS];
-
-      for (int a_col = threadIdx.x; a_col < K; a_col += blockDim.x) {
-        int a = A[(a_row + start_row) * K + a_col];
-        As[a_row][a_col%KP_K][a_col/KP_K] = a;
+    for (int tile_k = 0; tile_k < K; tile_k += TILE_K) {
+      for (int a_row = 0; a_row < TILE_X; a_row += 1) {
+        for (int a_col = threadIdx.x; a_col < TILE_K; a_col += blockDim.x) {
+          int a = A[(a_row + start_row) * K + (a_col + tile_k)];
+          As[a_row][a_col%KP_K][a_col/KP_K] = a;
+        }
       }
-    }
 
-    __syncthreads();
+      __syncthreads();
 
-    for (int a_row = 0; a_row < TILE_X; a_row++) {
-      for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
-        for (int a_col_start = lane * KP_K; a_col_start < K; a_col_start += warpSize * KP_K) {
-          int c = 0;
-          
-          for (int a_col = 0; a_col < KP_K; a_col++) {
-            int a = As[a_row][a_col][a_col_start/KP_K];
-            int kp_row = a_col;
-            int kp = kron_fac_sh[kp_row][kp_col];
+      for (int a_row = 0; a_row < TILE_X; a_row++) {
+        for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
+          for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += warpSize * KP_K) {
+            int c = 0;
+            
+            for (int a_col = 0; a_col < KP_K; a_col++) {
+              int a = As[a_row][a_col][a_col_start/KP_K];
+              int kp_row = a_col;
+              int kp = kron_fac_sh[kp_row][kp_col];
 
-            c += a * kp;
+              c += a * kp;
+            }
+
+            Csh[a_row][kp_col * KP_K + (a_col_start+tile_k)/KP_K] = c;
           }
-
-          Csh[a_row][a_col_start/KP_K + kp_col * KP_K] = c;
         }
       }
     }
-    
+
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
@@ -315,10 +315,11 @@ void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[
     const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
     const int N_COARSE_TB = 1;
+    const int TILE_K = 1024;
 
     dim3 grid = {M/TILE_X/N_COARSE_TB, (N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y}; 
     dim3 block = {128,1,1};
-    cuda_gemm<int,128,1024,N_COARSE_TB,TILE_Y,TILE_X,32,32,KP_K_BATCH><<<grid, block>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+    cuda_gemm<int,128,1024,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,32,32,KP_K_BATCH><<<grid, block>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
 
     // CUDACHECK(cudaDeviceSynchronize());
   }
