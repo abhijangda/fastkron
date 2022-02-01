@@ -251,7 +251,7 @@ __global__
 void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
   __shared__ __align__(128) int kron_fac_sh[TILE_Y][KP_K+1];//TODO: Change padding based on value of KP_K and TILE_Y
   __shared__ __align__(128) int As[TILE_X][TILE_K/KP_K][KP_K+4]; //TODO: Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
-  __shared__ int Csh[TILE_X][K];
+  __shared__ __align__(128) int Csh[TILE_X][K];
 
   int wid = threadIdx.x/warpSize;
   int lane = threadIdx.x%warpSize;
@@ -321,11 +321,11 @@ void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C)
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
-      for (int c_col = threadIdx.x; c_col < N; c_col += blockDim.x) {
+      for (int c_col = threadIdx.x*ldNumElems; c_col < N; c_col += blockDim.x*ldNumElems) {
         int c_row = (a_row + start_row);
         int c_idx = c_row * N + c_col;
 
-        C[c_idx] = Csh[a_row][c_col];
+        *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Csh[a_row][c_col];
       }
     }
   }
