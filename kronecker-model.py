@@ -17,7 +17,7 @@ from matplotlib import pyplot as plt
 
 # model and data 
 
-inputDim = 1024   # takes variable 'x' 
+inputDim = 64   # takes variable 'x' 
 outputDim = 1       # takes variable 'y'
 
 npoints = 65536

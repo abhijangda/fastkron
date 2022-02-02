@@ -158,7 +158,11 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
       register int Ar[KP_K];
-
+      
+      int lane = threadIdx.x%KP_K;
+      int wid = threadIdx.x/KP_K;
+      int blockWarps = blockDim.x/KP_K; //TODO: Names should be different
+      
       for (int a_col = 0; a_col < KP_K; a_col++) {
         Ar[a_col] = Ash[a_row][lane][a_col]; //TODO: Specifically for KP_K=32
       }
@@ -168,14 +172,14 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
 
         kron_fac_r = kron_fac_sh[kp_col][lane];
 
-        for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += warpSize * KP_K) {
+        for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K * KP_K) {
           int c = 0;
 
           #pragma unroll
           for (int a_col = 0; a_col < KP_K; a_col++) {
             int a = Ar[a_col];
             int kp_row = a_col;
-            int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col);
+            int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col, KP_K);
 
             c += a * kp;
           }
@@ -198,18 +202,29 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
   }
 }
 
-void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
+void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
                      int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
   //Row Major Layout of all matrics
   for (int i = 0; i < NUM_KP_MATS; i++) {
     int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
-    if (KP_MAT_K[0] == 16) {
+    if (KP_MAT_K[0] == 8) {
+      const int KP_K = 8;
+      const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
+      const int TILE_X = 1; //X direction correspond to tile of row 
+      const int KP_K_BATCH = 1;
+      const int N_COARSE_TB = 1;
+      const int TILE_K = KP_K*KP_K;
+
+      dim3 grid = {M/TILE_X/N_COARSE_TB, 1};  //(N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y
+      dim3 block = {128,1,1};
+      cuda_gemm<int,128,TILE_K,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,KP_K,KP_K,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+    } else if (KP_MAT_K[0] == 16) {
       const int KP_K = 16;
       const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
       const int TILE_X = 1; //X direction correspond to tile of row 
       const int KP_K_BATCH = 1;
-      const int N_COARSE_TB = 8;
+      const int N_COARSE_TB = 1;
       const int TILE_K = KP_K*KP_K;
 
       dim3 grid = {M/TILE_X/N_COARSE_TB, 1};  //(N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y
@@ -290,11 +305,15 @@ int main(int argc, char* argv[])
                                           // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {256,256,256, 2, {16,16},{16,16}},
   #ifdef EVAL
-                                          {65536,1024,1024, 2, {32,32},{32,32}},
+                                          // {65536,1024,1024, 2, {32,32},{32,32}},
+                                          // {65536,256,256, 2, {16,16},{16,16}},
+                                          {65536,64,64, 2, {8,8},{8,8}},
+                                          
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          {512,1024,1024, 2, {32,32},{32,32}},
+                                          // {512,1024,1024, 2, {32,32},{32,32}},
                                           // {512,256,256, 2, {16,16},{16,16}},
+                                          {512,64,64, 2, {8,8},{8,8}},
   #endif
 
                                           // {1024, 1024, 1024, 2, {32,32},{32,32}}
