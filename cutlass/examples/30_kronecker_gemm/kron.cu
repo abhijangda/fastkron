@@ -248,57 +248,57 @@ using SmArch = cutlass::arch::Sm61;
 
 template<typename T,int N_THREADS, int K, int N_COARSE_TB, int TILE_Y, int TILE_X, int TILE_K, int KP_N, int KP_K, int KP_K_BATCH>
 __global__ 
-void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
-  __shared__ __align__(128) int kron_fac_sh[TILE_Y][KP_K+1];//TODO: Change padding based on value of KP_K and TILE_Y
-  __shared__ __align__(128) int As[TILE_X][TILE_K/KP_K][KP_K+4]; //TODO: Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
-  __shared__ __align__(128) int Csh[TILE_X][K];
+void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac1, T * kron_fac2, T * C1, T* C2) {
+  __shared__ __align__(128) int kron_fac_sh[2][TILE_Y][KP_K+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
+  __shared__ __align__(128) int ACsh[2][TILE_X][TILE_K/KP_K][KP_K+4]; //TODO: Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
+  // __shared__ __align__(128) int Csh[TILE_X][TILE_K/KP_K][KP_K+4];
 
   int wid = threadIdx.x/warpSize;
   int lane = threadIdx.x%warpSize;
   int blockWarps = blockDim.x/warpSize;
 
   for (auto i = threadIdx.x; i < KP_K * TILE_Y; i += blockDim.x) {
-    kron_fac_sh[i%TILE_Y][i/TILE_Y] = kron_fac[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
+    kron_fac_sh[0][i%TILE_Y][i/TILE_Y] = kron_fac1[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
+  }
+
+  for (auto i = threadIdx.x; i < KP_K * TILE_Y; i += blockDim.x) {
+    kron_fac_sh[1][i%TILE_Y][i/TILE_Y] = kron_fac2[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
   }
 
   typedef int4 LD_TYPE;
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
-
+  
+  int tile_k = 0;
+  
   for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
-    for (int tile_k = 0; tile_k < K; tile_k += TILE_K) {
-      for (int a_row = 0; a_row < TILE_X; a_row += 1) {
-        register int Ar[TILE_K/128]; //TODO: 128 is blockDim.x
+    for (int a_row = 0; a_row < TILE_X; a_row += 1) {
+      for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < TILE_K; a_col += blockDim.x*ldNumElems, ari++) {
+        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (a_col + tile_k)];
+        
+        *(LD_TYPE*)&ACsh[0][a_row][a_col/KP_K][a_col%KP_K] = a;
 
-        for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < TILE_K; a_col += blockDim.x*ldNumElems, ari++) {
-          LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (a_col + tile_k)];
-          *(LD_TYPE*)&As[a_row][a_col/KP_K][a_col%KP_K] = a;
+        //TODO: Use warp shuffles to avoid misaligned address and have padding of 1
 
-          //TODO: Use warp shuffles to avoid misaligned address and have padding of 1
-
-          // int a1[4] = {a.x, a.y, a.z, a.w};
-          // __shfl_sync(0xffffffff, , a_col);
-        }
-
-        __syncwarp();
-
-        for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < TILE_K; a_col += blockDim.x*ldNumElems, ari++) {
-
-        }
+        // int a1[4] = {a.x, a.y, a.z, a.w};
+        //for (int round = 0; round < 4; round++)
+        // __shfl_sync(0xffffffff, a[(lane+round)%4], lane/4);
       }
+    }
 
-      __syncthreads();
+    __syncthreads();
 
+    for (int outC = 0; outC < 2; outC++) {
       for (int a_row = 0; a_row < TILE_X; a_row++) {
         register int Ar[KP_K];
 
         for (int a_col = 0; a_col < KP_K; a_col++) {
-          Ar[a_col] = As[a_row][lane][a_col]; //TODO: Specifically for KP_K=32
+          Ar[a_col] = ACsh[outC][a_row][lane][a_col]; //TODO: Specifically for KP_K=32
         }
 
         for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
           register int kron_fac_r; //TODO: Specifically for KP_K=32 and TILE_Y=32
 
-          kron_fac_r = kron_fac_sh[kp_col][lane];
+          kron_fac_r = kron_fac_sh[outC][kp_col][lane];
 
           for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += warpSize * KP_K) {
             int c = 0;
@@ -312,41 +312,44 @@ void __launch_bounds__(128)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C)
               c += a * kp;
             }
 
-            Csh[a_row][kp_col * KP_K + (a_col_start+tile_k)/KP_K] = c;
+            ACsh[(outC == 0) ? 1 : 0][a_row][kp_col][(a_col_start+tile_k)/KP_K] = c;
           }
         }
       }
-    }
 
-    __syncthreads();
+      __syncthreads();
 
-    for (int a_row = 0; a_row < TILE_X; a_row++) {
-      for (int c_col = threadIdx.x*ldNumElems; c_col < N; c_col += blockDim.x*ldNumElems) {
-        int c_row = (a_row + start_row);
-        int c_idx = c_row * N + c_col;
-
-        *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Csh[a_row][c_col];
+      for (int a_row = 0; a_row < TILE_X; a_row++) {
+        for (int c_col = threadIdx.x*ldNumElems; c_col < N; c_col += blockDim.x*ldNumElems) {
+          int c_row = (a_row + start_row);
+          int c_idx = c_row * N + c_col;
+          
+          T* Cptr = (outC == 0) ? C1 : C2;
+          *(LD_TYPE*)&Cptr[c_idx] = *(LD_TYPE*)&ACsh[(outC == 0) ? 1 : 0][a_row][c_col/KP_K][c_col%KP_K];
+        }
       }
+
+      __syncthreads();
     }
   }
 }
 
 void customKronGEMM(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
-                     int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[])
+                     int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
   //Row Major Layout of all matrics
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (int i = 0; i < 1; i++) {
     int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
     
     const int TILE_Y = 32; //Y direction corresponds to tile of column of the KP factor
     const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
-    const int N_COARSE_TB = 4;
+    const int N_COARSE_TB = 8;
     const int TILE_K = 1024;
 
     dim3 grid = {M/TILE_X/N_COARSE_TB, (N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y}; 
-    dim3 block = {128,1,1};
-    cuda_gemm<int,128,1024,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,32,32,KP_K_BATCH><<<grid, block>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+    dim3 block = {256,1,1};
+    cuda_gemm<int,256,1024,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,32,32,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, prev_kp, kpMats[1], kpMats[0], kpMatmulResult[0], kpMatmulResult[1]);
 
     // CUDACHECK(cudaDeviceSynchronize());
   }
@@ -503,16 +506,30 @@ int main(int argc, char* argv[])
 
       for (int i = 0; i < NUM_KP_MATS; i++)
         CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(int)));
-  #ifdef EVAL
+  #ifdef EVAL  
+      cudaStream_t stream;
+      cudaStreamCreate(&stream);
+      cudaEvent_t start;
+      cudaEvent_t end;
+      float elapsedTime;
+      CUDACHECK(cudaEventCreate(&start));
+      CUDACHECK(cudaEventCreate(&end));
+      for (int i = 0; i < 10; i++)
+        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      CUDACHECK(cudaStreamSynchronize(stream));
+      CUDACHECK(cudaEventRecord(start, stream));
       for (int i = 0; i < 100; i++)
-        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
-      CUDACHECK(cudaDeviceSynchronize());
+        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      CUDACHECK(cudaEventRecord(end, stream));
+      CUDACHECK(cudaEventSynchronize(end));
+      CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
+      printf("elapsedtime %f\n", elapsedTime);
       return;
   #else
       for (int i = 0; i < 1; i++)
-        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
-  #endif
+        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
       CUDACHECK(cudaDeviceSynchronize());
+  #endif
       // return;
       int* hKpMatMulResult = new int[M*N];
       // return;
