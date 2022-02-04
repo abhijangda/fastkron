@@ -17,7 +17,7 @@ from matplotlib import pyplot as plt
 
 # model and data 
 
-inputDim = 512   # takes variable 'x' 
+inputDim = 256   # takes variable 'x' 
 outputDim = 1       # takes variable 'y'
 
 npoints = 65536
@@ -116,7 +116,7 @@ class NewlinearRegression(torch.nn.Module):
 
 
 for i in range(2, 3):
-    model2 = NewlinearRegression(inputDim, outputDim, 3)
+    model2 = NewlinearRegression(inputDim, outputDim, 4)
     train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
 
 

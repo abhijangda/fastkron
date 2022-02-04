@@ -208,7 +208,18 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
   //Row Major Layout of all matrics
   for (int i = 0; i < NUM_KP_MATS; i++) {
     int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
-    if (KP_MAT_K[0] == 8) {
+    if (KP_MAT_K[0] == 4) {
+      const int KP_K = 4;
+      const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
+      const int TILE_X = 1; //X direction correspond to tile of row 
+      const int KP_K_BATCH = 1;
+      const int N_COARSE_TB = 1;
+      const int TILE_K = KP_K*KP_K*KP_K*KP_K;
+      
+      dim3 grid = {M/TILE_X/N_COARSE_TB, 1};  //(N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y
+      dim3 block = {128,1,1};
+      cuda_gemm<int,128,TILE_K,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,KP_K,KP_K,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+    } else if (KP_MAT_K[0] == 8) {
       const int KP_K = 8;
       const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
       const int TILE_X = 1; //X direction correspond to tile of row 
@@ -307,13 +318,14 @@ int main(int argc, char* argv[])
   #ifdef EVAL
                                           // {65536,1024,1024, 2, {32,32},{32,32}},
                                           // {65536,256,256, 2, {16,16},{16,16}},
-                                          {65536,512,512, 3, {8,8,8},{8,8,8}},
-                                          
+                                          // {65536,512,512, 3, {8,8,8},{8,8,8}},
+                                          {65536,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
                                           {512,1024,1024, 2, {32,32},{32,32}},
                                           {512,256,256, 2, {16,16},{16,16}},
                                           {512,512,512, 3, {8,8,8},{8,8,8}},
+                                          {512,256,256, 4, {4,4,4,4},{4,4,4,4}},
   #endif
 
                                           // {1024, 1024, 1024, 2, {32,32},{32,32}}
@@ -420,7 +432,7 @@ int main(int argc, char* argv[])
       CUDACHECK(cudaEventRecord(end, stream));
       CUDACHECK(cudaEventSynchronize(end));
       CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
-      printf("elapsedtime %f\n", elapsedTime);
+      printf("elapsedtime %f\n", elapsedTime/100);
       return;
   #else
       for (int i = 0; i < 1; i++)
