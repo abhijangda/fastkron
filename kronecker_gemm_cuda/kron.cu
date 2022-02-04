@@ -157,11 +157,11 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
-      register int Ar[KP_K];
-      
       int lane = threadIdx.x%KP_K;
       int wid = threadIdx.x/KP_K;
       int blockWarps = blockDim.x/KP_K; //TODO: Names should be different
+      
+      register int Ar[KP_K];
       
       for (int a_col = 0; a_col < KP_K; a_col++) {
         Ar[a_col] = Ash[a_row][lane][a_col]; //TODO: Specifically for KP_K=32
@@ -177,14 +177,14 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
 
           #pragma unroll
           for (int a_col = 0; a_col < KP_K; a_col++) {
-            int a = Ar[a_col];
+            int a = Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
             int kp_row = a_col;
             int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col, KP_K);
 
             c += a * kp;
           }
 
-          Csh[a_row][kp_col*KP_K+(a_col_start+tile_k)/KP_K] = c;
+          Csh[a_row][kp_col*KP_K*KP_K+a_col_start/KP_K] = c;
         }
       }
     }
@@ -214,8 +214,8 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
       const int TILE_X = 1; //X direction correspond to tile of row 
       const int KP_K_BATCH = 1;
       const int N_COARSE_TB = 1;
-      const int TILE_K = KP_K*KP_K;
-
+      const int TILE_K = KP_K*KP_K*KP_K;
+      
       dim3 grid = {M/TILE_X/N_COARSE_TB, 1};  //(N/KP_MAT_N[NUM_KP_MATS-i-1])/TILE_Y
       dim3 block = {128,1,1};
       cuda_gemm<int,128,TILE_K,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,KP_K,KP_K,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
@@ -307,13 +307,13 @@ int main(int argc, char* argv[])
   #ifdef EVAL
                                           // {65536,1024,1024, 2, {32,32},{32,32}},
                                           // {65536,256,256, 2, {16,16},{16,16}},
-                                          {65536,64,64, 2, {8,8},{8,8}},
+                                          {65536,512,512, 3, {8,8,8},{8,8,8}},
                                           
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
                                           // {512,1024,1024, 2, {32,32},{32,32}},
                                           // {512,256,256, 2, {16,16},{16,16}},
-                                          {512,64,64, 2, {8,8},{8,8}},
+                                          {512,512,512, 3, {8,8,8},{8,8,8}},
   #endif
 
                                           // {1024, 1024, 1024, 2, {32,32},{32,32}}

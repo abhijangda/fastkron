@@ -17,7 +17,7 @@ from matplotlib import pyplot as plt
 
 # model and data 
 
-inputDim = 64   # takes variable 'x' 
+inputDim = 512   # takes variable 'x' 
 outputDim = 1       # takes variable 'y'
 
 npoints = 65536
@@ -74,7 +74,7 @@ class NewlinearRegression(torch.nn.Module):
         super(NewlinearRegression, self).__init__()
         
         self.weights = []
-        l = int(inputSize**(1./numFactors))
+        l = int(round(inputSize**(1./numFactors)))
         print (l, numFactors)
         for i in range(numFactors):
             self.weights += [Parameter(torch.ones(l,l).cuda())]    
@@ -115,8 +115,8 @@ class NewlinearRegression(torch.nn.Module):
         return l1 #out.squeeze()
 
 
-for i in range(1, 2):
-    model2 = NewlinearRegression(inputDim, outputDim, 2**i)
+for i in range(2, 3):
+    model2 = NewlinearRegression(inputDim, outputDim, 3)
     train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
 
 
