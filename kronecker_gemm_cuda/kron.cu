@@ -157,29 +157,32 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
-      int lane = threadIdx.x%KP_K;
-      int wid = threadIdx.x/KP_K;
-      int blockWarps = blockDim.x/KP_K; //TODO: Names should be different
+      const int numKpColMult = TILE_K/KP_K;
+
+      int lane = threadIdx.x%numKpColMult;
+      int wid = threadIdx.x/numKpColMult;
+      int blockWarps = blockDim.x/numKpColMult; //TODO: Names should be different
       
       register int Ar[KP_K];
-      
+    
       for (int a_col = 0; a_col < KP_K; a_col++) {
-        Ar[a_col] = Ash[a_row][lane][a_col]; //TODO: Specifically for KP_K=32
+        Ar[a_col] = Ash[a_row][lane][a_col]; 
       }
 
       for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
-        register int kron_fac_r; //TODO: Specifically for KP_K=32 and TILE_Y=32
+        register int kron_fac_r;
+        
+        kron_fac_r = kron_fac_sh[kp_col][lane%KP_K];
 
-        kron_fac_r = kron_fac_sh[kp_col][lane];
-
-        for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
+        //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
+        int a_col_start = lane * KP_K; {
           int c = 0;
 
           #pragma unroll
           for (int a_col = 0; a_col < KP_K; a_col++) {
-            int a = Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
+            int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
             int kp_row = a_col;
-            int kp = kron_fac_sh[kp_col][a_col];;//__shfl_sync(0xffffffff, kron_fac_r, a_col, KP_K);
+            int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col, KP_K); //kron_fac_sh[kp_col][a_col];;//
 
             c += a * kp;
           }
@@ -316,9 +319,9 @@ int main(int argc, char* argv[])
                                           // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {256,256,256, 2, {16,16},{16,16}},
   #ifdef EVAL
-                                          // {65536,1024,1024, 2, {32,32},{32,32}},
-                                          // {65536,256,256, 2, {16,16},{16,16}},
-                                          // {65536,512,512, 3, {8,8,8},{8,8,8}},
+                                          {65536,1024,1024, 2, {32,32},{32,32}},
+                                          {65536,256,256, 2, {16,16},{16,16}},
+                                          {65536,512,512, 3, {8,8,8},{8,8,8}},
                                           {65536,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
@@ -433,7 +436,7 @@ int main(int argc, char* argv[])
       CUDACHECK(cudaEventSynchronize(end));
       CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
       printf("elapsedtime %f\n", elapsedTime/100);
-      return;
+      continue;
   #else
       for (int i = 0; i < 1; i++)
         customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
