@@ -144,13 +144,39 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
       for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < K; a_col += blockDim.x*ldNumElems, ari++) {
         LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + a_col];
         
-        *(LD_TYPE*)&Ash[a_row][(a_col/kpK)*kpK + a_col%kpK] = a;
+        *(LD_TYPE*)&Ash[a_row][a_col] = a;
+        //LOAD into Csh then transpose it to Ash
 
         //TODO: Use warp shuffles to avoid misaligned address and have padding of 1
+        // int _a_col = a_col - lane*ldNumElems + (lane/4)*ldNumElems + lane%4;
 
-        // int a1[4] = {a.x, a.y, a.z, a.w};
-        //for (int round = 0; round < 4; round++)
-        // __shfl_sync(0xffffffff, a[(lane+round)%4], lane/4);
+        // for (int i = 0; i < 8; i++) {
+        //   if (lane % (kpK/ldNumElems) == i)
+        //     Ash[a_row][(a_col%kpK)*kpK + a_col/kpK] = a.x;
+        //   if (lane % (kpK/ldNumElems) == i)
+        //     Ash[a_row][(a_col%kpK + 1)*kpK + a_col/kpK] = a.y;
+        //   if (a_col % (kpK/ldNumElems) == i)
+        //     Ash[a_row][(a_col%kpK + 2)*kpK + a_col/kpK] = a.z;
+        //   if (a_col % (kpK/ldNumElems) == i)
+        //     Ash[a_row][(a_col%kpK + 3)*kpK + a_col/kpK] = a.w;
+        // }
+
+        // int ax = __shfl_sync(0xffffffff, a1[(lane)%4], lane/4);
+        // int _a_col = a_col - lane*ldNumElems + (lane/4)*ldNumElems + lane%4;
+        // Ash[a_row][(_a_col/kpK)*kpK + _a_col%kpK] = ax;
+
+        // ax = __shfl_sync(0xffffffff, a1[(lane)%4], lane/4 + 8);
+        // _a_col = a_col - lane*ldNumElems + (lane/4+8)*ldNumElems + lane%4;
+        // Ash[a_row][(_a_col/kpK)*kpK + _a_col%kpK] = ax;
+
+        // ax = __shfl_sync(0xffffffff, a1[(lane)%4], lane/4 + 8*2);
+        // _a_col = a_col - lane*ldNumElems + (lane/4+2*8)*ldNumElems + lane%4;
+        // Ash[a_row][(_a_col/kpK)*kpK + _a_col%kpK] = ax;
+
+        // ax = __shfl_sync(0xffffffff, a1[(lane)%4], lane/4 + 8*3);
+        // _a_col = a_col - lane*ldNumElems + (lane/4+3*8)*ldNumElems + lane%4;
+        // Ash[a_row][(_a_col/kpK)*kpK + _a_col%kpK] = ax;
+        
       }
     }
 
@@ -165,8 +191,9 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
       
       register int Ar[MAX_KP_K];
     
-      for (int a_col = 0; a_col < kpK; a_col++) {
-        Ar[a_col] = Ash[a_row][lane*kpK + a_col]; 
+      for (int a_col = lane, i = 0; i < MAX_KP_K; a_col++, i++) {
+        if (a_col%kpK < kpK)
+          Ar[i] = Ash[a_row][lane*kpK + a_col%kpK];
       }
 
       for (int kp_col = wid; kp_col < kpN; kp_col += blockWarps) {
@@ -179,12 +206,14 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
           int c = 0;
 
           #pragma unroll
-          for (int a_col = 0; a_col < kpK; a_col++) {
-            int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-            int kp_row = a_col;
-            int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col, kpK); //kron_fac_sh[kp_col][a_col];;//
+          for (int a_col = 0; a_col < MAX_KP_K; a_col++) {
+            if (a_col < kpK) {
+              int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
+              int kp_row = (a_col+lane)%kpK;
+              int kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK); //kron_fac_sh[kp_col][a_col];;//
 
-            c += a * kp;
+              c += a * kp;
+            }
           }
 
           Csh[a_row][kp_col*(K/kpK)+a_col_start/kpK] = c;
