@@ -119,19 +119,32 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 }
 
 
-template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int KP_K_BATCH>
+template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int KP_K_BATCH, int CONSTS_AND_VARS_SAME>
 __global__ 
-void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C, int kpN, int kpK) {
-  __shared__ __align__(128) int kron_fac_sh[MAX_KP_N][MAX_KP_K+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
+void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int KVar, T * A, T * kron_fac, T * C, int kpNVar, int kpKVar) {
+  __shared__ __align__(128) int kron_fac_sh[MAX_KP_N][MAX_KP_K];//TODO: Change padding based on value o1, KP_K and TILE_Y
   __shared__ __align__(128) int Ash[TILE_X][MAX_K]; //TODO: Add Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
   __shared__ __align__(128) int Csh[TILE_X][MAX_K];
 
   int wid = threadIdx.x/warpSize;
   int lane = threadIdx.x%warpSize;
   int blockWarps = blockDim.x/warpSize;
+  int kpK;
+  int kpN;
+  int K;
+
+  if (CONSTS_AND_VARS_SAME) {
+    kpK = MAX_KP_K;
+    kpN = MAX_KP_N;
+    K = MAX_K;
+  } else {
+    kpK = kpKVar;
+    kpN = kpNVar;
+    K = KVar;
+  }
 
   for (auto i = threadIdx.x; i < kpN * kpK; i += blockDim.x) {
-    kron_fac_sh[i%kpN][i/kpN] = kron_fac[(i/kpN) * kpN + blockIdx.y * kpN + (i%kpN)];
+    kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
   }
 
   typedef int4 LD_TYPE;
@@ -193,13 +206,13 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
     
       for (int a_col = kpKlane, i = 0; i < MAX_KP_K; i++) {
         if (i < kpK)
-          Ar[i] = Ash[a_row][kpMullane*kpK + (a_col + i < kpK ? a_col: a_col - kpK) + i];//(a_col + i < kpK ? a_col: a_col - kpK) + i]; //min(a_col, abs(a_col - kpK))
+            Ar[i] = Ash[a_row][kpMullane*kpK + (a_col + i < kpK ? a_col: a_col - kpK) + i];//(a_col + i < kpK ? a_col: a_col - kpK) + i]; //min(a_col, abs(a_col - kpK))
       }
 
       for (int kp_col = kpMulwid; kp_col < kpN; kp_col += kpMulblockWarps) {
         register int kron_fac_r;
         
-        kron_fac_r = kron_fac_sh[kp_col][kpMullane%kpK];
+        kron_fac_r = kron_fac_sh[kp_col][kpKlane];
 
         //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
         int a_col_start = kpMullane * kpK; {
@@ -209,7 +222,10 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
           for (int a_col = 0; a_col < MAX_KP_K; a_col++) {
             if (a_col < kpK) {
               int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-              int kp_row = (a_col+kpMullane) < kpK ? (a_col+kpMullane) : (a_col+kpMullane) - kpK;
+              int kp_row;
+              if (CONSTS_AND_VARS_SAME) {
+                kp_row = (a_col + kpMullane)%kpK;
+              } else {kp_row = (a_col+kpMullane) < kpK ? (a_col+kpMullane) : (a_col+kpMullane) - kpK;}
               int kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK); //kron_fac_sh[kp_col][a_col];;//
 
               c += a * kp;
@@ -234,7 +250,7 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
   }
 }
 
-#define KERNEL_CALL dim3 grid = {M/TILE_X/N_COARSE_TB, 1}; dim3 block = {128,1,1}; cuda_gemm<int,128,N_COARSE_TB,TILE_X,MAX_K,KP_N,KP_K,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i], KP_MAT_N[NUM_KP_MATS-i-1], KP_MAT_K[NUM_KP_MATS-i-1]);
+#define KERNEL_CALL dim3 grid = {M/TILE_X/N_COARSE_TB, 1}; dim3 block = {128,1,1}; cuda_gemm<int,128,N_COARSE_TB,TILE_X,MAX_K,KP_N,KP_K,KP_K_BATCH,CONSTS_AND_VARS_SAME><<<grid, block, 0, stream>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i], KP_MAT_N[NUM_KP_MATS-i-1], KP_MAT_K[NUM_KP_MATS-i-1]);
 
 void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
                      int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
@@ -245,14 +261,38 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
 
     const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
-    const int N_COARSE_TB = 8;
-    
-    if (KP_MAT_K[0] <= 32) {
-      const int KP_K = 32;
-      const int KP_N = 32;
-      const int MAX_K = 1024;
+    if (M > 100) {
+      const int N_COARSE_TB = 16;
       
-      KERNEL_CALL
+      if (KP_MAT_K[0] <= 32) {
+        const int KP_K = 32;
+        const int KP_N = 32;
+        const int MAX_K = 1024;
+        if (KP_MAT_K[0] == 32) {
+          const int CONSTS_AND_VARS_SAME = 1;
+          KERNEL_CALL
+        } else {
+          const int CONSTS_AND_VARS_SAME = 0;
+          KERNEL_CALL
+        }
+      }
+
+    } else {
+      const int N_COARSE_TB = 1;
+      
+      if (KP_MAT_K[0] <= 32) {
+        const int KP_K = 32;
+        const int KP_N = 32;
+        const int MAX_K = 1024;
+        
+        if (KP_MAT_K[0] == 32) {
+          const int CONSTS_AND_VARS_SAME = 1;
+          KERNEL_CALL
+        } else {
+          const int CONSTS_AND_VARS_SAME = 0;
+          KERNEL_CALL
+        }
+      }
     }
     
     // CUDACHECK(cudaDeviceSynchronize());
