@@ -138,10 +138,16 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
   
   int tile_k = 0;
-  
+  const int numKpColMult = K/kpK;
+
+  int kpKlane = lane % kpK;
+  int kpMullane = threadIdx.x%numKpColMult;
+  int kpMulwid = threadIdx.x/numKpColMult;
+  int kpMulblockWarps = blockDim.x/numKpColMult; //TODO: Names should be different
+
   for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
     for (int a_row = 0; a_row < TILE_X; a_row += 1) {
-      for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < K; a_col += blockDim.x*ldNumElems, ari++) {
+      for (int a_col = threadIdx.x*ldNumElems; a_col < K; a_col += blockDim.x*ldNumElems) {
         LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + a_col];
         
         *(LD_TYPE*)&Ash[a_row][a_col] = a;
@@ -182,41 +188,35 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kro
 
     __syncthreads();
 
-    for (int a_row = 0; a_row < TILE_X; a_row++) {
-      const int numKpColMult = K/kpK;
-
-      int lane = threadIdx.x%numKpColMult;
-      int wid = threadIdx.x/numKpColMult;
-      int blockWarps = blockDim.x/numKpColMult; //TODO: Names should be different
-      
+    for (int a_row = 0; a_row < TILE_X; a_row++) {     
       register int Ar[MAX_KP_K];
     
-      for (int a_col = lane, i = 0; i < MAX_KP_K; a_col++, i++) {
-        if (a_col%kpK < kpK)
-          Ar[i] = Ash[a_row][lane*kpK + a_col%kpK];
+      for (int a_col = kpKlane, i = 0; i < MAX_KP_K; i++) {
+        if (i < kpK)
+          Ar[i] = Ash[a_row][kpMullane*kpK + (a_col + i < kpK ? a_col: a_col - kpK) + i];//(a_col + i < kpK ? a_col: a_col - kpK) + i]; //min(a_col, abs(a_col - kpK))
       }
 
-      for (int kp_col = wid; kp_col < kpN; kp_col += blockWarps) {
+      for (int kp_col = kpMulwid; kp_col < kpN; kp_col += kpMulblockWarps) {
         register int kron_fac_r;
         
-        kron_fac_r = kron_fac_sh[kp_col][lane%kpK];
+        kron_fac_r = kron_fac_sh[kp_col][kpMullane%kpK];
 
         //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
-        int a_col_start = lane * kpK; {
+        int a_col_start = kpMullane * kpK; {
           int c = 0;
 
           #pragma unroll
           for (int a_col = 0; a_col < MAX_KP_K; a_col++) {
             if (a_col < kpK) {
               int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-              int kp_row = (a_col+lane)%kpK;
+              int kp_row = (a_col+kpMullane) < kpK ? (a_col+kpMullane) : (a_col+kpMullane) - kpK;
               int kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK); //kron_fac_sh[kp_col][a_col];;//
 
               c += a * kp;
             }
           }
 
-          Csh[a_row][kp_col*(K/kpK)+a_col_start/kpK] = c;
+          Csh[a_row][kp_col*numKpColMult+kpMullane] = c;
         }
       }
     }
