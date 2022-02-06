@@ -119,19 +119,19 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 }
 
 
-template<typename T,int N_THREADS, int K, int N_COARSE_TB, int TILE_Y, int TILE_X, int TILE_K, int KP_N, int KP_K, int KP_K_BATCH>
+template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int KP_K_BATCH>
 __global__ 
-void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, T * C) {
-  __shared__ __align__(128) int kron_fac_sh[TILE_Y][KP_K+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
-  __shared__ __align__(128) int Ash[TILE_X][TILE_K/KP_K][KP_K+4]; //TODO: Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
-  __shared__ __align__(128) int Csh[TILE_X][K];
+void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, int K, T * A, T * kron_fac, T * C, int kpN, int kpK) {
+  __shared__ __align__(128) int kron_fac_sh[MAX_KP_N][MAX_KP_K+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
+  __shared__ __align__(128) int Ash[TILE_X][MAX_K]; //TODO: Add Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
+  __shared__ __align__(128) int Csh[TILE_X][MAX_K];
 
   int wid = threadIdx.x/warpSize;
   int lane = threadIdx.x%warpSize;
   int blockWarps = blockDim.x/warpSize;
 
-  for (auto i = threadIdx.x; i < KP_K * TILE_Y; i += blockDim.x) {
-    kron_fac_sh[i%TILE_Y][i/TILE_Y] = kron_fac[(i/TILE_Y) * KP_N + blockIdx.y *TILE_Y+ (i%TILE_Y)];
+  for (auto i = threadIdx.x; i < kpN * kpK; i += blockDim.x) {
+    kron_fac_sh[i%kpN][i/kpN] = kron_fac[(i/kpN) * kpN + blockIdx.y * kpN + (i%kpN)];
   }
 
   typedef int4 LD_TYPE;
@@ -141,10 +141,10 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
   
   for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
     for (int a_row = 0; a_row < TILE_X; a_row += 1) {
-      for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < TILE_K; a_col += blockDim.x*ldNumElems, ari++) {
-        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (a_col + tile_k)];
+      for (int a_col = threadIdx.x*ldNumElems, ari = 0; a_col < K; a_col += blockDim.x*ldNumElems, ari++) {
+        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + a_col];
         
-        *(LD_TYPE*)&Ash[a_row][a_col/KP_K][a_col%KP_K] = a;
+        *(LD_TYPE*)&Ash[a_row][(a_col/kpK)*kpK + a_col%kpK] = a;
 
         //TODO: Use warp shuffles to avoid misaligned address and have padding of 1
 
@@ -157,37 +157,37 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
-      const int numKpColMult = TILE_K/KP_K;
+      const int numKpColMult = K/kpK;
 
       int lane = threadIdx.x%numKpColMult;
       int wid = threadIdx.x/numKpColMult;
       int blockWarps = blockDim.x/numKpColMult; //TODO: Names should be different
       
-      register int Ar[KP_K];
+      register int Ar[MAX_KP_K];
     
-      for (int a_col = 0; a_col < KP_K; a_col++) {
-        Ar[a_col] = Ash[a_row][lane][a_col]; 
+      for (int a_col = 0; a_col < kpK; a_col++) {
+        Ar[a_col] = Ash[a_row][lane*kpK + a_col]; 
       }
 
-      for (int kp_col = wid; kp_col < KP_N; kp_col += blockWarps) {
+      for (int kp_col = wid; kp_col < kpN; kp_col += blockWarps) {
         register int kron_fac_r;
         
-        kron_fac_r = kron_fac_sh[kp_col][lane%KP_K];
+        kron_fac_r = kron_fac_sh[kp_col][lane%kpK];
 
         //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
-        int a_col_start = lane * KP_K; {
+        int a_col_start = lane * kpK; {
           int c = 0;
 
           #pragma unroll
-          for (int a_col = 0; a_col < KP_K; a_col++) {
+          for (int a_col = 0; a_col < kpK; a_col++) {
             int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
             int kp_row = a_col;
-            int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col, KP_K); //kron_fac_sh[kp_col][a_col];;//
+            int kp = __shfl_sync(0xffffffff, kron_fac_r, a_col, kpK); //kron_fac_sh[kp_col][a_col];;//
 
             c += a * kp;
           }
 
-          Csh[a_row][kp_col*(TILE_K/KP_K)+a_col_start/KP_K] = c;
+          Csh[a_row][kp_col*(K/kpK)+a_col_start/kpK] = c;
         }
       }
     }
@@ -205,7 +205,7 @@ void __launch_bounds__(N_THREADS)  cuda_gemm(int M, int N, T * A, T * kron_fac, 
   }
 }
 
-#define KERNEL_CALL dim3 grid = {M/TILE_X/N_COARSE_TB, 1}; dim3 block = {128,1,1}; cuda_gemm<int,128,TILE_K,N_COARSE_TB,TILE_Y,TILE_X,TILE_K,KP_K,KP_K,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i]);
+#define KERNEL_CALL dim3 grid = {M/TILE_X/N_COARSE_TB, 1}; dim3 block = {128,1,1}; cuda_gemm<int,128,N_COARSE_TB,TILE_X,MAX_K,KP_N,KP_K,KP_K_BATCH><<<grid, block, 0, stream>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i], KP_MAT_N[NUM_KP_MATS-i-1], KP_MAT_K[NUM_KP_MATS-i-1]);
 
 void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
                      int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
@@ -216,31 +216,13 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
 
     const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
-    const int N_COARSE_TB = 1;
+    const int N_COARSE_TB = 8;
     
-    if (KP_MAT_K[0] == 4) {
-      const int KP_K = 4;
-      const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
-      const int TILE_K = KP_K*KP_K*KP_K*KP_K;
-      
-      KERNEL_CALL
-    } else if (KP_MAT_K[0] == 8) {
-      const int KP_K = 8;
-      const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
-      const int TILE_K = KP_K*KP_K*KP_K;
-      
-      KERNEL_CALL
-    } else if (KP_MAT_K[0] == 16) {
-      const int KP_K = 16;
-      const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
-      const int TILE_K = KP_K*KP_K;
-
-      KERNEL_CALL
-    } else if (KP_MAT_K[0] == 32) {
+    if (KP_MAT_K[0] <= 32) {
       const int KP_K = 32;
-      const int TILE_Y = KP_K; //Y direction corresponds to tile of column of the KP factor
-      const int TILE_K = KP_K*KP_K;
-
+      const int KP_N = 32;
+      const int MAX_K = 1024;
+      
       KERNEL_CALL
     }
     
@@ -307,15 +289,15 @@ int main(int argc, char* argv[])
                                           // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {256,256,256, 2, {16,16},{16,16}},
   #ifdef EVAL
-                                          // {65536,1024,1024, 2, {32,32},{32,32}},
+                                          {65536,1024,1024, 2, {32,32},{32,32}},
                                           // {65536,256,256, 2, {16,16},{16,16}},
                                           // {65536,512,512, 3, {8,8,8},{8,8,8}},
-                                          {100,1024,1024, 2, {32,32},{32,32}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
-                                          {1,1024,1024, 2, {32,32},{32,32}},
-                                          {100,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {100,1024,1024, 2, {32,32},{32,32}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          // {1,1024,1024, 2, {32,32},{32,32}},
+                                          // {100,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
 
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
