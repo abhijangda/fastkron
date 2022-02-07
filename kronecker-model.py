@@ -121,7 +121,9 @@ def do(inputDim, npoints, d):
 cases = [#{"npoints": 100, "(2^l)^d": 1024, "d": 2},
           #{"npoints": 10, "(2^l)^d": 1024, "d": 2},
           #{"npoints": 1, "(2^l)^d": 1024, "d": 2},
-        {"npoints": 65536, "(2^l)^d": 1024, "d": 2},
+        # {"npoints": 65536, "(2^l)^d": 1024, "d": 2},
+        
+        {"npoints": 100, "(2^l)^d": 256, "d": 2},
 
         # {"npoints": 100, "(2^l)^d": 256, "d": 4},
         # {"npoints": 10, "(2^l)^d": 256, "d": 4},
