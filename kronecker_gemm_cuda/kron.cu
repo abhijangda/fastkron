@@ -177,7 +177,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
     for (int a_row = 0; a_row < TILE_X; a_row++) {     
       register int Ar[MAX_KP_K];
     
-      for (int a_col = kpKlane, i = 0; i < MAX_KP_K; i++) { //+ kpMullane/(warpSize/kpK)
+      for (int a_col = kpKlane, i = 0; i < MAX_KP_K; i++) { //
         if (i < kpK)
           Ar[i] = Ash[a_row][kpMullane*kpK + (a_col + i < kpK ? a_col: a_col - kpK) + i];//TODO: Shared memory bank conflicts here with KP_K = 4
       }
@@ -285,7 +285,7 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
 
     CUDACHECK(cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream));
     
-    CUDACHECK(cudaDeviceSynchronize());
+    // CUDACHECK(cudaDeviceSynchronize());
   }
 }
 
@@ -348,15 +348,15 @@ int main(int argc, char* argv[])
                                           // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {256,256,256, 2, {16,16},{16,16}},
   #ifdef EVAL
-                                          // {65536,1024,1024, 2, {32,32},{32,32}},
-                                          // {65536,256,256, 2, {16,16},{16,16}},
-                                          // {65536,512,512, 3, {8,8,8},{8,8,8}},
-                                          // {100,1024,1024, 2, {32,32},{32,32}},
-                                          // {10,1024,1024, 2, {32,32},{32,32}},
-                                          // {1,1024,1024, 2, {32,32},{32,32}},
+                                          {65536,1024,1024, 2, {32,32},{32,32}},
+                                          {65536,256,256, 2, {16,16},{16,16}},
+                                          {65536,512,512, 3, {8,8,8},{8,8,8}},
+                                          {100,1024,1024, 2, {32,32},{32,32}},
+                                          {10,1024,1024, 2, {32,32},{32,32}},
+                                          {1,1024,1024, 2, {32,32},{32,32}},
                                           {100,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           
                                           // {100,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
@@ -471,19 +471,19 @@ int main(int argc, char* argv[])
       cudaStreamCreate(&stream);
       cudaEvent_t start;
       cudaEvent_t end;
-      float elapsedTime;
+      float elapsedTime = 0;
       CUDACHECK(cudaEventCreate(&start));
       CUDACHECK(cudaEventCreate(&end));
       for (int i = 0; i < 10; i++)
         customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
       CUDACHECK(cudaStreamSynchronize(stream));
       CUDACHECK(cudaEventRecord(start, stream));
-      for (int i = 0; i < 100; i++)
+      for (int i = 0; i < 1000; i++)
         customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
       CUDACHECK(cudaEventRecord(end, stream));
       CUDACHECK(cudaEventSynchronize(end));
       CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
-      printf("elapsedtime %f\n", elapsedTime/100);
+      printf("elapsedtime %f\n", elapsedTime/1000);
       continue;
   #else
       for (int i = 0; i < 1; i++)
