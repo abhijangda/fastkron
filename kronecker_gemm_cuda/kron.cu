@@ -157,7 +157,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
   
   int tile_k = 0;
-  const int numKpColMult = min(K/kpK, N_THREADS);
+  const int numKpColMult = min(MAX_K/kpK, N_THREADS);
 
   int kpKlane = lane % kpK;
   int kpMullane = threadIdx.x%numKpColMult;
@@ -167,7 +167,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
     for (int a_row = 0; a_row < TILE_X; a_row += 1) {
       for (int a_col = threadIdx.x*ldNumElems; a_col < MAX_K; a_col += blockDim.x*ldNumElems) {
-        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + blockIdx.y*MAX_K + a_col];
+        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + ((CONSTS_AND_VARS_SAME) ? 0 : blockIdx.y*MAX_K) + a_col];
         
         *(LD_TYPE*)&Ash[a_row][a_col] = a;        
       }
@@ -180,8 +180,9 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
         register int Ar[MAX_KP_K];
       
         for (int a_col = kpKlane, i = 0; i < MAX_KP_K; i++) { //
-          if (i < kpK)
+          if (i < kpK) {
             Ar[i] = Ash[a_row][(a_col_start+kpMullane)*kpK + (a_col + i < kpK ? a_col: a_col - kpK) + i];//TODO: Shared memory bank conflicts here with KP_K = 4
+          }
         }
 
         for (int kp_col = kpMulwid; kp_col < kpN; kp_col += kpMulblockWarps) {
@@ -218,7 +219,11 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
       for (int c_col = threadIdx.x*ldNumElems; c_col < MAX_K; c_col += blockDim.x*ldNumElems) {
         int c_row = (a_row + start_row);
-        int c_idx = c_row * N + blockIdx.y * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
+        int c_idx;
+        if (CONSTS_AND_VARS_SAME)
+          c_idx = c_row * N + c_col;
+        else
+          c_idx = c_row * N + blockIdx.y * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
         // if (c_idx == 0) printf("%d\n", Csh[a_row][c_col]);
         *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Csh[a_row][c_col];
       }
@@ -283,8 +288,13 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     // assert(idx < sizeof(cudaGemmSpecialized)/sizeof(void*));
     
     int min_k = min(K, 1024);
-    // printf("%d\n", min_k);
-    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][K <= 1024 ? 1 : 0];
+    int consts_equals_vars = K <= 1024 ? 1 : 0;
+    // if (min_k/KP_MAT_K[0] >= 128) {
+    //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
+    //   min_k = min_k/KP_MAT_K[0];
+    //   consts_equals_vars = 0;
+    // }
+    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][consts_equals_vars];
     dim3 grid = {(M/TILE_X/N_COARSE_TB), (K/min_k)}; 
     dim3 block = {128,1,1};
 
@@ -355,22 +365,22 @@ int main(int argc, char* argv[])
                                           // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {256,256,256, 2, {16,16},{16,16}},
   #ifdef EVAL
-                                          {65536,1024,1024, 2, {32,32},{32,32}},
-                                          {65536,256,256, 2, {16,16},{16,16}},
-                                          {65536,512,512, 3, {8,8,8},{8,8,8}},
-                                          {100,1024,1024, 2, {32,32},{32,32}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
-                                          {1,1024,1024, 2, {32,32},{32,32}},
-                                          {100,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {100,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          {1,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          // {65536,1024,1024, 2, {32,32},{32,32}},
+                                          // {65536,256,256, 2, {16,16},{16,16}},
+                                          // {65536,512,512, 3, {8,8,8},{8,8,8}},
+                                          // {100,1024,1024, 2, {32,32},{32,32}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          // {1,1024,1024, 2, {32,32},{32,32}},
+                                          // {100,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {100,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          // {1,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           
-                                          {100,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
-                                          {10,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
-                                          {1,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          // {100,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          // {10,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          // {1,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
 
                                           // {100,1024,1024, 3, {16,16,4},{16,16,4}},
                                           // {100,256,256, 2, {16,16},{16,16}},
@@ -382,10 +392,10 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          {512,1024,1024, 2, {32,32},{32,32}},
-                                          {512,256,256, 2, {16,16},{16,16}},
-                                          {512,512,512, 3, {8,8,8},{8,8,8}},
-                                          {512,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {512,1024,1024, 2, {32,32},{32,32}},
+                                          // {512,256,256, 2, {16,16},{16,16}},
+                                          // {512,512,512, 3, {8,8,8},{8,8,8}},
+                                          // {512,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           {512,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
   #endif
@@ -395,6 +405,21 @@ int main(int argc, char* argv[])
 
   // int (*fnvalues[4])(int, int) = {&one, &zeroOne, &setToI, &randMod};
   int (*fnvalues[1])(int, int) = {&randMod};
+
+  if (matrixSizes.size() == 0) {
+    for (int d = 256, p = 4; p <= 15; p++) {
+      MatrixSizes matrixSize {
+      100,
+      d,
+      d,
+      p,
+      std::vector<int>(p, 4),
+      std::vector<int>(p, 4)};
+      d = d * 4;
+
+      matrixSizes.push_back(matrixSize);
+    }
+  }
 
   for (MatrixSizes matrixSize : matrixSizes) {
     int M = matrixSize.M;
@@ -495,6 +520,14 @@ int main(int argc, char* argv[])
       CUDACHECK(cudaEventSynchronize(end));
       CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
       printf("elapsedtime %f\n", elapsedTime/1000);
+
+      for (int i = 0; i < NUM_KP_MATS; i++) {
+        CUDACHECK(cudaFree(__dKpMats[i]));
+        CUDACHECK(cudaFree(__dKpMatmulResult[i]));
+      }
+
+      CUDACHECK(cudaFree(dX));
+      CUDACHECK(cudaFree(dResult));
       continue;
   #else
       for (int i = 0; i < 1; i++)
