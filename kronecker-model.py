@@ -133,12 +133,14 @@ def do(twoPowerL, npoints, d):
     # for i in range(2, 3):
     model = NewlinearRegression(inputDim, outputDim, d)
     train_and_predict(model, x_train, y_train, True, trans=True, print_model=True)
-
-    return model.all_cuda_times
+    all_cuda_times = model.all_cuda_times
+    del model
+    torch.cuda.empty_cache()
+    return all_cuda_times
 
 maxD = {2:15, 4:10, 8:7, 16: 5, 32: 4, 64 : 2}
 
-cases = [{"npoints": 1, "2^l": j, "d": i} for j in [2,4,8,16,32,64] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
+cases = [{"npoints": 100, "2^l": j, "d": i} for j in [2,4,8,16,32,64] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},

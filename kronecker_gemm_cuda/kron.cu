@@ -134,7 +134,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   int K;
   int N;
  
-  // if (threadIdx.x == 0&& blockIdx.x ==0)printf("%d %d %d %d %d %d\n", KVar, kpKVar, MAX_K, MAX_KP_K, N_COARSE_TB, CONSTS_AND_VARS_SAME);
+ 
   // return;
 
   if (CONSTS_AND_VARS_SAME) {
@@ -148,6 +148,8 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
     K = KVar;
     N = NVar;
   }
+
+  //  if (threadIdx.x == 0&& blockIdx.x ==0)printf("%d %d %d %d %d %d\n", KVar, kpK, MAX_K, MAX_KP_K, N_COARSE_TB, CONSTS_AND_VARS_SAME);
 
   for (auto i = threadIdx.x; i < kpN * kpK; i += blockDim.x) {
     kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
@@ -201,13 +203,15 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                 int kp_row;
                 if (CONSTS_AND_VARS_SAME) {
                   kp_row = (a_col + kpKlane)%kpK; //kpMullane/(warpSize/kpK)
-                } else {kp_row = (a_col+kpMullane) < kpK ? (a_col+kpMullane) : (a_col+kpMullane) - kpK;}
-                int kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK); //kron_fac_sh[kp_col][a_col];;//
+                } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;}
+                int kp = (kpK <= 32) ? __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK) : kron_fac_sh[kp_col][kp_row]; //kron_fac_sh[kp_col][a_col];;//
 
                 c += a * kp;
               }
             }
 
+            // if (a_row == 0 && (kp_col)*(MAX_K/kpK)+a_col_start+kpMullane && blockIdx.x == 0)
+            //   printf("c %d\n", c);
             Csh[a_row][(kp_col)*(MAX_K/kpK)+a_col_start+kpMullane] = c;
           }
         }
@@ -242,7 +246,8 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32)
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
   MAX_K_KERNELS(N_COARSE_TB, 16) \
@@ -254,7 +259,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   MAX_K_KERNELS(N_COARSE_TB, 1024)
 
 #define NUM_MAX_K_KERNELS 7
-#define NUM_KP_N_K_KERNELS 5
+#define NUM_KP_N_K_KERNELS 6
 #define NUM_COARSE_TB_KERNELS 3
 #define NUM_CONSTS_AND_VARS_SAME 2
 
@@ -289,11 +294,11 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     
     int min_k = min(K, 1024);
     int consts_equals_vars = K <= 1024 ? 1 : 0;
-    if (min_k/KP_MAT_K[0] >= 256) {
-      //K dimension is very high. Divide it in different threadblocks to have better parallelism
-      min_k = min_k/KP_MAT_K[0];
-      consts_equals_vars = 0;
-    }
+    // if (min_k/KP_MAT_K[0] >= 256) {
+    //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
+    //   min_k = min_k/KP_MAT_K[0];
+    //   consts_equals_vars = 0;
+    // }
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][consts_equals_vars];
     dim3 grid = {(K/min_k), (M/TILE_X/N_COARSE_TB)}; 
     dim3 block = {128,1,1};
@@ -402,12 +407,13 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          // {512,1024,1024, 2, {32,32},{32,32}},
-                                          // {512,256,256, 2, {16,16},{16,16}},
+                                          {512,1024,1024, 2, {32,32},{32,32}},
+                                          {512,256,256, 2, {16,16},{16,16}},
                                           // {512,512,512, 3, {8,8,8},{8,8,8}},
                                           // {512,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {512,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          // {512,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          {1, 4096, 4096, 2, {64,64},{64,64}}
   #endif
 
                                           // {1024, 1024, 1024, 2, {32,32},{32,32}}
