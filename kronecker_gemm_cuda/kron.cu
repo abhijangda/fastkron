@@ -164,10 +164,10 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   int kpMulwid = threadIdx.x/numKpColMult;
   int kpMulblockWarps = blockDim.x/numKpColMult; //TODO: Names should be different
 
-  for (int start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; start_row += gridDim.x * TILE_X) {
+  for (int start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
     for (int a_row = 0; a_row < TILE_X; a_row += 1) {
       for (int a_col = threadIdx.x*ldNumElems; a_col < MAX_K; a_col += blockDim.x*ldNumElems) {
-        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + ((CONSTS_AND_VARS_SAME) ? 0 : blockIdx.y*MAX_K) + a_col];
+        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + ((CONSTS_AND_VARS_SAME) ? 0 : blockIdx.x*MAX_K) + a_col];
         
         *(LD_TYPE*)&Ash[a_row][a_col] = a;        
       }
@@ -223,7 +223,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
         if (CONSTS_AND_VARS_SAME)
           c_idx = c_row * N + c_col;
         else
-          c_idx = c_row * N + blockIdx.y * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
+          c_idx = c_row * N + blockIdx.x * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
         // if (c_idx == 0) printf("%d\n", Csh[a_row][c_col]);
         *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Csh[a_row][c_col];
       }
@@ -289,13 +289,13 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     
     int min_k = min(K, 1024);
     int consts_equals_vars = K <= 1024 ? 1 : 0;
-    // if (min_k/KP_MAT_K[0] >= 128) {
-    //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
-    //   min_k = min_k/KP_MAT_K[0];
-    //   consts_equals_vars = 0;
-    // }
+    if (min_k/KP_MAT_K[0] >= 256) {
+      //K dimension is very high. Divide it in different threadblocks to have better parallelism
+      min_k = min_k/KP_MAT_K[0];
+      consts_equals_vars = 0;
+    }
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][consts_equals_vars];
-    dim3 grid = {(M/TILE_X/N_COARSE_TB), (K/min_k)}; 
+    dim3 grid = {(K/min_k), (M/TILE_X/N_COARSE_TB)}; 
     dim3 block = {128,1,1};
 
     void *args[] = {&M, &N, &K, &prev_kp, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&kpMatmulResult[i], (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1]};
@@ -344,6 +344,14 @@ struct MatrixSizes {
 
 int main(int argc, char* argv[]) 
 {
+
+  #ifdef EVAL
+  if (argc < 4) {printf("invalid command args\n"); return 0;}
+  int npoints = atoi(argv[1]);
+  int d = atoi(argv[2]);
+  int twoPowerL = atoi(argv[3]);
+  #endif
+
   std::vector<MatrixSizes> matrixSizes = {
                                           // {4,4,4, 2, {2,2},{2,2}},
                                           // {4,4,6, 2, {1,4},{2,3}},
@@ -387,6 +395,8 @@ int main(int argc, char* argv[])
                                           // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           // {1,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
 
+                                          // {100,512*8*8,512*8*8, 5, {8,8,8,8,8},{8,8,8,8,8}},
+
                                           // {100,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
@@ -405,21 +415,17 @@ int main(int argc, char* argv[])
 
   // int (*fnvalues[4])(int, int) = {&one, &zeroOne, &setToI, &randMod};
   int (*fnvalues[1])(int, int) = {&randMod};
-
-  if (matrixSizes.size() == 0) {
-    for (int d = 256, p = 4; p <= 15; p++) {
-      MatrixSizes matrixSize {
-      100,
-      d,
-      d,
-      p,
-      std::vector<int>(p, 4),
-      std::vector<int>(p, 4)};
-      d = d * 4;
-
-      matrixSizes.push_back(matrixSize);
-    }
+  
+  #ifdef EVAL
+  int Msz = 1;
+  for (int i = 0; i < d; i++) {
+    Msz *= twoPowerL;
   }
+  MatrixSizes matrixSize {
+    npoints, Msz, Msz, d, std::vector<int>(d, twoPowerL), std::vector<int>(d, twoPowerL)
+  };
+  matrixSizes.push_back(matrixSize);
+  #endif 
 
   for (MatrixSizes matrixSize : matrixSizes) {
     int M = matrixSize.M;

@@ -10,27 +10,29 @@ import gpytorch as gp
 import torch.nn.functional as F
 
 from matplotlib import pyplot as plt
-
+import math
 
 # In[2]:
 
+use_torch_profiler = True
+epochs = 100
 
 # model and data 
 
-def do(inputDim, npoints, d):
+def do(twoPowerL, npoints, d):
     outputDim = 1       # takes variable 'y'
-
+    inputDim = twoPowerL ** d
     x_train = np.zeros((npoints, inputDim)).astype(np.float32)
     y_train = None #func(x_train)
 
     # train adn prediciton 
     def train_and_predict(model, x_train, y_train, verbose=False, trans=False, print_model=False):
         learningRate = 0.1
-        epochs = 10
 
         criterion = torch.nn.MSELoss() 
         optimizer = torch.optim.SGD(model.parameters(), lr=learningRate)
         model.cuda()
+        
         for epoch in range(epochs):
             inputs = torch.from_numpy(x_train)
             # labels = torch.from_numpy(y_train)
@@ -74,7 +76,7 @@ def do(inputDim, npoints, d):
             
             self.weights = []
             l = int(round(inputSize**(1./numFactors)))
-            print (l, numFactors)
+
             for i in range(numFactors):
                 self.weights += [Parameter(torch.ones(l,l).cuda())]    
             
@@ -82,19 +84,33 @@ def do(inputDim, npoints, d):
                     
             self.linear2 = torch.nn.Linear(inputSize, 1)
             self.inputSize = inputSize
+            self.all_cuda_times = []
 
         def count_params(self):
             return sum([p.numel() for p in self.parameters()])
 
         def forward(self, x):
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-            print(x.shape)
-            start.record()
-            l1 = self.l1_weight@x
-            end.record()
-            torch.cuda.synchronize()
-            exec_time = start.elapsed_time(end)
+            if use_torch_profiler:
+                with torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.CUDA,
+                ]
+                ) as p:
+                    l1 = self.l1_weight@x
+                    torch.cuda.synchronize()
+            
+                cuda_time = 0
+                for event in p.events():
+                    if event.device_type == torch._C._autograd.DeviceType.CUDA:
+                        cuda_time += event.cuda_time
+                exec_time = cuda_time #start.elapsed_time(end)
+                self.all_cuda_times.append(cuda_time)
+            else:
+                l1 = self.l1_weight@x
+                torch.cuda.synchronize()
+            return
+
             bandwidth = 4 * 2 * (self.count_params() + x.numel() + l1.numel())/(exec_time/1e3)/1e9 
             flops = 2 * (self.inputSize * self.inputSize + x.shape[0] * x.shape[1] * x.shape[1])/(exec_time/1e3)/1e9
             print(len(self.weights), "Kronecker", exec_time, "= ms", "bandwidth = ", bandwidth, " GBPS", "elements = ", (self.count_params() + x.numel() + l1.numel()))
@@ -115,42 +131,68 @@ def do(inputDim, npoints, d):
 
 
     # for i in range(2, 3):
-    model2 = NewlinearRegression(inputDim, outputDim, d)
-    train_and_predict(model2, x_train, y_train, True, trans=True, print_model=True)
+    model = NewlinearRegression(inputDim, outputDim, d)
+    train_and_predict(model, x_train, y_train, True, trans=True, print_model=True)
 
-cases = [#{"npoints": 100, "(2^l)^d": 1024, "d": 2},
-          #{"npoints": 10, "(2^l)^d": 1024, "d": 2},
-          #{"npoints": 1, "(2^l)^d": 1024, "d": 2},
-        # {"npoints": 65536, "(2^l)^d": 1024, "d": 2},
+    return model.all_cuda_times
+
+maxD = {2:15, 4:10, 8:7, 16: 5, 32: 4, 64 : 2}
+
+cases = [{"npoints": 1, "2^l": j, "d": i} for j in [2,4,8,16,32,64] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
+#  [       {"npoints": 100, "2^l": 32, "d": 2},
+#         {"npoints": 10, "2^l": 32, "d": 2},
+#         {"npoints": 1, "2^l": 32, "d": 2},
+#         # {"npoints": 65536, "2^l^d": 1024, "d": 2},
         
-        # {"npoints": 100, "(2^l)^d": 256, "d": 2},
-        # {"npoints": 100, "(2^l)^d": 1024, "d": 5},
-        # {"npoints": 10, "(2^l)^d": 1024, "d": 5},
-        # {"npoints": 1, "(2^l)^d": 1024, "d": 5},
+#         # {"npoints": 100, "2^l^d": 256, "d": 2},
+#         {"npoints": 100, "2^l": 4, "d": 5},
+#         {"npoints": 10, "2^l": 4, "d": 5},
+#         {"npoints": 1, "2^l": 4, "d": 5},
+#         {"npoints": 100, "2^l": 2, "d": 10},
+#         {"npoints": 10, "2^l": 2, "d": 10},
+#         {"npoints": 1, "2^l": 2, "d": 10},
 
-        # {"npoints": 100, "(2^l)^d": 1024, "d": 10},
-        # {"npoints": 10, "(2^l)^d": 1024, "d": 10},
-        # {"npoints": 1, "(2^l)^d": 1024, "d": 10},
+#         {"npoints": 100, "2^l": 4, "d": 4},
+#         {"npoints": 100, "2^l": 4, "d": 5},
+#         {"npoints": 100, "2^l": 4, "d": 6},
+#         {"npoints": 100, "2^l": 4, "d": 7},
+#         {"npoints": 100, "2^l": 4, "d": 8},
+#         {"npoints": 100, "2^l": 4, "d": 9},
+#         {"npoints": 100, "2^l": 4, "d": 10},
 
-        # {"npoints": 100, "(2^l)^d": 256, "d": 4},
-        # {"npoints": 100, "(2^l)^d": 1024, "d": 5},
-        # {"npoints": 100, "(2^l)^d": 4096, "d": 6},
-        # {"npoints": 100, "(2^l)^d": 16384, "d": 7},
-        # {"npoints": 100, "(2^l)^d": 65536, "d": 8},
-        # {"npoints": 100, "(2^l)^d": 262144, "d": 9},
-        {"npoints": 100, "(2^l)^d": 262144*4, "d": 10},
+#         {"npoints": 100, "2^l": 8, "d": 5},
+        
+#         {"npoints": 10, "2^l": 4, "d": 4},
+#         {"npoints": 1, "2^l": 4, "d": 4},
 
-        # {"npoints": 10, "(2^l)^d": 256, "d": 4},
-        # {"npoints": 1, "(2^l)^d": 256, "d": 4},
+#         {"npoints": 100, "2^l": 4, "d": 6},
+#         {"npoints": 1, "2^l": 4, "d": 6},
+#         ]
 
-        # {"npoints": 100, "(2^l)^d": 4096, "d": 6},
-        # {"npoints": 1, "(2^l)^d": 4096, "d": 6},
-        # {"npoints": 1, "(2^l)^d": 256, "d": 4},
-        ]
+import subprocess
 
+case_times = {}
 for case in cases:
-    print (case)
-    do (case["(2^l)^d"], case["npoints"], case["d"])
+        try:
+            cuda_times = do(case["2^l"], case["npoints"], case["d"])
+            case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
+        except:
+            case["PyTorchTime"] = -1
+        twoPowerL = case["2^l"]
 
-    
+        (s, o) = subprocess.getstatusoutput("kronecker_gemm_cuda/kron %d %d %d"%(case["npoints"], case["d"], twoPowerL))
+        if s != 0:
+            print(o)
+            case["CUDATime"] = -1
+            case["Speedup"] = -1
+        else:
+            kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):].strip()) * 1000 #Convert ms to us
+            case["CUDATime"] = kront
+            case["Speedup"] = case["PyTorchTime"]/case["CUDATime"]
+            print(case)
 
+row_format = "{:>20}" * 6
+print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "CUDATime(us)", "Speedup"))
+for case in cases:
+    twoPowerL = case["2^l"]
+    print(row_format.format(case["npoints"], case["d"],twoPowerL, "%.3f"%case["PyTorchTime"], "%.3f"%case["CUDATime"], "%.3f"%case["Speedup"]))
