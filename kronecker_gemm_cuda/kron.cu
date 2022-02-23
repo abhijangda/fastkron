@@ -19,6 +19,8 @@
 #include <cassert>
 #include <vector>
 
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+
 void setMatrix(int* mat, int M, int N, int (*fnvalue)(int i, int j)) 
 {
   for (int i = 0; i < M; i++) {
@@ -161,7 +163,6 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   int tile_k = 0;
   const int numKpColMult = min(MAX_K/kpK, N_THREADS);
 
-  int kpKlane = lane % kpK;
   int kpMullane = threadIdx.x%numKpColMult;
   int kpMulwid = threadIdx.x/numKpColMult;
   int kpMulblockWarps = blockDim.x/numKpColMult; //TODO: Names should be different
@@ -178,41 +179,56 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
+      for (int i = threadIdx.x; i < MAX_K; i += blockDim.x)
+        Csh[a_row][i] = 0;
+
       for (int a_col_start = 0; a_col_start < MAX_K/kpK; a_col_start += numKpColMult) {
-        register int Ar[MAX_KP_K];
-      
-        for (int a_col = kpKlane, i = 0; i < MAX_KP_K; i++) { //
-          if (i < kpK) {
-            Ar[i] = Ash[a_row][(a_col_start+kpMullane)*kpK + (a_col + i < kpK ? a_col: a_col - kpK) + i];//TODO: Shared memory bank conflicts here with KP_K = 4
-          }
-        }
+        const int MAX_AR_SZ = 32;
 
-        for (int kp_col = kpMulwid; kp_col < kpN; kp_col += kpMulblockWarps) {
-          register int kron_fac_r;
-          
-          kron_fac_r = kron_fac_sh[kp_col][kpKlane];
+        //Load MAX_AR_SZ elements at a time to limit the register usage
+        for (int ar_start = 0; ar_start < MAX_KP_K; ar_start += MAX_AR_SZ) {
+          register int Ar[MIN(MAX_AR_SZ, MAX_KP_K)];
+          int kpKlane = lane % min(MAX_AR_SZ, kpK);
 
-          //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
-          {
-            int c = 0;
-
-            #pragma unroll
-            for (int a_col = 0; a_col < MAX_KP_K; a_col++) {
-              if (a_col < kpK) {
-                int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-                int kp_row;
-                if (CONSTS_AND_VARS_SAME) {
-                  kp_row = (a_col + kpKlane)%kpK; //kpMullane/(warpSize/kpK)
-                } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;}
-                int kp = (kpK <= 32) ? __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK) : kron_fac_sh[kp_col][kp_row]; //kron_fac_sh[kp_col][a_col];;//
-
-                c += a * kp;
-              }
+          for (int a_col = kpKlane, i = 0; i < MIN(MAX_AR_SZ, MAX_KP_K); i++) { //
+            if (i < kpK - ar_start) {
+              Ar[i] = Ash[a_row][(a_col_start+kpMullane)*kpK + ar_start + (a_col + i < min(MAX_AR_SZ, kpK) ? a_col: a_col - min(MAX_AR_SZ, kpK)) + i];//TODO: Shared memory bank conflicts here with KP_K = 4
             }
+          }
 
-            // if (a_row == 0 && (kp_col)*(MAX_K/kpK)+a_col_start+kpMullane && blockIdx.x == 0)
-            //   printf("c %d\n", c);
-            Csh[a_row][(kp_col)*(MAX_K/kpK)+a_col_start+kpMullane] = c;
+          for (int kp_col = kpMulwid; kp_col < kpN; kp_col += kpMulblockWarps) {
+            register int kron_fac_r;
+            
+            kron_fac_r = kron_fac_sh[kp_col][ar_start+kpKlane];
+
+            //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
+            {
+              int c = 0;
+
+              #pragma unroll
+              for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
+                if (a_col < kpK - ar_start) {
+                  int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
+                  int kp_row;
+                  if (CONSTS_AND_VARS_SAME) {
+                    kp_row = (a_col + kpKlane)%kpK; //kpMullane/(warpSize/kpK)
+                  } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;}
+                  int kp;
+                  if (kpK <= 32) {
+                    kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK);
+                  } else {
+                    kp_row = ar_start + kpKlane + (a_col+kpKlane < min(MAX_AR_SZ, kpK) ? a_col : a_col - min(MAX_AR_SZ, kpK));
+                    kp = kron_fac_sh[kp_col][kp_row];
+                  } 
+
+                  c += a * kp;
+                }
+              }
+
+              // if (a_row == 0 && (kp_col)*(MAX_K/kpK)+a_col_start+kpMullane && blockIdx.x == 0)
+              //   printf("c %d\n", c);
+              Csh[a_row][(kp_col)*(MAX_K/kpK)+a_col_start+kpMullane] += c;
+            }
           }
         }
       }
@@ -294,11 +310,11 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     
     int min_k = min(K, 1024);
     int consts_equals_vars = K <= 1024 ? 1 : 0;
-    // if (min_k/KP_MAT_K[0] >= 256) {
-    //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
-    //   min_k = min_k/KP_MAT_K[0];
-    //   consts_equals_vars = 0;
-    // }
+    if (min_k/KP_MAT_K[0] >= 256) {
+      //K dimension is very high. Divide it in different threadblocks to have better parallelism
+      min_k = min_k/KP_MAT_K[0];
+      consts_equals_vars = 0;
+    }
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][consts_equals_vars];
     dim3 grid = {(K/min_k), (M/TILE_X/N_COARSE_TB)}; 
     dim3 block = {128,1,1};
@@ -407,11 +423,12 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          {512,1024,1024, 2, {32,32},{32,32}},
-                                          {512,256,256, 2, {16,16},{16,16}},
-                                          // {512,512,512, 3, {8,8,8},{8,8,8}},
-                                          // {512,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {512,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
+                                          {10,1024,1024, 2, {32,32},{32,32}},
+                                          {10,256,256, 2, {16,16},{16,16}},
+                                          {10,512,512, 3, {8,8,8},{8,8,8}},
+                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}}
   #endif
