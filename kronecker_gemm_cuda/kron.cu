@@ -174,14 +174,14 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
         
         *(LD_TYPE*)&Ash[a_row][a_col] = a;        
       }
+
+      for (int i = threadIdx.x; i < MAX_K; i += blockDim.x)
+        Csh[a_row][i] = 0;
     }
 
     __syncthreads();
 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
-      for (int i = threadIdx.x; i < MAX_K; i += blockDim.x)
-        Csh[a_row][i] = 0;
-
       for (int a_col_start = 0; a_col_start < MAX_K/kpK; a_col_start += numKpColMult) {
         const int MAX_AR_SZ = 32;
 
@@ -197,14 +197,13 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
           }
 
           for (int kp_col = kpMulwid; kp_col < kpN; kp_col += kpMulblockWarps) {
-            register int kron_fac_r;
+            int c = 0;
             
-            kron_fac_r = kron_fac_sh[kp_col][ar_start+kpKlane];
+            register int kron_fac_r;
 
+            kron_fac_r = kron_fac_sh[kp_col][ar_start+kpKlane];
             //for (int a_col_start = lane * KP_K; a_col_start < TILE_K; a_col_start += KP_K*KP_K) {
             {
-              int c = 0;
-
               #pragma unroll
               for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
                 if (a_col < kpK - ar_start) {
@@ -214,9 +213,11 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                     kp_row = (a_col + kpKlane)%kpK; //kpMullane/(warpSize/kpK)
                   } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;}
                   int kp;
-                  if (kpK <= 32) {
+                  if (MAX_KP_K <= 32) {
                     kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK);
                   } else {
+                    //FIXME: Using shfl_sync instead of shared memory increases the # of instructions generated and hence, decreases the performance
+                    //significantly for 100x4096 and 64x64, 64x64
                     kp_row = ar_start + kpKlane + (a_col+kpKlane < min(MAX_AR_SZ, kpK) ? a_col : a_col - min(MAX_AR_SZ, kpK));
                     kp = kron_fac_sh[kp_col][kp_row];
                   } 
@@ -224,11 +225,11 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                   c += a * kp;
                 }
               }
-
-              // if (a_row == 0 && (kp_col)*(MAX_K/kpK)+a_col_start+kpMullane && blockIdx.x == 0)
-              //   printf("c %d\n", c);
-              Csh[a_row][(kp_col)*(MAX_K/kpK)+a_col_start+kpMullane] += c;
             }
+
+            // if (a_row == 0 && (kp_col)*(MAX_K/kpK)+a_col_start+kpMullane && blockIdx.x == 0)
+            //   printf("c %d\n", c);
+            Csh[a_row][(kp_col)*(MAX_K/kpK)+a_col_start+kpMullane] += c;
           }
         }
       }
