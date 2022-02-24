@@ -121,7 +121,7 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 }
 
 
-template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int CONSTS_AND_VARS_SAME>
+template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int K_EQUALS_VAR, int KPK_EQUALS_VAR>
 __global__ 
 void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T * kron_fac, T * C, int kpNVar, int kpKVar) {
   __shared__ __align__(128) int kron_fac_sh[MAX_KP_N][MAX_KP_K+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
@@ -139,14 +139,18 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
  
   // return;
 
-  if (CONSTS_AND_VARS_SAME) {
+  if (KPK_EQUALS_VAR) {
     kpK = MAX_KP_K;
     kpN = MAX_KP_N;
-    K = MAX_K;
-    N = K;
   } else {
     kpK = kpKVar;
     kpN = kpNVar;
+  }
+
+  if (K_EQUALS_VAR) {
+    K = MAX_K;
+    N = K;
+  } else {
     K = KVar;
     N = NVar;
   }
@@ -170,7 +174,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   for (int start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
     for (int a_row = 0; a_row < TILE_X; a_row += 1) {
       for (int a_col = threadIdx.x*ldNumElems; a_col < MAX_K; a_col += blockDim.x*ldNumElems) {
-        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + ((CONSTS_AND_VARS_SAME) ? 0 : blockIdx.x*MAX_K) + a_col];
+        LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : blockIdx.x*MAX_K) + a_col];
         
         *(LD_TYPE*)&Ash[a_row][a_col] = a;        
       }
@@ -209,7 +213,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                 if (a_col < kpK - ar_start) {
                   int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
                   int kp_row;
-                  if (CONSTS_AND_VARS_SAME) {
+                  if (K_EQUALS_VAR) {
                     kp_row = (a_col + kpKlane)%kpK; //kpMullane/(warpSize/kpK)
                   } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;}
                   int kp;
@@ -241,7 +245,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
       for (int c_col = threadIdx.x*ldNumElems; c_col < MAX_K; c_col += blockDim.x*ldNumElems) {
         int c_row = (a_row + start_row);
         int c_idx;
-        if (CONSTS_AND_VARS_SAME)
+        if (K_EQUALS_VAR && KPK_EQUALS_VAR)
           c_idx = c_row * N + c_col;
         else
           c_idx = c_row * N + blockIdx.x * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
@@ -254,9 +258,17 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
 
 #define KERNEL_CALL dim3 grid = {M/TILE_X/N_COARSE_TB, 1}; dim3 block = {128,1,1}; cuda_gemm<int,128,N_COARSE_TB,TILE_X,MAX_K,KP_N,KP_K,CONSTS_AND_VARS_SAME><<<grid, block, 0, stream>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i], KP_MAT_N[NUM_KP_MATS-i-1], KP_MAT_K[NUM_KP_MATS-i-1]);
 
+// #define KP_EQUALS_VAR_KERNELS (N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
+//   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,0>,\
+//   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,1>,
+
+#define K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
+  (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,K_EQUALS_VAR,0>,\
+  (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,K_EQUALS_VAR,1>,
+
 #define KP_N_K_KERNELS(N_COARSE_TB, MAX_K, KP_N_K) \
-  (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,0>,\
-  (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,1>,
+  K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 0) \
+  K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
@@ -278,9 +290,10 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
 #define NUM_MAX_K_KERNELS 7
 #define NUM_KP_N_K_KERNELS 6
 #define NUM_COARSE_TB_KERNELS 3
-#define NUM_CONSTS_AND_VARS_SAME 2
+#define NUM_K_EQUALS_VAR 2
+#define NUM_KPK_EQUALS_VAR 2
 
-static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_CONSTS_AND_VARS_SAME] = {
+static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
     COARSE_TB_KERNELS(1)
     COARSE_TB_KERNELS(8)
@@ -290,7 +303,7 @@ static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_K
 typedef int (*cuda_gemm_ty)(int, int, int, int*, int*, int*, int kpNVar, int kpKVar);
 
 
-static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_CONSTS_AND_VARS_SAME);
+static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 int log2(int n){return 31 - __builtin_clz(n);}
 
@@ -310,13 +323,13 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     // assert(idx < sizeof(cudaGemmSpecialized)/sizeof(void*));
     
     int min_k = min(K, 1024);
-    int consts_equals_vars = K <= 1024 ? 1 : 0;
+    int k_equals_var = K <= 1024 ? 1 : 0;
     if (min_k/KP_MAT_K[0] >= 256) {
       //K dimension is very high. Divide it in different threadblocks to have better parallelism
       min_k = min_k/KP_MAT_K[0];
-      consts_equals_vars = 0;
+      k_equals_var = 0;
     }
-    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][consts_equals_vars];
+    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/8][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][k_equals_var][1];
     dim3 grid = {(K/min_k), (M/TILE_X/N_COARSE_TB)}; 
     dim3 block = {128,1,1};
 
