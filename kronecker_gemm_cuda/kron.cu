@@ -23,7 +23,7 @@
 
 void setMatrix(int* mat, int M, int N, int (*fnvalue)(int i, int j)) 
 {
-  #pragma omp parallel for collapse(2)
+  // #pragma omp parallel for collapse(2)
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
       mat[i*N + j] = fnvalue(i,j);
@@ -129,9 +129,9 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
   __shared__ __align__(128) int Ash[TILE_X][MAX_K]; //TODO: Add Padding of 4 so that 128-bit loads can be loaded without misaligned address but ideally padding of 1 will be best for shared memory loads of As at line 293
   __shared__ __align__(128) int Csh[TILE_X][MAX_K];
 
-  int wid = threadIdx.x/warpSize;
-  int lane = threadIdx.x%warpSize;
-  int blockWarps = blockDim.x/warpSize;
+  int wid = threadIdx.x/32;
+  int lane = threadIdx.x%32;
+  int blockWarps = blockDim.x/32;
   int kpK;
   int kpN;
   int K;
@@ -197,7 +197,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
 
           for (int a_col = kpKlane, i = 0; i < MIN(MAX_AR_SZ, MAX_KP_K); i++) { //
             if (i < kpK - ar_start) {
-              Ar[i] = Ash[a_row][(a_col_start+kpMullane)*kpK + ar_start + (a_col + i < min(MAX_AR_SZ, kpK) ? a_col: a_col - min(MAX_AR_SZ, kpK)) + i];//TODO: Shared memory bank conflicts here with KP_K = 4
+              Ar[i] = Ash[a_row][(a_col_start+kpMullane)*kpK + ar_start + (a_col + i) % min(MAX_AR_SZ, kpK)];//TODO: Shared memory bank conflicts here with KP_K = 4
             }
           }
 
@@ -214,7 +214,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                 if (a_col < kpK - ar_start) {
                   int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
                   int kp_row;
-                  if (K_EQUALS_VAR) {
+                  if (KPK_EQUALS_VAR) {
                     kp_row = (a_col + kpKlane)%kpK; //kpMullane/(warpSize/kpK)
                   } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;}
                   int kp;
@@ -246,7 +246,7 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
       for (int c_col = threadIdx.x*ldNumElems; c_col < MAX_K; c_col += blockDim.x*ldNumElems) {
         int c_row = (a_row + start_row);
         int c_idx;
-        if (K_EQUALS_VAR && KPK_EQUALS_VAR)
+        if (K_EQUALS_VAR)
           c_idx = c_row * N + c_col;
         else
           c_idx = c_row * N + blockIdx.x * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
@@ -325,7 +325,7 @@ int* customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     // assert(idx < sizeof(cudaGemmSpecialized)/sizeof(void*));
     
     int min_k = min(K, 1024);
-    int k_equals_var = K <= 1024 ? 1 : 0;
+    int k_equals_var = (min_k == K) ? 1 : 0;
     if (min_k/KP_MAT_K[0] >= 256) {
       //K dimension is very high. Divide it in different threadblocks to have better parallelism
       min_k = min_k/KP_MAT_K[0];
