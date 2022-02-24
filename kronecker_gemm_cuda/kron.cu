@@ -23,6 +23,7 @@
 
 void setMatrix(int* mat, int M, int N, int (*fnvalue)(int i, int j)) 
 {
+  #pragma omp parallel for collapse(2)
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
       mat[i*N + j] = fnvalue(i,j);
@@ -307,12 +308,13 @@ static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS
 
 int log2(int n){return 31 - __builtin_clz(n);}
 
-void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
+int* customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
                      int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
   //Row Major Layout of all matrics
+  int* resultMat = kpMatmulResult[0];
+  int* prevResult = x;
   for (int i = 0; i < NUM_KP_MATS; i++) {
-    int* prev_kp = (i==0) ? x : kpMatmulResult[i-1];
 
     const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
@@ -333,12 +335,23 @@ void customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     dim3 grid = {(K/min_k), (M/TILE_X/N_COARSE_TB)}; 
     dim3 block = {128,1,1};
 
-    void *args[] = {&M, &N, &K, &prev_kp, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&kpMatmulResult[i], (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1]};
+    void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1]};
 
     CUDACHECK(cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream));
+
+    if (i < NUM_KP_MATS - 1) {
+      prevResult = resultMat;
+      if (resultMat == kpMatmulResult[0]) {        
+        resultMat = kpMatmulResult[1];
+      } else if (resultMat == kpMatmulResult[1]) {
+        resultMat = kpMatmulResult[0];
+      }
+    }
     
     // CUDACHECK(cudaDeviceSynchronize());
   }
+
+  return resultMat;
 }
 
 bool check(int* ref, int* computed, int M, int N) {
@@ -501,7 +514,7 @@ int main(int argc, char* argv[])
 
     int* __dKpOut[NUM_KP_MATS];
     int* __dKpMats[NUM_KP_MATS];
-    int* __dKpMatmulResult[NUM_KP_MATS];
+    int* __dKpMatmulResult[2];
 
     for (int i = 0; i < NUM_KP_MATS; i++) {
       KP_MAT_K[i] = matrixSize.KP_MAT_K[i];
@@ -512,15 +525,17 @@ int main(int argc, char* argv[])
 
       CUDACHECK(cudaMalloc(&__dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(int)));
       // CUDACHECK(cudaMalloc(&__dKpOut[i], K * N * sizeof(int)));
-      CUDACHECK(cudaMalloc(&__dKpMatmulResult[i], M*std::max(N,K) * sizeof(int)));
+      
 
-      CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(int)));
       // CUDACHECK(cudaMemset(__dKpOut[i], 0, K * N * sizeof(int)));
     }
 
     // CUDACHECK(cudaMemcpy(&dKpOut[0], &__dKpOut[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
     CUDACHECK(cudaMemcpy(&dKpMats[0], &__dKpMats[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
-    CUDACHECK(cudaMemcpy(&dKpMatmulResult[0], &__dKpMatmulResult[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
+    CUDACHECK(cudaMalloc(&__dKpMatmulResult[0], M*std::max(N,K) * sizeof(int)));
+    CUDACHECK(cudaMalloc(&__dKpMatmulResult[1], M*std::max(N,K) * sizeof(int)));
+    CUDACHECK(cudaMemset(__dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(int)));
+    CUDACHECK(cudaMemset(__dKpMatmulResult[1], 0, M*std::max(N,K) * sizeof(int)));
 
     int* result = new int[M*N];
 
@@ -543,7 +558,7 @@ int main(int argc, char* argv[])
       // slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats,
       //              M, N, K, KP_MAT_N, KP_MAT_K);
 
-      for (int i = 0; i < NUM_KP_MATS; i++)
+      for (int i = 0; i < 2; i++)
         CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(int)));
   #ifdef EVAL  
       cudaStream_t stream;
@@ -566,22 +581,24 @@ int main(int argc, char* argv[])
 
       for (int i = 0; i < NUM_KP_MATS; i++) {
         CUDACHECK(cudaFree(__dKpMats[i]));
-        CUDACHECK(cudaFree(__dKpMatmulResult[i]));
       }
 
+      CUDACHECK(cudaFree(__dKpMatmulResult[0]));
+      CUDACHECK(cudaFree(__dKpMatmulResult[1]));
       CUDACHECK(cudaFree(dX));
       CUDACHECK(cudaFree(dResult));
       continue;
   #else
-      for (int i = 0; i < 1; i++)
-        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      
+      int* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
       CUDACHECK(cudaDeviceSynchronize());
   #endif
       // return;
       int* hKpMatMulResult = new int[M*N];
       // return;
-      for (int i = 0; i < NUM_KP_MATS; i++)
-        CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
+      // for (int i = 0; i < NUM_KP_MATS; i++)
+      //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
+      CUDACHECK(cudaMemcpy(kpMatmulResult[NUM_KP_MATS-1], dResult, M*N*sizeof(int), cudaMemcpyDeviceToHost));
       // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
       if (check(result, kpMatmulResult[NUM_KP_MATS-1], M,N))
         printf("Results Correct for test %d\n", fnvalue);
