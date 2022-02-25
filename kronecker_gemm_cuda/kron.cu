@@ -217,6 +217,14 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
             kron_fac_r = kron_fac_sh[kp_col][lane % kpK];
   
             {
+              // const int MAX_KRON_COL_SIZE = MAX_AR_SZ;//MIN(16, MAX_AR_SZ);
+              // register int kron_fac_rs[MAX_KRON_COL_SIZE];
+
+              // #pragma unroll
+              // for (int kp_row = 0; kp_row < MAX_KRON_COL_SIZE; kp_row++) {
+              //   kron_fac_rs[kp_row] = __shfl_sync(0xffffffff, kron_fac_r, ar_start + (kp_row + kpKlane)%min(kpK, KPK_SPLIT_SIZE), kpK); // kron_fac_sh[kp_col][(ar_start + (kp_row + kpKlane)%min(kpK, KPK_SPLIT_SIZE)) % kpK];
+              // }
+
               #pragma unroll
               for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
                 if (a_col < kpK) {
@@ -224,14 +232,12 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                   int kp_row;
                   if (KPK_EQUALS_VAR) {
                     kp_row = ar_start + (a_col + kpKlane)%min(kpK, KPK_SPLIT_SIZE); //kpMullane/(warpSize/kpK)
-                    // if(kpK == 32 && threadIdx.x <= 1 && blockIdx.x == 0 && blockIdx.y == 0) {
-                    //   printf("threadIdx.x %d kpKlane %d a_col %d kp_row %d\n", threadIdx.x, kpKlane, a_col, kp_row);
-                    // }
                   } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
                   int kp;
                   if (MAX_KP_K <= 32) {
                    // kp = kron_fac_sh[kp_col][ar_start+(a_col+kpKlane)%min(kpK, KPK_SPLIT_SIZE)];
                     kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK);
+                    // kp = kron_fac_rs[a_col % MAX_KRON_COL_SIZE];
                   } else {
                     //FIXME: Using shfl_sync instead of shared memory increases the # of instructions generated and hence, decreases the performance
                     //significantly for 100x4096 and 64x64, 64x64
@@ -240,6 +246,15 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
                   } 
 
                   c += a * kp;
+
+                  // if ((a_col + 1)% MAX_KRON_COL_SIZE == 0 && a_col >= MAX_KRON_COL_SIZE - 1) {
+                  //   int kp_row_start = ((a_col + 1)/ MAX_KRON_COL_SIZE) * MAX_KRON_COL_SIZE;
+                    
+                  //   #pragma unroll
+                  //   for (int kp_row = 0; kp_row < MAX_KRON_COL_SIZE; kp_row++) {
+                  //     kron_fac_rs[kp_row] = __shfl_sync(0xffffffff, kron_fac_r, ar_start + (kp_row_start + kp_row + kpKlane)%min(kpK, KPK_SPLIT_SIZE), kpK);
+                  //   }
+                  // }
                 }
               }
             }
@@ -275,8 +290,6 @@ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T 
     }
   }
 }
-
-#define KERNEL_CALL dim3 grid = {M/TILE_X/N_COARSE_TB, 1}; dim3 block = {128,1,1}; cuda_gemm<int,128,N_COARSE_TB,TILE_X,MAX_K,KP_N,KP_K,CONSTS_AND_VARS_SAME><<<grid, block, 0, stream>>>(M, N, K, prev_kp, kpMats[NUM_KP_MATS-i-1], kpMatmulResult[i], KP_MAT_N[NUM_KP_MATS-i-1], KP_MAT_K[NUM_KP_MATS-i-1]);
 
 // #define KP_EQUALS_VAR_KERNELS (N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
 //   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,0>,\
