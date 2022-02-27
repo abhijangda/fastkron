@@ -125,6 +125,8 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 
 #define EXTERNAL_KP_K_TILE_ 32
 
+__device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
+
 template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int KP_N_TILE_, int K_EQUALS_VAR, int KPK_EQUALS_VAR>
 __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T * kron_fac, T * C, int kpNVar, int kpKVar, int kp_idx) {
   const int KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
@@ -190,7 +192,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     }
   }
 
-  typedef int4 LD_TYPE; // TODO: set to int4
+  typedef int4 LD_TYPE;
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
   
   const int numKpColMult = min(MAX_K/kpK*NUM_KPK_SPLITS, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A
@@ -260,61 +262,35 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 
             for (int kp_col = kpMulwid; kp_col < min(kpN, INTERNAL_KP_N_TILE); kp_col += kpMulblockWarps) {
               int c = 0;
-              // int csh_col = (internal_tile_kp_n + kp_col)*(MAX_K/kpK)+a_col_start+kpMullane;
-              // int c_idx = tile_k * (MAX_K/kpK) + (csh_col/(MAX_K/kpK)) * (K/kpK) + csh_col%(MAX_K/kpK);
-              // if (kp_idx == 0 && kp_col == 32){ //c_idx >= 2048 && c_idx < 2048+64) {
-              //   printf("csh_col %d %d %d\n", csh_col, c_idx, tile_k);
-              // }
+
               register int kron_fac_r;
 
-              // kron_fac_r = kron_fac_sh[kp_col][lane % kpK];
-    
-              {
-                // const int MAX_KRON_COL_SIZE = MAX_AR_SZ;//MIN(16, MAX_AR_SZ);
-                // register int kron_fac_rs[MAX_KRON_COL_SIZE];
+              kron_fac_r = kron_fac_sh[kp_col][lane % EXTERNAL_KP_K_TILE];
+              
+              __syncwarp();
 
-                // #pragma unroll
-                // for (int kp_row = 0; kp_row < MAX_KRON_COL_SIZE; kp_row++) {
-                //   kron_fac_rs[kp_row] = __shfl_sync(0xffffffff, kron_fac_r, ar_start + (kp_row + kpKlane)%min(kpK, KPK_SPLIT_SIZE), kpK); // kron_fac_sh[kp_col][(ar_start + (kp_row + kpKlane)%min(kpK, KPK_SPLIT_SIZE)) % kpK];
-                // }
+              #pragma unroll
+              for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
+                if (a_col < kpK) {
+                  int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
+                  int kp_row;
+                  if (KPK_EQUALS_VAR) {
+                    kp_row = ar_start + (a_col + kpKlane)%min(kpK, KPK_SPLIT_SIZE); //kpMullane/(warpSize/kpK)
+                  } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
+                  int kp;
+                  if (EXTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
+                    // kp = kron_fac_sh[kp_col][ar_start+(a_col+kpKlane)%min(kpK, KPK_SPLIT_SIZE)];
+                    kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, EXTERNAL_KP_K_TILE);
+                    // if (kp_col == 0 && ar_start == 16 && kpK == 128 && kp != kp1 && isfirstIdx(blockIdx))
+                    //   printf("kp_col %d kp_row %d %d, %d %d, %d %d %d\n", kp_col, kp_row, ar_start + (a_col+kpKlane) % min(MAX_AR_SZ, kpK), kp, kp1, ar_start, a_col, kpKlane);
+                  } else {
+                    //FIXME: For 1x16384 with 128x128 Kronecker factors, the results are incorrect for __shfl_sync because numkpcolmult != 32
+                    // kp_row = ar_start + kpKlane + (a_col+kpKlane < min(MAX_AR_SZ, kpK) ? a_col : a_col - min(MAX_AR_SZ, kpK));
+                    kp_row = ar_start + (a_col+kpKlane) % min(MAX_AR_SZ, kpK);
+                    kp = kron_fac_sh[kp_col][kp_row];
+                  } 
 
-                #pragma unroll
-                for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
-                  if (a_col < kpK) {
-                    int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-                    // if (csh_col == 0) {
-                    //   int c_idx = external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (csh_col/(MAX_K/kpK)) * (K/kpK) + csh_col%(MAX_K/kpK);
-                    //   if (c_idx == 32)
-                    //     printf("281: a %d\n", a);
-                    // }
-                    int kp_row;
-                    if (KPK_EQUALS_VAR) {
-                      kp_row = ar_start + (a_col + kpKlane)%min(kpK, KPK_SPLIT_SIZE); //kpMullane/(warpSize/kpK)
-                    } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
-                    int kp;
-                    if (MAX_KP_K <= 32) {
-                      kp = kron_fac_sh[kp_col][ar_start+(a_col+kpKlane)%min(kpK, KPK_SPLIT_SIZE)];
-                      // kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, kpK);
-                      // kp = kron_fac_rs[a_col % MAX_KRON_COL_SIZE];
-                    } else {
-                      //FIXME: Using shfl_sync instead of shared memory increases the # of instructions generated and hence, decreases the performance
-                      //significantly for 100x4096 and 64x64, 64x64
-                      // kp_row = ar_start + kpKlane + (a_col+kpKlane < min(MAX_AR_SZ, kpK) ? a_col : a_col - min(MAX_AR_SZ, kpK));
-                      kp_row = ar_start + (a_col+kpKlane) % min(MAX_AR_SZ, kpK);
-                      kp = kron_fac_sh[kp_col][kp_row];
-                    } 
-
-                    c += a * kp;
-
-                    // if ((a_col + 1)% MAX_KRON_COL_SIZE == 0 && a_col >= MAX_KRON_COL_SIZE - 1) {
-                    //   int kp_row_start = ((a_col + 1)/ MAX_KRON_COL_SIZE) * MAX_KRON_COL_SIZE;
-                      
-                    //   #pragma unroll
-                    //   for (int kp_row = 0; kp_row < MAX_KRON_COL_SIZE; kp_row++) {
-                    //     kron_fac_rs[kp_row] = __shfl_sync(0xffffffff, kron_fac_r, ar_start + (kp_row_start + kp_row + kpKlane)%min(kpK, KPK_SPLIT_SIZE), kpK);
-                    //   }
-                    // }
-                  }
+                  c += a * kp;
                 }
               }
 
@@ -351,7 +327,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
           
 
           atomicAdd(&C[c_idx], Csh[a_row][c_col]);
-          
+          // C[c_idx] = Csh[a_row][c_col];
 
           // if (kp_idx == 0 && c_idx >= 2048 && c_idx < 2048+64) {
           //   printf("Csh[a_row][%d] %d tile_k %d C[c_idx] %d\n", c_col, Csh[a_row][c_col], tile_k, C[c_idx]);
@@ -379,7 +355,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 //   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,1>,
 
 #define N_THREADS 256
-#define KP_N_TILE 64
+#define KP_N_TILE 32
 
 #define K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
   (void*)cuda_gemm<int,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,\
