@@ -23,12 +23,13 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
-void setMatrix(int* mat, int M, int N, int (*fnvalue)(int i, int j)) 
+template<typename T>
+void setMatrix(T* mat, int M, int N, int (*fnvalue)(int i, int j)) 
 {
   // #pragma omp parallel for collapse(2)
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
-      mat[i*N + j] = fnvalue(i,j);
+      mat[i*N + j] = (T)fnvalue(i,j);
     }
   }
 }
@@ -134,11 +135,11 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   const int INTERNAL_KP_N_TILE = MIN(16, KP_N_TILE);
   const int EXTERNAL_KP_K_TILE = MIN(EXTERNAL_KP_K_TILE_, MAX_KP_K);
 
-  __shared__ __align__(128) int kron_fac_sh[INTERNAL_KP_N_TILE][EXTERNAL_KP_K_TILE+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
+  __shared__ __align__(128) T kron_fac_sh[INTERNAL_KP_N_TILE][EXTERNAL_KP_K_TILE+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
   const int Ash_COLS = MAX_K/(MAX_KP_K/EXTERNAL_KP_K_TILE);
-  __shared__ __align__(128) int Ash[TILE_X][Ash_COLS];
+  __shared__ __align__(128) T Ash[TILE_X][Ash_COLS];
   const int Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
-  __shared__ __align__(128) int Csh[TILE_X][Csh_COLS];//Allocate Csh for only as many values that are produced
+  __shared__ __align__(128) T Csh[TILE_X][Csh_COLS];//Allocate Csh for only as many values that are produced
 
   int wid = threadIdx.x/32;
   int lane = threadIdx.x%32;
@@ -194,7 +195,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     // }
   }
 
-  typedef int4 LD_TYPE;
+  #ifdef EVAL
+    typedef float4 LD_TYPE; 
+  #else 
+    typedef int4 LD_TYPE; 
+  #endif 
+
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
   
   const int numKpColMult = min(MAX_K/kpK*NUM_KPK_SPLITS, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A
@@ -246,7 +252,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
           //Load MAX_AR_SZ elements at a time to limit the register usage
           // for (int ar_start = 0; ar_start < MAX_KP_K; ar_start += MAX_AR_SZ) 
           {
-            register int Ar[MAX_AR_SZ];
+            register T Ar[MAX_AR_SZ];
             int kpKlane = kpMullane % MAX_AR_SZ;
             int ar_start = kpSplitLane * MAX_AR_SZ;
 
@@ -263,21 +269,21 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
             }
 
             for (int kp_col = kpMulwid; kp_col < min(kpN, INTERNAL_KP_N_TILE); kp_col += kpMulblockWarps) {
-              int c = 0;
+              T c = 0;
 
-              register int kron_fac_r;
+              register T kron_fac_r;
 
               kron_fac_r = kron_fac_sh[kp_col][lane % EXTERNAL_KP_K_TILE];
               
               #pragma unroll
               for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
                 if (a_col < kpK) {
-                  int a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
+                  T a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
                   int kp_row;
                   if (KPK_EQUALS_VAR) {
                     kp_row = ar_start + (a_col + kpKlane)%min(kpK, KPK_SPLIT_SIZE); //kpMullane/(warpSize/kpK)
                   } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
-                  int kp;
+                  T kp;
                   if (EXTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
                     // kp = kron_fac_sh[kp_col][ar_start+(a_col+kpKlane)%min(kpK, KPK_SPLIT_SIZE)];
                     kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, EXTERNAL_KP_K_TILE);
@@ -356,9 +362,15 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 #define N_THREADS 256
 #define KP_N_TILE 32
 
+#ifdef EVAL
+    typedef float DATA_TYPE;
+  #else
+    typedef int DATA_TYPE;
+  #endif
+
 #define K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
-  (void*)cuda_gemm<int,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,\
-  (void*)cuda_gemm<int,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
+  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,\
+  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
 
 #define KP_N_K_KERNELS(N_COARSE_TB, MAX_K, KP_N_K) \
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 0) \
@@ -395,19 +407,19 @@ static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_K
     COARSE_TB_KERNELS(4)
   };
 
-typedef int (*cuda_gemm_ty)(int, int, int, int*, int*, int*, int kpNVar, int kpKVar);
-
-
 static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 int log2(int n){return 31 - __builtin_clz(n);}
 
-int* customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
-                     int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
+template<typename T>
+T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+                    int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
+  typedef int (*cuda_gemm_ty)(int, int, int, T*, T*, T*, int kpNVar, int kpKVar);
+
   //Row Major Layout of all matrics
-  int* resultMat = kpMatmulResult[0];
-  int* prevResult = x;
+  T* resultMat = kpMatmulResult[0];
+  T* prevResult = x;
   for (int i = 0; i < NUM_KP_MATS; i++) {
 
     const int TILE_X = 1; //X direction correspond to tile of row 
@@ -468,7 +480,8 @@ int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
 int randMod(int i, int j) {return rand()%5;}
 
-void setValues(int NUM_KP_MATS, int* kpMats[], int *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
+template<typename T>
+void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
 {
   for (int i = 0; i < NUM_KP_MATS; i++) {
     setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], fnvalue);
@@ -592,34 +605,34 @@ int main(int argc, char* argv[])
       printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
     }
 
-    int *kpout[NUM_KP_MATS];
-    int *kpMats[NUM_KP_MATS];
-    int* kpMatmulResult[NUM_KP_MATS];
+    DATA_TYPE *kpout[NUM_KP_MATS];
+    DATA_TYPE *kpMats[NUM_KP_MATS];
+    DATA_TYPE* kpMatmulResult[NUM_KP_MATS];
 
-    int *x = new int[M*K];
+    DATA_TYPE *x = new DATA_TYPE[M*K];
 
-    int* dX;
-    int** dKpOut;
-    int** dKpMats;
-    int** dKpMatmulResult;
+    DATA_TYPE* dX;
+    DATA_TYPE** dKpOut;
+    DATA_TYPE** dKpMats;
+    DATA_TYPE** dKpMatmulResult;
     
-    CUDACHECK(cudaMalloc(&dX, M*K * sizeof(int)));
-    CUDACHECK(cudaMalloc(&dKpMats, NUM_KP_MATS * sizeof(int*)));
-    CUDACHECK(cudaMalloc(&dKpMatmulResult, NUM_KP_MATS * sizeof(int*)));
-    CUDACHECK(cudaMalloc(&dKpOut, NUM_KP_MATS * sizeof(int*)));
+    CUDACHECK(cudaMalloc(&dX, M*K * sizeof(DATA_TYPE)));
+    CUDACHECK(cudaMalloc(&dKpMats, NUM_KP_MATS * sizeof(DATA_TYPE*)));
+    CUDACHECK(cudaMalloc(&dKpMatmulResult, NUM_KP_MATS * sizeof(DATA_TYPE*)));
+    CUDACHECK(cudaMalloc(&dKpOut, NUM_KP_MATS * sizeof(DATA_TYPE*)));
 
-    int* __dKpOut[NUM_KP_MATS];
-    int* __dKpMats[NUM_KP_MATS];
-    int* __dKpMatmulResult[2];
+    DATA_TYPE* __dKpOut[NUM_KP_MATS];
+    DATA_TYPE* __dKpMats[NUM_KP_MATS];
+    DATA_TYPE* __dKpMatmulResult[2];
 
     for (int i = 0; i < NUM_KP_MATS; i++) {
       KP_MAT_K[i] = matrixSize.KP_MAT_K[i];
       KP_MAT_N[i] = matrixSize.KP_MAT_N[i];
-      kpMats[i] = new int[KP_MAT_K[i] * KP_MAT_N[i]];
-      kpout[i] = new int[K*N]; //TODO: larger than needed
-      kpMatmulResult[i] = new int[M*std::max(N,K)];
+      kpMats[i] = new DATA_TYPE[KP_MAT_K[i] * KP_MAT_N[i]];
+      kpout[i] = new DATA_TYPE[K*N]; //TODO: larger than needed
+      kpMatmulResult[i] = new DATA_TYPE[M*std::max(N,K)];
 
-      CUDACHECK(cudaMalloc(&__dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(int)));
+      CUDACHECK(cudaMalloc(&__dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(DATA_TYPE)));
       // CUDACHECK(cudaMalloc(&__dKpOut[i], K * N * sizeof(int)));
       
 
@@ -627,26 +640,26 @@ int main(int argc, char* argv[])
     }
 
     // CUDACHECK(cudaMemcpy(&dKpOut[0], &__dKpOut[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
-    CUDACHECK(cudaMemcpy(&dKpMats[0], &__dKpMats[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
-    CUDACHECK(cudaMalloc(&__dKpMatmulResult[0], M*std::max(N,K) * sizeof(int)));
-    CUDACHECK(cudaMalloc(&__dKpMatmulResult[1], M*std::max(N,K) * sizeof(int)));
-    CUDACHECK(cudaMemset(__dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(int)));
-    CUDACHECK(cudaMemset(__dKpMatmulResult[1], 0, M*std::max(N,K) * sizeof(int)));
+    CUDACHECK(cudaMemcpy(&dKpMats[0], &__dKpMats[0], NUM_KP_MATS * sizeof(DATA_TYPE*), cudaMemcpyHostToDevice));
+    CUDACHECK(cudaMalloc(&__dKpMatmulResult[0], M*std::max(N,K) * sizeof(DATA_TYPE)));
+    CUDACHECK(cudaMalloc(&__dKpMatmulResult[1], M*std::max(N,K) * sizeof(DATA_TYPE)));
+    CUDACHECK(cudaMemset(__dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
+    CUDACHECK(cudaMemset(__dKpMatmulResult[1], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
 
-    int* result = new int[M*N];
+    DATA_TYPE* result = new DATA_TYPE[M*N];
 
-    int* dResult;
+    DATA_TYPE* dResult;
 
-    CUDACHECK(cudaMalloc(&dResult, M * N * sizeof(int)));
+    CUDACHECK(cudaMalloc(&dResult, M * N * sizeof(DATA_TYPE)));
 
     for (int fnvalue = 0; fnvalue < sizeof(fnvalues)/sizeof(fnvalues[0]); fnvalue++) {
       setValues(NUM_KP_MATS, kpMats, x, M, N, K, KP_MAT_N, KP_MAT_K, fnvalues[fnvalue]);
 
       for (int i = 0; i < NUM_KP_MATS; i++) {
-        CUDACHECK(cudaMemcpy(__dKpMats[i], kpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(int), cudaMemcpyHostToDevice));
+        CUDACHECK(cudaMemcpy(__dKpMats[i], kpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(DATA_TYPE), cudaMemcpyHostToDevice));
       }
     
-      CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(int), cudaMemcpyHostToDevice));
+      CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(DATA_TYPE), cudaMemcpyHostToDevice));
   #ifndef EVAL
       baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
                            M, N, K, KP_MAT_N, KP_MAT_K);
@@ -655,7 +668,7 @@ int main(int argc, char* argv[])
       //              M, N, K, KP_MAT_N, KP_MAT_K);
 
       for (int i = 0; i < 2; i++)
-        CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(int)));
+        CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
   #ifdef EVAL  
       cudaStream_t stream;
       cudaStreamCreate(&stream);
@@ -686,15 +699,16 @@ int main(int argc, char* argv[])
       continue;
   #else
       
-      int* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      DATA_TYPE* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
       CUDACHECK(cudaDeviceSynchronize());
   #endif
       // return;
-      int* hKpMatMulResult = new int[M*N];
+      #ifndef EVAL 
+      DATA_TYPE* hKpMatMulResult = new DATA_TYPE[M*N];
       // return;
       // for (int i = 0; i < NUM_KP_MATS; i++)
       //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
-      CUDACHECK(cudaMemcpy(kpMatmulResult[NUM_KP_MATS-1], dResult, M*N*sizeof(int), cudaMemcpyDeviceToHost));
+      CUDACHECK(cudaMemcpy(kpMatmulResult[NUM_KP_MATS-1], dResult, M*N*sizeof(DATA_TYPE), cudaMemcpyDeviceToHost));
       // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
       if (check(result, kpMatmulResult[NUM_KP_MATS-1], M,N))
         printf("Results Correct for test %d\n", fnvalue);
@@ -723,6 +737,7 @@ int main(int argc, char* argv[])
         // printf("\n");
         return 0;
       }
+      #endif
     }
 
     //Is there really a need to free anything when you have tons of RAM, am I right?
