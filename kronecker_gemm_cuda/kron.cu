@@ -179,17 +179,19 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     external_tile_kp_n = 0;
     tile_k = blockIdx.x;
   } else {
-    if (K/MAX_K == 32)  {
-      external_tile_kp_n = blockIdx.x / 32;
-      tile_k = blockIdx.x % 32;
-    } else if (K/MAX_K == 64) {
-      external_tile_kp_n = blockIdx.x / 64;
-      tile_k = blockIdx.x % 64;
-    } else {
-      //TODO: Optimize by making more special cases
-      external_tile_kp_n = blockIdx.x/(K/MAX_K);
-      tile_k = blockIdx.x % (K/MAX_K);
-    }
+    external_tile_kp_n = blockIdx.x%DIVUP(MAX_KP_N, KP_N_TILE);
+    tile_k = blockIdx.x/DIVUP(MAX_KP_N, KP_N_TILE);
+    // if (K/MAX_K == 32)  {
+    //   external_tile_kp_n = blockIdx.x / 32;
+    //   tile_k = blockIdx.x % 32;
+    // } else if (K/MAX_K == 64) {
+    //   external_tile_kp_n = blockIdx.x / 64;
+    //   tile_k = blockIdx.x % 64;
+    // } else {
+    //   //TODO: Optimize by making more special cases
+    //   external_tile_kp_n = blockIdx.x/(K/MAX_K);
+    //   tile_k = blockIdx.x % (K/MAX_K);
+    // }
   }
 
   typedef int4 LD_TYPE;
@@ -267,8 +269,6 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 
               kron_fac_r = kron_fac_sh[kp_col][lane % EXTERNAL_KP_K_TILE];
               
-              __syncwarp();
-
               #pragma unroll
               for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
                 if (a_col < kpK) {
@@ -325,7 +325,6 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
           else
             c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
           
-
           atomicAdd(&C[c_idx], Csh[a_row][c_col]);
           // C[c_idx] = Csh[a_row][c_col];
 
@@ -430,8 +429,6 @@ int* customKronGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* k
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
 
-    CUDACHECK(cudaMemset(resultMat, 0, M * K * sizeof(int)));
-    CUDACHECK(cudaDeviceSynchronize());
     void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1], &i};
 
     CUDACHECK(cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream));
