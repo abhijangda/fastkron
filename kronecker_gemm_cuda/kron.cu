@@ -124,7 +124,7 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
   }
 }
 
-#define EXTERNAL_KP_K_TILE_ 32
+#define EXTERNAL_KP_K_TILE_ 64
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
@@ -134,8 +134,9 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   const int NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
   const int INTERNAL_KP_N_TILE = MIN(16, KP_N_TILE);
   const int EXTERNAL_KP_K_TILE = MIN(EXTERNAL_KP_K_TILE_, MAX_KP_K);
+  const int INTERNAL_KP_K_TILE = MIN(32, EXTERNAL_KP_K_TILE);
 
-  __shared__ __align__(128) T kron_fac_sh[INTERNAL_KP_N_TILE][EXTERNAL_KP_K_TILE+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
+  __shared__ __align__(128) T kron_fac_sh[INTERNAL_KP_N_TILE][INTERNAL_KP_K_TILE+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
   const int Ash_COLS = MAX_K/(MAX_KP_K/EXTERNAL_KP_K_TILE);
   __shared__ __align__(128) T Ash[TILE_X][Ash_COLS];
   const int Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
@@ -165,14 +166,14 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     N = NVar;
   }
 
-  const int KPK_SPLIT_SIZE = MIN(16, EXTERNAL_KP_K_TILE);
-  const int NUM_KPK_SPLITS = MAX(1, EXTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
+  const int KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
+  const int NUM_KPK_SPLITS = MAX(1, INTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
 
   int external_tile_kp_n;
   int tile_k;
   int external_tile_kp_k = blockIdx.z;
   
-  if (KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && EXTERNAL_KP_K_TILE == MAX_KP_K) {
+  if (KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K) {
     for (auto i = threadIdx.x; i < kpN * kpK; i += blockDim.x) {
       kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
     }
@@ -201,7 +202,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     typedef int4 LD_TYPE; 
   #endif 
 
-  const int ldNumElems = (sizeof(LD_TYPE)/sizeof(int));
+  const int ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
   
   const int numKpColMult = min(MAX_K/kpK*NUM_KPK_SPLITS, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A
   
@@ -233,13 +234,15 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     }
 
     for (int internal_tile_kp_n = 0; internal_tile_kp_n < KP_N_TILE; internal_tile_kp_n += INTERNAL_KP_N_TILE) {
-      if (!(KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && EXTERNAL_KP_K_TILE == MAX_KP_K)) {
+    for (int internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
+
+      if (!(KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K)) {
         //Create kpK subwarps and each subwarp loads 0 to INTERNAL_KP_N_TILE elements
     
-        for (int swid = threadIdx.x/INTERNAL_KP_N_TILE; swid < EXTERNAL_KP_K_TILE; swid += blockDim.x/INTERNAL_KP_N_TILE) {
+        for (int swid = threadIdx.x/INTERNAL_KP_N_TILE; swid < INTERNAL_KP_K_TILE; swid += blockDim.x/INTERNAL_KP_N_TILE) {
           int col = external_tile_kp_n*KP_N_TILE + internal_tile_kp_n + threadIdx.x%INTERNAL_KP_N_TILE;
           int row = swid;
-          kron_fac_sh[threadIdx.x%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + row) * kpN + col];
+          kron_fac_sh[threadIdx.x%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
         }
       }
 
@@ -257,13 +260,13 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
             int ar_start = kpSplitLane * MAX_AR_SZ;
 
             for (int a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
-              if (EXTERNAL_KP_K_TILE == MAX_KP_K) {
+              if (INTERNAL_KP_K_TILE == MAX_KP_K) {
                 if (i < kpK) {
                   Ar[i] = Ash[a_row][(a_col_start+kpMullane)*kpK + ar_start + (a_col + i) % MAX_AR_SZ];//TODO: Shared memory bank conflicts here with KP_K = 4
                 }
               } else {
                 if (i < EXTERNAL_KP_K_TILE) {
-                  Ar[i] = Ash[a_row][(a_col_start+kpMullane)*EXTERNAL_KP_K_TILE + ar_start + (a_col + i) % MAX_AR_SZ];//TODO: Shared memory bank conflicts here with KP_K = 4
+                  Ar[i] = Ash[a_row][(a_col_start+kpMullane)*EXTERNAL_KP_K_TILE + internal_tile_kp_k + ar_start + (a_col + i) % MAX_AR_SZ];//TODO: Shared memory bank conflicts here with KP_K = 4
                 }
               }
             }
@@ -273,7 +276,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 
               register T kron_fac_r;
 
-              kron_fac_r = kron_fac_sh[kp_col][lane % EXTERNAL_KP_K_TILE];
+              kron_fac_r = kron_fac_sh[kp_col][lane % INTERNAL_KP_K_TILE];
               
               #pragma unroll
               for (int a_col = 0; a_col < MIN(MAX_KP_K, MAX_AR_SZ); a_col++) {
@@ -284,9 +287,9 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
                     kp_row = ar_start + (a_col + kpKlane)%min(kpK, KPK_SPLIT_SIZE); //kpMullane/(warpSize/kpK)
                   } else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
                   T kp;
-                  if (EXTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
+                  if (INTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
                     // kp = kron_fac_sh[kp_col][ar_start+(a_col+kpKlane)%min(kpK, KPK_SPLIT_SIZE)];
-                    kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, EXTERNAL_KP_K_TILE);
+                    kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, INTERNAL_KP_K_TILE);
                     // if (kp_col == 0 && ar_start == 16 && kpK == 128 && kp != kp1 && isfirstIdx(blockIdx))
                     //   printf("kp_col %d kp_row %d %d, %d %d, %d %d %d\n", kp_col, kp_row, ar_start + (a_col+kpKlane) % min(MAX_AR_SZ, kpK), kp, kp1, ar_start, a_col, kpKlane);
                   } else {
@@ -294,14 +297,16 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
                     // kp_row = ar_start + kpKlane + (a_col+kpKlane < min(MAX_AR_SZ, kpK) ? a_col : a_col - min(MAX_AR_SZ, kpK));
                     kp_row = ar_start + (a_col+kpKlane) % min(MAX_AR_SZ, kpK);
                     kp = kron_fac_sh[kp_col][kp_row];
+                    // if (a_row == 0 && kp_col == 0 && kpMullane == 0 && isfirstIdx(blockIdx))
+                    //   printf("kpSplitLane %d kp_row %d kp %d internal_tile_kp_k %d\n", kpSplitLane, kp_row, kp, internal_tile_kp_k);
                   } 
 
                   c += a * kp;
                 }
               }
 
-              // if (a_row == 0 && kpMulwid == 0 && kpMullane == 0 && threadIdx.x <= 1 && blockIdx.x == 0 && blockIdx.y == 0)
-              //   printf("c %d\n", c);
+              // if (a_row == 0 && kp_col == 0 && kpMullane == 0 && isfirstIdx(blockIdx))
+              //   printf("kpSplitLane %d c %d internal_tile_kp_k %d\n", kpSplitLane, c, internal_tile_kp_k);
               int csh_col = (internal_tile_kp_n + kp_col)*(MAX_K/kpK)+a_col_start+kpMullane;
               if (NUM_KPK_SPLITS == 1)
                 Csh[a_row][csh_col] += c;
@@ -309,13 +314,14 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
                 for (int offset = NUM_KPK_SPLITS/2; offset > 0; offset /= 2) 
                   c += __shfl_down_sync(0xffffffff, c, offset, NUM_KPK_SPLITS);
                 if (kpSplitLane == 0) {
-                  Csh[a_row][csh_col] = c;
+                  Csh[a_row][csh_col] += c;
                 }
               }
             }
           }
         }
       }
+    }
     }
 
     __syncthreads();
@@ -360,7 +366,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 //   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,1>,
 
 #define N_THREADS 256
-#define KP_N_TILE 32
+#define KP_N_TILE 64
 
 #ifdef EVAL
     typedef float DATA_TYPE;
@@ -368,9 +374,11 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
     typedef int DATA_TYPE;
   #endif
 
+#define TILE_X 1 
+
 #define K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
-  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,\
-  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
+  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,\
+  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
 
 #define KP_N_K_KERNELS(N_COARSE_TB, MAX_K, KP_N_K) \
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 0) \
@@ -392,9 +400,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   MAX_K_KERNELS(N_COARSE_TB, 128) \
   MAX_K_KERNELS(N_COARSE_TB, 256) \
   MAX_K_KERNELS(N_COARSE_TB, 512) \
-  MAX_K_KERNELS(N_COARSE_TB, 1024)
+  MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
 
-#define NUM_MAX_K_KERNELS 7
+#define MAX_K 1024
+#define NUM_MAX_K_KERNELS 9
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 3
 #define NUM_K_EQUALS_VAR 2
@@ -422,7 +433,6 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   T* prevResult = x;
   for (int i = 0; i < NUM_KP_MATS; i++) {
 
-    const int TILE_X = 1; //X direction correspond to tile of row 
     const int KP_K_BATCH = 1;
     int N_COARSE_TB = (M > 100) ? 2 : 1;
 
@@ -430,7 +440,7 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     // printf("idx %d log2(K) %d log2(16) %d\n", idx, log2(K), log2(16));
     // assert(idx < sizeof(cudaGemmSpecialized)/sizeof(void*));
     
-    int min_k = min(K, 1024);
+    int min_k = min(K, MAX_K);
     int k_equals_var = (min_k == K) ? 1 : 0;
     if (min_k/KP_MAT_K[0] >= 256) {
       //K dimension is very high. Divide it in different threadblocks to have better parallelism
@@ -478,7 +488,7 @@ bool check(int* ref, int* computed, int M, int N) {
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return rand()%5;}
+int randMod(int i, int j) {return rand()%5 + 1;}
 
 template<typename T>
 void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
@@ -557,14 +567,14 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          {10,1024,1024, 2, {32,32},{32,32}},                                        
-                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          {100,256,256, 2, {16,16},{16,16}},
-                                          {10,256,256, 2, {16,16},{16,16}},
-                                          {10,512,512, 3, {8,8,8},{8,8,8}},
-                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},                                        
+                                          // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
+                                          // {100,256,256, 2, {16,16},{16,16}},
+                                          // {10,256,256, 2, {16,16},{16,16}},
+                                          // {10,512,512, 3, {8,8,8},{8,8,8}},
+                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          // {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}}
   #endif
