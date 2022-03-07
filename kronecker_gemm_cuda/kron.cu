@@ -231,7 +231,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
           }
         }      
       }
-
+    
+    //TODO: nvcc unrolls this loop, which leads to high register usage
     for (int internal_tile_kp_n = 0; internal_tile_kp_n < KP_N_TILE; internal_tile_kp_n += INTERNAL_KP_N_TILE) {
       if (!(KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K)) {
         //Create kpK subwarps and each subwarp loads 0 to INTERNAL_KP_N_TILE elements
