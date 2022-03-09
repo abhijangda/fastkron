@@ -138,9 +138,9 @@ def do(twoPowerL, npoints, d):
     torch.cuda.empty_cache()
     return all_cuda_times
 
-maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 5, 128: 2}
+maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 2, 128: 2}
 
-cases = [{"npoints": 100, "2^l": j, "d": i} for j in [64] for i in range(4 if j > 4 else 4, maxD[j]+1)] 
+cases = [{"npoints": 100, "2^l": j, "d": i} for j in [64] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},
