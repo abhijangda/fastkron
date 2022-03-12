@@ -206,12 +206,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
   
-  const int numKpColMult = MIN(MAX_K/kpK, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A //128, 16, 128, 32
-  const int kpMulblockWarps = N_THREADS/numKpColMult; //1 , 8, 1, 4
-  const int Creg_SIZE = MAX(1, Csh_COLS/N_THREADS); // 8 , 2, 16, 1024/128=8
-  const int Creg_Rows = (MAX_K/kpK)/numKpColMult; //1024/4/128 = 2, 1, 4, 1 
-  const int Creg_Cols = INTERNAL_KP_N_TILE/kpMulblockWarps; //4/1 = 4, 2, 4, 8
-  const int NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE;
+  const int numKpColMult = MIN(MAX_K/kpK, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A //128, 16, 128, 32, 32
+  const int kpMulblockWarps = N_THREADS/numKpColMult; //1 , 8, 1, 4, 1
+  const int Creg_SIZE = MAX(1, Csh_COLS/N_THREADS); // 8 , 2, 16, 1024/128=8, 4096/32 = 128
+  const int Creg_Rows = (MAX_K/kpK)/numKpColMult; //1024/4/128 = 2, 1, 4, 1, 2
+  const int Creg_Cols = INTERNAL_KP_N_TILE/kpMulblockWarps; //4/1 = 4, 2, 4, 8, 32
+  const int NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; // 2
   assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
   register T Creg[Creg_SIZE];
@@ -318,7 +318,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 
                 // if (threadIdx.x == 0 && kp_col == 0 && kpMullane == 0 && isfirstIdx(blockIdx))
                 //   printf("318: internal_tile_kp_n %d creg_idx1 %d c %d kp_idx %d %d\n", internal_tile_kp_n, creg_idx1, c, kp_idx, Creg[(internal_tile_kp_n/INTERNAL_KP_N_TILE)*4 + c_reg_col_start*Creg_Cols + creg_idx1]);
-                int __idx = (internal_tile_kp_n/INTERNAL_KP_N_TILE)*Creg_Cols + c_reg_col_start*Creg_Cols + creg_idx1;
+                int __idx = (internal_tile_kp_n/INTERNAL_KP_N_TILE)*Creg_Cols*Creg_Rows + c_reg_col_start*Creg_Cols + creg_idx1;
                 Creg[__idx] += c;
 
                 // if (threadIdx.x == 0 && kpMulwid == 0 && isfirstIdx(blockIdx))
@@ -341,7 +341,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
         int c_row = (a_row + start_row);
         int c_idx;
         if (K_EQUALS_VAR)
-          c_idx = start_row * N + (reg/(NUM_INTERNAL_KP_N_TILES*Creg_Cols))*N_THREADS + (reg%(NUM_INTERNAL_KP_N_TILES*Creg_Cols)) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + threadIdx.x;
+          c_idx = start_row * N + (reg/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  + ((reg/Creg_Cols)%Creg_Rows)*N_THREADS + (reg%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + threadIdx.x;
         else
           c_idx = start_row * N + tile_k * (MAX_K/kpK) + (reg/(Creg_Cols*NUM_INTERNAL_KP_N_TILES))*N_THREADS + (reg%(Creg_Cols*NUM_INTERNAL_KP_N_TILES)) * (N_THREADS * (MAX_K/kpK)/numKpColMult) * (K/MAX_K) + threadIdx.x;
          
@@ -388,7 +388,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 //   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,0>,\
 //   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,1>,
 
-#define N_THREADS 128
+#define N_THREADS 512
 #define KP_N_TILE 64
 
 #ifdef EVAL
@@ -424,10 +424,10 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   MAX_K_KERNELS(N_COARSE_TB, 256) \
   MAX_K_KERNELS(N_COARSE_TB, 512) \
   MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  MAX_K_KERNELS(N_COARSE_TB, 4096) \
 
-#define MAX_K 1024
+#define MAX_K 4096
 #define NUM_MAX_K_KERNELS 9
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 3
@@ -590,9 +590,9 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
+                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {10,1024,1024, 2, {32,32},{32,32}},                                        
-                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           {10,256,256, 2, {16,16},{16,16}},
                                           // {10,256,256, 2, {16,16},{16,16}},
                                           {10,512,512, 3, {8,8,8},{8,8,8}},
