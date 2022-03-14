@@ -124,7 +124,7 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
   }
 }
 
-#define EXTERNAL_KP_K_TILE_ 64
+#define EXTERNAL_KP_K_TILE_ 128
 
 #define C_IN_REG
 
@@ -134,7 +134,7 @@ template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int M
 __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar, T * A, T * kron_fac, T * C, int kpNVar, int kpKVar, int kp_idx) {
   const int KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const int NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
-  const int INTERNAL_KP_N_TILE = MIN(64, KP_N_TILE);
+  const int INTERNAL_KP_N_TILE = MIN(128, KP_N_TILE);
   const int EXTERNAL_KP_K_TILE = MIN(EXTERNAL_KP_K_TILE_, MAX_KP_K);
   const int INTERNAL_KP_K_TILE = MIN(32, EXTERNAL_KP_K_TILE);
 
@@ -397,7 +397,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 //   (void*)cuda_gemm<int,128,N_COARSE_TB,1,MAX_K,KP_N_K,KP_N_K,1>,
 
 #define N_THREADS 512
-#define KP_N_TILE 64
+#define KP_N_TILE 128
 
 #ifdef EVAL
     typedef float DATA_TYPE;
