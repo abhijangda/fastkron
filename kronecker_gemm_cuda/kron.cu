@@ -209,10 +209,10 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
   
   const int numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A
-  const int kpMulblockWarps = N_THREADS/numKpColMult; //
+  const int kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //
   const int Creg_SIZE = MAX(1, Csh_COLS/N_THREADS); // 
   const int Creg_Rows = (MAX_K/MAX_KP_K)/numKpColMult; //
-  const int Creg_Cols = INTERNAL_KP_N_TILE/kpMulblockWarps; //
+  const int Creg_Cols = MAX(1, INTERNAL_KP_N_TILE/kpMulblockWarps); //
   const int NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; // 2
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
@@ -265,7 +265,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
         }
 
         __syncthreads();
-
+        if (kpMulwid > numKpColMult)
+            continue;
         for (int a_row = 0; a_row < TILE_X; a_row++) {
           #pragma unroll
           for (int a_col_start = 0, c_reg_col_start = 0; c_reg_col_start < (MAX_K/MAX_KP_K)/numKpColMult; a_col_start += numKpColMult, c_reg_col_start++) {
@@ -344,12 +345,19 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
         int a_row = 0;
         int c_row = (a_row + start_row);
         int c_idx;
+        int c_col;
         if (K_EQUALS_VAR)
-          c_idx = start_row * N + (reg/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  + ((reg/Creg_Cols)%Creg_Rows)*N_THREADS + (reg%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + threadIdx.x;
+          c_col = (reg/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  + ((reg/Creg_Cols)%Creg_Rows)*N_THREADS + (reg%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + threadIdx.x;
         else
-          c_idx = start_row * N + tile_k * (MAX_K/kpK) + (reg/(Creg_Cols*NUM_INTERNAL_KP_N_TILES))*N_THREADS + (reg%(Creg_Cols*NUM_INTERNAL_KP_N_TILES)) * (N_THREADS * (MAX_K/kpK)/numKpColMult) * (K/MAX_K) + threadIdx.x;
+          c_col = tile_k * (MAX_K/kpK) + 
+          (reg/(Creg_Cols*NUM_INTERNAL_KP_N_TILES))*N_THREADS + 
+          (reg%(Creg_Cols*NUM_INTERNAL_KP_N_TILES)) * 
+          ((N_THREADS * (MAX_K/kpK))/numKpColMult) * 
+          (K/MAX_K) + threadIdx.x;
         
-        C[c_idx] = Creg[reg];
+        c_idx = start_row * N + c_col;
+        if (c_col < K)
+          C[c_idx] = Creg[reg];
       }
     } else {
       __syncthreads();
@@ -409,36 +417,34 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
 
 #define KP_N_K_KERNELS(N_COARSE_TB, MAX_K, KP_N_K) \
+  K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 0) \
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
-  // K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 0) \
-  // K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64)
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) 
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64)
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-MAX_K_KERNELS(N_COARSE_TB, 4096)
+  MAX_K_KERNELS(N_COARSE_TB, 128) \
+  MAX_K_KERNELS(N_COARSE_TB, 256) \
+  MAX_K_KERNELS(N_COARSE_TB, 512) \
+  MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  MAX_K_KERNELS(N_COARSE_TB, 4096) \
+
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
-  // MAX_K_KERNELS(N_COARSE_TB, 128) \
-  // MAX_K_KERNELS(N_COARSE_TB, 256) \
-  // MAX_K_KERNELS(N_COARSE_TB, 512) \
-  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  // MAX_K_KERNELS(N_COARSE_TB, 2048)
-  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
-
+  
 #define MAX_K 4096
 #define NUM_MAX_K_KERNELS 9
 #define NUM_KP_N_K_KERNELS 7
-#define NUM_COARSE_TB_KERNELS 3
+#define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 2
 
@@ -478,7 +484,7 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     //   min_k = min_k/KP_MAT_K[0];
     //   k_equals_var = 0;
     // }
-    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[0][0][0][0][1]; //(cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/2][log2(min_k)-log2(16)][log2(KP_MAT_K[0])-log2(2)][k_equals_var][1];
+    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/2][log2(min_k)-log2(128)][log2(KP_MAT_K[0])-log2(2)][k_equals_var][1];
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
 
