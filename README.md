@@ -1,4 +1,3 @@
-
 # Current Baseline Build Instructions
 
 1. scipy-sparse
