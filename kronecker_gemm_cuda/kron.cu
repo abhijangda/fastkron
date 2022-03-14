@@ -128,6 +128,8 @@ void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
 
 #define C_IN_REG
 
+#define C_IN_SHMEM
+
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
 template<typename T,int N_THREADS, int N_COARSE_TB, int TILE_X, int MAX_K, int MAX_KP_N, int MAX_KP_K, int KP_N_TILE_, int K_EQUALS_VAR, int KPK_EQUALS_VAR>
@@ -150,7 +152,9 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   const int C_ELEMS_STORE = N_THREADS * (sizeof(LD_TYPE)/sizeof(T));
   const int Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
   const int Csh_COLS_SIZE = MIN(Csh_COLS, C_ELEMS_STORE);
+#ifdef C_IN_SHMEM
   __shared__ __align__(128) T Csh[TILE_X][Csh_COLS];//Allocate Csh for only as many values that are produced
+#endif
 
   int wid = threadIdx.x/32;
   int lane = threadIdx.x%32;
@@ -209,31 +213,35 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
   const int ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
   
   const int numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A, 32
-  const int kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //16
-  const int Creg_SIZE = MAX(1, Csh_COLS/N_THREADS); //4
-  const int Creg_Rows = (MAX_K/MAX_KP_K)/numKpColMult; //1
-  const int Creg_Cols = MAX(1, INTERNAL_KP_N_TILE/kpMulblockWarps); //4
-  const int NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //1
+  const int kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //
+  #ifdef C_IN_REG
+  const int Creg_SIZE = MAX(1, Csh_COLS/N_THREADS); //
+  const int Creg_Rows = (MAX_K/MAX_KP_K)/numKpColMult; //
+  const int Creg_Cols = MAX(1, INTERNAL_KP_N_TILE/kpMulblockWarps); //
+  const int NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
   register T Creg[Creg_SIZE];
+  #endif
 
   int kpMullane = threadIdx.x%numKpColMult;
   int kpMulwid = threadIdx.x/numKpColMult; //0
    //TODO: Names should be different
 
   for (int start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
-    if (false) {
+    #ifdef C_IN_SHMEM
       for (int a_row = 0; a_row < TILE_X; a_row += 1) {
         for (int i = threadIdx.x; i < Csh_COLS; i += blockDim.x)
           Csh[a_row][i] = 0;
       }
-    } else {
+    #endif
+    #ifdef C_IN_REG
       #pragma unroll
       for (int reg = 0; reg < Creg_SIZE; reg++) {
         Creg[reg] = 0;
       }
     }
+    #endif
 
     for (int internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
       for (int a_row = 0; a_row < TILE_X; a_row += 1) {
@@ -325,23 +333,28 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
 
                 // if (threadIdx.x == 0 && kp_col == 0 && kpMullane == 0 && isfirstIdx(blockIdx))
                 //   printf("318: internal_tile_kp_n %d creg_idx1 %d c %d kp_idx %d %d\n", internal_tile_kp_n, creg_idx1, c, kp_idx, Creg[(internal_tile_kp_n/INTERNAL_KP_N_TILE)*4 + c_reg_col_start*Creg_Cols + creg_idx1]);
+                #ifdef C_IN_REG
                 int __idx = (internal_tile_kp_n/INTERNAL_KP_N_TILE)*Creg_Cols*Creg_Rows + c_reg_col_start*Creg_Cols + c_reg_idx;
                 Creg[__idx] += c;
+                #endif 
 
                 // if (threadIdx.x == 0 && kpMulwid == 0 && isfirstIdx(blockIdx))
                 //   printf("323: internal_tile_kp_n %d creg_idx1 %d c %d kp_idx %d %d  %d\n", internal_tile_kp_n, creg_idx1, c, kp_idx, Creg[__idx], __idx);
                 // __syncwarp();
-                // int csh_col = (internal_tile_kp_n + kp_col)*(MAX_K/kpK) + a_col_start +kpMullane;
-                // Csh[a_row][csh_col] += c;
+                #ifdef C_IN_SHMEM
+                int csh_col = (internal_tile_kp_n + kp_col)*(MAX_K/kpK) + a_col_start +kpMullane;
+                Csh[a_row][csh_col] += c;
+                #endif 
               }
             }
           }
         }
       }
     }
-
-    if (true) {
-      for (uint reg = 0; reg < Creg_SIZE; reg++) {
+    
+    #ifdef C_IN_REG
+    {
+      for (int reg = 0; reg < Creg_SIZE; reg++) {
         int a_row = 0;
         int c_row = (a_row + start_row);
         int c_idx;
@@ -354,41 +367,44 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(int M, int NVar, int KVar
         if (c_col < K)
           C[c_idx] = Creg[reg];
       }
-    } else {
-      __syncthreads();
-      for (int a_row = 0; a_row < TILE_X; a_row++) {
-        if (EXTERNAL_KP_K_TILE != MAX_KP_K) {
-          //Atomic Store when there is an external KP_K tile
-          for (int c_col = threadIdx.x; c_col < Csh_COLS; c_col += blockDim.x) {
-            int c_row = (a_row + start_row);
-            int c_idx;
-            if (K_EQUALS_VAR)
-              c_idx = c_row * N + external_tile_kp_n*Csh_COLS + c_col;
-            else
-              c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
-            
-            atomicAdd(&C[c_idx], Csh[a_row][c_col]);
-            // C[c_idx] = Csh[a_row][c_col];
+    }
+    #endif
+    
+    #ifdef C_IN_SHMEM
+    __syncthreads();
+    for (int a_row = 0; a_row < TILE_X; a_row++) {
+      if (EXTERNAL_KP_K_TILE != MAX_KP_K) {
+        //Atomic Store when there is an external KP_K tile
+        for (int c_col = threadIdx.x; c_col < Csh_COLS; c_col += blockDim.x) {
+          int c_row = (a_row + start_row);
+          int c_idx;
+          if (K_EQUALS_VAR)
+            c_idx = c_row * N + external_tile_kp_n*Csh_COLS + c_col;
+          else
+            c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
+          
+          atomicAdd(&C[c_idx], Csh[a_row][c_col]);
+          // C[c_idx] = Csh[a_row][c_col];
 
-            // if (kp_idx == 0 && c_idx >= 2048 && c_idx < 2048+64) {
-            //   printf("Csh[a_row][%d] %d tile_k %d C[c_idx] %d\n", c_col, Csh[a_row][c_col], tile_k, C[c_idx]);
-            // }
-          }
-        } else {
-          //Normal Store
-          for (int c_col = threadIdx.x*ldNumElems; c_col < Csh_COLS; c_col += blockDim.x*ldNumElems) {
-            int c_row = (a_row + start_row);
-            int c_idx;
-            if (K_EQUALS_VAR)
-              c_idx = c_row * N + external_tile_kp_n*Csh_COLS + c_col;
-            else
-              c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
-            
-            *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Csh[a_row][c_col];
-          }
+          // if (kp_idx == 0 && c_idx >= 2048 && c_idx < 2048+64) {
+          //   printf("Csh[a_row][%d] %d tile_k %d C[c_idx] %d\n", c_col, Csh[a_row][c_col], tile_k, C[c_idx]);
+          // }
+        }
+      } else {
+        //Normal Store
+        for (int c_col = threadIdx.x*ldNumElems; c_col < Csh_COLS; c_col += blockDim.x*ldNumElems) {
+          int c_row = (a_row + start_row);
+          int c_idx;
+          if (K_EQUALS_VAR)
+            c_idx = c_row * N + external_tile_kp_n*Csh_COLS + c_col;
+          else
+            c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
+          
+          *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Csh[a_row][c_col];
         }
       }
     }
+    #endif  
   }
 }
 
