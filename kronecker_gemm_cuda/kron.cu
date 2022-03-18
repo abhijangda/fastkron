@@ -257,9 +257,9 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               uint ash_col = a_col + i;
               uint lane = ash_col/INTERNAL_KP_K_TILE;
               uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
-              uint kpKlane = lane % KPK_SPLIT_SIZE;
+              uint kpKlane = lane % INTERNAL_KP_K_TILE;
              
-              int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + ar_start_id*KPK_SPLIT_SIZE + (ash_col % KPK_SPLIT_SIZE + kpKlane)%KPK_SPLIT_SIZE;
+              int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (ash_col % INTERNAL_KP_K_TILE + kpKlane)%INTERNAL_KP_K_TILE;
               Ash[a_row][final_col] = a1[i];
             }
             // *(LD_TYPE*)&Ash[a_row][a_col] = a;
@@ -325,11 +325,11 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
             //Load MAX_AR_SZ elements at a time to limit the register usage
             for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) { //TODO: Shared memory bank conflicts with kpK = 32 and AR_SZ = 16
               register T Ar[MAX_AR_SZ];
-              uint kpKlane = lane % MAX_AR_SZ; //
-              uint ar_start = (ar_start_id + (lane/MAX_AR_SZ)*MAX_AR_SZ)%INTERNAL_KP_K_TILE;
+              uint kpKlane = lane % INTERNAL_KP_K_TILE; //
+              // uint ar_start = (ar_start_id + (lane/MAX_AR_SZ)*MAX_AR_SZ)%INTERNAL_KP_K_TILE;
 
               for (uint a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
-                  Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + ar_start + (a_col + i) % MAX_AR_SZ];//TODO: Shared memory bank conflicts here with KP_K = 4
+                  Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + (ar_start_id + a_col + i) % INTERNAL_KP_K_TILE];//TODO: Shared memory bank conflicts here with KP_K = 4
               }
               
               #pragma unroll
@@ -349,10 +349,10 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
                   {
                     T a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
                     uint kp_row;
-                    kp_row = (ar_start + a_col)%INTERNAL_KP_K_TILE; //kpMullane/(warpSize/kpK)
+                    kp_row = ar_start_id + a_col; //(ar_start + a_col)%INTERNAL_KP_K_TILE; //kpMullane/(warpSize/kpK)
                     //} else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
                     T kp;
-                    if (true){//(INTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
+                    if (false){//(INTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
                       kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, INTERNAL_KP_K_TILE);
                     } else {
                       kp = kron_fac_sh[kp_col][kp_row];
@@ -447,7 +447,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   }
 }
 
-#define N_THREADS 512
+#define N_THREADS 256
 #define KP_N_TILE 128
 
 #ifdef EVAL
@@ -654,7 +654,7 @@ int main(int argc, char* argv[])
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
                                           // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          {10,1024,1024, 2, {32,32},{32,32}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
