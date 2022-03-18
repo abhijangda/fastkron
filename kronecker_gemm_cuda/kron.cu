@@ -258,7 +258,6 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               uint lane = ash_col/INTERNAL_KP_K_TILE;
               uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
               uint kpKlane = lane % KPK_SPLIT_SIZE;
-              uint ar_start = (lane/KPK_SPLIT_SIZE)*KPK_SPLIT_SIZE; 
              
               int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + ar_start_id*KPK_SPLIT_SIZE + (ash_col % KPK_SPLIT_SIZE + kpKlane)%KPK_SPLIT_SIZE;
               Ash[a_row][final_col] = a1[i];
@@ -273,7 +272,6 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               uint lane = ash_col/INTERNAL_KP_K_TILE;
               uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
               uint kpKlane = lane % KPK_SPLIT_SIZE;
-              uint ar_start = (lane/KPK_SPLIT_SIZE)*KPK_SPLIT_SIZE; 
               
               int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + ar_start_id*KPK_SPLIT_SIZE + (ash_col % KPK_SPLIT_SIZE + kpKlane)%KPK_SPLIT_SIZE;
               Ash[a_row][final_col] = a1[i];
@@ -355,16 +353,9 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
                     //} else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
                     T kp;
                     if (true){//(INTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
-                      // kp = kron_fac_sh[kp_col][ar_start+(a_col+kpKlane)%min(kpK, KPK_SPLIT_SIZE)];
                       kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, INTERNAL_KP_K_TILE);
-                      // if (kp_col == 0 && ar_start == 16 && kpK == 128 && kp != kp1 && isfirstIdx(blockIdx))
-                      //   printf("kp_col %d kp_row %d %d, %d %d, %d %d %d\n", kp_col, kp_row, ar_start + (a_col+kpKlane) % min(MAX_AR_SZ, kpK), kp, kp1, ar_start, a_col, kpKlane);
                     } else {
-                      //FIXME: For 1x16384 with 128x128 Kronecker factors, the results are incorrect for __shfl_sync because numkpcolmult != 32
-                      // kp_row = ar_start + kpKlane + (a_col+kpKlane < min(MAX_AR_SZ, kpK) ? a_col : a_col - min(MAX_AR_SZ, kpK));
                       kp = kron_fac_sh[kp_col][kp_row];
-                      // if (a_row == 0 && kp_col == 0 && kpMullane == 0 && isfirstIdx(blockIdx))
-                      //   printf("kpSplitLane %d kp_row %d kp %d internal_tile_kp_k %d\n", kpSplitLane, kp_row, kp, internal_tile_kp_k);
                     } 
 
                     c += a * kp;
@@ -456,7 +447,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   }
 }
 
-#define N_THREADS 256
+#define N_THREADS 512
 #define KP_N_TILE 128
 
 #ifdef EVAL
