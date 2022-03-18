@@ -250,33 +250,25 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
       for (uint a_row = 0; a_row < TILE_X; a_row += 1) {
         for (uint a_col = threadIdx.x*ldNumElems; a_col < Ash_COLS; a_col += blockDim.x*ldNumElems) {
           uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+          LD_TYPE a;
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
-            LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
-            T a1[4] = {a.x, a.y, a.z, a.w};
-            for (int i = 0; i < ldNumElems; i++) {
-              uint ash_col = a_col + i;
-              uint lane = ash_col/INTERNAL_KP_K_TILE;
-              uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
-              uint kpKlane = lane % INTERNAL_KP_K_TILE;
-             
-              int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (ash_col % INTERNAL_KP_K_TILE + kpKlane)%INTERNAL_KP_K_TILE;
-              Ash[a_row][final_col] = a1[i];
-            }
+            a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
             // *(LD_TYPE*)&Ash[a_row][a_col] = a;
           } else {
-            LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
+            a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
                                       (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
-            T a1[4] = {a.x, a.y, a.z, a.w};
-            for (int i = 0; i < ldNumElems; i++) {
-              uint ash_col = a_col + i;
-              uint lane = ash_col/INTERNAL_KP_K_TILE;
-              uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
-              uint kpKlane = lane % KPK_SPLIT_SIZE;
-              
-              int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + ar_start_id*KPK_SPLIT_SIZE + (ash_col % KPK_SPLIT_SIZE + kpKlane)%KPK_SPLIT_SIZE;
-              Ash[a_row][final_col] = a1[i];
-            }
             // *(LD_TYPE*)&Ash[a_row][a_col] = a;
+          }
+
+          T a1[4] = {a.x, a.y, a.z, a.w};
+          for (uint i = 0; i < ldNumElems; i++) {
+            uint ash_col = a_col + i;
+            uint lane = ash_col/INTERNAL_KP_K_TILE;
+            uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
+            uint kpKlane = lane % INTERNAL_KP_K_TILE;
+           
+            uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (ash_col % INTERNAL_KP_K_TILE + kpKlane)%INTERNAL_KP_K_TILE;
+            Ash[a_row][final_col] = a1[i];
           }
         }
       }
@@ -326,7 +318,6 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
             for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) { //TODO: Shared memory bank conflicts with kpK = 32 and AR_SZ = 16
               register T Ar[MAX_AR_SZ];
               uint kpKlane = lane % INTERNAL_KP_K_TILE; //
-              // uint ar_start = (ar_start_id + (lane/MAX_AR_SZ)*MAX_AR_SZ)%INTERNAL_KP_K_TILE;
 
               for (uint a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
                   Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + (ar_start_id + a_col + i) % INTERNAL_KP_K_TILE];//TODO: Shared memory bank conflicts here with KP_K = 4
@@ -341,7 +332,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               #endif
                 T c = 0;
 
-                kron_fac_r = kron_fac_sh[kp_col][lane % INTERNAL_KP_K_TILE];
+                kron_fac_r = kron_fac_sh[kp_col][(ar_start_id+lane) % INTERNAL_KP_K_TILE];
                 
                 #pragma unroll
                 for (uint a_col = 0; a_col < MAX_AR_SZ; a_col++) {
@@ -349,13 +340,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
                   {
                     T a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
                     uint kp_row;
-                    kp_row = ar_start_id + a_col; //(ar_start + a_col)%INTERNAL_KP_K_TILE; //kpMullane/(warpSize/kpK)
-                    //} else {kp_row = (a_col+kpKlane) < kpK ? (a_col+kpKlane) : (a_col+kpKlane) - kpK;} //TODO:
+                    kp_row = a_col;
                     T kp;
-                    if (false){//(INTERNAL_KP_K_TILE <= 32 && kpK <= 64) {
+                    if (false){
                       kp = __shfl_sync(0xffffffff, kron_fac_r, kp_row, INTERNAL_KP_K_TILE);
                     } else {
-                      kp = kron_fac_sh[kp_col][kp_row];
+                      kp = kron_fac_sh[kp_col][ar_start_id + kp_row];
                     } 
 
                     c += a * kp;
@@ -491,7 +481,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   
 #define MAX_K 8192
 #define MIN_K 128
-#define NUM_MAX_K_KERNELS 8
+#define NUM_MAX_K_KERNELS 7
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
