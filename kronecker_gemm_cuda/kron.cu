@@ -254,13 +254,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
             LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
             T a1[4] = {a.x, a.y, a.z, a.w};
             for (int i = 0; i < ldNumElems; i++) {
-              uint ash_col = a_col + i; // 0 to 32, 32 to 63; 32*16 to 32*16 + 31
-              uint lane = ash_col/INTERNAL_KP_K_TILE; //0, 1, 16
+              uint ash_col = a_col + i;
+              uint lane = ash_col/INTERNAL_KP_K_TILE;
               uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
-              uint kpKlane = lane % KPK_SPLIT_SIZE; //0, 1, 0
-              uint ar_start = (lane/KPK_SPLIT_SIZE)*KPK_SPLIT_SIZE; //0, 0, 16
-              //0 + 0 + (0 to 31) + 0; 32 + 0 + (1 to 31 to 0); 32*16 + 16 + (0 to 31)
-              //0 + 0 + (0 to 15, 15 to 31); 32 + 0 + (1 to 15 to 0, 17 to 31 to 16); 32*16 + (0 to 15, 16 to 31); 32*17 + (1 to 15 to 0, 17 to 31 to 0)
+              uint kpKlane = lane % KPK_SPLIT_SIZE;
+              uint ar_start = (lane/KPK_SPLIT_SIZE)*KPK_SPLIT_SIZE; 
+             
               int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + ar_start_id*KPK_SPLIT_SIZE + (ash_col % KPK_SPLIT_SIZE + kpKlane)%KPK_SPLIT_SIZE;
               Ash[a_row][final_col] = a1[i];
             }
@@ -268,8 +267,18 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
           } else {
             LD_TYPE a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
                                       (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
-            
-            *(LD_TYPE*)&Ash[a_row][a_col] = a;
+            T a1[4] = {a.x, a.y, a.z, a.w};
+            for (int i = 0; i < ldNumElems; i++) {
+              uint ash_col = a_col + i;
+              uint lane = ash_col/INTERNAL_KP_K_TILE;
+              uint ar_start_id = (ash_col % INTERNAL_KP_K_TILE)/KPK_SPLIT_SIZE; 
+              uint kpKlane = lane % KPK_SPLIT_SIZE;
+              uint ar_start = (lane/KPK_SPLIT_SIZE)*KPK_SPLIT_SIZE; 
+              
+              int final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + ar_start_id*KPK_SPLIT_SIZE + (ash_col % KPK_SPLIT_SIZE + kpKlane)%KPK_SPLIT_SIZE;
+              Ash[a_row][final_col] = a1[i];
+            }
+            // *(LD_TYPE*)&Ash[a_row][a_col] = a;
           }
         }
       }
@@ -654,9 +663,9 @@ int main(int argc, char* argv[])
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
                                           // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
-                                          {1, 128*128, 128*128, 2, {128,128},{128,128}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
+                                          {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
                                           // {10,256,256, 2, {16,16},{16,16}},
                                           {10,512,512, 3, {8,8,8},{8,8,8}},
