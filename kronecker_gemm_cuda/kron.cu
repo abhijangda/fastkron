@@ -300,7 +300,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         __syncthreads();
         
         #ifdef C_IN_REG
-        if (true) //kpMulwid < kpMulblockWarps
+        if (kpMulwid < numKpColMult)
         #endif
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
           #pragma unroll
@@ -381,20 +381,20 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
       uint c_col;
       uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
 
-      c_col = (reg/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  + //(reg/1)*(512/32)*32=512
-      ((reg/Creg_Cols) % Creg_Rows) * N_THREADS + //(reg/1 %1) * 512 = 0
-      (reg%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + //reg%1 = 0 
+      c_col = (reg/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
+      ((reg/Creg_Cols) % Creg_Rows) * N_THREADS +
+      (reg%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
       threadIdx.x;
 
       if (!K_EQUALS_VAR) {
         uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-        c_col = tile_k * (MAX_K/kpK) + //512/32=16
-                (c_col/(MAX_K/kpK)) * (K/kpK) + //(c_col/16)*32
-                c_col%(MAX_K/kpK); //c_col%16
+        c_col = tile_k * (MAX_K/kpK) + 
+                (c_col/(MAX_K/kpK)) * (K/kpK) +
+                c_col%(MAX_K/kpK);
       }
 
       if (KP_N_TILE != MAX_KP_N) {
-        c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); //1024/(32/16) = 512
+        c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
       }
       
       c_idx = start_row * N + c_col;
@@ -481,19 +481,19 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   MAX_K_KERNELS(N_COARSE_TB, 128) \
   MAX_K_KERNELS(N_COARSE_TB, 256) \
   MAX_K_KERNELS(N_COARSE_TB, 512) \
-  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
-  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 512
+#define MAX_K 8192
 #define MIN_K 128
 #define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 3
+#define NUM_MAX_K_KERNELS 7
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
@@ -656,8 +656,8 @@ int main(int argc, char* argv[])
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
                                           // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
-                                          // {1, 4096, 4096, 2, {64,64},{64,64}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
                                           // {10,256,256, 2, {16,16},{16,16}},
