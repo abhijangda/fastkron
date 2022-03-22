@@ -330,13 +330,13 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               #endif
                 T c = 0;
                 const int NUM_KP_REGS = MAX_AR_SZ;
-                
+                T* kron_col_ptr = &kron_fac_sh[kp_col][ar_start_id];
+
                 #pragma unroll
                 for (uint a_col_outer = 0; a_col_outer < MAX_AR_SZ; a_col_outer += NUM_KP_REGS) {
                   // register T kron_fac_r;
 
                   // kron_fac_r = kron_fac_sh[kp_col][(ar_start_id+lane) % INTERNAL_KP_K_TILE];
-                  T* kron_col_ptr = &kron_fac_sh[kp_col][ar_start_id];
                   register T kron_fac_regs[NUM_KP_REGS];
                   for (uint reg = 0; reg < NUM_KP_REGS; reg++) {
                     uint kp_row = a_col_outer + reg;
@@ -346,8 +346,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
                   for (uint a_col_inner = 0; a_col_inner < NUM_KP_REGS; a_col_inner++) {
                     uint a_col = a_col_outer + a_col_inner;
                     T a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-                    T kp;
-                    kp = kron_fac_regs[a_col_inner];
+                    T kp = kron_fac_regs[a_col_inner];
                     c += a * kp;
                   }
                 }
@@ -491,8 +490,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
 #define MAX_K 8192
-#define MIN_K 8192
-#define MIN_KP_K 128
+#define MIN_K 128
+#define MIN_KP_K 2
 #define NUM_MAX_K_KERNELS 7
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 1
@@ -522,7 +521,7 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   for (int i = 0; i < NUM_KP_MATS; i++) {
 
     const int KP_K_BATCH = 1;
-    int N_COARSE_TB = (M > 100) ? 2 : 1;
+    int N_COARSE_TB = 1; //(M > 100) ? 2 : 1;
 
     // int idx = (N_COARSE_TB/8)*NUM_MAX_K_KERNELS + (log2(K)-log2(16))*NUM_KP_N_K_KERNELS + (log2(KP_MAT_K[0])-log2(2));
     // printf("idx %d log2(K) %d log2(16) %d\n", idx, log2(K), log2(16));
