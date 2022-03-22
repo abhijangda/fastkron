@@ -149,10 +149,10 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   #endif 
 
   __shared__ __align__(128) T kron_fac_sh[INTERNAL_KP_N_TILE][INTERNAL_KP_K_TILE+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
-  const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE); //512
+  const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
   __shared__ __align__(128) T Ash[TILE_X][Ash_COLS];
   const uint C_ELEMS_STORE = N_THREADS * (sizeof(LD_TYPE)/sizeof(T));
-  const uint Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE); // 512/(32/32) = 512
+  const uint Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
   const uint Csh_COLS_SIZE = MIN(Csh_COLS, C_ELEMS_STORE);
 #ifdef C_IN_SHMEM
   __shared__ __align__(128) T Csh[TILE_X][Csh_COLS];//Allocate Csh for only as many values that are produced
@@ -300,7 +300,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         __syncthreads();
         
         #ifdef C_IN_REG
-        if (kpMulwid < numKpColMult)
+        if (true)
         #endif
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
           #pragma unroll
@@ -483,17 +483,17 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   MAX_K_KERNELS(N_COARSE_TB, 512) \
   MAX_K_KERNELS(N_COARSE_TB, 1024) \
   MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
-  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  MAX_K_KERNELS(N_COARSE_TB, 4096) \  
+  MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 2048
-#define MIN_K 128
-#define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 6
+#define MAX_K 8192
+#define MIN_K 8192
+#define MIN_KP_K 128
+#define NUM_MAX_K_KERNELS 7
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
@@ -656,7 +656,7 @@ int main(int argc, char* argv[])
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
                                           // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          {10,1024,1024, 2, {32,32},{32,32}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
