@@ -14,7 +14,7 @@ import math
 
 # In[2]:
 
-use_torch_profiler = True
+use_torch_profiler = False
 epochs = 100
 
 # model and data 
@@ -140,7 +140,7 @@ def do(twoPowerL, npoints, d):
 
 maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 2, 128: 2}
 
-cases = [{"npoints": 100, "2^l": j, "d": i} for j in [64] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
+cases = [{"npoints": 100, "2^l": j, "d": i} for j in [128] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},

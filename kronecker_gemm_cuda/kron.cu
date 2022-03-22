@@ -336,11 +336,11 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
                   // register T kron_fac_r;
 
                   // kron_fac_r = kron_fac_sh[kp_col][(ar_start_id+lane) % INTERNAL_KP_K_TILE];
-                  
+                  T* kron_col_ptr = &kron_fac_sh[kp_col][ar_start_id];
                   register T kron_fac_regs[NUM_KP_REGS];
                   for (uint reg = 0; reg < NUM_KP_REGS; reg++) {
                     uint kp_row = a_col_outer + reg;
-                    kron_fac_regs[reg] = kron_fac_sh[kp_col][ar_start_id + kp_row];//__shfl_sync(0xffffffff, kron_fac_r, a_col_outer + reg, INTERNAL_KP_K_TILE);
+                    kron_fac_regs[reg] =  kron_col_ptr[kp_row];//__shfl_sync(0xffffffff, kron_fac_r, a_col_outer + reg, INTERNAL_KP_K_TILE);
                   }
 
                   for (uint a_col_inner = 0; a_col_inner < NUM_KP_REGS; a_col_inner++) {
@@ -449,7 +449,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
 }
 
 #define N_THREADS 512
-#define KP_N_TILE 32
+#define KP_N_TILE 64
 
 #ifdef EVAL
     typedef float DATA_TYPE;
@@ -483,17 +483,17 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   MAX_K_KERNELS(N_COARSE_TB, 512) \
   MAX_K_KERNELS(N_COARSE_TB, 1024) \
   MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(N_COARSE_TB, 4096) \
-  MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 8192
+#define MAX_K 2048
 #define MIN_K 128
 #define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 7
+#define NUM_MAX_K_KERNELS 6
 #define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
