@@ -14,8 +14,8 @@ import math
 
 # In[2]:
 
-use_torch_profiler = True
-epochs = 100
+use_torch_profiler = False
+epochs = 10
 
 # model and data 
 
@@ -97,6 +97,7 @@ def do(twoPowerL, npoints, d):
                     torch.profiler.ProfilerActivity.CUDA,
                 ]
                 ) as p:
+                    print(self.l1_weight.shape, x.shape)
                     l1 = self.l1_weight@x
                     torch.cuda.synchronize()
             
@@ -132,15 +133,15 @@ def do(twoPowerL, npoints, d):
 
     # for i in range(2, 3):
     model = NewlinearRegression(inputDim, outputDim, d)
-    train_and_predict(model, x_train, y_train, True, trans=True, print_model=True)
+    train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
     all_cuda_times = model.all_cuda_times
     del model
     torch.cuda.empty_cache()
     return all_cuda_times
 
-maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 3, 128: 2}
+maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 2, 128: 2}
 
-cases = [{"npoints": 128, "2^l": j, "d": i} for j in [64,128] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
+cases = [{"npoints": 100, "2^l": j, "d": i} for j in [128] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},
@@ -176,14 +177,14 @@ import sys
 
 case_times = {}
 for case in cases:
-        try:
+        if True:
             cuda_times = do(case["2^l"], case["npoints"], case["d"])
             case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
             bandwidth = 4 * 2 * (case["npoints"] * (case["2^l"] ** case["d"]))/(case["PyTorchTime"]/1e6)/1e9
             case["PyTorchBandwidth"] = bandwidth
             print(cuda_times)
-        except:
-            case["PyTorchTime"] = -1
+        
+            # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
 
         (s, o) = -1,-1 #subprocess.getstatusoutput("kronecker_gemm_cuda/kron %d %d %d"%(case["npoints"], case["d"], twoPowerL))

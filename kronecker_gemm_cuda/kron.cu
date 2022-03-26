@@ -148,9 +148,9 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     typedef int4 LD_TYPE; 
   #endif 
 
-  __shared__ __align__(128) T kron_fac_sh[INTERNAL_KP_N_TILE][INTERNAL_KP_K_TILE+1];//TODO: Change padding based on value o1, KP_K and TILE_Y
+  __shared__ T kron_fac_sh[INTERNAL_KP_N_TILE][INTERNAL_KP_K_TILE+1];
   const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
-  __shared__ __align__(128) T Ash[TILE_X][Ash_COLS];
+  __shared__ T Ash[TILE_X][Ash_COLS];
   const uint C_ELEMS_STORE = N_THREADS * (sizeof(LD_TYPE)/sizeof(T));
   const uint Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
   const uint Csh_COLS_SIZE = MIN(Csh_COLS, C_ELEMS_STORE);
@@ -182,7 +182,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     N = NVar;
   }
 
-  const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
+  const uint KPK_SPLIT_SIZE = MIN(32, INTERNAL_KP_K_TILE);
   const uint NUM_KPK_SPLITS = MAX(1, INTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
   const uint ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
 
@@ -210,12 +210,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   }
 
   
-  const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A, 16
+  const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A, 128
   #ifdef C_IN_REG
-  const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //32
-  const uint Creg_SIZE = MAX(1, Csh_COLS/N_THREADS); //1
-  const uint Creg_Rows = (MAX_K/MAX_KP_K)/numKpColMult; //(512/32)/16=1
-  const uint Creg_Cols = MAX(1, INTERNAL_KP_N_TILE/kpMulblockWarps); //32/32=1
+  const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //4
+  const uint Creg_SIZE = TILE_X * MAX(1, Csh_COLS/N_THREADS); //
+  const uint Creg_Rows = (MAX_K/MAX_KP_K)/numKpColMult; //2
+  const uint Creg_Cols = MAX(1, INTERNAL_KP_N_TILE/kpMulblockWarps); //4
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //1
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
@@ -305,11 +305,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
           #pragma unroll
           #ifdef C_IN_REG
-          for (uint a_col_start = 0, c_reg_col_start = 0; c_reg_col_start < (MAX_K/MAX_KP_K)/numKpColMult; a_col_start += numKpColMult, c_reg_col_start++) {
+          for (uint a_col_start = 0, c_reg_col_start = 0; c_reg_col_start < (MAX_K/MAX_KP_K)/numKpColMult; a_col_start += numKpColMult, c_reg_col_start++)
           #endif
           #ifdef C_IN_SHMEM
-          for (uint a_col_start = 0; a_col_start < MAX_K/kpK; a_col_start += numKpColMult) {
+          for (uint a_col_start = 0; a_col_start < MAX_K/kpK; a_col_start += numKpColMult) 
           #endif
+          {
             const uint MAX_AR_SZ = KPK_SPLIT_SIZE;
 
             //Load MAX_AR_SZ elements at a time to limit the register usage
@@ -323,11 +324,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               
               #pragma unroll
               #ifdef C_IN_REG
-              for (uint kp_col = kpMulwid, c_reg_idx = 0; c_reg_idx < INTERNAL_KP_N_TILE/kpMulblockWarps; kp_col += kpMulblockWarps, c_reg_idx++) {
+              for (uint kp_col = kpMulwid, c_reg_idx = 0; c_reg_idx < INTERNAL_KP_N_TILE/kpMulblockWarps; kp_col += kpMulblockWarps, c_reg_idx++)
               #endif
               #ifdef C_IN_SHMEM
-              for (uint kp_col = kpMulwid; kp_col < min(kpN, INTERNAL_KP_N_TILE); kp_col += kpMulblockWarps) {
+              for (uint kp_col = kpMulwid; kp_col < min(kpN, INTERNAL_KP_N_TILE); kp_col += kpMulblockWarps)
               #endif
+              {
                 T c = 0;
                 const int NUM_KP_REGS = MAX_AR_SZ;
                 T* kron_col_ptr = &kron_fac_sh[kp_col][ar_start_id];
@@ -347,19 +349,16 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
                     uint a_col = a_col_outer + a_col_inner;
                     T a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
                     T kp = kron_fac_regs[a_col_inner];
-                    c += a * kp;
+                    #ifdef C_IN_REG
+                      uint __idx = a_row*NUM_INTERNAL_KP_N_TILES*Creg_Cols*Creg_Rows + (internal_tile_kp_n/INTERNAL_KP_N_TILE)*Creg_Cols*Creg_Rows + c_reg_col_start*Creg_Cols + c_reg_idx;
+                      Creg[__idx] += a * kp;
+                    #endif 
+                    #ifdef C_IN_SHMEM
+                      c += a * kp;
+                    #endif
                   }
                 }
 
-                // if (threadIdx.x == 0 && kp_col == 0 && kpMullane == 0 && isfirstIdx(blockIdx))
-                //   printf("318: internal_tile_kp_n %d creg_idx1 %d c %d kp_idx %d %d\n", internal_tile_kp_n, creg_idx1, c, kp_idx, Creg[(internal_tile_kp_n/INTERNAL_KP_N_TILE)*4 + c_reg_col_start*Creg_Cols + creg_idx1]);
-                #ifdef C_IN_REG
-                uint __idx = (internal_tile_kp_n/INTERNAL_KP_N_TILE)*Creg_Cols*Creg_Rows + c_reg_col_start*Creg_Cols + c_reg_idx;
-                Creg[__idx] += c;
-                #endif 
-
-                // if (threadIdx.x == 0 && kpMulwid == 0 && isfirstIdx(blockIdx))
-                //   printf("323: internal_tile_kp_n %d creg_idx1 %d c %d kp_idx %d %d  %d\n", internal_tile_kp_n, creg_idx1, c, kp_idx, Creg[__idx], __idx);
                 // __syncwarp();
                 #ifdef C_IN_SHMEM
                 uint csh_col = (internal_tile_kp_n + kp_col)*(MAX_K/kpK) + a_col_start +kpMullane;
@@ -373,16 +372,21 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     }
     
     #ifdef C_IN_REG
+    T* Creg_in_sh = &Ash[0][0];
+    const int Creg_in_sh_elems = sizeof(Ash)/sizeof(T);
+    const int Creg_elems_in_sh = MAX(Creg_in_sh_elems/N_THREADS, 1);
+    // if (blockIdx.x == 0 && threadIdx.x == 0) printf("Creg_elems_in_sh %d Creg_in_sh_elems %d Creg_SIZE %d\n", Creg_elems_in_sh, Creg_in_sh_elems, Creg_SIZE);
     for (uint reg = 0; reg < Creg_SIZE; reg++) {
-      uint a_row = 0;
+      uint a_row = reg / (Creg_SIZE/TILE_X);
       uint c_row = (a_row + start_row);
       uint c_idx;
+      uint reg_col = reg % (Creg_SIZE/TILE_X);
       uint c_col;
-      uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
-
-      c_col = (reg/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
-      ((reg/Creg_Cols) % Creg_Rows) * N_THREADS +
-      (reg%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
+      uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();      
+      //Cannot store N_THREADS values in shared memory. So may be not do it then?
+      c_col = (reg_col/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
+      ((reg_col/Creg_Cols) % Creg_Rows) * N_THREADS +
+      (reg_col%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
       threadIdx.x;
 
       if (!K_EQUALS_VAR) {
@@ -396,10 +400,39 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
       }
       
-      c_idx = start_row * N + c_col;
-      // if (start_row == 0 && kp_idx == 0) printf("%d\n", Creg[reg]);
-      if (c_col < K)
+      c_idx = c_row * N + c_col;
+      //TODO: Store to shared memory and then to global memory using vector stores
+      if (c_col < K) {
         C[c_idx] = Creg[reg];
+      }      
+        //Not worth storing in shared memory and then doing 128-bit stores
+        // for (uint reg2 = 0; reg2 < Creg_elems_in_sh; reg2++) {
+        //   uint reg = reg1 + reg2;
+        //   uint store_index = threadIdx.x + reg2 * N_THREADS;
+
+        //   Creg_in_sh[store_index] = Creg[reg];
+        // }
+
+        // __syncthreads();
+        // // const int ldNumElems = sizeof(T)/sizeof(T);
+        // for (uint csh_col = threadIdx.x*ldNumElems; csh_col < Creg_elems_in_sh*N_THREADS; csh_col += N_THREADS*ldNumElems) {
+        //   uint c_row = (a_row + start_row);
+        //   uint c_idx;
+        //   uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
+        //   uint c_col = csh_col + (reg1/Creg_elems_in_sh)*N_THREADS*Creg_elems_in_sh;
+
+        //   if (K_EQUALS_VAR) {
+        //     c_idx = c_row * N  + c_col + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); //TODO: Fix when external_tile_kp_n > 0
+        //   } else {
+        //     uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+
+        //     c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
+        //   }
+          
+        //   *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Creg_in_sh[csh_col];
+        // }
+
+        // __syncthreads();
     }
     #endif
     
@@ -448,7 +481,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
 }
 
 #define N_THREADS 512
-#define KP_N_TILE 64
+#define KP_N_TILE 128
 
 #ifdef EVAL
     typedef float DATA_TYPE;
@@ -467,33 +500,39 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-  MAX_K_KERNELS(N_COARSE_TB, 128) \
-  MAX_K_KERNELS(N_COARSE_TB, 256) \
-  MAX_K_KERNELS(N_COARSE_TB, 512) \
-  MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(N_COARSE_TB, 2048) \
   MAX_K_KERNELS(N_COARSE_TB, 4096) \  
-  MAX_K_KERNELS(N_COARSE_TB, 8192) \
+MAX_K_KERNELS(N_COARSE_TB, 8192) \  
+MAX_K_KERNELS(N_COARSE_TB, 16384) \  
+
+
+  // MAX_K_KERNELS(N_COARSE_TB, 128) \
+  // MAX_K_KERNELS(N_COARSE_TB, 256) \
+  // MAX_K_KERNELS(N_COARSE_TB, 512) \
+  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(N_COARSE_TB, 4096) \  
+  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 8192
-#define MIN_K 128
-#define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 7
-#define NUM_KP_N_K_KERNELS 7
+#define MAX_K 16384
+#define MIN_K 4096
+#define MIN_KP_K 128
+#define NUM_MAX_K_KERNELS 3 //7
+#define NUM_KP_N_K_KERNELS 1// 7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
@@ -505,7 +544,7 @@ static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_K
     // COARSE_TB_KERNELS(4)
   };
 
-// static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
+static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 int log2(int n){return 31 - __builtin_clz(n);}
 
@@ -659,10 +698,10 @@ int main(int argc, char* argv[])
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
-                                          // {10,256,256, 2, {16,16},{16,16}},
-                                          {10,512,512, 3, {8,8,8},{8,8,8}},
-                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          // // {10,256,256, 2, {16,16},{16,16}},
+                                          // {10,512,512, 3, {8,8,8},{8,8,8}},
+                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}}
   #endif
