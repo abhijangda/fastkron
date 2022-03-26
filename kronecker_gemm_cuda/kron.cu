@@ -209,8 +209,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   
   const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A,
   const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //4
-  const uint Creg_Rows = 1;
-  const uint Creg_Cols = 1;
+  const uint Creg_Rows = 2;
+  const uint Creg_Cols = 2;
   const uint Creg_SIZE = Creg_Rows * Creg_Cols;
   assert (Creg_SIZE == Csh_COLS/N_THREADS);
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //1
@@ -288,8 +288,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         __syncthreads();
         
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
-          const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x / 32)*1 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
-          const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x % 32)*1 = 0,1,2,3,...
+          const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x / 16)*2 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
+          const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x % 16)*2 = 0,2,4,6,...
 
           // #pragma unroll
           {
@@ -315,7 +315,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
                 uint kp_col = kp_col_start + _kp_col;
                 for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
-                  KPr[elem][_kp_col] = kron_fac_sh[kp_col][elem]; //TODO: fix this
+                  KPr[elem][_kp_col] = kron_fac_sh[kp_col][elem]; //TODO: Add ar_start_id
               }
 
               for (int i = 0; i < Creg_Rows; i++)
@@ -327,20 +327,19 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         }
       }
     }
-    
-    const uint c_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols;
-    const uint c_elem_in_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols;
-
+  
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
-        T val = Creg[reg_i][reg_j];
         int a_row = 0;
-        uint c_row = (a_row + start_row);
-        uint c_col = c_col_start*MAX_KP_K + reg_i*Creg_Cols + c_elem_in_col_start + reg_j; //*Creg_Cols needs to be fixed
-        uint c_idx = c_row * N + c_col;
-        assert(threadIdx.x == c_col);
-        // if (kp_idx == 0&& c_row == 0 && threadIdx.x < 128)
-        //   printf("threadIdx.x %d c_col %d c_col_start %d c_elem_in_col_start %d\n", threadIdx.x, c_col, c_col_start, c_elem_in_col_start);
+        const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x / 16)*2 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
+        const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols; 
+        
+        const uint c_row = (a_row + start_row);
+        const uint c_col = kp_col_start*MAX_KP_K + reg_j*MAX_KP_K + a_col_start + reg_i;
+        const uint c_idx = c_row * N + c_col;
+        // assert(threadIdx.x == c_col);
+        // if (kp_idx == 0&& c_row == 0 && c_col < 64)
+        //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
         if (c_col < K)
           C[c_idx] = Creg[reg_i][reg_j];
       }
@@ -405,7 +404,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   }
 }
 
-#define N_THREADS 1024 
+#define N_THREADS 256 
 #define KP_N_TILE 128
 
 #ifdef EVAL
