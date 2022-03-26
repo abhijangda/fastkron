@@ -209,13 +209,14 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   
   const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A,
   const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //4
-  const uint Creg_SIZE = TILE_X * MAX(1, Csh_COLS/N_THREADS); //
-  const uint Creg_Rows = (MAX_K/MAX_KP_K)/numKpColMult; //2
-  const uint Creg_Cols = MAX(1, INTERNAL_KP_N_TILE/kpMulblockWarps); //4
+  const uint Creg_Rows = 1;
+  const uint Creg_Cols = 1;
+  const uint Creg_SIZE = Creg_Rows * Creg_Cols;
+  assert (Creg_SIZE == Csh_COLS/N_THREADS);
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //1
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
-  register T Creg[Creg_SIZE];
+  register T Creg[Creg_Rows][Creg_Cols];
 
   uint kpMullane = threadIdx.x%numKpColMult;
   uint kpMulwid = threadIdx.x/numKpColMult;
@@ -224,8 +225,11 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   for (uint start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
     // const uint start_row = blockIdx.y;
     #pragma unroll
-    for (uint reg = 0; reg < Creg_SIZE; reg++) {
-      Creg[reg] = 0;
+    for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
+      #pragma unroll
+      for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
+        Creg[reg_i][reg_j] = 0;
+      }
     }
   
     for (uint internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
@@ -235,22 +239,23 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
           LD_TYPE a;
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
             a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
-            // *(LD_TYPE*)&Ash[a_row][a_col] = a;
+            *(LD_TYPE*)&Ash[a_row][a_col] = a;
           } else {
             a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
                                       (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
-            // *(LD_TYPE*)&Ash[a_row][a_col] = a;
+            *(LD_TYPE*)&Ash[a_row][a_col] = a;
           }
-
-          T a1[4] = {a.x, a.y, a.z, a.w};
-          for (uint i = 0; i < ldNumElems; i++) {
-            uint ash_col = a_col + i;
-            uint lane = ash_col/INTERNAL_KP_K_TILE; // 32
-            uint kpKlane = lane % INTERNAL_KP_K_TILE; // % 32
+          
+          //TODO: Following code stores Ash in a round robin manner. Disabling it for new version
+          // T a1[4] = {a.x, a.y, a.z, a.w};
+          // for (uint i = 0; i < ldNumElems; i++) {
+          //   uint ash_col = a_col + i;
+          //   uint lane = ash_col/INTERNAL_KP_K_TILE; // 32
+          //   uint kpKlane = lane % INTERNAL_KP_K_TILE; // % 32
            
-            uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (ash_col % INTERNAL_KP_K_TILE + kpKlane)%INTERNAL_KP_K_TILE;
-            Ash[a_row][final_col] = a1[i];
-          }
+          //   uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (ash_col % INTERNAL_KP_K_TILE + kpKlane)%INTERNAL_KP_K_TILE;
+          //   Ash[a_row][final_col] = a1[i];
+          // }
         }
       }
     
@@ -283,82 +288,92 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         __syncthreads();
         
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
-          #pragma unroll
-          for (uint a_col_start = 0, c_reg_col_start = 0; c_reg_col_start < (MAX_K/MAX_KP_K)/numKpColMult; a_col_start += numKpColMult, c_reg_col_start++) {
+          const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x / 32)*1 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
+          const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x % 32)*1 = 0,1,2,3,...
+
+          // #pragma unroll
+          {
             const uint MAX_AR_SZ = KPK_SPLIT_SIZE;
 
             //Load MAX_AR_SZ elements at a time to limit the register usage
             for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) { //TODO: Shared memory bank conflicts with kpK = 32 and AR_SZ = 16
-              register T Ar[MAX_AR_SZ];
-              uint kpKlane = (lane % numKpColMult) % INTERNAL_KP_K_TILE; //
+              register T Ar[Creg_Rows][MAX_AR_SZ];
+              register T KPr[MAX_AR_SZ][Creg_Cols];
+              //TODO: Following code loads from shared memory in round robin manner. Disabling it for now.
+              // uint kpKlane = (lane % numKpColMult) % INTERNAL_KP_K_TILE; //
 
-              for (uint a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
-                  Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + (ar_start_id + a_col + i) % INTERNAL_KP_K_TILE];//TODO: Shared memory bank conflicts here with KP_K = 4
-              }
+              // for (uint a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
+              //     Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + (ar_start_id + a_col + i) % INTERNAL_KP_K_TILE];//TODO: Shared memory bank conflicts here with KP_K = 4
+              // }
               
-              #pragma unroll
-              for (uint kp_col = kpMulwid, c_reg_idx = 0; c_reg_idx < INTERNAL_KP_N_TILE/kpMulblockWarps; kp_col += kpMulblockWarps, c_reg_idx++) {
-                T c = 0;
-                const int NUM_KP_REGS = MAX_AR_SZ;
-                T* kron_col_ptr = &kron_fac_sh[kp_col][ar_start_id];
-
-                #pragma unroll
-                for (uint a_col_outer = 0; a_col_outer < MAX_AR_SZ; a_col_outer += NUM_KP_REGS) {
-                  // register T kron_fac_r;
-
-                  // kron_fac_r = kron_fac_sh[kp_col][(ar_start_id+lane) % INTERNAL_KP_K_TILE];
-                  register T kron_fac_regs[NUM_KP_REGS];
-                  for (uint reg = 0; reg < NUM_KP_REGS; reg++) {
-                    uint kp_row = a_col_outer + reg;
-                    kron_fac_regs[reg] =  kron_col_ptr[kp_row];//__shfl_sync(0xffffffff, kron_fac_r, a_col_outer + reg, INTERNAL_KP_K_TILE);
-                  }
-
-                  for (uint a_col_inner = 0; a_col_inner < NUM_KP_REGS; a_col_inner++) {
-                    uint a_col = a_col_outer + a_col_inner;
-                    T a = Ar[a_col]; //Ash[a_row][a_col_start/KP_K][a_col]; //Ar[a_col];
-                    T kp = kron_fac_regs[a_col_inner];
-                    uint __idx = a_row*NUM_INTERNAL_KP_N_TILES*Creg_Cols*Creg_Rows + (internal_tile_kp_n/INTERNAL_KP_N_TILE)*Creg_Cols*Creg_Rows + c_reg_col_start*Creg_Cols + c_reg_idx;
-                    Creg[__idx] += a * kp;
-                  }
-                }
+              for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
+                uint a_col = a_col_start + _a_col;
+                for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
+                  Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + a_elem]; //TODO: Add ar_start_id
               }
+
+              for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
+                uint kp_col = kp_col_start + _kp_col;
+                for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
+                  KPr[elem][_kp_col] = kron_fac_sh[kp_col][elem]; //TODO: fix this
+              }
+
+              for (int i = 0; i < Creg_Rows; i++)
+                for (int j = 0; j < Creg_Cols; j++)
+                  for (int k = 0; k < MAX_AR_SZ; k++)
+                    Creg[i][j] += Ar[i][k] * KPr[k][j];
             }
           }
         }
       }
     }
     
-    #ifdef C_IN_REG
-    // if (blockIdx.x == 0 && threadIdx.x == 0) printf("Creg_elems_in_sh %d Creg_in_sh_elems %d Creg_SIZE %d\n", Creg_elems_in_sh, Creg_in_sh_elems, Creg_SIZE);
-    for (uint reg = 0; reg < Creg_SIZE; reg++) {
-      uint a_row = reg / (Creg_SIZE/TILE_X);
-      uint c_row = (a_row + start_row);
-      uint c_idx;
-      uint reg_col = reg % (Creg_SIZE/TILE_X);
-      uint c_col;
-      uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();      
-      //Cannot store N_THREADS values in shared memory. So may be not do it then?
-      c_col = (reg_col/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
-      ((reg_col/Creg_Cols) % Creg_Rows) * N_THREADS +
-      (reg_col%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
-      threadIdx.x;
+    const uint c_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols;
+    const uint c_elem_in_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols;
 
-      if (!K_EQUALS_VAR) {
-        uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-        c_col = tile_k * (MAX_K/kpK) + 
-                (c_col/(MAX_K/kpK)) * (K/kpK) +
-                c_col%(MAX_K/kpK);
+    for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
+      for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
+        T val = Creg[reg_i][reg_j];
+        int a_row = 0;
+        uint c_row = (a_row + start_row);
+        uint c_col = c_col_start*MAX_KP_K + reg_i*Creg_Cols + c_elem_in_col_start + reg_j; //*Creg_Cols needs to be fixed
+        uint c_idx = c_row * N + c_col;
+        assert(threadIdx.x == c_col);
+        // if (kp_idx == 0&& c_row == 0 && threadIdx.x < 128)
+        //   printf("threadIdx.x %d c_col %d c_col_start %d c_elem_in_col_start %d\n", threadIdx.x, c_col, c_col_start, c_elem_in_col_start);
+        if (c_col < K)
+          C[c_idx] = Creg[reg_i][reg_j];
       }
+    }
+    // for (uint reg = 0; reg < Creg_SIZE; reg++) {
+    //   uint a_row = reg / (Creg_SIZE/TILE_X);
+    //   uint c_row = (a_row + start_row);
+    //   uint c_idx;
+    //   uint reg_col = reg % (Creg_SIZE/TILE_X);
+    //   uint c_col;
+    //   uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();      
+    //   //Cannot store N_THREADS values in shared memory. So may be not do it then?
+    //   c_col = (reg_col/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
+    //   ((reg_col/Creg_Cols) % Creg_Rows) * N_THREADS +
+    //   (reg_col%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
+    //   threadIdx.x;
 
-      if (KP_N_TILE != MAX_KP_N) {
-        c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
-      }
+    //   if (!K_EQUALS_VAR) {
+    //     uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+    //     c_col = tile_k * (MAX_K/kpK) + 
+    //             (c_col/(MAX_K/kpK)) * (K/kpK) +
+    //             c_col%(MAX_K/kpK);
+    //   }
+
+    //   if (KP_N_TILE != MAX_KP_N) {
+    //     c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
+    //   }
       
-      c_idx = c_row * N + c_col;
-      //TODO: Store to shared memory and then to global memory using vector stores
-      if (c_col < K) {
-        C[c_idx] = Creg[reg];
-      }      
+    //   c_idx = c_row * N + c_col;
+    //   //TODO: Store to shared memory and then to global memory using vector stores
+    //   if (c_col < K) {
+    //     C[c_idx] = Creg[reg];
+    //   }      
         //Not worth storing in shared memory and then doing 128-bit stores
         // for (uint reg2 = 0; reg2 < Creg_elems_in_sh; reg2++) {
         //   uint reg = reg1 + reg2;
@@ -387,12 +402,10 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         // }
 
         // __syncthreads();
-    }
-    #endif
   }
 }
 
-#define N_THREADS 512
+#define N_THREADS 1024 
 #define KP_N_TILE 128
 
 #ifdef EVAL
@@ -412,33 +425,35 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32)   
+// KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-  MAX_K_KERNELS(N_COARSE_TB, 128) \
-  MAX_K_KERNELS(N_COARSE_TB, 256) \
-  MAX_K_KERNELS(N_COARSE_TB, 512) \
   MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(N_COARSE_TB, 4096) \  
-  MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  // MAX_K_KERNELS(N_COARSE_TB, 128) \
+  // MAX_K_KERNELS(N_COARSE_TB, 256) \
+  // MAX_K_KERNELS(N_COARSE_TB, 512) \
+  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(N_COARSE_TB, 4096) \  
+  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 8192
-#define MIN_K 128
-#define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 7
-#define NUM_KP_N_K_KERNELS 7
+#define MAX_K 1024
+#define MIN_K 1024
+#define MIN_KP_K 32
+#define NUM_MAX_K_KERNELS 1 //7
+#define NUM_KP_N_K_KERNELS 1 //7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
