@@ -210,8 +210,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A,
   const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //4
   const uint Creg_SIZE = MAX(MIN(Csh_COLS/N_THREADS, 64), 1);
-  const uint Creg_Rows = MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 1 than cols, to use 128-bit stores
-  const uint Creg_Cols = MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
+  const uint Creg_Rows = 2; //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 1 than cols, to use 128-bit stores
+  const uint Creg_Cols = 2; //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //1
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
@@ -409,11 +409,11 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         //   *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Creg_in_sh[csh_col];
         // }
 
-        // __syncthreads();
+    __syncthreads();
   }}}
 }
 
-#define N_THREADS 256 
+#define N_THREADS 1024 
 #define KP_N_TILE 128
 
 #ifdef EVAL
@@ -433,33 +433,35 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64)
+// KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-  MAX_K_KERNELS(N_COARSE_TB, 128) \
-  MAX_K_KERNELS(N_COARSE_TB, 256) \
-  MAX_K_KERNELS(N_COARSE_TB, 512) \
-  MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(N_COARSE_TB, 4096) \  
-  MAX_K_KERNELS(N_COARSE_TB, 8192) \
+MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  // MAX_K_KERNELS(N_COARSE_TB, 128) \
+  // MAX_K_KERNELS(N_COARSE_TB, 256) \
+  // MAX_K_KERNELS(N_COARSE_TB, 512) \
+  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(N_COARSE_TB, 4096) \  
+  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 8192
-#define MIN_K 128
-#define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 7
-#define NUM_KP_N_K_KERNELS 7
+#define MAX_K 4096
+#define MIN_K 4096
+#define MIN_KP_K 64
+#define NUM_MAX_K_KERNELS 1//7
+#define NUM_KP_N_K_KERNELS 1//7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
@@ -620,8 +622,8 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
+                                          // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
