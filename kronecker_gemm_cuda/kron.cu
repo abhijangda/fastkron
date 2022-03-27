@@ -179,7 +179,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     N = NVar;
   }
 
-  const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
+  const uint KPK_SPLIT_SIZE = MIN(4, INTERNAL_KP_K_TILE);
   const uint NUM_KPK_SPLITS = MAX(1, INTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
   const uint ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
 
@@ -210,8 +210,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A,
   const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //4
   const uint Creg_SIZE = MAX(MIN(Csh_COLS/N_THREADS, 64), 1);
-  const uint Creg_Rows = 2; //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 1 than cols, to use 128-bit stores
-  const uint Creg_Cols = 2; //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
+  const uint Creg_Rows = 4; //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 1 than cols, to use 128-bit stores
+  const uint Creg_Cols = 4; //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //1
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
@@ -339,18 +339,24 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
       }
     }
   
-    for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
-      for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
-        int a_row = 0;
-        
-        const uint c_row = (a_row + start_row);
-        const uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
-        const uint c_idx = c_row * N + c_col;
-        // assert(threadIdx.x == c_col);
-        // if (kp_idx == 0&& c_row == 0 && c_col < 64)
-        //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
-        if (c_col < K)
-          C[c_idx] = Creg[reg_i][reg_j];
+    for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
+      if (Creg_Rows % 4 == 0) {
+        for (uint reg_i = 0; reg_i < Creg_Rows; reg_i += 4) {
+          int a_row = 0;
+          
+          const uint c_row = (a_row + start_row);
+          const uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
+          const uint c_idx = c_row * N + c_col;
+          // assert(threadIdx.x == c_col);
+          // if (kp_idx == 0&& c_row == 0 && c_col < 64)
+          //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
+          if (c_col < K) {
+            LD_TYPE c = {Creg[reg_i][reg_j], Creg[reg_i+1][reg_j], Creg[reg_i+2][reg_j], Creg[reg_i+3][reg_j]};
+            *(LD_TYPE*)&C[c_idx] = c;
+          }
+        }
+      } else {
+        assert(false);
       }
     }
     // for (uint reg = 0; reg < Creg_SIZE; reg++) {
@@ -413,7 +419,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   }}}
 }
 
-#define N_THREADS 1024 
+#define N_THREADS 256 
 #define KP_N_TILE 128
 
 #ifdef EVAL
