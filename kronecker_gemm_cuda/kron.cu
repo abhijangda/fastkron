@@ -209,7 +209,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   
   const uint numKpColMult = MIN(MAX_K/MAX_KP_K, N_THREADS); //Threads executing in parallel to multiply one column of KP with MAX_K row elements of A,
   const uint kpMulblockWarps = MIN(MAX_KP_K, N_THREADS/numKpColMult); //4
-  const uint Creg_Rows = 2;
+  const uint Creg_Rows = 4;
   const uint Creg_Cols = 2;
   const uint Creg_SIZE = Creg_Rows * Creg_Cols;
   assert (Creg_SIZE == Csh_COLS/N_THREADS);
@@ -288,8 +288,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         __syncthreads();
         
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
-          const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x / 16)*2 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
-          const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x % 16)*2 = 0,2,4,6,...
+          const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Rows)) * Creg_Cols; // ()/16)*2 = 0,0, ...., 2,2 ....2,2,2,2,....
+          const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Rows)) * Creg_Rows; // ()%(16)*2 =   0,0,..,2,2,2,...
 
           // #pragma unroll
           {
@@ -331,8 +331,8 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
         int a_row = 0;
-        const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Cols)) * Creg_Cols; //(threadIdx.x / 16)*2 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
-        const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Cols)) * Creg_Cols; 
+        const uint kp_col_start = (threadIdx.x /(KP_N_TILE/Creg_Rows)) * Creg_Cols; //(threadIdx.x / 16)*2 = 0, 0, 0, ..., 2, 2, 2, ..., 4, 4,4,...
+        const uint a_col_start = (threadIdx.x % (KP_N_TILE/Creg_Rows)) * Creg_Rows; 
         
         const uint c_row = (a_row + start_row);
         const uint c_col = kp_col_start*MAX_KP_K + reg_j*MAX_KP_K + a_col_start + reg_i;
@@ -404,7 +404,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
   }
 }
 
-#define N_THREADS 256 
+#define N_THREADS 128 
 #define KP_N_TILE 128
 
 #ifdef EVAL
