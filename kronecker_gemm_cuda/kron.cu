@@ -179,7 +179,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     N = NVar;
   }
 
-  const uint KPK_SPLIT_SIZE = MIN(4, INTERNAL_KP_K_TILE);
+  const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
   const uint NUM_KPK_SPLITS = MAX(1, INTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
   const uint ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
 
@@ -304,7 +304,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
           // assert (kp_col_start == 0);
           // #pragma unroll
           {
-            const uint MAX_AR_SZ = KPK_SPLIT_SIZE;
+            const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
 
             //Load MAX_AR_SZ elements at a time to limit the register usage
             for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) { //TODO: Shared memory bank conflicts with kpK = 32 and AR_SZ = 16
@@ -320,13 +320,13 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
                 uint a_col = a_col_start + _a_col;
                 for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                  Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + ar_start_id + a_elem]; //TODO: Add ar_start_id
+                  Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + ar_start_id + a_elem];
               }
 
               for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
                 uint kp_col = kp_col_start + _kp_col;
                 for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
-                  KPr[elem][_kp_col] = kron_fac_sh[kp_col][ar_start_id + elem]; //TODO: Add ar_start_id
+                  KPr[elem][_kp_col] = kron_fac_sh[kp_col][ar_start_id + elem];
               }
 
               for (int i = 0; i < Creg_Rows; i++)
