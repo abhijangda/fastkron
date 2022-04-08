@@ -134,8 +134,9 @@ template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_external_tile_kp_n()
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
+// __launch_bounds__(N_THREADS)
 template<typename T, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
-__global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
+__global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
   const uint INTERNAL_KP_N_TILE = MIN(128, KP_N_TILE);
@@ -148,7 +149,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     typedef int4 LD_TYPE; 
   #endif 
 
-  __shared__ T kron_fac_sh[INTERNAL_KP_N_TILE][INTERNAL_KP_K_TILE+1];
+  __shared__ T kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
   const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
   __shared__ T Ash[TILE_X][Ash_COLS];
   const uint C_ELEMS_STORE = N_THREADS * (sizeof(LD_TYPE)/sizeof(T));
@@ -191,16 +192,17 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
     #else 
       typedef int4 LD_TYPE; 
     #endif
-    const int ldNumElems = sizeof(LD_TYPE)/sizeof(T);
-    const int ldSize = MIN(kpN*kpK, ldNumElems);
+    const uint ldNumElems = sizeof(LD_TYPE)/sizeof(T);
+    const uint ldSize = MIN(kpN*kpK, ldNumElems);
 
-    for (auto i = threadIdx.x*ldSize; i < (kpN * kpK); i += blockDim.x*ldSize) {
+    for (uint i = threadIdx.x*ldSize; i < (kpN * kpK); i += blockDim.x*ldSize) {
       // kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
       LD_TYPE a = *(LD_TYPE*)&kron_fac[i];
       T a1[4] = {a.x, a.y, a.z, a.w};
-      for (int j = 0; j < ldSize; j++) {
-        int idx = i + j;
-        kron_fac_sh[idx%kpK][idx/kpK] = a1[j];
+      #pragma unroll
+      for (uint j = 0; j < ldSize; j++) {
+        uint idx = i + j;
+        kron_fac_sh[idx/MAX_KP_K][idx%MAX_KP_K] = a1[j];
       }
     }
   } else {
@@ -216,18 +218,15 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
 
   register T Creg[Creg_Rows][Creg_Cols];
 
-  const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols; // / 64 = 0, 0, 0, 0, 0, 0, ..., 64 times, 0
-  const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows; // % 64 = 0, 1, 2, 3, 4, 5 ..., .          63
+  const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols;
+  const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows;
 
   for (uint start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
   // if (start_row == 0 && threadIdx.x == 0) {
   //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
   // }
   for (uint kp_col_start = kp_col_start_; kp_col_start < MAX_KP_K      ; kp_col_start += (N_THREADS/ ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * (N_THREADS/ ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) { //(64/64)
-    // if (start_row == 0 && kp_idx == 0 && threadIdx.x < 64) {
-    //   printf("Creg_Rows %d Creg_Cols %d a_col_start %d kp_col_start %d\n", Creg_Rows, Creg_Cols, a_col_start, kp_col_start);
-    // }
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * (N_THREADS/ ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       #pragma unroll
@@ -256,6 +255,7 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
           
           //TODO: Following code stores Ash in a round robin manner. Disabling it for new version
           T a1[4] = {a.x, a.y, a.z, a.w};
+          #pragma unroll
           for (uint i = 0; i < ldNumElems; i++) {
             uint ash_col = a_col + i;
             uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/Creg_Rows; // 32
@@ -285,9 +285,10 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
             // kron_fac_sh[threadIdx.x%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
             LD_TYPE a = *(LD_TYPE*)&kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
             T a1[4] = {a.x, a.y, a.z, a.w};
+            #pragma unroll
             for (uint i = 0; i < ldSize; i++) {
               uint idx = (threadIdx.x%(INTERNAL_KP_N_TILE/ldSize))*ldSize + i%ldSize;
-              kron_fac_sh[idx][row] = a1[i];
+              kron_fac_sh[row][idx] = a1[i];
             }
           }
         }
@@ -295,40 +296,36 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
         __syncthreads();
         
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
-          // assert (kp_col_start == 0);
-          // #pragma unroll
-          {
-            const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
+          const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
 
-            //Load MAX_AR_SZ elements at a time to limit the register usage
-            for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) { //TODO: Shared memory bank conflicts with kpK = 32 and AR_SZ = 16
-              register T Ar[Creg_Rows][MAX_AR_SZ];
-              register T KPr[MAX_AR_SZ][Creg_Cols];
-              //TODO: Following code loads from shared memory in round robin manner. Disabling it for now.
-              // uint kpKlane = (lane % numKpColMult) % INTERNAL_KP_K_TILE; //
+          //Load MAX_AR_SZ elements at a time to limit the register usage
+          for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) {
+            register T Ar[Creg_Rows][MAX_AR_SZ];
+            register T KPr[MAX_AR_SZ][Creg_Cols];
 
-              // for (uint a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
-              //     Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + (ar_start_id + a_col + i) % INTERNAL_KP_K_TILE];//TODO: Shared memory bank conflicts here with KP_K = 4
-              // }
-              uint round_start = (a_col_start / Creg_Rows)%INTERNAL_KP_K_TILE;
+            uint round_start = (a_col_start / Creg_Rows)%INTERNAL_KP_K_TILE;
 
-              for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
-                uint a_col = a_col_start + _a_col;
-                for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                  Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
-              }
-
-              for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
-                uint kp_col = kp_col_start + _kp_col;
-                for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
-                  KPr[elem][_kp_col] = kron_fac_sh[kp_col][ar_start_id + elem];
-              }
-
-              for (int i = 0; i < Creg_Rows; i++)
-                for (int j = 0; j < Creg_Cols; j++)
-                  for (int k = 0; k < MAX_AR_SZ; k++)
-                    Creg[i][j] += Ar[i][k] * KPr[k][j];
+            #pragma unroll
+            for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
+              uint a_col = a_col_start + _a_col;
+              for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
+                Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
             }
+            
+            #pragma unroll
+            for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
+              uint kp_col = kp_col_start + _kp_col;
+              for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
+                KPr[elem][_kp_col] = kron_fac_sh[ar_start_id + elem][kp_col];
+            }
+
+            #pragma unroll
+            for (int i = 0; i < Creg_Rows; i++)
+              #pragma unroll
+              for (int j = 0; j < Creg_Cols; j++)
+                #pragma unroll
+                for (int k = 0; k < MAX_AR_SZ; k++)
+                  Creg[i][j] += Ar[i][k] * KPr[k][j];
           }
         }
       }
