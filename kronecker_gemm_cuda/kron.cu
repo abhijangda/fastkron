@@ -253,12 +253,11 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             // *(LD_TYPE*)&Ash[a_row][a_col] = a;
           }
           
-          //TODO: Following code stores Ash in a round robin manner. Disabling it for new version
           T a1[4] = {a.x, a.y, a.z, a.w};
           #pragma unroll
           for (uint i = 0; i < ldNumElems; i++) {
             uint ash_col = a_col + i;
-            uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/Creg_Rows; // 32
+            uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/Creg_Rows;
            
             uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (a_col_start + ash_col%INTERNAL_KP_K_TILE)%INTERNAL_KP_K_TILE;
             Ash[a_row][final_col] = a1[i];
