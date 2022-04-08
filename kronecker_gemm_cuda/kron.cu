@@ -244,26 +244,25 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
             a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
             // *(LD_TYPE*)&Ash[a_row][a_col] = a;
-            T a1[4] = {a.x, a.y, a.z, a.w};
-            for (int j = 0; j < ldNumElems; j++) {
-              Ash[a_row][a_col + j] = a1[j];
-            }
+            // T a1[4] = {a.x, a.y, a.z, a.w};
+            // for (int j = 0; j < ldNumElems; j++) {
+            //   Ash[a_row][a_col + j] = a1[j];
+            // }
           } else {
             a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
                                       (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
-            *(LD_TYPE*)&Ash[a_row][a_col] = a;
+            // *(LD_TYPE*)&Ash[a_row][a_col] = a;
           }
           
           //TODO: Following code stores Ash in a round robin manner. Disabling it for new version
-          // T a1[4] = {a.x, a.y, a.z, a.w};
-          // for (uint i = 0; i < ldNumElems; i++) {
-          //   uint ash_col = a_col + i;
-          //   uint lane = ash_col/INTERNAL_KP_K_TILE; // 32
-          //   uint kpKlane = lane % INTERNAL_KP_K_TILE; // % 32
+          T a1[4] = {a.x, a.y, a.z, a.w};
+          for (uint i = 0; i < ldNumElems; i++) {
+            uint ash_col = a_col + i;
+            uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/Creg_Rows; // 32
            
-          //   uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (ash_col % INTERNAL_KP_K_TILE + kpKlane)%INTERNAL_KP_K_TILE;
-          //   Ash[a_row][final_col] = a1[i];
-          // }
+            uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (a_col_start + ash_col%INTERNAL_KP_K_TILE)%INTERNAL_KP_K_TILE;
+            Ash[a_row][final_col] = a1[i];
+          }
         }
       }
     
@@ -311,12 +310,12 @@ __global__ void __launch_bounds__(N_THREADS) cuda_gemm(uint M, uint NVar, uint K
               // for (uint a_col = kpKlane, i = 0; i < MAX_AR_SZ; i++) { //
               //     Ar[i] = Ash[a_row][(a_col_start+kpMullane)*INTERNAL_KP_K_TILE + (ar_start_id + a_col + i) % INTERNAL_KP_K_TILE];//TODO: Shared memory bank conflicts here with KP_K = 4
               // }
-              
+              uint round_start = (a_col_start / Creg_Rows)%INTERNAL_KP_K_TILE;
+
               for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
                 uint a_col = a_col_start + _a_col;
-                uint round_start = a_col_start / Creg_Rows;
                 for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                  Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + ar_start_id + a_elem]; //round_start
+                  Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
               }
 
               for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
