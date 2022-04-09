@@ -3,6 +3,9 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <time.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #define CUDACHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
@@ -22,6 +25,25 @@
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
+
+
+double convertTimeValToDouble (struct timeval _time)
+{
+  return ((double)_time.tv_sec) + ((double)_time.tv_usec)/1000000.0f;
+}
+
+struct timeval getTimeOfDay ()
+{
+  struct timeval _time;
+
+  if (gettimeofday (&_time, NULL) == -1) {
+    fprintf (stderr, "gettimeofday returned -1\n");
+    perror ("");
+    abort ();
+  }
+
+  return _time;
+}
 
 template<typename T>
 void setMatrix(T* mat, int M, int N, int (*fnvalue)(int i, int j)) 
@@ -134,6 +156,32 @@ template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_external_tile_kp_n()
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
+__device__ constexpr uint uint_squareroot(uint x)
+{
+  switch (x) {
+    case 1:
+      return 1;
+    
+    case 2:
+      return 2;
+    
+    case 4:
+      return 2;
+    
+    case 8:
+      return 4;
+    
+    case 16:
+      return 4;
+    
+    case 32:
+      return 8;
+    
+    default:
+      return 1;
+  }
+}
+
 // __launch_bounds__(N_THREADS)
 template<typename T, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
@@ -208,11 +256,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   } else {
   }
 
+  const uint MAX_CREG_SIZE = MAX(MAX_K/N_THREADS, 1);
+  const uint Creg_Rows = MIN(4, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
+  const uint Creg_Cols = MIN(MAX_KP_K, MIN(4, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
-  const uint Creg_SIZE = MAX(MIN(Csh_COLS/N_THREADS, 64), 1);
-  const uint Creg_Rows = 4; //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 1 than cols, to use 128-bit stores
-  const uint Creg_Cols = 4; //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
-  
+  if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) 
+    printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
+    
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
@@ -293,7 +343,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         }
 
         __syncthreads();
-        
+
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
           const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
 
@@ -442,35 +492,33 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64)
-// KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
-//   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-MAX_K_KERNELS(N_COARSE_TB, 4096) \
-  // MAX_K_KERNELS(N_COARSE_TB, 128) \
-  // MAX_K_KERNELS(N_COARSE_TB, 256) \
-  // MAX_K_KERNELS(N_COARSE_TB, 512) \
-  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  // MAX_K_KERNELS(N_COARSE_TB, 4096) \  
-  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  MAX_K_KERNELS(N_COARSE_TB, 128) \
+  MAX_K_KERNELS(N_COARSE_TB, 256) \
+  MAX_K_KERNELS(N_COARSE_TB, 512) \
+  MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  MAX_K_KERNELS(N_COARSE_TB, 8192) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
 #define MAX_K 4096
-#define MIN_K 4096
-#define MIN_KP_K 64
-#define NUM_MAX_K_KERNELS 1//7
-#define NUM_KP_N_K_KERNELS 1//7
+#define MIN_K 128
+#define MIN_KP_K 2
+#define NUM_MAX_K_KERNELS 7
+#define NUM_KP_N_K_KERNELS 7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
@@ -581,6 +629,29 @@ int main(int argc, char* argv[])
   int twoPowerL = atoi(argv[3]);
   #endif
 
+
+  if (false) {
+    int size = 1024*1024*1024;
+    char* host_ptr, *device_ptr;
+    CUDACHECK(cudaMallocHost(&host_ptr, size));
+    memset(host_ptr, 1, size);
+    CUDACHECK(cudaMalloc(&device_ptr, size));
+
+    for (int i = 4; i < size; i *= 2) {
+      
+      double t1 = convertTimeValToDouble(getTimeOfDay());
+
+      for (int j = 0; j < 10; j++)
+        CUDACHECK(cudaMemcpy(device_ptr, host_ptr, i, cudaMemcpyHostToDevice));
+      
+      double t2 = convertTimeValToDouble(getTimeOfDay());
+
+      printf("size: %ld time: %lf micro seconds\n", i, (t2-t1)/10.0f * 1e6);
+    }
+
+    return 0;
+  }
+
   std::vector<MatrixSizes> matrixSizes = {
                                           // {4,4,4, 2, {2,2},{2,2}},
                                           // {4,4,6, 2, {1,4},{2,3}},
@@ -631,14 +702,14 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
+                                          {10,1024,1024, 2, {32,32},{32,32}},
                                           {1, 4096, 4096, 2, {64,64},{64,64}},
-                                          // {1, 128*128, 128*128, 2, {128,128},{128,128}},
+                                          {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
-                                          // // {10,256,256, 2, {16,16},{16,16}},
+                                          // {10,256,256, 2, {16,16},{16,16}},
                                           // {10,512,512, 3, {8,8,8},{8,8,8}},
-                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}}
@@ -713,6 +784,7 @@ int main(int argc, char* argv[])
 
     // CUDACHECK(cudaMemcpy(&dKpOut[0], &__dKpOut[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
     // CUDACHECK(cudaMemcpy(&dKpMats[0], &__dKpMats[0], NUM_KP_MATS * sizeof(DATA_TYPE*), cudaMemcpyHostToDevice));
+
     CUDACHECK(cudaMalloc(&__dKpMatmulResult[0], M*std::max(N,K) * sizeof(DATA_TYPE)));
     CUDACHECK(cudaMalloc(&__dKpMatmulResult[1], M*std::max(N,K) * sizeof(DATA_TYPE)));
     CUDACHECK(cudaMemset(__dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
