@@ -177,6 +177,9 @@ __device__ constexpr uint uint_squareroot(uint x)
     case 32:
       return 8;
     
+    case 64:
+      return 8;
+    
     default:
       return 1;
   }
@@ -257,8 +260,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   }
 
   const uint MAX_CREG_SIZE = MAX(MAX_K/N_THREADS, 1);
-  const uint Creg_Rows = MIN(4, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
-  const uint Creg_Cols = MIN(MAX_KP_K, MIN(4, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
+  const uint Creg_Rows = MIN(8, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
+  const uint Creg_Cols = MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
 #ifndef EVAL
   if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) 
@@ -507,33 +510,37 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-  MAX_K_KERNELS(N_COARSE_TB, 128) \
-  MAX_K_KERNELS(N_COARSE_TB, 256) \
-  MAX_K_KERNELS(N_COARSE_TB, 512) \
-  MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(N_COARSE_TB, 4096) \
-  MAX_K_KERNELS(N_COARSE_TB, 8192) \
+MAX_K_KERNELS(N_COARSE_TB, 16384) \
+
+  // MAX_K_KERNELS(N_COARSE_TB, 128) \
+  // MAX_K_KERNELS(N_COARSE_TB, 256) \
+  // MAX_K_KERNELS(N_COARSE_TB, 512) \
+  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  // MAX_K_KERNELS(N_COARSE_TB, 16384) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 16) \
   // MAX_K_KERNELS(N_COARSE_TB, 32) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
-#define MAX_K 4096
-#define MIN_K 128
-#define MIN_KP_K 2
-#define NUM_MAX_K_KERNELS 7
-#define NUM_KP_N_K_KERNELS 7
+#define MAX_K 16384
+#define MIN_K 16384
+#define MIN_KP_K 128
+#define NUM_MAX_K_KERNELS 1 //8
+#define NUM_KP_N_K_KERNELS 1//7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
@@ -719,7 +726,7 @@ int main(int argc, char* argv[])
   #else
                                           // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {10,1024,1024, 2, {32,32},{32,32}},
-                                          {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
+                                          // {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
                                           // {1, 4096, 4096, 2, {64,64},{64,64}},
                                           // {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}},
