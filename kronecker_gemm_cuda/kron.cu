@@ -260,9 +260,11 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   const uint Creg_Rows = MIN(4, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
   const uint Creg_Cols = MIN(MAX_KP_K, MIN(4, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
+#ifndef EVAL
   if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) 
     printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
-    
+#endif
+
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
@@ -386,7 +388,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           int a_row = 0;
           
           const uint c_row = (a_row + start_row);
-          const uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
+          uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
+          if (!K_EQUALS_VAR) {
+            uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+            c_col = tile_k * (MAX_K/kpK) + 
+                (c_col/(MAX_K/kpK)) * (K/kpK) +
+                c_col%(MAX_K/kpK);
+          }
           const uint c_idx = c_row * N + c_col;
           // assert(threadIdx.x == c_col);
           // if (kp_idx == 0&& c_row == 0 && c_col < 64)
@@ -401,7 +409,14 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           int a_row = 0;
             
           const uint c_row = (a_row + start_row);
-          const uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
+          uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
+          
+          if (!K_EQUALS_VAR) {
+            uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+            c_col = tile_k * (MAX_K/kpK) + 
+                (c_col/(MAX_K/kpK)) * (K/kpK) +
+                c_col%(MAX_K/kpK);
+          }
           const uint c_idx = c_row * N + c_col;
           // assert(threadIdx.x == c_col);
           // if (kp_idx == 0&& c_row == 0 && c_col < 64)
@@ -702,9 +717,11 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
-                                          {1, 4096, 4096, 2, {64,64},{64,64}},
+                                          // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
+                                          // {10,1024,1024, 2, {32,32},{32,32}},
+                                          {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
+                                          // {1, 4096, 4096, 2, {64,64},{64,64}},
+                                          // {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
                                           {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
                                           // {10,256,256, 2, {16,16},{16,16}},
@@ -772,7 +789,13 @@ int main(int argc, char* argv[])
       KP_MAT_K[i] = matrixSize.KP_MAT_K[i];
       KP_MAT_N[i] = matrixSize.KP_MAT_N[i];
       kpMats[i] = new DATA_TYPE[KP_MAT_K[i] * KP_MAT_N[i]];
-      kpout[i] = new DATA_TYPE[K*N]; //TODO: larger than needed
+      size_t sz = ((uint64_t)K)*((uint64_t)N);
+      #ifndef EVAL
+      kpout[i] = new DATA_TYPE[sz]; //TODO: larger than needed
+      assert(kpout[i] != nullptr);
+      #else
+      kpout[i] = nullptr;
+      #endif
       kpMatmulResult[i] = new DATA_TYPE[M*std::max(N,K)];
 
       CUDACHECK(cudaMalloc(&__dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(DATA_TYPE)));
