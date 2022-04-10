@@ -259,7 +259,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   } else {
   }
 
-  const uint MAX_CREG_SIZE = MAX(MAX_K/N_THREADS, 1);
+  const uint MAX_CREG_SIZE = MAX((MAX_K/(MAX_KP_N/KP_N_TILE))/N_THREADS, 1);
   const uint Creg_Rows = MIN(8, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
   const uint Creg_Cols = MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
@@ -274,14 +274,14 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   register T Creg[Creg_Rows][Creg_Cols];
 
   const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols;
-  const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows;
+  const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows; 
 
   for (uint start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
   // if (start_row == 0 && threadIdx.x == 0) {
   //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
   // }
-  for (uint kp_col_start = kp_col_start_; kp_col_start < MAX_KP_K      ; kp_col_start += (N_THREADS/ ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * (N_THREADS/ ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
+  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; kp_col_start += (N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * (N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       #pragma unroll
@@ -398,6 +398,10 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
                 (c_col/(MAX_K/kpK)) * (K/kpK) +
                 c_col%(MAX_K/kpK);
           }
+          if (KP_N_TILE != MAX_KP_N) {
+            uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
+            c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
+          }
           const uint c_idx = c_row * N + c_col;
           // assert(threadIdx.x == c_col);
           // if (kp_idx == 0&& c_row == 0 && c_col < 64)
@@ -419,6 +423,10 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             c_col = tile_k * (MAX_K/kpK) + 
                 (c_col/(MAX_K/kpK)) * (K/kpK) +
                 c_col%(MAX_K/kpK);
+          }
+          if (KP_N_TILE != MAX_KP_N) {
+            uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
+            c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
           }
           const uint c_idx = c_row * N + c_col;
           // assert(threadIdx.x == c_col);
@@ -491,7 +499,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 }
 
 #define N_THREADS 256 
-#define KP_N_TILE 128
+#define KP_N_TILE 64
 
 #ifdef EVAL
     typedef float DATA_TYPE;
