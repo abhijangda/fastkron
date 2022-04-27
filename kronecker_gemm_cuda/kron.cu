@@ -27,9 +27,9 @@
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
 
-double convertTimeValToDouble (struct timeval _time)
+double convertTimeValToDouble(struct timeval _time)
 {
-  return ((double)_time.tv_sec) + ((double)_time.tv_usec)/1000000.0f;
+  return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
 }
 
 struct timeval getTimeOfDay ()
@@ -56,17 +56,21 @@ void setMatrix(T* mat, int M, int N, int (*fnvalue)(int i, int j))
   }
 }
 
-void printMatrix(int* mat, int M, int N) 
+void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) 
 {
   printf("[");
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
       // if (mat[i*N + j] == 18496)
         // printf("%d,%d\n",i,j);
+      if (max_cols != -1 && j >= max_cols)
+        break;  
       printf("%d, ", mat[i*N + j]);
     }
     if (i < M-1)
       printf("\n");
+    if (max_rows != -1 && i >= max_rows)
+      break;
   }
   printf("]");
 }
@@ -101,12 +105,15 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
       }    
     }    
   }
+
+  printMatrix(result, M, N, 4, 4);
 }
 
 /**
  * 
 */
-void slicedMatmul(int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
+template<typename T>
+void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
                   int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[])
 {
   int secFacRowMulSize = 1;
@@ -499,7 +506,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 }
 
 #define N_THREADS 256 
-#define KP_N_TILE 64
+#define KP_N_TILE 128
 
 #ifdef EVAL
     typedef float DATA_TYPE;
@@ -518,7 +525,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) 
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
@@ -529,7 +536,9 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
-MAX_K_KERNELS(N_COARSE_TB, 16384) \
+  MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  MAX_K_KERNELS(N_COARSE_TB, 8192) \
+  MAX_K_KERNELS(N_COARSE_TB, 16384) \
 
   // MAX_K_KERNELS(N_COARSE_TB, 128) \
   // MAX_K_KERNELS(N_COARSE_TB, 256) \
@@ -545,9 +554,9 @@ MAX_K_KERNELS(N_COARSE_TB, 16384) \
   // MAX_K_KERNELS(N_COARSE_TB, 64) \
   
 #define MAX_K 16384
-#define MIN_K 16384
-#define MIN_KP_K 128
-#define NUM_MAX_K_KERNELS 1 //8
+#define MIN_K 4096
+#define MIN_KP_K 64
+#define NUM_MAX_K_KERNELS 3 //8
 #define NUM_KP_N_K_KERNELS 1//7
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
@@ -666,17 +675,19 @@ int main(int argc, char* argv[])
     CUDACHECK(cudaMallocHost(&host_ptr, size));
     memset(host_ptr, 1, size);
     CUDACHECK(cudaMalloc(&device_ptr, size));
+    cudaStream_t stream;
 
+    CUDACHECK(cudaStreamCreate(&stream));
     for (int i = 4; i < size; i *= 2) {
       
       double t1 = convertTimeValToDouble(getTimeOfDay());
 
-      for (int j = 0; j < 10; j++)
-        CUDACHECK(cudaMemcpy(device_ptr, host_ptr, i, cudaMemcpyHostToDevice));
+      for (int j = 0; j < 100; j++)
+        CUDACHECK(cudaMemcpyAsync(device_ptr, host_ptr, i, cudaMemcpyHostToDevice, stream));
       
       double t2 = convertTimeValToDouble(getTimeOfDay());
 
-      printf("size: %ld time: %lf micro seconds\n", i, (t2-t1)/10.0f * 1e6);
+      printf("size: %ld time: %lf micro seconds\n", i, (t2-t1)/100.0f);
     }
 
     return 0;
@@ -736,14 +747,14 @@ int main(int argc, char* argv[])
                                           // {10,1024,1024, 2, {32,32},{32,32}},
                                           // {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
                                           // {1, 4096, 4096, 2, {64,64},{64,64}},
-                                          // {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
-                                          {1, 128*128, 128*128, 2, {128,128},{128,128}},
-                                          {10,256,256, 2, {16,16},{16,16}},
+                                          {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
+                                          // {1, 128*128, 128*128, 2, {128,128},{128,128}},
+                                          // {10,256,256, 2, {16,16},{16,16}},
                                           // {10,256,256, 2, {16,16},{16,16}},
                                           // {10,512,512, 3, {8,8,8},{8,8,8}},
-                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          // {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}}
   #endif
 
@@ -806,8 +817,8 @@ int main(int argc, char* argv[])
       kpMats[i] = new DATA_TYPE[KP_MAT_K[i] * KP_MAT_N[i]];
       size_t sz = ((uint64_t)K)*((uint64_t)N);
       #ifndef EVAL
-      kpout[i] = new DATA_TYPE[sz]; //TODO: larger than needed
-      assert(kpout[i] != nullptr);
+      // kpout[i] = new DATA_TYPE[sz]; //TODO: larger than needed
+      // assert(kpout[i] != nullptr);
       #else
       kpout[i] = nullptr;
       #endif
@@ -843,14 +854,14 @@ int main(int argc, char* argv[])
     
       CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(DATA_TYPE), cudaMemcpyHostToDevice));
   #ifndef EVAL
-      baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
-                           M, N, K, KP_MAT_N, KP_MAT_K);
+      // baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
+      //                      M, N, K, KP_MAT_N, KP_MAT_K);
+      slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+      result = kpMatmulResult[NUM_KP_MATS-1];
   #endif
-      // slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats,
-      //              M, N, K, KP_MAT_N, KP_MAT_K);
-
       for (int i = 0; i < 2; i++)
         CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
+
   #ifdef EVAL  
       cudaStream_t stream;
       cudaStreamCreate(&stream);
@@ -890,9 +901,10 @@ int main(int argc, char* argv[])
       // return;
       // for (int i = 0; i < NUM_KP_MATS; i++)
       //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
-      CUDACHECK(cudaMemcpy(kpMatmulResult[NUM_KP_MATS-1], dResult, M*N*sizeof(DATA_TYPE), cudaMemcpyDeviceToHost));
+      CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(DATA_TYPE), cudaMemcpyDeviceToHost));
       // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
-      if (check(result, kpMatmulResult[NUM_KP_MATS-1], M,N))
+      // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
+      if (check(result, hKpMatMulResult, M,N))
         printf("Results Correct for test %d\n", fnvalue);
       else {
         // printf("\nMatmul:");
