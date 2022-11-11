@@ -14,7 +14,7 @@ import math
 
 # In[2]:
 
-use_torch_profiler = False
+use_torch_profiler = True
 epochs = 10
 
 # model and data 
@@ -85,6 +85,8 @@ def do(twoPowerL, npoints, d):
             self.linear2 = torch.nn.Linear(inputSize, 1)
             self.inputSize = inputSize
             self.all_cuda_times = []
+            self.all_cublas_times = []
+            self.all_at_times = []
 
         def count_params(self):
             return sum([p.numel() for p in self.parameters()])
@@ -102,11 +104,20 @@ def do(twoPowerL, npoints, d):
                     torch.cuda.synchronize()
             
                 cuda_time = 0
+                cublas_time = 0
+                at_time = 0
                 for event in p.events():
+                    if "sgemm" in event.name:
+                        cublas_time += event.cuda_time
+                    elif "at::native::unrolled_elementwise_kernel" in event.name:
+                        at_time += event.cuda_time
+
                     if event.device_type == torch._C._autograd.DeviceType.CUDA:
                         cuda_time += event.cuda_time
                 exec_time = cuda_time #start.elapsed_time(end)
                 self.all_cuda_times.append(cuda_time)
+                self.all_cublas_times.append(cublas_time)
+                self.all_at_times.append(at_time)
             else:
                 l1 = self.l1_weight@x
                 torch.cuda.synchronize()
@@ -135,11 +146,13 @@ def do(twoPowerL, npoints, d):
     model = NewlinearRegression(inputDim, outputDim, d)
     train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
     all_cuda_times = model.all_cuda_times
+    all_cublas_times = model.all_cublas_times
+    all_at_times = model.all_at_times
     del model
     torch.cuda.empty_cache()
-    return all_cuda_times
+    return all_cublas_times, all_at_times, all_cuda_times
 
-maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 2, 128: 2}
+maxD = {2:22, 4:11, 8:7, 16: 5, 32: 5, 64 : 3, 128: 2}
 
 cases = [{"npoints": 100, "2^l": j, "d": i} for j in [128] for i in range(2 if j > 4 else 4, maxD[j]+1)] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
@@ -178,11 +191,12 @@ import sys
 case_times = {}
 for case in cases:
         if True:
-            cuda_times = do(case["2^l"], case["npoints"], case["d"])
+            (cublas_times, at_times, cuda_times) = do(case["2^l"], case["npoints"], case["d"])
             case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
+            case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
+            case["atTime"] = sum(at_times[1:])/len(at_times[1:])
             bandwidth = 4 * 2 * (case["npoints"] * (case["2^l"] ** case["d"]))/(case["PyTorchTime"]/1e6)/1e9
             case["PyTorchBandwidth"] = bandwidth
-            print(cuda_times)
         
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
@@ -198,8 +212,8 @@ for case in cases:
             case["Speedup"] = case["PyTorchTime"]/case["CUDATime"]
             print(case)
 
-row_format = "{:>20}" * 6
-print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "CUDATime(us)", "Speedup"))
+row_format = "{:>20}" * 8
+print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "cuBLASTime(us)", "atTime(us)", "CUDATime(us)", "Speedup"))
 for case in cases:
     twoPowerL = case["2^l"]
-    print(row_format.format(case["npoints"], case["d"],twoPowerL, "%.3f"%case["PyTorchTime"], "%.3f"%case["CUDATime"], "%.3f"%case["Speedup"]))
+    print(row_format.format(case["npoints"], case["d"],twoPowerL, "%.3f"%case["PyTorchTime"], "%.3f"%case["cuBLASTime"], "%.3f"%case["atTime"], "%.3f"%case["CUDATime"], "%.3f"%case["Speedup"]))
