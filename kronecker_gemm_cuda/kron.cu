@@ -208,6 +208,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
     typedef int4 LD_TYPE; 
   #endif 
 
+  // printf("MAX_K %d MAX_KP_N %d MAX_KP_K %d KP_N_TILE_ %d\n", MAX_K, MAX_KP_N, MAX_KP_K, KP_N_TILE_);
+
   __shared__ T kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
   const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
   __shared__ T Ash[TILE_X][Ash_COLS];
@@ -594,7 +596,7 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     //   min_k = min_k/KP_MAT_K[0];
     //   k_equals_var = 0;
     // }cudaGemmSpecialized[0][0][0][k_equals_var][1]; //
-    printf("min_k %d\n", min_k);
+    // printf("min_k %d\n", min_k);
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KP_MAT_K[0])-log2(MIN_KP_K)][k_equals_var][0];
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
@@ -602,7 +604,7 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1], &i};
 
     CUDACHECK(cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream));
-
+    // CUDACHECK(cudaDeviceSynchronize());
     if (i < NUM_KP_MATS - 1) {
       prevResult = resultMat;
       if (resultMat == kpMatmulResult[0]) {        
