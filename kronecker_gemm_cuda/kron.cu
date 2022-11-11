@@ -290,8 +290,9 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   // if (start_row == 0 && threadIdx.x == 0) {
   //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
   // }
-  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; kp_col_start += (N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * (N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
+  
+  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; kp_col_start += MAX(1, (N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows))) * Creg_Cols) { //TODO: Something missing in the increment
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       #pragma unroll
@@ -358,7 +359,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         }
 
         __syncthreads();
-
+        
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
           const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
 
@@ -394,7 +395,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         }
       }
     }
-  
+
     for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
       if (Creg_Rows % 4 == 0) {
         for (uint reg_i = 0; reg_i < Creg_Rows; reg_i += 4) {
@@ -448,6 +449,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         }
       }
     }
+    
     // for (uint reg = 0; reg < Creg_SIZE; reg++) {
     //   uint a_row = reg / (Creg_SIZE/TILE_X);
     //   uint c_row = (a_row + start_row);
@@ -534,6 +536,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
   KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
@@ -547,11 +550,12 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   MAX_K_KERNELS(N_COARSE_TB, 1024) \
   MAX_K_KERNELS(N_COARSE_TB, 2048) \
   MAX_K_KERNELS(N_COARSE_TB, 4096) \
+  
   // MAX_K_KERNELS(N_COARSE_TB, 8192) \
   // MAX_K_KERNELS(N_COARSE_TB, 16384) 
-  
-#define MAX_K 4096
+
 #define MIN_K 16
+#define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
 
 #define MIN_KP_K 2
@@ -600,11 +604,11 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KP_MAT_K[0])-log2(MIN_KP_K)][k_equals_var][0];
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
-
+    
     void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1], &i};
 
     CUDACHECK(cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream));
-    // CUDACHECK(cudaDeviceSynchronize());
+
     if (i < NUM_KP_MATS - 1) {
       prevResult = resultMat;
       if (resultMat == kpMatmulResult[0]) {        
@@ -742,18 +746,19 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
+                                            {1, 4096, 4096,12,{2,2,2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2,2,2}},
                                           {10,1024,1024, 2, {32,32},{32,32}},
                                           {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
-                                          {1, 4096, 4096, 2, {64,64},{64,64}},
-                                          {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
-                                          // {1, 128*128, 128*128, 2, {128,128},{128,128}},
+                                          // {1, 4096, 4096, 2, {64,64},{64,64}},
+                                          // {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
+                                          // // {1, 128*128, 128*128, 2, {128,128},{128,128}},
                                           {10,256,256, 2, {16,16},{16,16}},
                                           {10,256,256, 2, {16,16},{16,16}},
                                           {10,512,512, 3, {8,8,8},{8,8,8}},
                                           {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
                                           {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}}
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}}
   #endif
 
