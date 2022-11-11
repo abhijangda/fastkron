@@ -26,6 +26,7 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
+constexpr int log2(int n){return 31 - __builtin_clz(n);}
 
 double convertTimeValToDouble(struct timeval _time)
 {
@@ -517,7 +518,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 #define TILE_X 1
 
 #define K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
-(void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
+  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
   // (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,
 
 #define KP_N_K_KERNELS(N_COARSE_TB, MAX_K, KP_N_K) \
@@ -525,39 +526,36 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) 
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
+  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
 #define COARSE_TB_KERNELS(N_COARSE_TB) \
+  MAX_K_KERNELS(N_COARSE_TB, 16) \
+  MAX_K_KERNELS(N_COARSE_TB, 32) \
+  MAX_K_KERNELS(N_COARSE_TB, 64) \
+  MAX_K_KERNELS(N_COARSE_TB, 128) \
+  MAX_K_KERNELS(N_COARSE_TB, 256) \
+  MAX_K_KERNELS(N_COARSE_TB, 512) \
+  MAX_K_KERNELS(N_COARSE_TB, 1024) \
+  MAX_K_KERNELS(N_COARSE_TB, 2048) \
   MAX_K_KERNELS(N_COARSE_TB, 4096) \
-  MAX_K_KERNELS(N_COARSE_TB, 8192) \
-  MAX_K_KERNELS(N_COARSE_TB, 16384) \
-
-  // MAX_K_KERNELS(N_COARSE_TB, 128) \
-  // MAX_K_KERNELS(N_COARSE_TB, 256) \
-  // MAX_K_KERNELS(N_COARSE_TB, 512) \
-  // MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  // MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  // MAX_K_KERNELS(N_COARSE_TB, 4096) \
   // MAX_K_KERNELS(N_COARSE_TB, 8192) \
-  // MAX_K_KERNELS(N_COARSE_TB, 16384) \
-
-  // MAX_K_KERNELS(N_COARSE_TB, 16) \
-  // MAX_K_KERNELS(N_COARSE_TB, 32) \
-  // MAX_K_KERNELS(N_COARSE_TB, 64) \
+  // MAX_K_KERNELS(N_COARSE_TB, 16384) 
   
-#define MAX_K 16384
-#define MIN_K 4096
-#define MIN_KP_K 64
-#define NUM_MAX_K_KERNELS 3 //8
-#define NUM_KP_N_K_KERNELS 1//7
+#define MAX_K 4096
+#define MIN_K 16
+#define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
+
+#define MIN_KP_K 2
+#define MAX_KP_K 64
+#define NUM_KP_N_K_KERNELS (log2(MAX_KP_K)-log2(MIN_KP_K) + 1)
+
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
@@ -570,8 +568,6 @@ static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_K
   };
 
 static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
-
-int log2(int n){return 31 - __builtin_clz(n);}
 
 template<typename T>
 T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
@@ -598,6 +594,7 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     //   min_k = min_k/KP_MAT_K[0];
     //   k_equals_var = 0;
     // }cudaGemmSpecialized[0][0][0][k_equals_var][1]; //
+    printf("min_k %d\n", min_k);
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KP_MAT_K[0])-log2(MIN_KP_K)][k_equals_var][0];
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
@@ -743,18 +740,18 @@ int main(int argc, char* argv[])
                                           // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
                                           // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
   #else
-                                          // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {10,1024,1024, 2, {32,32},{32,32}},
-                                          // {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
-                                          // {1, 4096, 4096, 2, {64,64},{64,64}},
+                                          {10,1024,1024, 2, {32,32},{32,32}},
+                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
+                                          {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
+                                          {1, 4096, 4096, 2, {64,64},{64,64}},
                                           {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}},
-                                          // {10,256,256, 2, {16,16},{16,16}},
-                                          // {10,256,256, 2, {16,16},{16,16}},
-                                          // {10,512,512, 3, {8,8,8},{8,8,8}},
-                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          // {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
+                                          {10,256,256, 2, {16,16},{16,16}},
+                                          {10,256,256, 2, {16,16},{16,16}},
+                                          {10,512,512, 3, {8,8,8},{8,8,8}},
+                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
+                                          {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
+                                          {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}}
   #endif
 
