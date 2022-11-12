@@ -15,7 +15,7 @@ import math
 # In[2]:
 
 use_torch_profiler = True
-epochs = 10
+epochs = 100
 
 # model and data 
 
@@ -207,7 +207,7 @@ for case in cases:
             case["CUDATime"] = -1
             case["Speedup"] = -1
         else:
-            kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):].strip()) * 1000 #Convert ms to us
+            kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
             case["CUDATime"] = kront
             case["Speedup"] = case["PyTorchTime"]/case["CUDATime"]
             print(case)

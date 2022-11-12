@@ -669,7 +669,7 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
 }
 
 template<typename T, typename VecT>
-void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_MAT_N, int* KP_MAT_K, bool checkResults) {
+void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
   int (*fnvalues[1])(int, int) = {&randMod}; //{&one, &zeroOne, &setToI, &randMod};
   
   {
@@ -687,88 +687,84 @@ void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
 
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
 
-  T* kpout[NUM_KP_MATS];
-  T* kpMats[NUM_KP_MATS];
-  T* kpMatmulResult[NUM_KP_MATS];
+  //Allocate host data
+  T* hX;
+  T* hKpMats[NUM_KP_MATS];
+  T* hKpMatmulResult[NUM_KP_MATS];
 
-  T* x = new T[M*K];
-  T* result = new T[M*N];
-  
+  hX = new T[M*K];
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
+    hKpMatmulResult[i] = new T[M*std::max(N,K)];
+  }
+
+  setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+
+  //Allocate GPU data
   T* dX;
-  T* dResult;
   T* dKpMatmulResult[2];
   T* dKpOut[NUM_KP_MATS];
   T* dKpMats[NUM_KP_MATS];
+
+  CUDACHECK(cudaMalloc(&dX, M * K * sizeof(T)));
+  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], M * std::max(N,K) * sizeof(T)));
+  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], M * std::max(N,K) * sizeof(T)));
   
-  CUDACHECK(cudaMalloc(&dX, M*K*sizeof(T)));
-
   for (int i = 0; i < NUM_KP_MATS; i++) {
-    KP_MAT_K[i] = KP_MAT_K[i];
-    KP_MAT_N[i] = KP_MAT_N[i];
-    kpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
-    size_t sz = ((uint64_t)K)*((uint64_t)N);
-    kpout[i] = nullptr;
-    kpMatmulResult[i] = new T[M*std::max(N,K)];
-
-    CUDACHECK(cudaMalloc(&dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    CUDACHECK(cudaMalloc(&dKpMats[i],            KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
   }
 
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], M*std::max(N,K) * sizeof(T)));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], M*std::max(N,K) * sizeof(T)));
-  CUDACHECK(cudaMemset(dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(T)));
-  CUDACHECK(cudaMemset(dKpMatmulResult[1], 0, M*std::max(N,K) * sizeof(T)));
-
-  setValues(NUM_KP_MATS, kpMats, x, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
-
-  for (int i = 0; i < NUM_KP_MATS; i++) {
-    CUDACHECK(cudaMemcpy(dKpMats[i], kpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
+  for (int i = 0; i < 2; i++) {
+    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, M * std::max(N,K) * sizeof(T)));
   }
 
-  CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(T), cudaMemcpyHostToDevice));
-
-  for (int i = 0; i < 2; i++)
-    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(T)));
-
-  cudaStream_t stream;
-  cudaStreamCreate(&stream);
-  cudaEvent_t start;
-  cudaEvent_t end;
-  float elapsedTime = 0;
+  CUDACHECK(cudaMemcpy(dX, hX, M * K * sizeof(T), cudaMemcpyHostToDevice));
+  
   if (checkResults) {
     T* dResult;
-    // baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
-    //                      M, N, K, KP_MAT_N, KP_MAT_K);
-    slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K);
-    result = kpMatmulResult[NUM_KP_MATS-1];
+
+    T* hResult;
+
+    //CPU implementation of algorithm
+    slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+    hResult = hKpMatmulResult[NUM_KP_MATS-1];
+
+    //Run GPU implementation
     dResult = customKronGEMM<T, VecT>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     CUDACHECK(cudaDeviceSynchronize());
-    T* hKpMatMulResult = new T[M*N];
-    // return;
-    // for (int i = 0; i < NUM_KP_MATS; i++)
-    //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
-    CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(T), cudaMemcpyDeviceToHost));
-    // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
-    // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
-    if (check(result, hKpMatMulResult, M,N))
+    T* dResultToHost = new T[M*N];
+    CUDACHECK(cudaMemcpy(dResultToHost, dResult, M*N*sizeof(T), cudaMemcpyDeviceToHost));
+    
+    //Check Results
+    if (check(hResult, dResultToHost, M, N))
       printf("Results Correct\n");
   }
   
-  //Warm Up iterations
+  cudaStream_t stream;
+  cudaEvent_t start;
+  cudaEvent_t end;
+  float elapsedTime = 0;
+  
   CUDACHECK(cudaEventCreate(&start));
   CUDACHECK(cudaEventCreate(&end));
+  cudaStreamCreate(&stream);
+
+  //Warm Up iterations
   for (int i = 0; i < 10; i++)
     customKronGEMM<T, VecT>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   CUDACHECK(cudaStreamSynchronize(stream));
 
   //Run
   CUDACHECK(cudaEventRecord(start, stream));
-  for (int i = 0; i < 1000; i++)
+  for (int i = 0; i < numIters; i++)
     customKronGEMM<T, VecT>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   CUDACHECK(cudaEventRecord(end, stream));
   CUDACHECK(cudaEventSynchronize(end));
   CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
-  printf("elapsedtime %f\n", elapsedTime/1000);
+  printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
 
+  //Free GPU Memory
   for (int i = 0; i < NUM_KP_MATS; i++) {
     CUDACHECK(cudaFree(dKpMats[i]));
   }
@@ -776,6 +772,13 @@ void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
   CUDACHECK(cudaFree(dKpMatmulResult[0]));
   CUDACHECK(cudaFree(dKpMatmulResult[1]));
   CUDACHECK(cudaFree(dX));
+
+  //Free CPU RAM
+  delete[] hX;
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    delete[] hKpMats[i];
+    delete[] hKpMatmulResult[i];
+  }
 }
 
 int main(int argc, char* argv[]) {  
@@ -794,8 +797,8 @@ int main(int argc, char* argv[]) {
     KP_MAT_K[i] = KP_MAT_N[i] = twoPowerL;
   }
   
-  run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
-  run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
+  run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 100, false);
+  // run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
 
   return 0;
 }
