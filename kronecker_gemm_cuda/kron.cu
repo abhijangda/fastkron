@@ -668,33 +668,24 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
   setMatrix(x, M, K, fnvalue);
 }
 
-struct MatrixSizes {
-  const int M, N, K;
-  const int NUM_KP_MATS;
-  const std::vector<int> KP_MAT_N; 
-  const std::vector<int> KP_MAT_K;
-};
-
 template<typename T, typename VecT>
-void run(MatrixSizes matrixSize, bool checkResults) {
-  int M = matrixSize.M;
-  int N = matrixSize.N;
-  int K = matrixSize.K;
+void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_MAT_N, int* KP_MAT_K, bool checkResults) {
   int (*fnvalues[1])(int, int) = {&randMod}; //{&one, &zeroOne, &setToI, &randMod};
-
-  int NUM_KP_MATS = matrixSize.NUM_KP_MATS;
-  int KP_MAT_N[NUM_KP_MATS];
-  int KP_MAT_K[NUM_KP_MATS];
+  
+  {
+    //Check N and K is a multiplication of KP_MAT_N and KP_MAT_K
+    int n=1,k=1;
+    for (int i = 0; i < NUM_KP_MATS; i++) {
+      k *= KP_MAT_K[i];
+      n *= KP_MAT_N[i];
+    }
+    if (n != N || k != K) {
+      printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
+      return;
+    }
+  }
 
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
-  int n=1,k=1;
-  for (int i = 0; i < NUM_KP_MATS; i++) {
-    k *= matrixSize.KP_MAT_K[i];
-    n *= matrixSize.KP_MAT_N[i];
-  }
-  if (n != N || k != K) {
-    printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
-  }
 
   T* kpout[NUM_KP_MATS];
   T* kpMats[NUM_KP_MATS];
@@ -717,8 +708,8 @@ void run(MatrixSizes matrixSize, bool checkResults) {
   T* __dKpMatmulResult[2];
 
   for (int i = 0; i < NUM_KP_MATS; i++) {
-    KP_MAT_K[i] = matrixSize.KP_MAT_K[i];
-    KP_MAT_N[i] = matrixSize.KP_MAT_N[i];
+    KP_MAT_K[i] = KP_MAT_K[i];
+    KP_MAT_N[i] = KP_MAT_N[i];
     kpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
     size_t sz = ((uint64_t)K)*((uint64_t)N);
     kpout[i] = nullptr;
@@ -808,7 +799,7 @@ void run(MatrixSizes matrixSize, bool checkResults) {
     // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
     // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
     if (check(result, hKpMatMulResult, M,N))
-      printf("Results Correct for test %d\n", fnvalue);
+      printf("Results Correct\n");
     #endif
   }
 }
@@ -819,17 +810,18 @@ int main(int argc, char* argv[]) {
   int d = atoi(argv[2]);
   int twoPowerL = atoi(argv[3]);
 
-  std::vector<MatrixSizes> matrixSizes;
-  
-  int Msz = 1;
+  int KP_MAT_N[d];
+  int KP_MAT_K[d];
+  int N = 1;
+  int K = 1;
   for (int i = 0; i < d; i++) {
-    Msz *= twoPowerL;
+    N *= twoPowerL;
+    K *= twoPowerL;
+    KP_MAT_K[i] = KP_MAT_N[i] = twoPowerL;
   }
-  MatrixSizes matrixSize {
-    npoints, Msz, Msz, d, std::vector<int>(d, twoPowerL), std::vector<int>(d, twoPowerL)
-  };
-
-  run<float, float4>(matrixSize, true);
+  
+  run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
+  run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
 
   return 0;
 }
