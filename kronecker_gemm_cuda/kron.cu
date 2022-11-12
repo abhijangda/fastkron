@@ -192,21 +192,9 @@ __device__ constexpr uint uint_squareroot(uint x)
   }
 }
 
-#ifdef EVAL
-  typedef float4 LD_TYPE; 
-#else 
-  typedef int4 LD_TYPE; 
-#endif
-
-#ifdef EVAL
-  typedef float DATA_TYPE;
-#else
-  typedef int DATA_TYPE;
-#endif
-
 
 // __launch_bounds__(N_THREADS)
-template<typename T, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
+template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
@@ -219,7 +207,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   __shared__ T kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
   const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
   __shared__ T Ash[TILE_X][Ash_COLS];
-  const uint C_ELEMS_STORE = N_THREADS * (sizeof(LD_TYPE)/sizeof(T));
+  const uint C_ELEMS_STORE = N_THREADS * (sizeof(VecT)/sizeof(T));
   const uint Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
   const uint Csh_COLS_SIZE = MIN(Csh_COLS, C_ELEMS_STORE);
 
@@ -249,17 +237,17 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
   const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
   const uint NUM_KPK_SPLITS = MAX(1, INTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
-  const uint ldNumElems = (sizeof(LD_TYPE)/sizeof(T));
+  const uint ldNumElems = (sizeof(VecT)/sizeof(T));
 
   uint external_tile_kp_k = blockIdx.z;
   
   if (KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K) {
-    const uint ldNumElems = sizeof(LD_TYPE)/sizeof(T);
+    const uint ldNumElems = sizeof(VecT)/sizeof(T);
     const uint ldSize = MIN(kpN*kpK, ldNumElems);
 
     for (uint i = threadIdx.x*ldSize; i < (kpN * kpK); i += blockDim.x*ldSize) {
       // kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
-      LD_TYPE a = *(LD_TYPE*)&kron_fac[i];
+      VecT a = *(VecT*)&kron_fac[i];
       T a1[4] = {a.x, a.y, a.z, a.w};
       #pragma unroll
       for (uint j = 0; j < ldSize; j++) {
@@ -292,8 +280,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
   // }
   
-  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; kp_col_start += MAX(1, (N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows))) * Creg_Cols) { //TODO: Something missing in the increment
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K; a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
+  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; kp_col_start +=             MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ; a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       #pragma unroll
@@ -306,18 +294,18 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
       for (uint a_row = 0; a_row < TILE_X; a_row += 1) {
         for (uint a_col = threadIdx.x*ldNumElems; a_col < Ash_COLS; a_col += blockDim.x*ldNumElems) {
           uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-          LD_TYPE a;
+          VecT a;
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
-            a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
-            // *(LD_TYPE*)&Ash[a_row][a_col] = a;
+            a = *(VecT*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
+            // *(VecT*)&Ash[a_row][a_col] = a;
             // T a1[4] = {a.x, a.y, a.z, a.w};
             // for (int j = 0; j < ldNumElems; j++) {
             //   Ash[a_row][a_col + j] = a1[j];
             // }
           } else {
-            a = *(LD_TYPE*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
+            a = *(VecT*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
                                       (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
-            // *(LD_TYPE*)&Ash[a_row][a_col] = a;
+            // *(VecT*)&Ash[a_row][a_col] = a;
           }
           
           T a1[4] = {a.x, a.y, a.z, a.w};
@@ -336,12 +324,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
       for (uint internal_tile_kp_n = 0; internal_tile_kp_n < KP_N_TILE; internal_tile_kp_n += INTERNAL_KP_N_TILE) {
         if (!(KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K)) {
           //Create kpK subwarps and each subwarp loads 0 to INTERNAL_KP_N_TILE elements
-          #ifdef EVAL
-            typedef float4 LD_TYPE; 
-          #else 
-            typedef int4 LD_TYPE; 
-          #endif
-          const uint ldNumElems = sizeof(LD_TYPE)/sizeof(T);
+          const uint ldNumElems = sizeof(VecT)/sizeof(T);
           const uint ldSize = MIN(INTERNAL_KP_N_TILE, ldNumElems);
 
           for (uint swid = threadIdx.x/(INTERNAL_KP_N_TILE/ldSize); swid < INTERNAL_KP_K_TILE; swid += blockDim.x/(INTERNAL_KP_N_TILE/ldSize)) {
@@ -349,7 +332,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             uint col = external_tile_kp_n*KP_N_TILE + internal_tile_kp_n + (threadIdx.x%(INTERNAL_KP_N_TILE/ldSize))*ldSize;
             uint row = swid;
             // kron_fac_sh[threadIdx.x%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
-            LD_TYPE a = *(LD_TYPE*)&kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
+            VecT a = *(VecT*)&kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
             T a1[4] = {a.x, a.y, a.z, a.w};
             #pragma unroll
             for (uint i = 0; i < ldSize; i++) {
@@ -419,8 +402,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           // if (kp_idx == 0&& c_row == 0 && c_col < 64)
           //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
           if (c_col < K) {
-            LD_TYPE c = {Creg[reg_i][reg_j], Creg[reg_i+1][reg_j], Creg[reg_i+2][reg_j], Creg[reg_i+3][reg_j]};
-            *(LD_TYPE*)&C[c_idx] = c;
+            VecT c = {Creg[reg_i][reg_j], Creg[reg_i+1][reg_j], Creg[reg_i+2][reg_j], Creg[reg_i+3][reg_j]};
+            *(VecT*)&C[c_idx] = c;
           }
         }
       } else {
@@ -504,7 +487,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         //     c_idx = c_row * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (c_col/(MAX_K/kpK)) * (K/kpK) + c_col%(MAX_K/kpK);
         //   }
           
-        //   *(LD_TYPE*)&C[c_idx] = *(LD_TYPE*)&Creg_in_sh[csh_col];
+        //   *(VecT*)&C[c_idx] = *(VecT*)&Creg_in_sh[csh_col];
         // }
 
     __syncthreads();
@@ -516,39 +499,45 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
 #define TILE_X 1
 
-#define K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
-  (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
+#define K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
+  (void*)cuda_gemm<T, VecT, N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
   // (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,
 
-#define KP_N_K_KERNELS(N_COARSE_TB, MAX_K, KP_N_K) \
-  K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 0) \
-  K_EQUALS_VAR_KERNELS(N_COARSE_TB, MAX_K, KP_N_K, 1)
+#define KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K) \
+  K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, 0) \
+  K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, 1)
 
-#define MAX_K_KERNELS(N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 64) \
+#define MAX_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K) \
+  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
+  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 4) \
+  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 8) \
+  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 16) \
+  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 32) \
+  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64) \
 
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
 
 
-#define COARSE_TB_KERNELS(N_COARSE_TB) \
-  MAX_K_KERNELS(N_COARSE_TB, 16) \
-  MAX_K_KERNELS(N_COARSE_TB, 32) \
-  MAX_K_KERNELS(N_COARSE_TB, 64) \
-  MAX_K_KERNELS(N_COARSE_TB, 128) \
-  MAX_K_KERNELS(N_COARSE_TB, 256) \
-  MAX_K_KERNELS(N_COARSE_TB, 512) \
-  MAX_K_KERNELS(N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(N_COARSE_TB, 4096) \
+#define COARSE_TB_KERNELS(T, VecT, N_COARSE_TB) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 32) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 64) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 128) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 256) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 512) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 1024) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
+  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
   
   // MAX_K_KERNELS(N_COARSE_TB, 8192) \
   // MAX_K_KERNELS(N_COARSE_TB, 16384) 
 
+#define TYPE_KERNELS(T, VecT) \
+  COARSE_TB_KERNELS(T, VecT, 1)
+
+//Two type kernels float/float4 and int/int4
+
+#define NUM_TYPE_KERNELS 2
 #define MIN_K 16
 #define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
@@ -561,16 +550,31 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
 
-static void* cudaGemmSpecialized[NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
+static void* cudaGemmSpecialized[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
-    COARSE_TB_KERNELS(1)
+  TYPE_KERNELS(float, float4)
+  TYPE_KERNELS(int, int4)
+    // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
     // COARSE_TB_KERNELS(4)
   };
 
-static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
+static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_TYPE_KERNELS * NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 template<typename T>
+int typeKernelIndex(T x) {
+  //Should not be called
+  assert(false);
+}
+
+template<>
+int typeKernelIndex<float>(float x) {return 0;}
+
+template<>
+int typeKernelIndex<int>(int x)     {return 1;}
+
+
+template<typename T, typename VecT>
 T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
                     int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
@@ -596,7 +600,8 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     //   k_equals_var = 0;
     // }cudaGemmSpecialized[0][0][0][k_equals_var][1]; //
     // printf("min_k %d\n", min_k);
-    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KP_MAT_K[0])-log2(MIN_KP_K)][k_equals_var][0];
+    int typeKernel = typeKernelIndex((T)0);
+    cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[typeKernel][N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KP_MAT_K[0])-log2(MIN_KP_K)][k_equals_var][0];
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
     
@@ -670,88 +675,152 @@ struct MatrixSizes {
   const std::vector<int> KP_MAT_K;
 };
 
-int main(int argc, char* argv[]) 
-{
-  #ifdef EVAL
+template<typename T, typename VecT>
+void run(MatrixSizes matrixSize, bool checkResults) {
+  int M = matrixSize.M;
+  int N = matrixSize.N;
+  int K = matrixSize.K;
+  int (*fnvalues[1])(int, int) = {&randMod}; //{&one, &zeroOne, &setToI, &randMod};
+
+  int NUM_KP_MATS = matrixSize.NUM_KP_MATS;
+  int KP_MAT_N[NUM_KP_MATS];
+  int KP_MAT_K[NUM_KP_MATS];
+
+  printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
+  int n=1,k=1;
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    k *= matrixSize.KP_MAT_K[i];
+    n *= matrixSize.KP_MAT_N[i];
+  }
+  if (n != N || k != K) {
+    printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
+  }
+
+  T* kpout[NUM_KP_MATS];
+  T* kpMats[NUM_KP_MATS];
+  T* kpMatmulResult[NUM_KP_MATS];
+
+  T* x = new T[M*K];
+  T* result = new T[M*N];
+  
+  T*  dX;
+  T** dKpOut;
+  T** dKpMats;
+  T** dKpMatmulResult;
+  T*  dResult;
+  
+  CUDACHECK(cudaMalloc(&dX, M*K * sizeof(T)));
+  CUDACHECK(cudaMalloc(&dResult, M * N * sizeof(T)));
+
+  T* __dKpOut[NUM_KP_MATS];
+  T* __dKpMats[NUM_KP_MATS];
+  T* __dKpMatmulResult[2];
+
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    KP_MAT_K[i] = matrixSize.KP_MAT_K[i];
+    KP_MAT_N[i] = matrixSize.KP_MAT_N[i];
+    kpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
+    size_t sz = ((uint64_t)K)*((uint64_t)N);
+    kpout[i] = nullptr;
+    kpMatmulResult[i] = new T[M*std::max(N,K)];
+
+    CUDACHECK(cudaMalloc(&__dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+  }
+
+  CUDACHECK(cudaMalloc(&__dKpMatmulResult[0], M*std::max(N,K) * sizeof(T)));
+  CUDACHECK(cudaMalloc(&__dKpMatmulResult[1], M*std::max(N,K) * sizeof(T)));
+  CUDACHECK(cudaMemset(__dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(T)));
+  CUDACHECK(cudaMemset(__dKpMatmulResult[1], 0, M*std::max(N,K) * sizeof(T)));
+
+  for (int fnvalue = 0; fnvalue < sizeof(fnvalues)/sizeof(fnvalues[0]); fnvalue++) {
+    setValues(NUM_KP_MATS, kpMats, x, M, N, K, KP_MAT_N, KP_MAT_K, fnvalues[fnvalue]);
+
+    for (int i = 0; i < NUM_KP_MATS; i++) {
+      CUDACHECK(cudaMemcpy(__dKpMats[i], kpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
+    }
+  
+    CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(T), cudaMemcpyHostToDevice));
+
+    for (int i = 0; i < 2; i++)
+      CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(T)));
+
+#ifdef EVAL  
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+    cudaEvent_t start;
+    cudaEvent_t end;
+    float elapsedTime = 0;
+    if (checkResults) {
+      // baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
+      //                      M, N, K, KP_MAT_N, KP_MAT_K);
+      slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+      result = kpMatmulResult[NUM_KP_MATS-1];
+      T* dResult = customKronGEMM<T, VecT>(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      CUDACHECK(cudaDeviceSynchronize());
+      T* hKpMatMulResult = new T[M*N];
+      // return;
+      // for (int i = 0; i < NUM_KP_MATS; i++)
+      //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
+      CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(T), cudaMemcpyDeviceToHost));
+      // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
+      // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
+      if (check(result, hKpMatMulResult, M,N))
+        printf("Results Correct for test %d\n", fnvalue);
+    }
+    
+    //Warm Up iterations
+    CUDACHECK(cudaEventCreate(&start));
+    CUDACHECK(cudaEventCreate(&end));
+    for (int i = 0; i < 10; i++)
+      customKronGEMM<T, VecT>(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    CUDACHECK(cudaStreamSynchronize(stream));
+
+    //Run
+    CUDACHECK(cudaEventRecord(start, stream));
+    for (int i = 0; i < 1000; i++)
+      customKronGEMM<T, VecT>(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    CUDACHECK(cudaEventRecord(end, stream));
+    CUDACHECK(cudaEventSynchronize(end));
+    CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
+    printf("elapsedtime %f\n", elapsedTime/1000);
+
+    for (int i = 0; i < NUM_KP_MATS; i++) {
+      CUDACHECK(cudaFree(__dKpMats[i]));
+    }
+
+    CUDACHECK(cudaFree(__dKpMatmulResult[0]));
+    CUDACHECK(cudaFree(__dKpMatmulResult[1]));
+    CUDACHECK(cudaFree(dX));
+    CUDACHECK(cudaFree(dResult));
+    continue;
+#else
+    
+    T* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+    CUDACHECK(cudaDeviceSynchronize());
+#endif
+    // return;
+    #ifndef EVAL 
+    T* hKpMatMulResult = new T[M*N];
+    // return;
+    // for (int i = 0; i < NUM_KP_MATS; i++)
+    //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
+    CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(T), cudaMemcpyDeviceToHost));
+    // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
+    // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
+    if (check(result, hKpMatMulResult, M,N))
+      printf("Results Correct for test %d\n", fnvalue);
+    #endif
+  }
+}
+
+int main(int argc, char* argv[]) {  
   if (argc < 4) {printf("invalid command args\n"); return 0;}
   int npoints = atoi(argv[1]);
   int d = atoi(argv[2]);
   int twoPowerL = atoi(argv[3]);
-  bool checkResults = true;
-  #endif
 
-  std::vector<MatrixSizes> matrixSizes = {
-                                          // {4,4,4, 2, {2,2},{2,2}},
-                                          // {4,4,6, 2, {1,4},{2,3}},
-                                          // {4,4,8, 2, {2,2},{2,4}},
-                                          // {4,4,8, 2, {2,2},{4,2}},
-                                          // {8,8,8, 2, {4,2},{4,2}},
-                                          // {8,8,8, 2, {4,2},{2,4}},
-                                          // {8,8,8, 3, {2,2,2},{2,2,2}},
-                                          // {8,8,32, 3, {2,2,2},{2,4,4}},
-                                          // {8,16,32, 3, {4,2,2},{2,4,4}},
-                                          // {8,8,16, 3, {2,2,2},{2,4,2}},
-                                          // {16,8,8, 3, {2,2,2},{2,2,2}},
-                                          // {16,16,16, 2, {4,4},{4,4}},
-                                          // {16,16,16, 3, {4,2,2},{4,2,2}},
-                                          // {16,16,16, 3, {4,2,2},{2,4,2}},
-                                          // {16,16,16, 3, {8,2,1},{2,4,2}},
-                                          // {16,16,16, 4, {2,2,2,2},{2,2,2,2}},
-                                          // {16,16,64, 4, {2,2,2,2},{2,4,2,4}},
-                                          // {256,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {256,256,256, 2, {16,16},{16,16}},
-  #ifdef EVAL
-                                          // {65536,1024,1024, 2, {32,32},{32,32}},
-                                          // {65536,256,256, 2, {16,16},{16,16}},
-                                          // {65536,512,512, 3, {8,8,8},{8,8,8}},
-                                          // {100,1024,1024, 2, {32,32},{32,32}},
-                                          // {10,1024,1024, 2, {32,32},{32,32}},
-                                          // {1,1024,1024, 2, {32,32},{32,32}},
-                                          // {100,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {1,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          // {100,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          // {1,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          
-                                          // {100,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
-                                          // {10,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
-                                          // {1,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}},
-
-                                          // {100,1024,1024, 3, {16,16,4},{16,16,4}},
-                                          // {100,256,256, 2, {16,16},{16,16}},
-                                          // {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          // {1,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-
-                                          // {100,512*8*8,512*8*8, 5, {8,8,8,8,8},{8,8,8,8,8}},
-
-                                          // {100,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {1,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          // {1024,32*1024,32*1024, 2, {32,32,32},{32,32,32}},
-  #else
-                                          {1, 4096, 4096,12,{2,2,2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2,2,2}},
-                                          {10,1024,1024, 2, {32,32},{32,32}},
-                                          {10,1024,1024, 10, {2,2,2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2,2,2}},
-                                          {1,1024*32,1024*32, 3, {32,32,32},{32,32,32}},
-                                          // {1, 4096, 4096, 2, {64,64},{64,64}},
-                                          // {1, 4096*64, 4096*64, 3, {64,64,64},{64,64,64}},
-                                          // // {1, 128*128, 128*128, 2, {128,128},{128,128}},
-                                          {10,256,256, 2, {16,16},{16,16}},
-                                          {10,256,256, 2, {16,16},{16,16}},
-                                          {10,512,512, 3, {8,8,8},{8,8,8}},
-                                          {10,256,256, 4, {4,4,4,4},{4,4,4,4}},
-                                          {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
-                                          {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}}
-                                          // {1, 128*128, 128*128, 2, {128,128},{128,128}}
-                                          // {1024, 1024, 1024, 2, {32,32},{32,32}}
-  #endif
-                                          };
-
-  // int (*fnvalues[4])(int, int) = {&one, &zeroOne, &setToI, &randMod};
-  int (*fnvalues[1])(int, int) = {&randMod};
+  std::vector<MatrixSizes> matrixSizes;
   
-  #ifdef EVAL
   int Msz = 1;
   for (int i = 0; i < d; i++) {
     Msz *= twoPowerL;
@@ -759,182 +828,8 @@ int main(int argc, char* argv[])
   MatrixSizes matrixSize {
     npoints, Msz, Msz, d, std::vector<int>(d, twoPowerL), std::vector<int>(d, twoPowerL)
   };
-  matrixSizes.push_back(matrixSize);
-  #endif 
 
-  for (MatrixSizes matrixSize : matrixSizes) {
-    int M = matrixSize.M;
-    int N = matrixSize.N;
-    int K = matrixSize.K;
-    
-    int NUM_KP_MATS = matrixSize.NUM_KP_MATS;
-    int KP_MAT_N[NUM_KP_MATS];
-    int KP_MAT_K[NUM_KP_MATS];
-
-    printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
-    int n=1,k=1;
-    for (int i = 0; i < NUM_KP_MATS; i++) {
-      k *= matrixSize.KP_MAT_K[i];
-      n *= matrixSize.KP_MAT_N[i];
-    }
-    if (n != N || k != K) {
-      printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
-    }
-
-    DATA_TYPE *kpout[NUM_KP_MATS];
-    DATA_TYPE *kpMats[NUM_KP_MATS];
-    DATA_TYPE* kpMatmulResult[NUM_KP_MATS];
-
-    DATA_TYPE *x = new DATA_TYPE[M*K];
-
-    DATA_TYPE* dX;
-    DATA_TYPE** dKpOut;
-    DATA_TYPE** dKpMats;
-    DATA_TYPE** dKpMatmulResult;
-    
-    CUDACHECK(cudaMalloc(&dX, M*K * sizeof(DATA_TYPE)));
-    
-    DATA_TYPE* __dKpOut[NUM_KP_MATS];
-    DATA_TYPE* __dKpMats[NUM_KP_MATS];
-    DATA_TYPE* __dKpMatmulResult[2];
-
-    for (int i = 0; i < NUM_KP_MATS; i++) {
-      KP_MAT_K[i] = matrixSize.KP_MAT_K[i];
-      KP_MAT_N[i] = matrixSize.KP_MAT_N[i];
-      kpMats[i] = new DATA_TYPE[KP_MAT_K[i] * KP_MAT_N[i]];
-      size_t sz = ((uint64_t)K)*((uint64_t)N);
-      #ifndef EVAL
-      // kpout[i] = new DATA_TYPE[sz]; //TODO: larger than needed
-      // assert(kpout[i] != nullptr);
-      #else
-      kpout[i] = nullptr;
-      #endif
-      kpMatmulResult[i] = new DATA_TYPE[M*std::max(N,K)];
-
-      CUDACHECK(cudaMalloc(&__dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(DATA_TYPE)));
-      // CUDACHECK(cudaMalloc(&__dKpOut[i], K * N * sizeof(int)));
-      
-
-      // CUDACHECK(cudaMemset(__dKpOut[i], 0, K * N * sizeof(int)));
-    }
-
-    // CUDACHECK(cudaMemcpy(&dKpOut[0], &__dKpOut[0], NUM_KP_MATS * sizeof(int*), cudaMemcpyHostToDevice));
-    // CUDACHECK(cudaMemcpy(&dKpMats[0], &__dKpMats[0], NUM_KP_MATS * sizeof(DATA_TYPE*), cudaMemcpyHostToDevice));
-
-    CUDACHECK(cudaMalloc(&__dKpMatmulResult[0], M*std::max(N,K) * sizeof(DATA_TYPE)));
-    CUDACHECK(cudaMalloc(&__dKpMatmulResult[1], M*std::max(N,K) * sizeof(DATA_TYPE)));
-    CUDACHECK(cudaMemset(__dKpMatmulResult[0], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
-    CUDACHECK(cudaMemset(__dKpMatmulResult[1], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
-
-    DATA_TYPE* result = new DATA_TYPE[M*N];
-
-    DATA_TYPE* dResult;
-
-    CUDACHECK(cudaMalloc(&dResult, M * N * sizeof(DATA_TYPE)));
-
-    for (int fnvalue = 0; fnvalue < sizeof(fnvalues)/sizeof(fnvalues[0]); fnvalue++) {
-      setValues(NUM_KP_MATS, kpMats, x, M, N, K, KP_MAT_N, KP_MAT_K, fnvalues[fnvalue]);
-
-      for (int i = 0; i < NUM_KP_MATS; i++) {
-        CUDACHECK(cudaMemcpy(__dKpMats[i], kpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(DATA_TYPE), cudaMemcpyHostToDevice));
-      }
-    
-      CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(DATA_TYPE), cudaMemcpyHostToDevice));
-  
-      for (int i = 0; i < 2; i++)
-        CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
-
-  #ifdef EVAL  
-      cudaStream_t stream;
-      cudaStreamCreate(&stream);
-      cudaEvent_t start;
-      cudaEvent_t end;
-      float elapsedTime = 0;
-      if (checkResults) {
-        // baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
-        //                      M, N, K, KP_MAT_N, KP_MAT_K);
-        slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K);
-        result = kpMatmulResult[NUM_KP_MATS-1];
-        DATA_TYPE* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
-        CUDACHECK(cudaDeviceSynchronize());
-        DATA_TYPE* hKpMatMulResult = new DATA_TYPE[M*N];
-        // return;
-        // for (int i = 0; i < NUM_KP_MATS; i++)
-        //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
-        CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(DATA_TYPE), cudaMemcpyDeviceToHost));
-        // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
-        // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
-        if (check(result, hKpMatMulResult, M,N))
-          printf("Results Correct for test %d\n", fnvalue);
-      }
-      CUDACHECK(cudaEventCreate(&start));
-      CUDACHECK(cudaEventCreate(&end));
-      for (int i = 0; i < 10; i++)
-        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
-      CUDACHECK(cudaStreamSynchronize(stream));
-      CUDACHECK(cudaEventRecord(start, stream));
-      for (int i = 0; i < 1000; i++)
-        customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
-      CUDACHECK(cudaEventRecord(end, stream));
-      CUDACHECK(cudaEventSynchronize(end));
-      CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
-      printf("elapsedtime %f\n", elapsedTime/1000);
-
-      for (int i = 0; i < NUM_KP_MATS; i++) {
-        CUDACHECK(cudaFree(__dKpMats[i]));
-      }
-
-      CUDACHECK(cudaFree(__dKpMatmulResult[0]));
-      CUDACHECK(cudaFree(__dKpMatmulResult[1]));
-      CUDACHECK(cudaFree(dX));
-      CUDACHECK(cudaFree(dResult));
-      continue;
-  #else
-      
-      DATA_TYPE* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
-      CUDACHECK(cudaDeviceSynchronize());
-  #endif
-      // return;
-      #ifndef EVAL 
-      DATA_TYPE* hKpMatMulResult = new DATA_TYPE[M*N];
-      // return;
-      // for (int i = 0; i < NUM_KP_MATS; i++)
-      //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
-      CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(DATA_TYPE), cudaMemcpyDeviceToHost));
-      // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
-      // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
-      if (check(result, hKpMatMulResult, M,N))
-        printf("Results Correct for test %d\n", fnvalue);
-      else {
-        // printf("\nMatmul:");
-        // printMatrix(result, K, N);
-
-        // printf("\nx:");
-        // printMatrix(x, M, K);    
-        // for (int kpMatId = 0; kpMatId < NUM_KP_MATS; kpMatId++) {
-        //   printf("\nKP Mat %d:", kpMatId);
-        //   printMatrix(kpMats[kpMatId], KP_MAT_K[kpMatId], KP_MAT_N[kpMatId]);
-        // }
-        // // printf("\nKP Out:");
-        // // printMatrix(kpout[0], 8, 8);
-        // for (int id = 0; id < NUM_KP_MATS; id++) {
-        //   printf("\nKP result %d:", id);
-        //   printMatrix(kpMatmulResult[id], M, N);
-        // }
-        // printf("\nKP result 2:");
-        // printMatrix(kpMatmulResult[2], 16, 16);
-        // printf("\nKP result 3:");
-        // printMatrix(kpMatmulResult[3], 16, 16);
-        // printf("\nKP result 1:");
-        // printMatrix(kpMatmulResult[1], M, N);
-        // printf("\n");
-        return 0;
-      }
-      #endif
-    }
-
-    //Is there really a need to free anything when you have tons of RAM, am I right?
-  }
+  run<float, float4>(matrixSize, true);
 
   return 0;
 }
