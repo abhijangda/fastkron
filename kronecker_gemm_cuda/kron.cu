@@ -122,14 +122,13 @@ void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   int colsTillNow = 1;
   int resultCols;
   for (int kp = 0; kp < NUM_KP_MATS; kp++) {
-    int* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
+    T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     int kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
     int kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
     int prevKPMatmulCols = (kp == 0) ? K : resultCols;
 
     resultCols = (prevKPMatmulCols/kpSecondK) * kpSecondN;
-    secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * K/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]);
-
+    secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * (K/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]));
     //Number of times a column is multiplied with input matrix is equal to 
     //N/(number of column elements of this matrix * cols so far) * number of rows so far.
 
@@ -624,10 +623,24 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   return resultMat;
 }
 
-bool check(int* ref, int* computed, int M, int N) {
+template<typename T>
+bool eqVal(T x, T y) {} 
+
+template<>
+bool eqVal(int x, int y) {return x == y;}
+
+template<>
+bool eqVal(float x, float y) {
+  if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
+  if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
+  return abs((x-y)/y) <= 1e-5;
+}
+
+template<typename T>
+bool check(T* ref, T* computed, int M, int N) {
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
-      if (ref[i*N + j] != computed[i* N + j]) {
+      if (!eqVal(ref[i*N + j], computed[i* N + j])) {
         printf("Mismatch for %d x %d at (%d, %d): ref = %d, computed = %d\n", M, N, i, j, ref[i*N+j], computed[i*N+j]);
         return false;
       }
@@ -663,38 +676,13 @@ struct MatrixSizes {
 
 int main(int argc, char* argv[]) 
 {
-
   #ifdef EVAL
   if (argc < 4) {printf("invalid command args\n"); return 0;}
   int npoints = atoi(argv[1]);
   int d = atoi(argv[2]);
   int twoPowerL = atoi(argv[3]);
+  bool checkResults = true;
   #endif
-
-
-  if (false) {
-    int size = 1024*1024*1024;
-    char* host_ptr, *device_ptr;
-    CUDACHECK(cudaMallocHost(&host_ptr, size));
-    memset(host_ptr, 1, size);
-    CUDACHECK(cudaMalloc(&device_ptr, size));
-    cudaStream_t stream;
-
-    CUDACHECK(cudaStreamCreate(&stream));
-    for (int i = 4; i < size; i *= 2) {
-      
-      double t1 = convertTimeValToDouble(getTimeOfDay());
-
-      for (int j = 0; j < 100; j++)
-        CUDACHECK(cudaMemcpyAsync(device_ptr, host_ptr, i, cudaMemcpyHostToDevice, stream));
-      
-      double t2 = convertTimeValToDouble(getTimeOfDay());
-
-      printf("size: %ld time: %lf micro seconds\n", i, (t2-t1)/100.0f);
-    }
-
-    return 0;
-  }
 
   std::vector<MatrixSizes> matrixSizes = {
                                           // {4,4,4, 2, {2,2},{2,2}},
@@ -760,9 +748,8 @@ int main(int argc, char* argv[])
                                           {10,1024,1024, 5, {4,4,4,4,4},{4,4,4,4,4}},
                                           {4,4096,4096, 6, {4,4,4,4,4,4},{4,4,4,4,4,4}}
                                           // {1, 128*128, 128*128, 2, {128,128},{128,128}}
-  #endif
-
                                           // {1024, 1024, 1024, 2, {32,32},{32,32}}
+  #endif
                                           };
 
   // int (*fnvalues[4])(int, int) = {&one, &zeroOne, &setToI, &randMod};
@@ -857,12 +844,7 @@ int main(int argc, char* argv[])
       }
     
       CUDACHECK(cudaMemcpy(dX, x, M * K * sizeof(DATA_TYPE), cudaMemcpyHostToDevice));
-  #ifndef EVAL
-      // baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
-      //                      M, N, K, KP_MAT_N, KP_MAT_K);
-      slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K);
-      result = kpMatmulResult[NUM_KP_MATS-1];
-  #endif
+  
       for (int i = 0; i < 2; i++)
         CUDACHECK(cudaMemset(__dKpMatmulResult[i], 0, M*std::max(N,K) * sizeof(DATA_TYPE)));
 
@@ -872,6 +854,23 @@ int main(int argc, char* argv[])
       cudaEvent_t start;
       cudaEvent_t end;
       float elapsedTime = 0;
+      if (checkResults) {
+        // baselineKPThenMatmul(NUM_KP_MATS, result, x, kpout, kpMats, 
+        //                      M, N, K, KP_MAT_N, KP_MAT_K);
+        slicedMatmul(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+        result = kpMatmulResult[NUM_KP_MATS-1];
+        DATA_TYPE* dResult = customKronGEMM(NUM_KP_MATS, __dKpMatmulResult, dX, __dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+        CUDACHECK(cudaDeviceSynchronize());
+        DATA_TYPE* hKpMatMulResult = new DATA_TYPE[M*N];
+        // return;
+        // for (int i = 0; i < NUM_KP_MATS; i++)
+        //   CUDACHECK(cudaMemcpy(kpMatmulResult[i], __dKpMatmulResult[i], M*N*sizeof(int), cudaMemcpyDeviceToHost));
+        CUDACHECK(cudaMemcpy(hKpMatMulResult, dResult, M*N*sizeof(DATA_TYPE), cudaMemcpyDeviceToHost));
+        // if (check(result, kpMatmulResult[NUM_KP_MATS-1], M, N))
+        // printMatrix(kpMatmulResult[NUM_KP_MATS-1], M, N, 4, 4);
+        if (check(result, hKpMatMulResult, M,N))
+          printf("Results Correct for test %d\n", fnvalue);
+      }
       CUDACHECK(cudaEventCreate(&start));
       CUDACHECK(cudaEventCreate(&end));
       for (int i = 0; i < 10; i++)
