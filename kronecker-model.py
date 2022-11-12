@@ -107,9 +107,9 @@ def do(twoPowerL, npoints, d):
                 cublas_time = 0
                 at_time = 0
                 for event in p.events():
-                    if "sgemm" in event.name:
+                    if "sgemm" in event.name or "gemmSN" in event.name:
                         cublas_time += event.cuda_time
-                    elif "at::native::unrolled_elementwise_kernel" in event.name:
+                    elif "at::native::elementwise_kernel" in event.name:
                         at_time += event.cuda_time
 
                     if event.device_type == torch._C._autograd.DeviceType.CUDA:
@@ -201,7 +201,7 @@ for case in cases:
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
 
-        (s, o) = subprocess.getstatusoutput("kronecker_gemm_cuda/kron %d %d %d"%(case["npoints"], case["d"], twoPowerL))
+        (s, o) = (-1,-1)# subprocess.getstatusoutput("kronecker_gemm_cuda/kron %d %d %d"%(case["npoints"], case["d"], twoPowerL))
         if s != 0:
             print(o)
             case["CUDATime"] = -1
