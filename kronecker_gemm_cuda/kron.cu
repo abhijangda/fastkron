@@ -192,6 +192,19 @@ __device__ constexpr uint uint_squareroot(uint x)
   }
 }
 
+#ifdef EVAL
+  typedef float4 LD_TYPE; 
+#else 
+  typedef int4 LD_TYPE; 
+#endif
+
+#ifdef EVAL
+  typedef float DATA_TYPE;
+#else
+  typedef int DATA_TYPE;
+#endif
+
+
 // __launch_bounds__(N_THREADS)
 template<typename T, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
@@ -200,12 +213,6 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   const uint INTERNAL_KP_N_TILE = MIN(128, KP_N_TILE);
   const uint EXTERNAL_KP_K_TILE = MIN(EXTERNAL_KP_K_TILE_, MAX_KP_K);
   const uint INTERNAL_KP_K_TILE = MIN(32, EXTERNAL_KP_K_TILE);
-
-  #ifdef EVAL
-    typedef float4 LD_TYPE; 
-  #else 
-    typedef int4 LD_TYPE; 
-  #endif 
 
   // printf("MAX_K %d MAX_KP_N %d MAX_KP_K %d KP_N_TILE_ %d\n", MAX_K, MAX_KP_N, MAX_KP_K, KP_N_TILE_);
 
@@ -247,11 +254,6 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   uint external_tile_kp_k = blockIdx.z;
   
   if (KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K) {
-    #ifdef EVAL
-      typedef float4 LD_TYPE; 
-    #else 
-      typedef int4 LD_TYPE; 
-    #endif
     const uint ldNumElems = sizeof(LD_TYPE)/sizeof(T);
     const uint ldSize = MIN(kpN*kpK, ldNumElems);
 
@@ -511,12 +513,6 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
 #define N_THREADS 256 
 #define KP_N_TILE 128
-
-#ifdef EVAL
-    typedef float DATA_TYPE;
-  #else
-    typedef int DATA_TYPE;
-  #endif
 
 #define TILE_X 1
 
