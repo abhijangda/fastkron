@@ -77,8 +77,7 @@ void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1)
 }
 
 void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], int* kpMats[],
-                          int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[])
-{
+                          int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
   int cols;
   int rows;
 
@@ -110,13 +109,9 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
   printMatrix(result, M, N, 4, 4);
 }
 
-/**
- * 
-*/
 template<typename T>
 void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-                  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[])
-{
+                  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
   int secFacRowMulSize = 1;
   int rowsTillNow = 1;
   int colsTillNow = 1;
