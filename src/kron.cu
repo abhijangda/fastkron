@@ -793,7 +793,7 @@ int main(int argc, char* argv[]) {
     KP_MAT_K[i] = KP_MAT_N[i] = twoPowerL;
   }
   
-  run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 100, false);
+  run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 100, true);
   // run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
 
   return 0;

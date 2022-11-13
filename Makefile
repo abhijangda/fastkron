@@ -1,13 +1,13 @@
 all: kron
 
-kron: kron.cu
-	nvcc kron.cu -I ../../include -I ../../tools/util/include -I ../common/ -o kron -Xcompiler -fopenmp -O3
+kron: src/kron.cu
+	nvcc $< -I ../../include -I ../../tools/util/include -I ../common/ -o $@ -Xcompiler -fopenmp -O3
 
-kron-eval: kron.cu
-	nvcc kron.cu -DEVAL -I ../../include -I ../../tools/util/include -I ../common/ -o kron -Xcompiler -fopenmp -O3
+kron-eval: src/kron.cu
+	nvcc $< -DEVAL -I ../../include -I ../../tools/util/include -I ../common/ -o $@ -Xcompiler -fopenmp -O3
 
-kron-eval-debug: kron.cu
-	nvcc kron.cu -DEVAL -I ../../include -I ../../tools/util/include -I ../common/ -g -O0 -o kron -Xcompiler -fopenmp
+kron-eval-debug: src/kron.cu
+	nvcc $< -DEVAL -I ../../include -I ../../tools/util/include -I ../common/ -g -O0 -o $@ -Xcompiler -fopenmp
 
 clean:
 	rm -rf kron
