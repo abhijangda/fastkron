@@ -275,13 +275,16 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols;
   const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows; 
 
-  for (uint start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; start_row += gridDim.y * TILE_X) {
+  for (uint start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; 
+       start_row += gridDim.y * TILE_X) {
   // if (start_row == 0 && threadIdx.x == 0) {
   //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
   // }
   
-  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; kp_col_start +=             MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ; a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
+  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; 
+       kp_col_start +=             MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ; 
+       a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
     for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
       #pragma unroll
@@ -514,9 +517,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 16) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 32) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64) \
-
   // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
-
 
 #define COARSE_TB_KERNELS(T, VecT, N_COARSE_TB) \
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16) \
@@ -740,7 +741,7 @@ void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
     if (check(hResult, dResultToHost, M, N))
       printf("Results Correct\n");
   }
-  
+
   cudaStream_t stream;
   cudaEvent_t start;
   cudaEvent_t end;

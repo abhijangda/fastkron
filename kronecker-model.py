@@ -201,7 +201,7 @@ for case in cases:
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
 
-        (s, o) = (-1,-1)# subprocess.getstatusoutput("kronecker_gemm_cuda/kron %d %d %d"%(case["npoints"], case["d"], twoPowerL))
+        (s, o) = subprocess.getstatusoutput("kronecker_gemm_cuda/kron %d %d %d"%(case["npoints"], case["d"], twoPowerL))
         if s != 0:
             print(o)
             case["CUDATime"] = -1
