@@ -376,6 +376,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           }
         }
       }
+
+      __syncthreads();
     }
 
     for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
@@ -665,7 +667,7 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
 }
 
 template<typename T, typename VecT>
-void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
+bool run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
   int (*fnvalues[1])(int, int) = {&randMod}; //{&one, &zeroOne, &setToI, &randMod};
   
   {
@@ -677,7 +679,7 @@ void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
     }
     if (n != N || k != K) {
       printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
-      return;
+      return false;
     }
   }
 
@@ -735,6 +737,8 @@ void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
     //Check Results
     if (check(hResult, dResultToHost, M, N))
       printf("Results Correct\n");
+    else
+      return false;
   }
 
   cudaStream_t stream;
@@ -775,6 +779,8 @@ void run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
     delete[] hKpMats[i];
     delete[] hKpMatmulResult[i];
   }
+
+  return true;
 }
 
 int main(int argc, char* argv[]) {  
@@ -793,8 +799,10 @@ int main(int argc, char* argv[]) {
     KP_MAT_K[i] = KP_MAT_N[i] = twoPowerL;
   }
   
-  run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 100, true);
-  // run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, true);
+  // run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 100, true);
+  bool ret = run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 1, true);
+
+  if (!ret) return 1;
 
   return 0;
 }
