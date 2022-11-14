@@ -1,12 +1,3 @@
-
-// Standard Library includes
-#include <iostream>
-#include <sstream>
-#include <vector>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-
 #define CUDACHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
   if( e != cudaSuccess ) {                          \
@@ -16,11 +7,11 @@
   }                                                 \
 } while(0)
 
-#include <iostream>
-#include <string>
 #include <cstdlib>
 #include <cassert>
-#include <vector>
+#include <cstdio>
+#include <type_traits>
+
 #include "kron.h"
 
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
@@ -442,16 +433,11 @@ static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_TYPE_KERNELS * NU
 
 template<typename T>
 int typeKernelIndex(T x) {
-  //Should not be called
-  assert(false);
+  if (std::is_same<T, float>::value)
+    return 0;
+  if (std::is_same<T, int>::value)
+    return 1;
 }
-
-template<>
-int typeKernelIndex<float>(float x) {return 0;}
-
-template<>
-int typeKernelIndex<int>(int x)     {return 1;}
-
 
 template<typename T, typename VecT>
 T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
