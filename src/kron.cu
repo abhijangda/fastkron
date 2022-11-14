@@ -574,7 +574,7 @@ int typeKernelIndex<int>(int x)     {return 1;}
 
 template<typename T, typename VecT>
 T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-                    int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
+                  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
   typedef int (*cuda_gemm_ty)(int, int, int, T*, T*, T*, int kpNVar, int kpKVar);
 
@@ -622,6 +622,16 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   return resultMat;
 }
 
+float* kronSGEMM(const int NUM_KP_MATS, float* kpMatmulResult[], float* x, float* kpMats[],
+  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  return customKronGEMM<float, float4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+}
+
+int* kronIGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
+  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  return customKronGEMM<int, int4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+}
+
 template<typename T>
 bool eqVal(T x, T y) {} 
 
@@ -664,6 +674,19 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
   }
 
   setMatrix(x, M, K, fnvalue);
+}
+
+template<typename T>
+T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  if (std::is_same<T, float>::value) {
+    return (T*)kronSGEMM(NUM_KP_MATS, (float**)kpMatmulResult, (float*)x, (float**)kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+  } else if (std::is_same<T, int>::value) {
+    return (T*)kronIGEMM(NUM_KP_MATS, (int**)kpMatmulResult, (int*)x, (int**)kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+  } else {
+    printf("Invalid type\n");
+    return NULL;
+  }
 }
 
 template<typename T, typename VecT>
@@ -729,7 +752,7 @@ bool run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
     hResult = hKpMatmulResult[NUM_KP_MATS-1];
 
     //Run GPU implementation
-    dResult = customKronGEMM<T, VecT>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+    dResult = kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     CUDACHECK(cudaDeviceSynchronize());
     T* dResultToHost = new T[M*N];
     CUDACHECK(cudaMemcpy(dResultToHost, dResult, M*N*sizeof(T), cudaMemcpyDeviceToHost));
@@ -751,8 +774,9 @@ bool run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
   cudaStreamCreate(&stream);
 
   //Warm Up iterations
-  for (int i = 0; i < 10; i++)
+  for (int i = 0; i < 10; i++) {
     customKronGEMM<T, VecT>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+  }
   CUDACHECK(cudaStreamSynchronize(stream));
 
   //Run
