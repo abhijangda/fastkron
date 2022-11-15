@@ -373,13 +373,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
+KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 4) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 8) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 16) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 32) \
   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64) \
-  // KP_N_K_KERNELS(N_COARSE_TB, MAX_K, 128) 
+//   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 128) 
 
 #define COARSE_TB_KERNELS(T, VecT, N_COARSE_TB) \
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16) \
@@ -391,9 +391,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 1024) \
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
-  
-  // MAX_K_KERNELS(N_COARSE_TB, 8192) \
-  // MAX_K_KERNELS(N_COARSE_TB, 16384) 
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 8192) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16384) 
 
 #define TYPE_KERNELS(T, VecT) \
   COARSE_TB_KERNELS(T, VecT, 1)

@@ -15,7 +15,7 @@ import math
 # In[2]:
 
 use_torch_profiler = True
-epochs = 10
+epochs = 100
 
 # model and data 
 
