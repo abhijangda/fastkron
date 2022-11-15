@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, true);
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, false);
   else if (strcmp(type, "int") == 0)
     status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, true);
   else

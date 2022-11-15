@@ -12,6 +12,7 @@
 #define EXTERNAL_KP_K_TILE_ 128
 
 #define C_IN_REG
+#define EVAL
 
 //utils.h
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
@@ -459,7 +460,7 @@ cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* 
   *resultMat = kpMatmulResult[0];
   T* prevResult = x;
   cudaError_t status;
-  //TODO: check N == multiplication of KP_MAT_N and same for K
+
   for (int i = 0; i < NUM_KP_MATS; i++) {
 
     const int KP_K_BATCH = 1;
@@ -503,6 +504,9 @@ cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* 
   return status;
 }
 
+/**************************************************
+          Library Functions
+***************************************************/
 cudaError_t kronSGEMM(const int NUM_KP_MATS, float* kpMatmulResult[], float* x, float* kpMats[], float** result,
                       int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
