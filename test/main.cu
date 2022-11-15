@@ -22,8 +22,54 @@
     }                                                 \
   } while(0)
 
-void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) 
+/**************************************************
+                    Timing functions
+**************************************************/
+static double convertTimeValToDouble(struct timeval _time) {
+  return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
+}
+
+static struct timeval getTimeOfDay () {
+  struct timeval _time;
+
+  if (gettimeofday (&_time, NULL) == -1) {
+    fprintf (stderr, "gettimeofday returned -1\n");
+    perror ("");
+    abort ();
+  }
+
+  return _time;
+}
+
+/**************************************************
+                Matrix Functions
+***************************************************/
+int one(int i, int j) {return 1;}
+int zeroOne(int i, int j) {return i % 2;}
+int setToI(int i, int j) {return i;}
+int randMod(int i, int j) {return rand()%5 + 1;}
+
+template<typename T>
+static void setMatrix(T* mat, int M, int N, int (*fnvalue)(int i, int j)) {
+  // #pragma omp parallel for collapse(2)
+  for (int i = 0; i < M; i++) {
+    for (int j = 0; j < N; j++) {
+      mat[i*N + j] = (T)fnvalue(i,j);
+    }
+  }
+}
+
+template<typename T>
+void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
 {
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], fnvalue);
+  }
+
+  setMatrix(x, M, K, fnvalue);
+}
+
+static void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) {
   printf("[");
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
@@ -41,6 +87,39 @@ void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1)
   printf("]");
 }
 
+/**************************************************
+          Equality Check Functions
+***************************************************/
+template<typename T> static bool eqVal(T x, T y) {} 
+
+template<> bool eqVal(int x, int y) {return x == y;}
+
+template<> bool eqVal(float x, float y) {
+  if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
+  if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
+  return abs((x-y)/y) <= 1e-5;
+}
+
+template<typename T>
+static bool check(T* ref, T* computed, int M, int N) {
+  for (int i = 0; i < M; i++) {
+    for (int j = 0; j < N; j++) {
+      if (!eqVal(ref[i*N + j], computed[i* N + j])) {
+        printf("Mismatch for %d x %d at (%d, %d): ref = %d, computed = %d\n", M, N, i, j, ref[i*N+j], computed[i*N+j]);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**************************************************
+              Serial KronGEMM Functions
+***************************************************/
+
+//Perform Kronecker multiplications to get full matrix and multiply
+//that with other matrix
 void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], int* kpMats[],
                           int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
   int cols;
@@ -71,9 +150,10 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
     }    
   }
 
-  printMatrix(result, M, N, 4, 4);
+  // printMatrix(result, M, N, 4, 4);
 }
 
+//Serial implementation of the new Kron GEMM implementation
 template<typename T>
 void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
                   int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
@@ -91,7 +171,6 @@ void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * (K/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]));
     //Number of times a column is multiplied with input matrix is equal to 
     //N/(number of column elements of this matrix * cols so far) * number of rows so far.
-
     rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
 
@@ -113,108 +192,37 @@ void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   }
 }
 
-double convertTimeValToDouble(struct timeval _time)
-{
-  return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
-}
-
-struct timeval getTimeOfDay ()
-{
-  struct timeval _time;
-
-  if (gettimeofday (&_time, NULL) == -1) {
-    fprintf (stderr, "gettimeofday returned -1\n");
-    perror ("");
-    abort ();
-  }
-
-  return _time;
-}
-
+/**************************************************
+              Call KronGEMM Library Functions
+***************************************************/
 template<typename T>
-void setMatrix(T* mat, int M, int N, int (*fnvalue)(int i, int j)) 
-{
-  // #pragma omp parallel for collapse(2)
-  for (int i = 0; i < M; i++) {
-    for (int j = 0; j < N; j++) {
-      mat[i*N + j] = (T)fnvalue(i,j);
-    }
-  }
-}
-
-template<typename T>
-bool eqVal(T x, T y) {} 
-
-template<>
-bool eqVal(int x, int y) {return x == y;}
-
-template<>
-bool eqVal(float x, float y) {
-  if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
-  if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
-  return abs((x-y)/y) <= 1e-5;
-}
-
-template<typename T>
-bool check(T* ref, T* computed, int M, int N) {
-  for (int i = 0; i < M; i++) {
-    for (int j = 0; j < N; j++) {
-      if (!eqVal(ref[i*N + j], computed[i* N + j])) {
-        printf("Mismatch for %d x %d at (%d, %d): ref = %d, computed = %d\n", M, N, i, j, ref[i*N+j], computed[i*N+j]);
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-int one(int i, int j) {return 1;}
-int zeroOne(int i, int j) {return i % 2;}
-int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return rand()%5 + 1;}
-
-template<typename T>
-void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
-{
-  for (int i = 0; i < NUM_KP_MATS; i++) {
-    setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], fnvalue);
-  }
-
-  setMatrix(x, M, K, fnvalue);
-}
-
-template<typename T>
-T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+static T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+            int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  T* result;
   if (std::is_same<T, float>::value) {
-    return (T*)kronSGEMM(NUM_KP_MATS, (float**)kpMatmulResult, (float*)x, (float**)kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    CUDACHECK(kronSGEMM(NUM_KP_MATS, 
+                        (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
+                        M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
-    return (T*)kronIGEMM(NUM_KP_MATS, (int**)kpMatmulResult, (int*)x, (int**)kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    CUDACHECK(kronIGEMM(NUM_KP_MATS, 
+                        (int**)kpMatmulResult, (int*)x, (int**)kpMats, (int**)&result, 
+                        M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else {
     printf("Invalid type\n");
     return NULL;
   }
+
+  return result;
 }
 
+
+/**************************************************
+              Test Driver
+***************************************************/
 template<typename T, typename VecT>
-bool run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
+static bool run(const int M, const int N, const int K, const int NUM_KP_MATS, 
+                int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
   int (*fnvalues[1])(int, int) = {&randMod}; //{&one, &zeroOne, &setToI, &randMod};
-  
-  {
-    //Check N and K is a multiplication of KP_MAT_N and KP_MAT_K
-    int n=1,k=1;
-    for (int i = 0; i < NUM_KP_MATS; i++) {
-      k *= KP_MAT_K[i];
-      n *= KP_MAT_N[i];
-    }
-    if (n != N || k != K) {
-      printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
-      return false;
-    }
-  }
 
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
 
@@ -317,6 +325,9 @@ bool run(const int M, const int N, const int K, const int NUM_KP_MATS, int* KP_M
   return true;
 }
 
+/**************************************************
+              Main Function
+***************************************************/
 int main(int argc, char* argv[]) {  
   if (argc < 4) {printf("invalid command args\n"); return 0;}
   int npoints = atoi(argv[1]);

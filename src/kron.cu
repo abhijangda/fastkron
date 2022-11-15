@@ -1,12 +1,3 @@
-#define CUDACHECK(cmd) do {                         \
-  cudaError_t e = cmd;                              \
-  if( e != cudaSuccess ) {                          \
-    printf("Failed: Cuda error %s:%d '%s'\n",             \
-        __FILE__,__LINE__,cudaGetErrorString(e));   \
-    exit(EXIT_FAILURE);                             \
-  }                                                 \
-} while(0)
-
 #include <cstdlib>
 #include <cassert>
 #include <cstdio>
@@ -18,11 +9,12 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
-constexpr int log2(int n){return 31 - __builtin_clz(n);}
-
 #define EXTERNAL_KP_K_TILE_ 128
 
 #define C_IN_REG
+
+//utils.h
+static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
 // #define C_IN_SHMEM
 template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_tile_k() {return blockIdx.x/DIVUP(MAX_KP_N, KP_N_TILE);}
@@ -432,22 +424,42 @@ static void* cudaGemmSpecialized[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MA
 static_assert(sizeof(cudaGemmSpecialized)/sizeof(void*) == NUM_TYPE_KERNELS * NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 template<typename T>
-int typeKernelIndex(T x) {
+static int typeKernelIndex(T x) {
   if (std::is_same<T, float>::value)
     return 0;
   if (std::is_same<T, int>::value)
     return 1;
 }
 
+static bool checkKronMatrixSizes(const int NUM_KP_MATS, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
+  //Check N and K is a multiplication of KP_MAT_N and KP_MAT_K
+  int n=1,k=1;
+  for (int i = 0; i < NUM_KP_MATS; i++) {
+    k *= KP_MAT_K[i];
+    n *= KP_MAT_N[i];
+  }
+  if (n != N || k != K) {
+    printf("Invalid KP Factors Sizes %d != %d, %d != %d\n", n, N, k, K);
+    return false;
+  }
+
+  return true;
+}
+
 template<typename T, typename VecT>
-T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-                  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
+cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[], T** resultMat,
+                           int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream)
 {
   typedef int (*cuda_gemm_ty)(int, int, int, T*, T*, T*, int kpNVar, int kpKVar);
 
+  if (!checkKronMatrixSizes(NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K))
+    return cudaErrorInvalidValue;
+
   //Row Major Layout of all matrics
-  T* resultMat = kpMatmulResult[0];
+  *resultMat = kpMatmulResult[0];
   T* prevResult = x;
+  cudaError_t status;
+  //TODO: check N == multiplication of KP_MAT_N and same for K
   for (int i = 0; i < NUM_KP_MATS; i++) {
 
     const int KP_K_BATCH = 1;
@@ -470,31 +482,35 @@ T* customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
     dim3 block = {N_THREADS,1,1};
     
-    void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)&resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1], &i};
+    void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1], &i};
 
-    CUDACHECK(cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream));
+    status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
+    if (status != cudaSuccess)
+      return status;
 
     if (i < NUM_KP_MATS - 1) {
-      prevResult = resultMat;
-      if (resultMat == kpMatmulResult[0]) {        
-        resultMat = kpMatmulResult[1];
-      } else if (resultMat == kpMatmulResult[1]) {
-        resultMat = kpMatmulResult[0];
+      prevResult = *resultMat;
+      if (*resultMat == kpMatmulResult[0]) {        
+        *resultMat = kpMatmulResult[1];
+      } else if (*resultMat == kpMatmulResult[1]) {
+        *resultMat = kpMatmulResult[0];
       }
     }
     
     // CUDACHECK(cudaDeviceSynchronize());
   }
 
-  return resultMat;
+  return status;
 }
 
-float* kronSGEMM(const int NUM_KP_MATS, float* kpMatmulResult[], float* x, float* kpMats[],
-  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
-  return customKronGEMM<float, float4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+cudaError_t kronSGEMM(const int NUM_KP_MATS, float* kpMatmulResult[], float* x, float* kpMats[], float** result,
+                      int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  if (result == NULL) return cudaErrorInvalidValue;
+  return customKronGEMM<float, float4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, result, M, N, K, KP_MAT_N, KP_MAT_K, stream);
 }
 
-int* kronIGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[],
-  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
-  return customKronGEMM<int, int4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+cudaError_t kronIGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int* kpMats[], int** result,
+                      int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  if (result == NULL) return cudaErrorInvalidValue;
+  return customKronGEMM<int, int4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, result, M, N, K, KP_MAT_N, KP_MAT_K, stream);
 }
