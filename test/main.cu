@@ -1,17 +1,13 @@
 #include <iostream>
-#include <sstream>
-#include <vector>
+#include <string>
+
+#include <assert.h>
 #include <time.h>
 #include <sys/time.h>
 #include <unistd.h>
 
-#include <iostream>
-#include <string>
-#include <cstdlib>
-#include <cassert>
-#include <vector>
-
 #include "kron.h"
+#include "anyoption.h"
 
 #define CUDACHECK(cmd) do {                         \
     cudaError_t e = cmd;                              \
@@ -25,21 +21,21 @@
 /**************************************************
                     Timing functions
 **************************************************/
-static double convertTimeValToDouble(struct timeval _time) {
-  return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
-}
+// static double convertTimeValToDouble(struct timeval _time) {
+//   return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
+// }
 
-static struct timeval getTimeOfDay () {
-  struct timeval _time;
+// static struct timeval getTimeOfDay () {
+//   struct timeval _time;
 
-  if (gettimeofday (&_time, NULL) == -1) {
-    fprintf (stderr, "gettimeofday returned -1\n");
-    perror ("");
-    abort ();
-  }
+//   if (gettimeofday (&_time, NULL) == -1) {
+//     fprintf (stderr, "gettimeofday returned -1\n");
+//     perror ("");
+//     abort ();
+//   }
 
-  return _time;
-}
+//   return _time;
+// }
 
 /**************************************************
                 Matrix Functions
@@ -69,23 +65,23 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
   setMatrix(x, M, K, fnvalue);
 }
 
-static void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) {
-  printf("[");
-  for (int i = 0; i < M; i++) {
-    for (int j = 0; j < N; j++) {
-      // if (mat[i*N + j] == 18496)
-        // printf("%d,%d\n",i,j);
-      if (max_cols != -1 && j >= max_cols)
-        break;  
-      printf("%d, ", mat[i*N + j]);
-    }
-    if (i < M-1)
-      printf("\n");
-    if (max_rows != -1 && i >= max_rows)
-      break;
-  }
-  printf("]");
-}
+// static void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) {
+//   printf("[");
+//   for (int i = 0; i < M; i++) {
+//     for (int j = 0; j < N; j++) {
+//       // if (mat[i*N + j] == 18496)
+//         // printf("%d,%d\n",i,j);
+//       if (max_cols != -1 && j >= max_cols)
+//         break;  
+//       printf("%d, ", mat[i*N + j]);
+//     }
+//     if (i < M-1)
+//       printf("\n");
+//     if (max_rows != -1 && i >= max_rows)
+//       break;
+//   }
+//   printf("]");
+// }
 
 /**************************************************
           Equality Check Functions
@@ -105,7 +101,7 @@ static bool check(T* ref, T* computed, int M, int N) {
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
       if (!eqVal(ref[i*N + j], computed[i* N + j])) {
-        printf("Mismatch for %d x %d at (%d, %d): ref = %d, computed = %d\n", M, N, i, j, ref[i*N+j], computed[i*N+j]);
+        std::cout << "Mismatch for" << M << " x " << N << " at (" << i << ", " << j << "): ref = " << ref[i*N+j] << "computed = " << computed[i*N+j] << "\n";
         return false;
       }
     }
@@ -222,8 +218,6 @@ static T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[]
 template<typename T, typename VecT>
 static bool run(const int M, const int N, const int K, const int NUM_KP_MATS, 
                 int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
-  int (*fnvalues[1])(int, int) = {&randMod}; //{&one, &zeroOne, &setToI, &randMod};
-
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
 
   //Allocate host data
@@ -242,7 +236,6 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
   //Allocate GPU data
   T* dX;
   T* dKpMatmulResult[2];
-  T* dKpOut[NUM_KP_MATS];
   T* dKpMats[NUM_KP_MATS];
 
   CUDACHECK(cudaMalloc(&dX, M * K * sizeof(T)));
@@ -262,7 +255,6 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
   
   if (checkResults) {
     T* dResult;
-
     T* hResult;
 
     //CPU implementation of algorithm
@@ -329,25 +321,72 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
               Main Function
 ***************************************************/
 int main(int argc, char* argv[]) {  
-  if (argc < 4) {printf("invalid command args\n"); return 0;}
-  int npoints = atoi(argv[1]);
-  int d = atoi(argv[2]);
-  int twoPowerL = atoi(argv[3]);
+  int batch = 0;
+  int facs = 0;
+  int size = 0;
+  char* type;
 
-  int KP_MAT_N[d];
-  int KP_MAT_K[d];
+  AnyOption *opt = new AnyOption();
+
+  opt->addUsage("usage: ");
+  opt->addUsage("batch: Size of Batch");
+  opt->addUsage("facs: Number of Kron Factors");
+  opt->addUsage("size: Row and cols of each Kron Factor");
+  opt->addUsage("type: Type of matrices (float, int, half, double)");
+
+  opt->setOption("batch", 'b');
+  opt->setOption("facs", 'f');
+  opt->setOption("size", 's');
+  opt->setOption("type", 't');
+
+  opt->processCommandArgs(argc, argv);
+  
+  if (!opt->hasOptions()) { /* print usage if no options */
+    opt->printUsage();
+    delete opt;
+    return 1;
+  }
+
+  if (opt->getValue('b') != NULL) {
+    batch = atoi(opt->getValue('b'));
+  }
+
+  if (opt->getValue('f') != NULL) {
+    facs = atoi(opt->getValue('f'));
+  }
+
+  if (opt->getValue('s') != NULL) {
+    size = atoi(opt->getValue('s'));
+  }
+
+  if (opt->getValue('t') != NULL) {
+    type = opt->getValue('t');
+  }
+
+  if (batch <= 0 || facs <= 0 || size <= 0) {
+    printf("Invalid value batch: %d, facs %d, size %d\n", batch, facs, size);
+    return 1;
+  }
+
+  int KP_MAT_N[facs];
+  int KP_MAT_K[facs];
   int N = 1;
   int K = 1;
-  for (int i = 0; i < d; i++) {
-    N *= twoPowerL;
-    K *= twoPowerL;
-    KP_MAT_K[i] = KP_MAT_N[i] = twoPowerL;
+  for (int i = 0; i < facs; i++) {
+    N *= size;
+    K *= size;
+    KP_MAT_K[i] = KP_MAT_N[i] = size;
   }
   
-  // run<float, float4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 100, true);
-  bool ret = run<int, int4>(npoints, N, K, d, KP_MAT_N, KP_MAT_K, 1, true);
+  bool status = false;
+  if (strcmp(type, "float") == 0)
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, true);
+  else if (strcmp(type, "int") == 0)
+    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, true);
+  else
+    printf("type not supported %s\n", type);
 
-  if (!ret) return 1;
+  if (!status) return 1;
 
   return 0;
 }
