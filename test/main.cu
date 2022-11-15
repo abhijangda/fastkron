@@ -86,7 +86,7 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
 /**************************************************
           Equality Check Functions
 ***************************************************/
-template<typename T> static bool eqVal(T x, T y) {} 
+template<typename T> static bool eqVal(T x, T y) {abort(); return false;}
 
 template<> bool eqVal(int x, int y) {return x == y;}
 
