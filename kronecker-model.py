@@ -201,7 +201,7 @@ for case in cases:
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
 
-        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t float"%(case["npoints"], case["d"], twoPowerL))
+        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t float -c -r 100"%(case["npoints"], case["d"], twoPowerL))
         if s != 0:
             print(o)
             case["CUDATime"] = -1
