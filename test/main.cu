@@ -43,7 +43,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return rand()%5 + 1;}
+int randMod(int i, int j) {return one(i,j);} //rand()%5 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
@@ -176,6 +176,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
 
+    #pragma omp parallel for
     for (uint i = 0; i < M; i++) {
       for (uint j = 0; j < resultCols; j++) {
         T r = 0;
