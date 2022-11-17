@@ -24,6 +24,7 @@
 #define EVAL
 
 //utils.h
+static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
 // #define C_IN_SHMEM
@@ -464,7 +465,7 @@ KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
 
-static void* kronGemmKernels[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
+static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float, float4)
   TYPE_KERNELS(int, int4)
@@ -474,7 +475,7 @@ static void* kronGemmKernels[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_
     // COARSE_TB_KERNELS(4)
   };
 
-static_assert(sizeof(kronGemmKernels)/sizeof(void*) == NUM_TYPE_KERNELS * NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
+static_assert(sizeof(KronGemmKernels)/sizeof(void*) == NUM_TYPE_KERNELS * NUM_COARSE_TB_KERNELS * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 template<typename T>
 static int typeKernelIndex(T x) {
@@ -486,10 +487,12 @@ static int typeKernelIndex(T x) {
     return 2;
 }
 
-static bool checkKronMatrixSizes(const int NUM_KP_MATS, int M, int N, int K, int KronMatCols[], int KronMatRows[]) {
-  //Check N and K is a multiplication of KronMatCols and KronMatRows
+/**Library entry points to launch cuda kernels**/
+
+//Check N and K is a multiplication of KronMatCols and KronMatRows
+static bool checkKronMatrixSizes(uint NumKronMats, uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[]) {
   int n=1,k=1;
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (int i = 0; i < NumKronMats; i++) {
     k *= KronMatRows[i];
     n *= KronMatCols[i];
   }
@@ -501,29 +504,32 @@ static bool checkKronMatrixSizes(const int NUM_KP_MATS, int M, int N, int K, int
   return true;
 }
 
+//Launch cuda kernels
 template<typename T, typename VecT>
-cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kronGemmResults[], T* x, T* kronMats[], T** kronGemmResult,
-                           int M, int N, int K, int KronMatCols[], int KronMatRows[], cudaStream_t stream)
+cudaError_t generalKronGemm(const uint NumKronMats, T* kronGemmResults[], T* x, T* kronMats[], T** kronGemmResult,
+                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream)
 {
   typedef int (*KronGemmKernel)(int, int, int, T*, T*, T*, int kpNVar, int kpKVar);
-
-  if (!checkKronMatrixSizes(NUM_KP_MATS, M, N, K, KronMatCols, KronMatRows))
-    return cudaErrorInvalidValue;
-
-  //Row Major Layout of all matrics
-  *kronGemmResult = kronGemmResults[0];
-  T* prevResult = x;
   cudaError_t status;
 
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return cudaErrorInvalidValue;
+
+  //Only row major layout of all matrics is supported.
+  
+  //Use double buffering for writing result and using output 
+  //of previous iteration as input to current
+  
+  *kronGemmResult = kronGemmResults[0];
+  T* prevResult = x;
+
+  for (uint i = 0; i < NumKronMats; i++) {
+    KronGemmKernel cuda_gemm_func = NULL;
+    dim3 grid;
+    dim3 block;
 
     const int KP_K_BATCH = 1;
     int N_COARSE_TB = 1; //(M > 100) ? 2 : 1;
-
-    // int idx = (N_COARSE_TB/8)*NUM_MAX_K_KERNELS + (log2(K)-log2(16))*NUM_KP_N_K_KERNELS + (log2(KronMatRows[0])-log2(2));
-    // printf("idx %d log2(K) %d log2(16) %d\n", idx, log2(K), log2(16));
-    // assert(idx < sizeof(kronGemmKernels)/sizeof(void*));
-    
     int min_k = min(K, MAX_K);
     int k_equals_var = (min_k == K) ? 1 : 0;
     // if (min_k/KronMatRows[0] >= 256) {
@@ -532,27 +538,56 @@ cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kronGemmResults[], T* x, T*
     //   k_equals_var = 0;
     // }
     // printf("min_k %d\n", min_k);
-    int typeKernel = typeKernelIndex((T)0);
-    KronGemmKernel cuda_gemm_func = (KronGemmKernel)kronGemmKernels[typeKernel][N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][k_equals_var][0];
-    dim3 grid = {(K/min_k) * DIVUP(KronMatCols[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KronMatRows[0], EXTERNAL_KP_K_TILE_)}; 
-    dim3 block = {N_THREADS, 1, 1};
+    uint typeKernelIdx = typeKernelIndex((T)0);
     
-    void *args[] = {&M, &N, &K, &prevResult, (void*)&kronMats[NUM_KP_MATS-i-1], (void*)kronGemmResult, (void*)&KronMatCols[NUM_KP_MATS-i-1], (void*)&KronMatRows[NUM_KP_MATS-i-1], &i};
+    //Check that kernel index is valid only in debug mode
+    assert(typeKernelIdx < NUM_TYPE_KERNELS);
+    assert(N_COARSE_TB/2 < NUM_COARSE_TB_KERNELS);
+    assert(log2(min_k)-log2(MIN_K) < NUM_MAX_K_KERNELS);
+    assert(log2(KronMatRows[0])-log2(MIN_KP_K) < NUM_KP_N_K_KERNELS);
+
+    cuda_gemm_func = (KronGemmKernel)KronGemmKernels[typeKernelIdx][N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][k_equals_var][0];
+    
+    assert(cuda_gemm_func != NULL);
+    
+    //Create the grid and thread block
+    grid = {
+              (K/min_k) * DIVUP(KronMatCols[0], KP_N_TILE), 
+              DIVUP((M/TILE_X), N_COARSE_TB), 
+              DIVUP(KronMatRows[0], EXTERNAL_KP_K_TILE_)
+           };
+    block = {
+              N_THREADS, 
+              1, 
+              1
+            };
+    
+    //Create kernel args;
+    void *args[] = {
+                    &M, &N, &K, 
+                    &prevResult, 
+                    (void*)&kronMats[NumKronMats-i-1], 
+                    (void*)kronGemmResult, 
+                    (void*)&KronMatCols[NumKronMats-i-1], 
+                    (void*)&KronMatRows[NumKronMats-i-1], 
+                    &i
+                  };
 
     status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
     if (status != cudaSuccess)
       return status;
 
-    if (i < NUM_KP_MATS - 1) {
+    //Double/ring/circular buffer previous result and new result
+    if (i < NumKronMats - 1) {
       prevResult = *kronGemmResult;
-      if (*kronGemmResult == kronGemmResults[0]) {        
+      if (prevResult == kronGemmResults[0]) {        
         *kronGemmResult = kronGemmResults[1];
-      } else if (*kronGemmResult == kronGemmResults[1]) {
+      } else if (prevResult == kronGemmResults[1]) {
         *kronGemmResult = kronGemmResults[0];
       }
     }
     
-    CUDA_CHECK(cudaDeviceSynchronize());
+    // CUDA_CHECK(cudaDeviceSynchronize());
   }
 
   return status;
@@ -561,20 +596,20 @@ cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kronGemmResults[], T* x, T*
 /**************************************************
           Library Functions
 ***************************************************/
-cudaError_t kronSGEMM(const int NUM_KP_MATS, float* kronGemmResults[], float* x, float* kronMats[], float** result,
-                      int M, int N, int K, int KronMatCols[], int KronMatRows[], cudaStream_t stream) {
+cudaError_t kronSGEMM(const uint NumKronMats, float* kronGemmResults[], float* x, float* kronMats[], float** result,
+                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
-  return customKronGEMM<float, float4>(NUM_KP_MATS, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
+  return generalKronGemm<float, float4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
 }
 
-cudaError_t kronIGEMM(const int NUM_KP_MATS, int* kronGemmResults[], int* x, int* kronMats[], int** result,
-                      int M, int N, int K, int KronMatCols[], int KronMatRows[], cudaStream_t stream) {
+cudaError_t kronIGEMM(const uint NumKronMats, int* kronGemmResults[], int* x, int* kronMats[], int** result,
+                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
-  return customKronGEMM<int, int4>(NUM_KP_MATS, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
+  return generalKronGemm<int, int4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
 }
 
-cudaError_t kronDGEMM(const int NUM_KP_MATS, double* kronGemmResults[], double* x, double* kronMats[], double** result,
-  int M, int N, int K, int KronMatCols[], int KronMatRows[], cudaStream_t stream) {
+cudaError_t kronDGEMM(const uint NumKronMats, double* kronGemmResults[], double* x, double* kronMats[], double** result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
-  return customKronGEMM<double, double4>(NUM_KP_MATS, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
+  return generalKronGemm<double, double4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
 }

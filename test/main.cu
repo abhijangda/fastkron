@@ -46,19 +46,19 @@ int setToI(int i, int j) {return i;}
 int randMod(int i, int j) {return rand()%5 + 1;}
 
 template<typename T>
-static void setMatrix(T* mat, int M, int N, int (*fnvalue)(int i, int j)) {
+static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
   // #pragma omp parallel for collapse(2)
-  for (int i = 0; i < M; i++) {
-    for (int j = 0; j < N; j++) {
+  for (uint i = 0; i < M; i++) {
+    for (uint j = 0; j < N; j++) {
       mat[i*N + j] = (T)fnvalue(i,j);
     }
   }
 }
 
 template<typename T>
-void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], int (*fnvalue)(int i, int j))
+void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], int (*fnvalue)(int i, int j))
 {
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (uint i = 0; i < NUM_KP_MATS; i++) {
     setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], fnvalue);
   }
 
@@ -67,8 +67,8 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
 
 // static void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) {
 //   printf("[");
-//   for (int i = 0; i < M; i++) {
-//     for (int j = 0; j < N; j++) {
+//   for (uint i = 0; i < M; i++) {
+//     for (uint j = 0; j < N; j++) {
 //       // if (mat[i*N + j] == 18496)
 //         // printf("%d,%d\n",i,j);
 //       if (max_cols != -1 && j >= max_cols)
@@ -103,9 +103,9 @@ template<> bool eqVal(double x, double y) {
 }
 
 template<typename T>
-static bool check(T* ref, T* computed, int M, int N) {
-  for (int i = 0; i < M; i++) {
-    for (int j = 0; j < N; j++) {
+static bool check(T* ref, T* computed, uint M, uint N) {
+  for (uint i = 0; i < M; i++) {
+    for (uint j = 0; j < N; j++) {
       if (!eqVal(ref[i*N + j], computed[i* N + j])) {
         std::cout << "Mismatch for " << M << " x " << N << " at (" << i << ", " << j << "): ref = " << ref[i*N+j] << " computed = " << computed[i*N+j] << "\n";
         return false;
@@ -122,20 +122,20 @@ static bool check(T* ref, T* computed, int M, int N) {
 
 //Perform Kronecker multiplications to get full matrix and multiply
 //that with other matrix
-void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], int* kpMats[],
-                          int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
-  int cols;
-  int rows;
+void baselineKPThenMatmul(uint NUM_KP_MATS, int* result, int* x, int* kpout[], int* kpMats[],
+                          uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[]) {
+  uint cols;
+  uint rows;
 
-  for (int kp = 0; kp < NUM_KP_MATS - 1; kp++) {
+  for (uint kp = 0; kp < NUM_KP_MATS - 1; kp++) {
     int* kpFirst = (kp == 0) ? kpMats[0] : kpout[kp - 1];
-    int kpFirstRows = (kp == 0) ? KP_MAT_K[0] : rows;
-    int kpFirstCols = (kp == 0) ? KP_MAT_N[0] : cols;
+    uint kpFirstRows = (kp == 0) ? KP_MAT_K[0] : rows;
+    uint kpFirstCols = (kp == 0) ? KP_MAT_N[0] : cols;
 
     cols = kpFirstCols * KP_MAT_N[kp+1];
     rows = kpFirstRows * KP_MAT_K[kp+1];
-    for (int i = 0; i < rows; i++) {
-      for (int j = 0; j < cols; j++) {
+    for (uint i = 0; i < rows; i++) {
+      for (uint j = 0; j < cols; j++) {
         int v2 = kpMats[kp+1][(i%KP_MAT_K[kp+1]) * KP_MAT_N[kp+1] + j%KP_MAT_N[kp+1]];
         int v1 = kpFirst[(i/KP_MAT_K[kp+1]) * kpFirstCols + j/KP_MAT_N[kp+1]];
         kpout[kp][i*cols + j] = v1 * v2;
@@ -143,10 +143,10 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
     }
   }
 
-  for(int i = 0; i < M; i++) {    
-    for(int j = 0; j < N; j++) {    
+  for(uint i = 0; i < M; i++) {    
+    for(uint j = 0; j < N; j++) {    
       result[i* N + j] = 0;    
-      for(int k = 0; k < K; k++) {   
+      for(uint k = 0; k < K; k++) {   
         result[i * N + j] += x[i*K + k]*kpout[NUM_KP_MATS-2][k*N + j];
       }    
     }    
@@ -157,16 +157,16 @@ void baselineKPThenMatmul(int NUM_KP_MATS, int* result, int* x, int* kpout[], in
 
 //Serial implementation of the new Kron GEMM implementation
 template<typename T>
-void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-                  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
-  int secFacRowMulSize = 1;
-  int rowsTillNow = 1;
-  int colsTillNow = 1;
-  int resultCols;
-  for (int kp = 0; kp < NUM_KP_MATS; kp++) {
+void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+                  uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[]) {
+  uint secFacRowMulSize = 1;
+  uint rowsTillNow = 1;
+  uint colsTillNow = 1;
+  uint resultCols;
+  for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
     T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
-    int kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
-    int kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
+    uint kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
+    uint kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
     int prevKPMatmulCols = (kp == 0) ? K : resultCols;
 
     resultCols = (prevKPMatmulCols/kpSecondK) * kpSecondN;
@@ -176,14 +176,14 @@ void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
 
-    for (int i = 0; i < M; i++) {
-      for (int j = 0; j < resultCols; j++) {
+    for (uint i = 0; i < M; i++) {
+      for (uint j = 0; j < resultCols; j++) {
         T r = 0;
 
-        for (int kp_k = 0; kp_k < kpSecondK; kp_k++) {
-          int slice = (j / secFacRowMulSize) % kpSecondN;
+        for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
+          uint slice = (j / secFacRowMulSize) % kpSecondN;
 
-          int v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
+          T v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
           
           r += prevKPMatmul[i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k] * v2;
         }
@@ -198,8 +198,8 @@ void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
               Call KronGEMM Library Functions
 ***************************************************/
 template<typename T>
-static T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-            int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
   T* result;
   if (std::is_same<T, float>::value) {
     CUDACHECK(kronSGEMM(NUM_KP_MATS, 
@@ -226,8 +226,8 @@ static T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[]
               Test Driver
 ***************************************************/
 template<typename T, typename VecT>
-static bool run(const int M, const int N, const int K, const int NUM_KP_MATS, 
-                int* KP_MAT_N, int* KP_MAT_K, int numIters, bool checkResults) {
+static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
+                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, bool checkResults) {
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
 
   //Allocate host data
@@ -236,7 +236,7 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
   T* hKpMatmulResult[NUM_KP_MATS];
 
   hX = new T[M*K];
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (uint i = 0; i < NUM_KP_MATS; i++) {
     hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
     hKpMatmulResult[i] = new T[M*std::max(N,K)];
   }
@@ -252,12 +252,12 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
   CUDACHECK(cudaMalloc(&dKpMatmulResult[0], M * std::max(N,K) * sizeof(T)));
   CUDACHECK(cudaMalloc(&dKpMatmulResult[1], M * std::max(N,K) * sizeof(T)));
   
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (uint i = 0; i < NUM_KP_MATS; i++) {
     CUDACHECK(cudaMalloc(&dKpMats[i],            KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
   }
 
-  for (int i = 0; i < 2; i++) {
+  for (uint i = 0; i < 2; i++) {
     CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, M * std::max(N,K) * sizeof(T)));
   }
 
@@ -294,14 +294,14 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
   cudaStreamCreate(&stream);
 
   //Warm Up iterations
-  for (int i = 0; i < 10; i++) {
+  for (uint i = 0; i < 10; i++) {
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaStreamSynchronize(stream));
 
   //Run
   CUDACHECK(cudaEventRecord(start, stream));
-  for (int i = 0; i < numIters; i++)
+  for (uint i = 0; i < numIters; i++)
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   CUDACHECK(cudaEventRecord(end, stream));
   CUDACHECK(cudaEventSynchronize(end));
@@ -309,7 +309,7 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
   printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
 
   //Free GPU Memory
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (uint i = 0; i < NUM_KP_MATS; i++) {
     CUDACHECK(cudaFree(dKpMats[i]));
   }
 
@@ -319,7 +319,7 @@ static bool run(const int M, const int N, const int K, const int NUM_KP_MATS,
 
   //Free CPU RAM
   delete[] hX;
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (uint i = 0; i < NUM_KP_MATS; i++) {
     delete[] hKpMats[i];
     delete[] hKpMatmulResult[i];
   }
@@ -390,11 +390,11 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  int KP_MAT_N[facs];
-  int KP_MAT_K[facs];
-  int N = 1;
-  int K = 1;
-  for (int i = 0; i < facs; i++) {
+  uint KP_MAT_N[facs];
+  uint KP_MAT_K[facs];
+  uint N = 1;
+  uint K = 1;
+  for (uint i = 0; i < (uint)facs; i++) {
     N *= size;
     K *= size;
     KP_MAT_K[i] = KP_MAT_N[i] = size;
