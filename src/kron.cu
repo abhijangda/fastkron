@@ -5,6 +5,15 @@
 
 #include "kron.h"
 
+#define CUDA_CHECK(cmd) do {                         \
+  cudaError_t e = cmd;                              \
+  if( e != cudaSuccess ) {                          \
+    printf("Failed: Cuda error %s:%d '%s'\n",             \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
@@ -52,6 +61,41 @@ __device__ constexpr uint uint_squareroot(uint x)
   }
 }
 
+template<typename VecT, typename T>
+__device__ void loadVecToRegs(VecT& vec, T* regs) {
+  //Not implemented
+}
+
+template<>
+__device__ void loadVecToRegs(float4& vec, float* regs) {
+  regs[0] = vec.x;
+  regs[1] = vec.y;
+  regs[2] = vec.z;
+  regs[3] = vec.w;
+}
+
+template<>
+__device__ void loadVecToRegs(int4& vec, int* regs) {
+  regs[0] = vec.x;
+  regs[1] = vec.y;
+  regs[2] = vec.z;
+  regs[3] = vec.w;
+}
+
+
+template<>
+__device__ void loadVecToRegs(double4& vec, double* regs) {
+  regs[0] = vec.x;
+  regs[1] = vec.y;
+  regs[2] = vec.z;
+  regs[3] = vec.w;
+}
+
+template<>
+__device__ void loadVecToRegs(double2& vec, double* regs) {
+  regs[0] = vec.x;
+  regs[1] = vec.y;
+}
 
 // __launch_bounds__(N_THREADS)
 template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
@@ -102,13 +146,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   uint external_tile_kp_k = blockIdx.z;
   
   if (KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K) {
-    const uint ldNumElems = sizeof(VecT)/sizeof(T);
     const uint ldSize = MIN(kpN*kpK, ldNumElems);
 
     for (uint i = threadIdx.x*ldSize; i < (kpN * kpK); i += blockDim.x*ldSize) {
       // kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
       VecT a = *(VecT*)&kron_fac[i];
-      T a1[4] = {a.x, a.y, a.z, a.w};
+      T a1[ldNumElems];
+      loadVecToRegs(a, a1);
       #pragma unroll
       for (uint j = 0; j < ldSize; j++) {
         uint idx = i + j;
@@ -123,8 +167,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   const uint Creg_Cols = MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
 #ifndef EVAL
-  if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) 
+  __syncthreads();
+  if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
     printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
+    // for (int i = 0; i < kpN; i++) 
+    //   for (int j = 0; j < kpK; j++)
+    //     printf("%lf \n", (double)kron_fac_sh[i][j]);
+  }
 #endif
 
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
@@ -171,7 +220,9 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             // *(VecT*)&Ash[a_row][a_col] = a;
           }
           
-          T a1[4] = {a.x, a.y, a.z, a.w};
+          T a1[ldNumElems];
+          loadVecToRegs(a, a1);
+
           #pragma unroll
           for (uint i = 0; i < ldNumElems; i++) {
             uint ash_col = a_col + i;
@@ -196,7 +247,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             uint row = swid;
             // kron_fac_sh[threadIdx.x%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
             VecT a = *(VecT*)&kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
-            T a1[4] = {a.x, a.y, a.z, a.w};
+            T a1[ldNumElems];
+            loadVecToRegs(a, a1);
             #pragma unroll
             for (uint i = 0; i < ldSize; i++) {
               uint idx = (threadIdx.x%(INTERNAL_KP_N_TILE/ldSize))*ldSize + i%ldSize;
@@ -399,7 +451,7 @@ KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
 
 //Two type kernels float/float4 and int/int4
 
-#define NUM_TYPE_KERNELS 2
+#define NUM_TYPE_KERNELS 3
 #define MIN_K 16
 #define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
@@ -416,6 +468,7 @@ static void* cudaGemmSpecialized[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MA
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float, float4)
   TYPE_KERNELS(int, int4)
+  TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
     // COARSE_TB_KERNELS(4)
@@ -429,6 +482,8 @@ static int typeKernelIndex(T x) {
     return 0;
   if (std::is_same<T, int>::value)
     return 1;
+  if (std::is_same<T, double>::value)
+    return 2;
 }
 
 static bool checkKronMatrixSizes(const int NUM_KP_MATS, int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[]) {
@@ -475,12 +530,12 @@ cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* 
     //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
     //   min_k = min_k/KP_MAT_K[0];
     //   k_equals_var = 0;
-    // }cudaGemmSpecialized[0][0][0][k_equals_var][1]; //
+    // }cudaGemmSpecialized[0][0][0][k_equals_var][1];
     // printf("min_k %d\n", min_k);
     int typeKernel = typeKernelIndex((T)0);
     cuda_gemm_ty cuda_gemm_func = (cuda_gemm_ty)cudaGemmSpecialized[typeKernel][N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KP_MAT_K[0])-log2(MIN_KP_K)][k_equals_var][0];
     dim3 grid = {(K/min_k) * DIVUP(KP_MAT_N[0], KP_N_TILE), DIVUP((M/TILE_X), N_COARSE_TB), DIVUP(KP_MAT_K[0], EXTERNAL_KP_K_TILE_)}; 
-    dim3 block = {N_THREADS,1,1};
+    dim3 block = {N_THREADS, 1, 1};
     
     void *args[] = {&M, &N, &K, &prevResult, (void*)&kpMats[NUM_KP_MATS-i-1], (void*)resultMat, (void*)&KP_MAT_N[NUM_KP_MATS-i-1], (void*)&KP_MAT_K[NUM_KP_MATS-i-1], &i};
 
@@ -497,7 +552,7 @@ cudaError_t customKronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* 
       }
     }
     
-    // CUDACHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
   }
 
   return status;
@@ -516,4 +571,10 @@ cudaError_t kronIGEMM(const int NUM_KP_MATS, int* kpMatmulResult[], int* x, int*
                       int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
   return customKronGEMM<int, int4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, result, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+}
+
+cudaError_t kronDGEMM(const int NUM_KP_MATS, double* kpMatmulResult[], double* x, double* kpMats[], double** result,
+  int M, int N, int K, int KP_MAT_N[], int KP_MAT_K[], cudaStream_t stream) {
+  if (result == NULL) return cudaErrorInvalidValue;
+  return customKronGEMM<double, double4>(NUM_KP_MATS, kpMatmulResult, x, kpMats, result, M, N, K, KP_MAT_N, KP_MAT_K, stream);
 }
