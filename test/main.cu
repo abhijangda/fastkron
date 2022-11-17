@@ -86,11 +86,17 @@ void setValues(int NUM_KP_MATS, T* kpMats[], T *x, int M, int N, int K, int KP_M
 /**************************************************
           Equality Check Functions
 ***************************************************/
-template<typename T> static bool eqVal(T x, T y) {abort(); return false;}
+template<typename T> static bool eqVal(T x, T y) {abort(); printf("invalid type\n"); return false;}
 
 template<> bool eqVal(int x, int y) {return x == y;}
 
 template<> bool eqVal(float x, float y) {
+  if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
+  if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
+  return abs((x-y)/y) <= 1e-5;
+}
+
+template<> bool eqVal(double x, double y) {
   if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
   if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
   return abs((x-y)/y) <= 1e-5;
@@ -101,7 +107,7 @@ static bool check(T* ref, T* computed, int M, int N) {
   for (int i = 0; i < M; i++) {
     for (int j = 0; j < N; j++) {
       if (!eqVal(ref[i*N + j], computed[i* N + j])) {
-        std::cout << "Mismatch for" << M << " x " << N << " at (" << i << ", " << j << "): ref = " << ref[i*N+j] << "computed = " << computed[i*N+j] << "\n";
+        std::cout << "Mismatch for " << M << " x " << N << " at (" << i << ", " << j << "): ref = " << ref[i*N+j] << " computed = " << computed[i*N+j] << "\n";
         return false;
       }
     }
@@ -172,7 +178,7 @@ void slicedMatmul(int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
 
     for (int i = 0; i < M; i++) {
       for (int j = 0; j < resultCols; j++) {
-        int r = 0;
+        T r = 0;
 
         for (int kp_k = 0; kp_k < kpSecondK; kp_k++) {
           int slice = (j / secFacRowMulSize) % kpSecondN;
@@ -202,6 +208,10 @@ static T* kronGEMM(const int NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[]
   } else if (std::is_same<T, int>::value) {
     CUDACHECK(kronIGEMM(NUM_KP_MATS, 
                         (int**)kpMatmulResult, (int*)x, (int**)kpMats, (int**)&result, 
+                        M, N, K, KP_MAT_N, KP_MAT_K, stream));
+  } else if (std::is_same<T, double>::value) {
+    CUDACHECK(kronDGEMM(NUM_KP_MATS, 
+                        (double**)kpMatmulResult, (double*)x, (double**)kpMats, (double**)&result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else {
     printf("Invalid type\n");
@@ -324,20 +334,26 @@ int main(int argc, char* argv[]) {
   int batch = 0;
   int facs = 0;
   int size = 0;
-  char* type;
+  char* type = NULL;
+  bool checkResults = false;
+  int runs = 0;
 
   AnyOption *opt = new AnyOption();
 
   opt->addUsage("usage: ");
   opt->addUsage("batch: Size of Batch");
-  opt->addUsage("facs: Number of Kron Factors");
-  opt->addUsage("size: Row and cols of each Kron Factor");
-  opt->addUsage("type: Type of matrices (float, int, half, double)");
+  opt->addUsage("facs:  Number of Kron Factors");
+  opt->addUsage("size:  Row and cols of each Kron Factor");
+  opt->addUsage("type:  Type of matrices (float, int, half, double)");
+  opt->addUsage("check: Check results for first run");
+  opt->addUsage("runs:  Number of runs");
 
   opt->setOption("batch", 'b');
   opt->setOption("facs", 'f');
   opt->setOption("size", 's');
   opt->setOption("type", 't');
+  opt->setFlag("check", 'c');
+  opt->setOption("runs", 'r');
 
   opt->processCommandArgs(argc, argv);
   
@@ -363,8 +379,14 @@ int main(int argc, char* argv[]) {
     type = opt->getValue('t');
   }
 
-  if (batch <= 0 || facs <= 0 || size <= 0) {
-    printf("Invalid value batch: %d, facs %d, size %d\n", batch, facs, size);
+  checkResults = opt->getFlag('c');
+
+  if (opt->getValue('r') != NULL) {
+    runs = atoi(opt->getValue('r'));
+  }
+
+  if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
+    printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
     return 1;
   }
 
@@ -380,9 +402,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, false);
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, checkResults);
   else if (strcmp(type, "int") == 0)
-    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, 100, true);
+    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, checkResults);
+  else if (strcmp(type, "double") == 0)
+    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, checkResults);
   else
     printf("type not supported %s\n", type);
 
