@@ -43,24 +43,27 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
   K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, 1)
 
 #define MAX_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64) \
+KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64)
+  // KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
+  // KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 4) \
+  // KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 8) \
+  // KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 16) \
+  // KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 32) \
+  // KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64) \
 //   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 128) 
 
 #define COARSE_TB_KERNELS(T, VecT, N_COARSE_TB) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 32) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 64) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 128) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 256) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 512) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
+MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
+
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 32) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 64) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 128) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 256) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 512) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 1024) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
   // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 8192) \
   // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16384) 
 
@@ -70,11 +73,11 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 //Two type kernels float/float4 and int/int4
 
 #define NUM_TYPE_KERNELS 3
-#define MIN_K 16
+#define MIN_K 4096
 #define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
 
-#define MIN_KP_K 2
+#define MIN_KP_K 64
 #define MAX_KP_K 64
 #define NUM_KP_N_K_KERNELS (log2(MAX_KP_K)-log2(MIN_KP_K) + 1)
 
