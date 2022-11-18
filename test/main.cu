@@ -295,7 +295,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   cudaStreamCreate(&stream);
 
   //Warm Up iterations
-  for (uint i = 0; i < 10; i++) {
+  for (uint i = 0; i < 1; i++) {
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaStreamSynchronize(stream));
@@ -386,7 +386,7 @@ int main(int argc, char* argv[]) {
     runs = atoi(opt->getValue('r'));
   }
 
-  if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
+  if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs < 0) {
     printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
     return 1;
   }

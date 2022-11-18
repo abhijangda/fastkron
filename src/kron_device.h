@@ -69,6 +69,11 @@ __device__ void loadVecToRegs(double2& vec, double* regs) {
   regs[1] = vec.y;
 }
 
+template<>
+__device__ void loadVecToRegs(float& vec, float* regs) {
+  regs[0] = vec;
+}
+
 // __launch_bounds__(N_THREADS)
 template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
@@ -188,7 +193,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             // }
           } else {
             a = *(VecT*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
-                                      (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
+                           (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
             // *(VecT*)&Ash[a_row][a_col] = a;
           }
           
@@ -232,7 +237,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         __syncthreads();
         
         for (uint a_row = 0; a_row < TILE_X; a_row++) {
-          const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
+          const uint MAX_AR_SZ = MIN(8, KPK_SPLIT_SIZE);
 
           //Load MAX_AR_SZ elements at a time to limit the register usage
           for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) {
