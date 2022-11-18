@@ -1,6 +1,6 @@
 // #define C_IN_SHMEM
-template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_tile_k() {return blockIdx.x/DIVUP(MAX_KP_N, KP_N_TILE);}
-template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_external_tile_kp_n() {return blockIdx.x%DIVUP(MAX_KP_N, KP_N_TILE);}
+template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_tile_k() {return blockIdx.y/DIVUP(MAX_KP_N, KP_N_TILE);}
+template<uint MAX_KP_N, uint KP_N_TILE> __device__ uint get_external_tile_kp_n() {return blockIdx.y%DIVUP(MAX_KP_N, KP_N_TILE);}
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
@@ -161,8 +161,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols;
   const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows; 
 
-  for (uint start_row = blockIdx.y * TILE_X; start_row < gridDim.y * TILE_X * N_COARSE_TB; 
-       start_row += gridDim.y * TILE_X) {
+  for (uint start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; 
+       start_row += gridDim.x * TILE_X) {
   // if (start_row == 0 && threadIdx.x == 0) {
   //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
   // }

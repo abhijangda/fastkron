@@ -29,7 +29,7 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
 #include "kron_device.cu"
 
-#define N_THREADS 512 
+#define N_THREADS 256
 #define KP_N_TILE 128
 
 #define TILE_X 1
@@ -173,8 +173,8 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     
     //Create the grid and thread block
     grid = {
+              DIVUP((M/TILE_X), N_COARSE_TB),
               (K/min_k) * DIVUP(KronMatCols[0], KP_N_TILE), 
-              DIVUP((M/TILE_X), N_COARSE_TB), 
               DIVUP(KronMatRows[0], EXTERNAL_KP_K_TILE_)
            };
     block = {

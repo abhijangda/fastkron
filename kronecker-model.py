@@ -154,7 +154,7 @@ def do(twoPowerL, npoints, d):
 
 maxD = {2:22, 4:11, 8:7, 16: 5, 32: 4, 64 : 3} #128:2
 
-cases = [{"npoints": 100, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j]+1)] 
+cases = [{"npoints": 10, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j]+1)] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},
@@ -209,11 +209,14 @@ for case in cases:
         else:
             kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
             case["CUDATime"] = kront
-            case["Speedup"] = case["PyTorchTime"]/case["CUDATime"]
+            case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
+            case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
             print(case)
 
-row_format = "{:>20}" * 8
-print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "cuBLASTime(us)", "atTime(us)", "CUDATime(us)", "Speedup"))
+row_format = "{:>20}" * 9
+print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "cuBLASTime(us)", "atTime(us)", "CUDATime(us)", "Speedup over Pytorch", "Speedup over cublass"))
 for case in cases:
     twoPowerL = case["2^l"]
-    print(row_format.format(case["npoints"], case["d"],twoPowerL, "%.3f"%case["PyTorchTime"], "%.3f"%case["cuBLASTime"], "%.3f"%case["atTime"], "%.3f"%case["CUDATime"], "%.3f"%case["Speedup"]))
+    print(row_format.format(case["npoints"], case["d"],twoPowerL, 
+                            "%.3f"%case["PyTorchTime"], "%.3f"%case["cuBLASTime"], "%.3f"%case["atTime"], 
+                            "%.3f"%case["CUDATime"], "%.3f"%case["Speedup-Pytorch"], "%.3f"%case["Speedup-cublas"]))
