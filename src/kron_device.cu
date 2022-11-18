@@ -69,6 +69,11 @@ __device__ void loadVecToRegs(double2& vec, double* regs) {
   regs[1] = vec.y;
 }
 
+template<>
+__device__ void loadVecToRegs(float& vec, float* regs) {
+  regs[0] = vec;
+}
+
 // __launch_bounds__(N_THREADS)
 template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
@@ -151,7 +156,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
   // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
 
-  register T Creg[Creg_Rows][Creg_Cols];
+  register T Creg[TILE_X][Creg_Rows][Creg_Cols];
 
   const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols;
   const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows; 
@@ -167,10 +172,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ; 
        a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
-    for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
+    for(uint tile_row = 0; tile_row < TILE_X; tile_row++) {
       #pragma unroll
-      for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
-        Creg[reg_i][reg_j] = 0;
+      for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
+        #pragma unroll
+        for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
+          Creg[tile_row][reg_i][reg_j] = 0;
+        }
       }
     }
   
@@ -188,7 +196,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             // }
           } else {
             a = *(VecT*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
-                                      (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
+                           (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
             // *(VecT*)&Ash[a_row][a_col] = a;
           }
           
@@ -231,93 +239,96 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
         __syncthreads();
         
-        for (uint a_row = 0; a_row < TILE_X; a_row++) {
-          const uint MAX_AR_SZ = MIN(4, KPK_SPLIT_SIZE);
+        const uint MAX_AR_SZ = MIN(8, KPK_SPLIT_SIZE);
 
-          //Load MAX_AR_SZ elements at a time to limit the register usage
-          for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) {
-            register T Ar[Creg_Rows][MAX_AR_SZ];
-            register T KPr[MAX_AR_SZ][Creg_Cols];
+        //Load MAX_AR_SZ elements at a time to limit the register usage
+        for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) {
+          register T Ar[TILE_X][Creg_Rows][MAX_AR_SZ];
+          register T KPr[MAX_AR_SZ][Creg_Cols];
 
-            uint round_start = (a_col_start / Creg_Rows)%INTERNAL_KP_K_TILE;
+          uint round_start = (a_col_start / Creg_Rows)%INTERNAL_KP_K_TILE;
 
+          #pragma unroll
+          for (uint a_row = 0; a_row < TILE_X; a_row++) {
             #pragma unroll
             for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
               uint a_col = a_col_start + _a_col;
               for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                Ar[_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
+                Ar[a_row][_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
             }
-            
-            #pragma unroll
-            for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
-              uint kp_col = kp_col_start + _kp_col;
-              for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
-                KPr[elem][_kp_col] = kron_fac_sh[ar_start_id + elem][kp_col];
-            }
+          }
+          
+          #pragma unroll
+          for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
+            uint kp_col = kp_col_start + _kp_col;
+            for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
+              KPr[elem][_kp_col] = kron_fac_sh[ar_start_id + elem][kp_col];
+          }
 
+          #pragma unroll
+          for (uint a_row = 0; a_row < TILE_X; a_row++)
             #pragma unroll
             for (int i = 0; i < Creg_Rows; i++)
               #pragma unroll
               for (int j = 0; j < Creg_Cols; j++)
                 #pragma unroll
                 for (int k = 0; k < MAX_AR_SZ; k++)
-                  Creg[i][j] += Ar[i][k] * KPr[k][j];
-          }
+                  Creg[a_row][i][j] += Ar[a_row][i][k] * KPr[k][j];
         }
       }
 
       __syncthreads();
     }
-
-    for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
-      if (Creg_Rows % 4 == 0) {
-        for (uint reg_i = 0; reg_i < Creg_Rows; reg_i += 4) {
-          int a_row = 0;
-          
-          const uint c_row = (a_row + start_row);
-          uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
-          if (!K_EQUALS_VAR) {
-            uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-            c_col = tile_k * (MAX_K/kpK) + 
-                (c_col/(MAX_K/kpK)) * (K/kpK) +
-                c_col%(MAX_K/kpK);
+    
+    #pragma unroll 
+    for (int a_row = 0; a_row < TILE_X; a_row++) {
+      #pragma unroll 
+      for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
+        if (Creg_Rows % 4 == 0) {
+          for (uint reg_i = 0; reg_i < Creg_Rows; reg_i += 4) {          
+            const uint c_row = (a_row + start_row);
+            uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
+            if (!K_EQUALS_VAR) {
+              uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+              c_col = tile_k * (MAX_K/kpK) + 
+                  (c_col/(MAX_K/kpK)) * (K/kpK) +
+                  c_col%(MAX_K/kpK);
+            }
+            if (KP_N_TILE != MAX_KP_N) {
+              uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
+              c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
+            }
+            const uint c_idx = c_row * N + c_col;
+            // assert(threadIdx.x == c_col);
+            // if (kp_idx == 0&& c_row == 0 && c_col < 64)
+            //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
+            if (c_col < K) {
+              VecT c = {Creg[a_row][reg_i][reg_j], Creg[a_row][reg_i+1][reg_j], Creg[a_row][reg_i+2][reg_j], Creg[a_row][reg_i+3][reg_j]};
+              *(VecT*)&C[c_idx] = c;
+            }
           }
-          if (KP_N_TILE != MAX_KP_N) {
-            uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
-            c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
-          }
-          const uint c_idx = c_row * N + c_col;
-          // assert(threadIdx.x == c_col);
-          // if (kp_idx == 0&& c_row == 0 && c_col < 64)
-          //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
-          if (c_col < K) {
-            VecT c = {Creg[reg_i][reg_j], Creg[reg_i+1][reg_j], Creg[reg_i+2][reg_j], Creg[reg_i+3][reg_j]};
-            *(VecT*)&C[c_idx] = c;
-          }
-        }
-      } else {
-        for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
-          int a_row = 0;
+        } else {
+          for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {            
+            const uint c_row = (a_row + start_row);
+            uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
             
-          const uint c_row = (a_row + start_row);
-          uint c_col = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
-          
-          if (!K_EQUALS_VAR) {
-            uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-            c_col = tile_k * (MAX_K/kpK) + 
-                (c_col/(MAX_K/kpK)) * (K/kpK) +
-                c_col%(MAX_K/kpK);
-          }
-          if (KP_N_TILE != MAX_KP_N) {
-            uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
-            c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
-          }
-          const uint c_idx = c_row * N + c_col;
-          // assert(threadIdx.x == c_col);
-          // if (kp_idx == 0&& c_row == 0 && c_col < 64)
-          //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
-          if (c_col < K) {
-            C[c_idx] = Creg[reg_i][reg_j];
+            if (!K_EQUALS_VAR) {
+              uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
+              c_col = tile_k * (MAX_K/kpK) + 
+                  (c_col/(MAX_K/kpK)) * (K/kpK) +
+                  c_col%(MAX_K/kpK);
+            }
+            if (KP_N_TILE != MAX_KP_N) {
+              uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
+              c_col += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
+            }
+            const uint c_idx = c_row * N + c_col;
+            // assert(threadIdx.x == c_col);
+            // if (kp_idx == 0&& c_row == 0 && c_col < 64)
+            //   printf("threadIdx.x %d c_col %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, c_col, kp_col_start, a_col_start, reg_i, reg_j);
+            if (c_col < K) {
+              C[c_idx] = Creg[a_row][reg_i][reg_j];
+            }
           }
         }
       }

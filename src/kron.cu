@@ -27,9 +27,9 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
-#include "kron_device.h"
+#include "kron_device.cu"
 
-#define N_THREADS 256 
+#define N_THREADS 512 
 #define KP_N_TILE 128
 
 #define TILE_X 1
