@@ -144,7 +144,10 @@ def do(twoPowerL, npoints, d):
 
     # for i in range(2, 3):
     model = NewlinearRegression(inputDim, outputDim, d)
-    train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
+    try:
+        train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
+    except torch.cuda.OutOfMemoryError:
+        pass    
     all_cuda_times = model.all_cuda_times
     all_cublas_times = model.all_cublas_times
     all_at_times = model.all_at_times
@@ -192,16 +195,21 @@ case_times = {}
 for case in cases:
         if True:
             (cublas_times, at_times, cuda_times) = do(case["2^l"], case["npoints"], case["d"])
-            case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
-            case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
-            case["atTime"] = sum(at_times[1:])/len(at_times[1:])
+            if len(cuda_times) > 1: 
+                case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
+                case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
+                case["atTime"] = sum(at_times[1:])/len(at_times[1:])
+            else:
+                case["PyTorchTime"] = -1
+                case["cuBLASTime"] = -1
+                case["atTime"] = -1
             bandwidth = 4 * 2 * (case["npoints"] * (case["2^l"] ** case["d"]))/(case["PyTorchTime"]/1e6)/1e9
             case["PyTorchBandwidth"] = bandwidth
         
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
 
-        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t float -c -r 100"%(case["npoints"], case["d"], twoPowerL))
+        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t float -r 100"%(case["npoints"], case["d"], twoPowerL))
         if s != 0:
             print(o)
             case["CUDATime"] = -1

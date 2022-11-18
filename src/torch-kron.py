@@ -32,7 +32,5 @@ b = baseline(input, kronmats)
 
 o = matmulkron(input, kronmats)
 
-print(b)
-print(o)
 print ((b == o))
 print ((b == o).all())
