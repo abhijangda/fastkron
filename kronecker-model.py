@@ -3,11 +3,13 @@
 
 # In[1]:
 
-
+import sys
+sys.path.insert(0, './src/')
 import torch 
 import numpy as np
 import gpytorch as gp 
 import torch.nn.functional as F
+import torch_kron
 
 from matplotlib import pyplot as plt
 import math
@@ -19,7 +21,7 @@ epochs = 100
 
 # model and data 
 
-def do(twoPowerL, npoints, d):
+def doGPytorch(twoPowerL, npoints, d):
     outputDim = 1       # takes variable 'y'
     inputDim = twoPowerL ** d
     x_train = np.zeros((npoints, inputDim)).astype(np.float32)
@@ -32,12 +34,11 @@ def do(twoPowerL, npoints, d):
         criterion = torch.nn.MSELoss() 
         optimizer = torch.optim.SGD(model.parameters(), lr=learningRate)
         model.cuda()
-        
-        for epoch in range(epochs):
-            inputs = torch.from_numpy(x_train)
+        inputs = torch.from_numpy(x_train)
             # labels = torch.from_numpy(y_train)
             
-            inputs = inputs.cuda()
+        inputs = inputs.cuda()
+        for epoch in range(1):
             # labels = labels.cuda()
 
             # Clear gradient buffers because we don't want any gradient from previous epoch to carry forward, dont want to cummulate gradients
@@ -92,35 +93,36 @@ def do(twoPowerL, npoints, d):
             return sum([p.numel() for p in self.parameters()])
 
         def forward(self, x):
-            if use_torch_profiler:
-                with torch.profiler.profile(
-                activities=[
-                    torch.profiler.ProfilerActivity.CPU,
-                    torch.profiler.ProfilerActivity.CUDA,
-                ]
-                ) as p:
-                    print(self.l1_weight.shape, x.shape)
+            for epoch in range(epochs):
+                if use_torch_profiler:
+                    with torch.profiler.profile(
+                    activities=[
+                        torch.profiler.ProfilerActivity.CPU,
+                        torch.profiler.ProfilerActivity.CUDA,
+                    ]
+                    ) as p:
+                        print(self.l1_weight.shape, x.shape)
+                        l1 = self.l1_weight@x
+                        torch.cuda.synchronize()
+                
+                    cuda_time = 0
+                    cublas_time = 0
+                    at_time = 0
+                    for event in p.events():
+                        if "sgemm" in event.name or "gemmSN" in event.name:
+                            cublas_time += event.cuda_time
+                        elif "at::native::elementwise_kernel" in event.name:
+                            at_time += event.cuda_time
+
+                        if event.device_type == torch._C._autograd.DeviceType.CUDA:
+                            cuda_time += event.cuda_time
+                    exec_time = cuda_time #start.elapsed_time(end)
+                    self.all_cuda_times.append(cuda_time)
+                    self.all_cublas_times.append(cublas_time)
+                    self.all_at_times.append(at_time)
+                else:
                     l1 = self.l1_weight@x
                     torch.cuda.synchronize()
-            
-                cuda_time = 0
-                cublas_time = 0
-                at_time = 0
-                for event in p.events():
-                    if "sgemm" in event.name or "gemmSN" in event.name:
-                        cublas_time += event.cuda_time
-                    elif "at::native::elementwise_kernel" in event.name:
-                        at_time += event.cuda_time
-
-                    if event.device_type == torch._C._autograd.DeviceType.CUDA:
-                        cuda_time += event.cuda_time
-                exec_time = cuda_time #start.elapsed_time(end)
-                self.all_cuda_times.append(cuda_time)
-                self.all_cublas_times.append(cublas_time)
-                self.all_at_times.append(at_time)
-            else:
-                l1 = self.l1_weight@x
-                torch.cuda.synchronize()
             return
 
             bandwidth = 4 * 2 * (self.count_params() + x.numel() + l1.numel())/(exec_time/1e3)/1e9 
@@ -144,10 +146,8 @@ def do(twoPowerL, npoints, d):
 
     # for i in range(2, 3):
     model = NewlinearRegression(inputDim, outputDim, d)
-    try:
-        train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
-    except torch.cuda.OutOfMemoryError:
-        pass    
+    train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
+    
     all_cuda_times = model.all_cuda_times
     all_cublas_times = model.all_cublas_times
     all_at_times = model.all_at_times
@@ -155,9 +155,47 @@ def do(twoPowerL, npoints, d):
     torch.cuda.empty_cache()
     return all_cublas_times, all_at_times, all_cuda_times
 
-maxD = {2:22, 4:11, 8:7, 16: 5, 32: 4, 64 : 3} #128:2
+def doTorchKron(twoPower, npoints, d):
+    input = torch_kron.initmat(npoints, twoPower*twoPower)
+    kronmats = []
+    for s in range(d):
+        kronmats += [torch_kron.initmat(twoPower,twoPower)]
+    all_cuda_times = []
+    all_cublas_times = []
+    all_at_times = []
+    for epoch in range(epochs):
+        with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ]
+        ) as p:
+            torch_kron.matmulkron(input, kronmats)
+            torch.cuda.synchronize()
+        
+        cuda_time = 0
+        cublas_time = 0
+        at_time = 0
+        for event in p.events():
+            if "sgemm" in event.name or "gemmSN" in event.name:
+                cublas_time += event.cuda_time
+            elif "at::native::elementwise_kernel" in event.name:
+                at_time += event.cuda_time
 
-cases = [{"npoints": 10, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j]+1)] 
+            if event.device_type == torch._C._autograd.DeviceType.CPU:
+                cuda_time += event.cpu_time
+        exec_time = cuda_time #start.elapsed_time(end)
+        all_cuda_times.append(cuda_time)
+        all_cublas_times.append(cublas_time)
+        all_at_times.append(at_time)
+            
+    torch.cuda.empty_cache()
+    # print(all_cublas_times)
+    return all_cublas_times, all_at_times, all_cuda_times
+
+maxD = {32: 5} #, 32: 5, 64 : 4} #128:2 #2:22, 4:11, 8:7,
+
+cases = [{"npoints": 1024, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j])] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},
@@ -194,7 +232,8 @@ import sys
 case_times = {}
 for case in cases:
         if True:
-            (cublas_times, at_times, cuda_times) = do(case["2^l"], case["npoints"], case["d"])
+            (cublas_times, at_times, cuda_times) = doGPytorch(case["2^l"], case["npoints"], case["d"])
+            print(len(cuda_times), len(cublas_times), len(at_times))
             if len(cuda_times) > 1: 
                 case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
                 case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
@@ -217,12 +256,12 @@ for case in cases:
         else:
             kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
             case["CUDATime"] = kront
-            case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
-            case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
-            print(case)
+        case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
+        case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
+        print(case)
 
 row_format = "{:>20}" * 9
-print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "cuBLASTime(us)", "atTime(us)", "CUDATime(us)", "Speedup over Pytorch", "Speedup over cublass"))
+print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "cuBLASTime(us)", "atTime(us)", "CUDATime(us)", "Speedup-Pytorch", "Speedup-cublas"))
 for case in cases:
     twoPowerL = case["2^l"]
     print(row_format.format(case["npoints"], case["d"],twoPowerL, 

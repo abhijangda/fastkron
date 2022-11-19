@@ -1,7 +1,7 @@
 import torch
 
 def initmat(m, n):
-    return torch.randint(0, 5, (m,n)) #.cuda()
+    return torch.randn(m,n)
 
 def baseline(input, kronmats):
     outputKron = kronmats[0]
@@ -12,8 +12,8 @@ def baseline(input, kronmats):
 def matmulkron(input, kronmats):
     output = input
     shape = input.shape
-    kronmats.reverse()
-    for k in kronmats:
+    
+    for k in reversed(kronmats):
         newinput = output.reshape(shape[0] * (shape[1]//k.shape[0]), k.shape[0])
         output = torch.matmul(newinput, k)
         output = output.view(shape[0], (shape[1]//k.shape[0]), k.shape[0])
@@ -21,16 +21,18 @@ def matmulkron(input, kronmats):
     return output.reshape(shape)
 
 
-npoints = 3
-twoPower = 32
-input = initmat(npoints, twoPower*twoPower)
-kronmats = [initmat(twoPower,twoPower)]*2 #[initmat(twoPower,twoPower), initmat(twoPower,twoPower)]
-# print (input)
-# print(kronmats[0])
-# print(kronmats[1])
-b = baseline(input, kronmats)
+if __name__ == "__main__":
+    npoints = 2
+    twoPower = 8
+    input = initmat(npoints, twoPower**3)
+    kronmats = []
+    for s in range(3):
+        kronmats += [initmat(twoPower,twoPower)]
+    # print(kronmats[0])
+    # print(kronmats[1])
+    b = baseline(input, kronmats)
 
-o = matmulkron(input, kronmats)
+    o = matmulkron(input, kronmats)
 
-print ((b == o))
-print ((b == o).all())
+    print ((b == o))
+    print ((b == o).all())
