@@ -95,6 +95,15 @@ __device__ void createVec(int4& vec, int* regs) {
   vec.w = regs[3];
 }
 
+
+template<>
+__device__ void createVec(double4& vec, double* regs) {
+  vec.x = regs[0];
+  vec.y = regs[1];
+  vec.z = regs[2];
+  vec.w = regs[3];
+}
+
 template<>
 __device__ void createVec(float& vec, float* regs) {
   vec = regs[0];

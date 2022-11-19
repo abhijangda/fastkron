@@ -89,7 +89,7 @@ static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float,  float4)
   TYPE_KERNELS(int,    int4)
-  // TYPE_KERNELS(double, double4)
+  TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
     // COARSE_TB_KERNELS(4)
