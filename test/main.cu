@@ -386,7 +386,7 @@ int main(int argc, char* argv[]) {
     runs = atoi(opt->getValue('r'));
   }
 
-  if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
+  if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL) {
     printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
     return 1;
   }

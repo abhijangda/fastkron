@@ -17,7 +17,7 @@ import math
 # In[2]:
 
 use_torch_profiler = True
-epochs = 100
+epochs = 10
 
 # model and data 
 
@@ -193,7 +193,7 @@ def doTorchKron(twoPower, npoints, d):
     # print(all_cublas_times)
     return all_cublas_times, all_at_times, all_cuda_times
 
-maxD = {32: 5} #, 32: 5, 64 : 4} #128:2 #2:22, 4:11, 8:7,
+maxD = {32:3} #{2:22, 4:11, 8:7, 32: 5, 64 : 4} #128:2
 
 cases = [{"npoints": 1024, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j])] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
