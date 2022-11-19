@@ -110,7 +110,7 @@ __device__ void createVec(float& vec, float* regs) {
 }
 
 template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
-__launch_bounds__(N_THREADS,2)
+__launch_bounds__(N_THREADS,4)
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
@@ -219,6 +219,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   
     for (uint internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
       for (uint a_col = threadIdx.x*ldNumElems; a_col < Ash_COLS; a_col += N_THREADS*ldNumElems) {
+        #pragma unroll
         for (uint a_row = 0; a_row < TILE_X; a_row += 1) {
           uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
           VecT a;
@@ -288,6 +289,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             #pragma unroll
             for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
               uint a_col = a_col_start + _a_col;
+              #pragma unroll
               for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
                 Ar[a_row][_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
             }
@@ -432,6 +434,6 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         //   *(VecT*)&C[c_idx] = *(VecT*)&Creg_in_sh[csh_col];
         // }
 
-    __syncthreads();
+    // __syncthreads();
   }}}
 }
