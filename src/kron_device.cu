@@ -109,8 +109,8 @@ __device__ void createVec(float& vec, float* regs) {
   vec = regs[0];
 }
 
-// __launch_bounds__(N_THREADS)
 template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
+__launch_bounds__(N_THREADS,2)
 __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
@@ -129,7 +129,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
   uint wid = threadIdx.x/32;
   uint lane = threadIdx.x%32;
-  uint blockWarps = blockDim.x/32;
+  uint blockWarps = N_THREADS/32;
   uint kpK;
   uint kpN;
   uint K;
@@ -204,7 +204,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   
   for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; 
        kp_col_start +=             MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) {
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ; 
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ;
        a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
     #pragma unroll
     for(uint tile_row = 0; tile_row < TILE_X; tile_row++) {
@@ -218,8 +218,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
     }
   
     for (uint internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
-      for (uint a_row = 0; a_row < TILE_X; a_row += 1) {
-        for (uint a_col = threadIdx.x*ldNumElems; a_col < Ash_COLS; a_col += blockDim.x*ldNumElems) {
+      for (uint a_col = threadIdx.x*ldNumElems; a_col < Ash_COLS; a_col += N_THREADS*ldNumElems) {
+        for (uint a_row = 0; a_row < TILE_X; a_row += 1) {
           uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
           VecT a;
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
@@ -231,7 +231,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             // }
           } else {
             a = *(VecT*)&A[(a_row + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
-                           (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
+                          (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
             // *(VecT*)&Ash[a_row][a_col] = a;
           }
           
@@ -242,7 +242,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           for (uint i = 0; i < ldNumElems; i++) {
             uint ash_col = a_col + i;
             uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/Creg_Rows;
-           
+          
             uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (a_col_start + ash_col%INTERNAL_KP_K_TILE)%INTERNAL_KP_K_TILE;
             Ash[a_row][final_col] = a1[i];
           }
@@ -256,7 +256,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           const uint ldNumElems = sizeof(VecT)/sizeof(T);
           const uint ldSize = MIN(INTERNAL_KP_N_TILE, ldNumElems);
 
-          for (uint swid = threadIdx.x/(INTERNAL_KP_N_TILE/ldSize); swid < INTERNAL_KP_K_TILE; swid += blockDim.x/(INTERNAL_KP_N_TILE/ldSize)) {
+          for (uint swid = threadIdx.x/(INTERNAL_KP_N_TILE/ldSize); swid < INTERNAL_KP_K_TILE; swid += N_THREADS/(INTERNAL_KP_N_TILE/ldSize)) {
             uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
             uint col = external_tile_kp_n*KP_N_TILE + internal_tile_kp_n + (threadIdx.x%(INTERNAL_KP_N_TILE/ldSize))*ldSize;
             uint row = swid;
