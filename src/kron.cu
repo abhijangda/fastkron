@@ -29,10 +29,10 @@ static constexpr int log2(int  n) {return 31 - __builtin_clz(n);}
 
 #include "kron_device.cu"
 
-#define N_THREADS 128
+#define N_THREADS 256
 #define KP_N_TILE 128
 
-#define TILE_X 2
+#define TILE_X 4
 
 #define K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
   (void*)cuda_gemm<T, VecT, N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
@@ -88,8 +88,8 @@ static constexpr int log2(int  n) {return 31 - __builtin_clz(n);}
 static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float,  float4)
-  TYPE_KERNELS(int,    int4)
-  TYPE_KERNELS(double, double4)
+  // TYPE_KERNELS(int,    int4)
+  // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
     // COARSE_TB_KERNELS(4)

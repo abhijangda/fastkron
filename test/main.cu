@@ -43,7 +43,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return one(i,j);} //rand()%5 + 1;}
+int randMod(int i, int j) {return rand()%5 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
@@ -295,7 +295,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   cudaStreamCreate(&stream);
 
   //Warm Up iterations
-  for (uint i = 0; i < 10; i++) {
+  for (uint i = 0; i < 1; i++) {
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaStreamSynchronize(stream));

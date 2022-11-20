@@ -175,8 +175,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   }
 
   const uint MAX_CREG_SIZE = MAX((MAX_K/(MAX_KP_N/KP_N_TILE))/N_THREADS, 1);
-  const uint Creg_Rows = MIN(8, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
-  const uint Creg_Cols = MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
+  const uint Creg_Rows = 1; //MIN(8, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
+  const uint Creg_Cols = 4; //MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
 #ifndef EVAL
   __syncthreads();
@@ -274,9 +274,11 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         }
 
         __syncthreads();
-        
-        const uint MAX_AR_SZ = MIN(8, KPK_SPLIT_SIZE);
 
+        const uint MAX_AR_SZ = MIN(8, KPK_SPLIT_SIZE);
+        // if (isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
+        //   printf("210:kp_col_start %d a_col_start %d  INTERNAL_KP_K_TILE %d %d \n", kp_col_start, a_col_start, INTERNAL_KP_K_TILE, INTERNAL_KP_K_TILE*TILE_X*Creg_Rows);
+        // }
         //Load MAX_AR_SZ elements at a time to limit the register usage
         for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) {
           register T Ar[TILE_X][Creg_Rows][MAX_AR_SZ];
@@ -290,8 +292,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
               uint a_col = a_col_start + _a_col;
               #pragma unroll
-              for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                Ar[a_row][_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
+              for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)
+                Ar[a_row][_a_col][a_elem] = Ash[a_row][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE];
             }
           }
           
@@ -320,7 +322,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
     
     #pragma unroll 
     for (int a_row = 0; a_row < TILE_X; a_row++) {
-      #pragma unroll 
+      #pragma unroll
       for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
         if (Creg_Rows % ldNumElems == 0) {
           for (uint reg_i = 0; reg_i < Creg_Rows; reg_i += ldNumElems) {
