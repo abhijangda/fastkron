@@ -130,7 +130,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
                             const uint M, const uint N, const uint K, 
                             const uint KronMatCols[], const uint KronMatRows[], 
                             cudaStream_t stream) {
-  typedef int (*KronGemmKernel)(int, int, int, T*, T*, T*, int kpNVar, int kpKVar);
+  typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
 
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
@@ -185,12 +185,12 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     
     //Create kernel args;
     void *args[] = {
-                    (void*)&M, (void*)&N, (void*)&K, 
+                    (void*)&M, (void*)&N, (void*)&K,
+                    (void*)&KronMatCols[NumKronMats-i-1], 
+                    (void*)&KronMatRows[NumKronMats-i-1],
                     &prevResult, 
                     (void*)&kronMats[NumKronMats-i-1], 
                     (void*)kronGemmResult, 
-                    (void*)&KronMatCols[NumKronMats-i-1], 
-                    (void*)&KronMatRows[NumKronMats-i-1], 
                     &i
                   };
 

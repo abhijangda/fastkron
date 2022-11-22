@@ -76,7 +76,12 @@ __device__ void loadVecToRegs(float& vec, float* regs) {
 
 // __launch_bounds__(N_THREADS)
 template<typename ElemT, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
-__global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __restrict__ A, const ElemT * __restrict__ kron_fac, ElemT * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
+__global__ void kronGemmKernel(const uint rowsC, const uint colsC, const uint colsA,
+                               const uint kronRows, const uint kronCols,
+                               const ElemT * __restrict__ glA, 
+                               const ElemT * __restrict__ glKronMats, 
+                               ElemT       * __restrict__ glC,
+                               const uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
   const uint INTERNAL_KP_N_TILE = MIN(128, KP_N_TILE);
@@ -84,15 +89,14 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
   const uint INTERNAL_KP_K_TILE = MIN(32, EXTERNAL_KP_K_TILE);
 
   // printf("MAX_K %d MAX_KP_N %d MAX_KP_K %d KP_N_TILE_ %d\n", MAX_K, MAX_KP_N, MAX_KP_K, KP_N_TILE_);
-
-  __shared__ ElemT kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
-  const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
-  __shared__ ElemT Ash[TILE_X][Ash_COLS];
+  const uint tileColA = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
+  __shared__ ElemT shKronMats[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
+  __shared__ ElemT shA[TILE_X][tileColA];
   
-  const uint WarpSize = 32;
-  const uint tid = threadIdx.x;
-  const uint wid = tid/WarpSize;
-  const uint lane = tid%WarpSize;
+  const uint WarpSize   = 32;
+  const uint tid        = threadIdx.x;
+  const uint wid        = tid/WarpSize;
+  const uint lane       = tid%WarpSize;
   const uint blockWarps = blockDim.x/WarpSize;
   uint kpK;
   uint kpN;
@@ -103,16 +107,16 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
     kpK = MAX_KP_K;
     kpN = MAX_KP_N;
   } else {
-    kpK = kpKVar;
-    kpN = kpNVar;
+    kpK = kronCols;
+    kpN = kronRows;
   }
 
   if (K_EQUALS_VAR) {
     K = MAX_K;
     N = K;
   } else {
-    K = KVar;
-    N = NVar;
+    K = colsA;
+    N = rowsC;
   }
 
   const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
@@ -125,14 +129,14 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
     const uint ldSize = MIN(kpN*kpK, VecTNumElems);
 
     for (uint i = tid*ldSize; i < kpN * kpK; i += blockDim.x*ldSize) {
-      // kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
-      VecT a = *(VecT*)&kron_fac[i];
+      // shKronMats[i%kpN][i/kpK] = glKronMats[i];
+      VecT a = *(VecT*)&glKronMats[i];
       ElemT a1[VecTNumElems];
       loadVecToRegs(a, a1);
       #pragma unroll
       for (uint j = 0; j < ldSize; j++) {
         uint idx = i + j;
-        kron_fac_sh[idx/MAX_KP_K][idx%MAX_KP_K] = a1[j];
+        shKronMats[idx/MAX_KP_K][idx%MAX_KP_K] = a1[j];
       }
     }
   } else {
@@ -148,7 +152,7 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
     printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
     // for (int i = 0; i < kpN; i++) 
     //   for (int j = 0; j < kpK; j++)
-    //     printf("%lf \n", (double)kron_fac_sh[i][j]);
+    //     printf("%lf \n", (double)shKronMats[i][j]);
   }
 #endif
 
@@ -183,20 +187,20 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
   
     for (uint internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
       for (uint aRow = 0; aRow < TILE_X; aRow += 1) {
-        for (uint a_col = tid*VecTNumElems; a_col < Ash_COLS; a_col += blockDim.x*VecTNumElems) {
+        for (uint a_col = tid*VecTNumElems; a_col < tileColA; a_col += blockDim.x*VecTNumElems) {
           uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
           VecT a;
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
-            a = *(VecT*)&A[(aRow + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
-            // *(VecT*)&Ash[aRow][a_col] = a;
+            a = *(VecT*)&glA[(aRow + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
+            // *(VecT*)&shA[aRow][a_col] = a;
             // ElemT a1[4] = {a.x, a.y, a.z, a.w};
             // for (int j = 0; j < VecTNumElems; j++) {
-            //   Ash[aRow][a_col + j] = a1[j];
+            //   shA[aRow][a_col + j] = a1[j];
             // }
           } else {
-            a = *(VecT*)&A[(aRow + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
+            a = *(VecT*)&glA[(aRow + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + \
                            (a_col/INTERNAL_KP_K_TILE)*kpK + external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + a_col % INTERNAL_KP_K_TILE];
-            // *(VecT*)&Ash[aRow][a_col] = a;
+            // *(VecT*)&shA[aRow][a_col] = a;
           }
           
           ElemT a1[VecTNumElems];
@@ -208,7 +212,7 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
             uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/CRegRows;
            
             uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (a_col_start + ash_col%INTERNAL_KP_K_TILE)%INTERNAL_KP_K_TILE;
-            Ash[aRow][final_col] = a1[i];
+            shA[aRow][final_col] = a1[i];
           }
         }
       }
@@ -224,14 +228,14 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
             uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
             uint col = external_tile_kp_n*KP_N_TILE + internal_tile_kp_n + (tid%(INTERNAL_KP_N_TILE/ldSize))*ldSize;
             uint row = swid;
-            // kron_fac_sh[tid%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
-            VecT a = *(VecT*)&kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
+            // shKronMats[tid%INTERNAL_KP_N_TILE][row] = glKronMats[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
+            VecT a = *(VecT*)&glKronMats[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
             ElemT a1[VecTNumElems];
             loadVecToRegs(a, a1);
             #pragma unroll
             for (uint i = 0; i < ldSize; i++) {
               uint idx = (tid%(INTERNAL_KP_N_TILE/ldSize))*ldSize + i%ldSize;
-              kron_fac_sh[row][idx] = a1[i];
+              shKronMats[row][idx] = a1[i];
             }
           }
         }
@@ -253,7 +257,7 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
             for (uint _a_col = 0; _a_col < CRegRows; _a_col++) {
               uint a_col = a_col_start + _a_col;
               for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                Ar[aRow][_a_col][a_elem] = Ash[aRow][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
+                Ar[aRow][_a_col][a_elem] = shA[aRow][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
             }
           }
           
@@ -261,7 +265,7 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
           for (uint _kp_col = 0; _kp_col < CRegCols; _kp_col++) {
             uint kp_col = kp_col_start + _kp_col;
             for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
-              KPr[elem][_kp_col] = kron_fac_sh[ar_start_id + elem][kp_col];
+              KPr[elem][_kp_col] = shKronMats[ar_start_id + elem][kp_col];
           }
 
           #pragma unroll
@@ -303,7 +307,7 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
             //   printf("tid %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", tid, cCol, kp_col_start, a_col_start, reg_i, reg_j);
             if (cCol < K) {
               VecT c = {Creg[aRow][reg_i][reg_j], Creg[aRow][reg_i+1][reg_j], Creg[aRow][reg_i+2][reg_j], Creg[aRow][reg_i+3][reg_j]};
-              *(VecT*)&C[cIdx] = c;
+              *(VecT*)&glC[cIdx] = c;
             }
           }
         } else {
@@ -326,13 +330,13 @@ __global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __res
             // if (kp_idx == 0&& cRow == 0 && cCol < 64)
             //   printf("tid %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", tid, cCol, kp_col_start, a_col_start, reg_i, reg_j);
             if (cCol < K) {
-              C[cIdx] = Creg[aRow][reg_i][reg_j];
+              glC[cIdx] = Creg[aRow][reg_i][reg_j];
             }
           }
         }
       }
     }
-    
+
     __syncthreads();
   }}}
 }
