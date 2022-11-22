@@ -33,8 +33,8 @@ __device__ constexpr uint sqrt(uint x)
   }
 }
 
-template<typename VecT, typename T>
-__device__ void loadVecToRegs(VecT& vec, T* regs) {
+template<typename VecT, typename ElemT>
+__device__ void loadVecToRegs(VecT& vec, ElemT* regs) {
   //Not implemented
 }
 
@@ -75,8 +75,8 @@ __device__ void loadVecToRegs(float& vec, float* regs) {
 }
 
 // __launch_bounds__(N_THREADS)
-template<typename T, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
-__global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A, const T * __restrict__ kron_fac, T * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
+template<typename ElemT, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
+__global__ void cuda_gemm(uint M, uint NVar, uint KVar, const ElemT * __restrict__ A, const ElemT * __restrict__ kron_fac, ElemT * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
   const uint INTERNAL_KP_N_TILE = MIN(128, KP_N_TILE);
@@ -85,16 +85,18 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
   // printf("MAX_K %d MAX_KP_N %d MAX_KP_K %d KP_N_TILE_ %d\n", MAX_K, MAX_KP_N, MAX_KP_K, KP_N_TILE_);
 
-  __shared__ T kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
+  __shared__ ElemT kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
   const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
-  __shared__ T Ash[TILE_X][Ash_COLS];
-  const uint C_ELEMS_STORE = N_THREADS * (sizeof(VecT)/sizeof(T));
+  __shared__ ElemT Ash[TILE_X][Ash_COLS];
+  const uint C_ELEMS_STORE = N_THREADS * (sizeof(VecT)/sizeof(ElemT));
   const uint Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
   const uint Csh_COLS_SIZE = MIN(Csh_COLS, C_ELEMS_STORE);
-
-  uint wid = threadIdx.x/32;
-  uint lane = threadIdx.x%32;
-  uint blockWarps = blockDim.x/32;
+  
+  const uint WarpSize = 32;
+  const uint tid = threadIdx.x;
+  const uint wid = tid/WarpSize;
+  const uint lane = tid%WarpSize;
+  const uint blockWarps = blockDim.x/WarpSize;
   uint kpK;
   uint kpN;
   uint K;
@@ -118,17 +120,17 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
   const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);
   const uint NUM_KPK_SPLITS = MAX(1, INTERNAL_KP_K_TILE/KPK_SPLIT_SIZE);
-  const uint ldNumElems = (sizeof(VecT)/sizeof(T));
+  const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
   uint external_tile_kp_k = blockIdx.z;
   
   if (KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K) {
-    const uint ldSize = MIN(kpN*kpK, ldNumElems);
+    const uint ldSize = MIN(kpN*kpK, VecTNumElems);
 
-    for (uint i = threadIdx.x*ldSize; i < (kpN * kpK); i += blockDim.x*ldSize) {
+    for (uint i = tid*ldSize; i < kpN * kpK; i += blockDim.x*ldSize) {
       // kron_fac_sh[i%kpN][i/kpK] = kron_fac[i];
       VecT a = *(VecT*)&kron_fac[i];
-      T a1[ldNumElems];
+      ElemT a1[VecTNumElems];
       loadVecToRegs(a, a1);
       #pragma unroll
       for (uint j = 0; j < ldSize; j++) {
@@ -139,14 +141,14 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   } else {
   }
 
-  const uint MAX_CREG_SIZE = MAX((MAX_K/(MAX_KP_N/KP_N_TILE))/N_THREADS, 1);
-  const uint Creg_Rows = MIN(8, MAX(sqrt(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
-  const uint Creg_Cols = MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
+  const uint CRegSize = MAX((MAX_K/(MAX_KP_N/KP_N_TILE))/N_THREADS, 1);
+  const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
+  const uint CRegCols = MIN(MAX_KP_K, MIN(8, CRegSize/CRegRows)); //MIN(MAX_KP_K, Creg_SIZE/CRegRows);
   
 #ifndef EVAL
   __syncthreads();
   if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
-    printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
+    printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
     // for (int i = 0; i < kpN; i++) 
     //   for (int j = 0; j < kpK; j++)
     //     printf("%lf \n", (double)kron_fac_sh[i][j]);
@@ -154,29 +156,29 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 #endif
 
   const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
-  // assert(Creg_SIZE == Creg_Cols * Creg_Rows * NUM_INTERNAL_KP_N_TILES);
+  // assert(Creg_SIZE == CRegCols * CRegRows * NUM_INTERNAL_KP_N_TILES);
 
-  register T Creg[TILE_X][Creg_Rows][Creg_Cols];
+  register ElemT Creg[TILE_X][CRegRows][CRegCols];
 
-  const uint kp_col_start_ = (threadIdx.x / ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols;
-  const uint a_col_start_  = (threadIdx.x % ((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows; 
+  const uint kp_col_start_ = (tid / ((MAX_K/MAX_KP_K)/CRegRows)) * CRegCols;
+  const uint a_col_start_  = (tid % ((MAX_K/MAX_KP_K)/CRegRows)) * CRegRows; 
 
   for (uint start_row = blockIdx.x * TILE_X; start_row < gridDim.x * TILE_X * N_COARSE_TB; 
        start_row += gridDim.x * TILE_X) {
-  // if (start_row == 0 && threadIdx.x == 0) {
-  //   printf("Creg_Rows %d Creg_Cols %d\n", Creg_Rows, Creg_Cols);
+  // if (start_row == 0 && tid == 0) {
+  //   printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
   // }
   
-  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE      ; 
-       kp_col_start +=             MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Cols) { //TODO: Something missing in the increment
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K ; 
-       a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/Creg_Rows)) * Creg_Rows) {
+  for (uint kp_col_start = kp_col_start_; kp_col_start < KP_N_TILE     ; 
+       kp_col_start +=             MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/CRegRows)) * CRegCols) { //TODO: Something missing in the increment
+  for (uint a_col_start  = a_col_start_ ; a_col_start  < MAX_K/MAX_KP_K;
+       a_col_start  += N_THREADS * MAX(1, N_THREADS/((MAX_K/MAX_KP_K)/CRegRows)) * CRegRows) {
     #pragma unroll
     for(uint tile_row = 0; tile_row < TILE_X; tile_row++) {
       #pragma unroll
-      for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {
+      for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
         #pragma unroll
-        for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
+        for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
           Creg[tile_row][reg_i][reg_j] = 0;
         }
       }
@@ -184,14 +186,14 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   
     for (uint internal_tile_kp_k = 0; internal_tile_kp_k < EXTERNAL_KP_K_TILE; internal_tile_kp_k += INTERNAL_KP_K_TILE) {
       for (uint aRow = 0; aRow < TILE_X; aRow += 1) {
-        for (uint a_col = threadIdx.x*ldNumElems; a_col < Ash_COLS; a_col += blockDim.x*ldNumElems) {
+        for (uint a_col = tid*VecTNumElems; a_col < Ash_COLS; a_col += blockDim.x*VecTNumElems) {
           uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
           VecT a;
           if (INTERNAL_KP_K_TILE == MAX_KP_K) {
             a = *(VecT*)&A[(aRow + start_row) * K + (K_EQUALS_VAR ? 0 : tile_k*MAX_K) + a_col];
             // *(VecT*)&Ash[aRow][a_col] = a;
-            // T a1[4] = {a.x, a.y, a.z, a.w};
-            // for (int j = 0; j < ldNumElems; j++) {
+            // ElemT a1[4] = {a.x, a.y, a.z, a.w};
+            // for (int j = 0; j < VecTNumElems; j++) {
             //   Ash[aRow][a_col + j] = a1[j];
             // }
           } else {
@@ -200,13 +202,13 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
             // *(VecT*)&Ash[aRow][a_col] = a;
           }
           
-          T a1[ldNumElems];
+          ElemT a1[VecTNumElems];
           loadVecToRegs(a, a1);
 
           #pragma unroll
-          for (uint i = 0; i < ldNumElems; i++) {
+          for (uint i = 0; i < VecTNumElems; i++) {
             uint ash_col = a_col + i;
-            uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/Creg_Rows;
+            uint a_col_start = (ash_col/INTERNAL_KP_K_TILE)/CRegRows;
            
             uint final_col = (ash_col/INTERNAL_KP_K_TILE)*INTERNAL_KP_K_TILE + (a_col_start + ash_col%INTERNAL_KP_K_TILE)%INTERNAL_KP_K_TILE;
             Ash[aRow][final_col] = a1[i];
@@ -218,20 +220,20 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
       for (uint internal_tile_kp_n = 0; internal_tile_kp_n < KP_N_TILE; internal_tile_kp_n += INTERNAL_KP_N_TILE) {
         if (!(KP_N_TILE == MAX_KP_N && INTERNAL_KP_N_TILE == MAX_KP_N && INTERNAL_KP_K_TILE == MAX_KP_K)) {
           //Create kpK subwarps and each subwarp loads 0 to INTERNAL_KP_N_TILE elements
-          const uint ldNumElems = sizeof(VecT)/sizeof(T);
-          const uint ldSize = MIN(INTERNAL_KP_N_TILE, ldNumElems);
+          const uint VecTNumElems = sizeof(VecT)/sizeof(ElemT);
+          const uint ldSize = MIN(INTERNAL_KP_N_TILE, VecTNumElems);
 
-          for (uint swid = threadIdx.x/(INTERNAL_KP_N_TILE/ldSize); swid < INTERNAL_KP_K_TILE; swid += blockDim.x/(INTERNAL_KP_N_TILE/ldSize)) {
+          for (uint swid = tid/(INTERNAL_KP_N_TILE/ldSize); swid < INTERNAL_KP_K_TILE; swid += blockDim.x/(INTERNAL_KP_N_TILE/ldSize)) {
             uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
-            uint col = external_tile_kp_n*KP_N_TILE + internal_tile_kp_n + (threadIdx.x%(INTERNAL_KP_N_TILE/ldSize))*ldSize;
+            uint col = external_tile_kp_n*KP_N_TILE + internal_tile_kp_n + (tid%(INTERNAL_KP_N_TILE/ldSize))*ldSize;
             uint row = swid;
-            // kron_fac_sh[threadIdx.x%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
+            // kron_fac_sh[tid%INTERNAL_KP_N_TILE][row] = kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
             VecT a = *(VecT*)&kron_fac[(external_tile_kp_k * EXTERNAL_KP_K_TILE + internal_tile_kp_k + row) * kpN + col];
-            T a1[ldNumElems];
+            ElemT a1[VecTNumElems];
             loadVecToRegs(a, a1);
             #pragma unroll
             for (uint i = 0; i < ldSize; i++) {
-              uint idx = (threadIdx.x%(INTERNAL_KP_N_TILE/ldSize))*ldSize + i%ldSize;
+              uint idx = (tid%(INTERNAL_KP_N_TILE/ldSize))*ldSize + i%ldSize;
               kron_fac_sh[row][idx] = a1[i];
             }
           }
@@ -243,15 +245,15 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
 
         //Load MAX_AR_SZ elements at a time to limit the register usage
         for (uint ar_start_id = 0; ar_start_id < INTERNAL_KP_K_TILE; ar_start_id += MAX_AR_SZ) {
-          register T Ar[TILE_X][Creg_Rows][MAX_AR_SZ];
-          register T KPr[MAX_AR_SZ][Creg_Cols];
+          register ElemT Ar[TILE_X][CRegRows][MAX_AR_SZ];
+          register ElemT KPr[MAX_AR_SZ][CRegCols];
 
-          uint round_start = (a_col_start / Creg_Rows)%INTERNAL_KP_K_TILE;
+          uint round_start = (a_col_start / CRegRows)%INTERNAL_KP_K_TILE;
 
           #pragma unroll
           for (uint aRow = 0; aRow < TILE_X; aRow++) {
             #pragma unroll
-            for (uint _a_col = 0; _a_col < Creg_Rows; _a_col++) {
+            for (uint _a_col = 0; _a_col < CRegRows; _a_col++) {
               uint a_col = a_col_start + _a_col;
               for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
                 Ar[aRow][_a_col][a_elem] = Ash[aRow][a_col * INTERNAL_KP_K_TILE + (ar_start_id + a_elem + round_start)%INTERNAL_KP_K_TILE]; 
@@ -259,7 +261,7 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           }
           
           #pragma unroll
-          for (uint _kp_col = 0; _kp_col < Creg_Cols; _kp_col++) {
+          for (uint _kp_col = 0; _kp_col < CRegCols; _kp_col++) {
             uint kp_col = kp_col_start + _kp_col;
             for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
               KPr[elem][_kp_col] = kron_fac_sh[ar_start_id + elem][kp_col];
@@ -268,9 +270,9 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
           #pragma unroll
           for (uint aRow = 0; aRow < TILE_X; aRow++)
             #pragma unroll
-            for (int i = 0; i < Creg_Rows; i++)
+            for (int i = 0; i < CRegRows; i++)
               #pragma unroll
-              for (int j = 0; j < Creg_Cols; j++)
+              for (int j = 0; j < CRegCols; j++)
                 #pragma unroll
                 for (int k = 0; k < MAX_AR_SZ; k++)
                   Creg[aRow][i][j] += Ar[aRow][i][k] * KPr[k][j];
@@ -283,9 +285,9 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
     #pragma unroll 
     for (int aRow = 0; aRow < TILE_X; aRow++) {
       #pragma unroll 
-      for (uint reg_j = 0; reg_j < Creg_Cols; reg_j++) {
-        if (Creg_Rows % 4 == 0) {
-          for (uint reg_i = 0; reg_i < Creg_Rows; reg_i += 4) {          
+      for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
+        if (CRegRows % 4 == 0) {
+          for (uint reg_i = 0; reg_i < CRegRows; reg_i += 4) {          
             const uint cRow = (aRow + start_row);
             uint cCol = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
             if (!K_EQUALS_VAR) {
@@ -299,16 +301,16 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
               cCol += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
             }
             const uint cIdx = cRow * N + cCol;
-            // assert(threadIdx.x == cCol);
+            // assert(tid == cCol);
             // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("threadIdx.x %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, cCol, kp_col_start, a_col_start, reg_i, reg_j);
+            //   printf("tid %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", tid, cCol, kp_col_start, a_col_start, reg_i, reg_j);
             if (cCol < K) {
               VecT c = {Creg[aRow][reg_i][reg_j], Creg[aRow][reg_i+1][reg_j], Creg[aRow][reg_i+2][reg_j], Creg[aRow][reg_i+3][reg_j]};
               *(VecT*)&C[cIdx] = c;
             }
           }
         } else {
-          for (uint reg_i = 0; reg_i < Creg_Rows; reg_i++) {            
+          for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {            
             const uint cRow = (aRow + start_row);
             uint cCol = kp_col_start*(MAX_K/MAX_KP_K) + reg_j*(MAX_K/MAX_KP_K) + a_col_start + reg_i;
             
@@ -323,9 +325,9 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
               cCol += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
             }
             const uint cIdx = cRow * N + cCol;
-            // assert(threadIdx.x == cCol);
+            // assert(tid == cCol);
             // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("threadIdx.x %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", threadIdx.x, cCol, kp_col_start, a_col_start, reg_i, reg_j);
+            //   printf("tid %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", tid, cCol, kp_col_start, a_col_start, reg_i, reg_j);
             if (cCol < K) {
               C[cIdx] = Creg[aRow][reg_i][reg_j];
             }
@@ -342,10 +344,10 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
     //   uint cCol;
     //   uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();      
     //   //Cannot store N_THREADS values in shared memory. So may be not do it then?
-    //   cCol = (reg_col/(Creg_Cols * Creg_Rows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
-    //   ((reg_col/Creg_Cols) % Creg_Rows) * N_THREADS +
-    //   (reg_col%Creg_Cols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
-    //   threadIdx.x;
+    //   cCol = (reg_col/(CRegCols * CRegRows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
+    //   ((reg_col/CRegCols) % CRegRows) * N_THREADS +
+    //   (reg_col%CRegCols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
+    //   tid;
 
     //   if (!K_EQUALS_VAR) {
     //     uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
@@ -366,14 +368,14 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
         //Not worth storing in shared memory and then doing 128-bit stores
         // for (uint reg2 = 0; reg2 < Creg_elems_in_sh; reg2++) {
         //   uint reg = reg1 + reg2;
-        //   uint store_index = threadIdx.x + reg2 * N_THREADS;
+        //   uint store_index = tid + reg2 * N_THREADS;
 
         //   Creg_in_sh[store_index] = Creg[reg];
         // }
 
         // __syncthreads();
-        // // const int ldNumElems = sizeof(T)/sizeof(T);
-        // for (uint csh_col = threadIdx.x*ldNumElems; csh_col < Creg_elems_in_sh*N_THREADS; csh_col += N_THREADS*ldNumElems) {
+        // // const int VecTNumElems = sizeof(ElemT)/sizeof(ElemT);
+        // for (uint csh_col = tid*VecTNumElems; csh_col < Creg_elems_in_sh*N_THREADS; csh_col += N_THREADS*VecTNumElems) {
         //   uint cRow = (aRow + start_row);
         //   uint cIdx;
         //   uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
