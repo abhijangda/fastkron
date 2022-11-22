@@ -100,7 +100,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
   const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
   
-  register   ElemT Creg[TileSizeRowsA][CRegRows][CRegCols];
+  register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols];
   __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
   __shared__ ElemT shKronMats[TileSizeKronCols][TileSizeKronRows];
 
@@ -163,43 +163,46 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }
   }
 
-  for (uint start_row = blockIdx.x * TileSizeRowsA; start_row < gridDim.x * TileSizeRowsA * N_COARSE_TB; 
-       start_row += gridDim.x * TileSizeRowsA) {
-  // if (start_row == 0 && tid == 0) {
+  for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
+            tileRowA  < gridDim.x  * TileSizeRowsA * N_COARSE_TB;
+            tileRowA += gridDim.x  * TileSizeRowsA) {
+  // if (tileRowA == 0 && tid == 0) {
   //   printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
   // }
-  
-  for (uint kp_col_start = kp_col_start_; kp_col_start < MaxTileSizeKronRows     ; 
-       kp_col_start +=              MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) { 
-  for (uint a_col_start  = a_col_start_ ; a_col_start  < MaxColsA/MaxKronRows;
-       a_col_start  += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) {
+
+  for (uint tileKronCol =  kp_col_start_;
+            tileKronCol <  MaxTileSizeKronRows;
+            tileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) {
+
+  for (uint tileColA    =  a_col_start_ ;
+            tileColA    <  MaxColsA/MaxKronRows;
+            tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) {
+
     #pragma unroll
-    for(uint tile_row = 0; tile_row < TileSizeRowsA; tile_row++) {
-      #pragma unroll
-      for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
-        #pragma unroll
-        for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-          Creg[tile_row][reg_i][reg_j] = 0;
-        }
-      }
-    }
-  
+    for (uint r = 0; r < TileSizeRowsA; r++) {
+    #pragma unroll
+    for (uint i = 0; i < CRegRows;      i++) {
+    #pragma unroll
+    for (uint j = 0; j < CRegCols;      j++) {
+      regC[r][i][j] = 0;
+    }}}
+
     for (uint internal_tile_kp_k = 0; internal_tile_kp_k < MaxTileSizeKronCols; internal_tile_kp_k += TileSizeKronCols) {
-      for (uint aRow = 0; aRow < TileSizeRowsA; aRow += 1) {
+      for (uint rowA = 0; rowA < TileSizeRowsA; rowA += 1) {
         for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += blockDim.x*VecTNumElems) {
           uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronRows>();
           VecT a;
           if (TileSizeKronCols == MaxKronRows) {
-            a = *(VecT*)&glA[(aRow + start_row) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + a_col];
-            // *(VecT*)&shA[aRow][a_col] = a;
+            a = *(VecT*)&glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + a_col];
+            // *(VecT*)&shA[rowA][a_col] = a;
             // ElemT a1[4] = {a.x, a.y, a.z, a.w};
             // for (int j = 0; j < VecTNumElems; j++) {
-            //   shA[aRow][a_col + j] = a1[j];
+            //   shA[rowA][a_col + j] = a1[j];
             // }
           } else {
-            a = *(VecT*)&glA[(aRow + start_row) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
+            a = *(VecT*)&glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
                            (a_col/TileSizeKronCols)*kronCols + external_tile_kp_k * MaxTileSizeKronCols + internal_tile_kp_k + a_col % TileSizeKronCols];
-            // *(VecT*)&shA[aRow][a_col] = a;
+            // *(VecT*)&shA[rowA][a_col] = a;
           }
           
           ElemT a1[VecTNumElems];
@@ -208,10 +211,10 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           #pragma unroll
           for (uint i = 0; i < VecTNumElems; i++) {
             uint ash_col = a_col + i;
-            uint a_col_start = (ash_col/TileSizeKronCols)/CRegRows;
+            uint tileColA = (ash_col/TileSizeKronCols)/CRegRows;
            
-            uint final_col = (ash_col/TileSizeKronCols)*TileSizeKronCols + (a_col_start + ash_col%TileSizeKronCols)%TileSizeKronCols;
-            shA[aRow][final_col] = a1[i];
+            uint final_col = (ash_col/TileSizeKronCols)*TileSizeKronCols + (tileColA + ash_col%TileSizeKronCols)%TileSizeKronCols;
+            shA[rowA][final_col] = a1[i];
           }
         }
       }
@@ -248,34 +251,34 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           register ElemT Ar[TileSizeRowsA][CRegRows][MAX_AR_SZ];
           register ElemT KPr[MAX_AR_SZ][CRegCols];
 
-          uint round_start = (a_col_start / CRegRows)%TileSizeKronCols;
+          uint round_start = (tileColA / CRegRows)%TileSizeKronCols;
 
           #pragma unroll
-          for (uint aRow = 0; aRow < TileSizeRowsA; aRow++) {
+          for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
             #pragma unroll
             for (uint _a_col = 0; _a_col < CRegRows; _a_col++) {
-              uint a_col = a_col_start + _a_col;
+              uint a_col = tileColA + _a_col;
               for (uint a_elem = 0; a_elem < MAX_AR_SZ; a_elem++)    
-                Ar[aRow][_a_col][a_elem] = shA[aRow][a_col * TileSizeKronCols + (ar_start_id + a_elem + round_start)%TileSizeKronCols]; 
+                Ar[rowA][_a_col][a_elem] = shA[rowA][a_col * TileSizeKronCols + (ar_start_id + a_elem + round_start)%TileSizeKronCols]; 
             }
           }
           
           #pragma unroll
           for (uint _kp_col = 0; _kp_col < CRegCols; _kp_col++) {
-            uint kp_col = kp_col_start + _kp_col;
+            uint kp_col = tileKronCol + _kp_col;
             for (uint elem = 0; elem < MAX_AR_SZ; elem++)    
               KPr[elem][_kp_col] = shKronMats[ar_start_id + elem][kp_col];
           }
 
           #pragma unroll
-          for (uint aRow = 0; aRow < TileSizeRowsA; aRow++)
+          for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
             #pragma unroll
             for (int i = 0; i < CRegRows; i++)
               #pragma unroll
               for (int j = 0; j < CRegCols; j++)
                 #pragma unroll
                 for (int k = 0; k < MAX_AR_SZ; k++)
-                  Creg[aRow][i][j] += Ar[aRow][i][k] * KPr[k][j];
+                  regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
         }
       }
 
@@ -283,13 +286,13 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }
     
     #pragma unroll 
-    for (int aRow = 0; aRow < TileSizeRowsA; aRow++) {
+    for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
       #pragma unroll 
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
         if (CRegRows % 4 == 0) {
           for (uint reg_i = 0; reg_i < CRegRows; reg_i += 4) {          
-            const uint cRow = (aRow + start_row);
-            uint cCol = kp_col_start*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + a_col_start + reg_i;
+            const uint cRow = (rowA + tileRowA);
+            uint cCol = tileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
             if (!K_EQUALS_VAR) {
               uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronRows>();
               cCol = tile_k * (MaxColsA/kronCols) + 
@@ -303,16 +306,16 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             const uint cIdx = cRow * colsC + cCol;
             // assert(tid == cCol);
             // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("tid %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", tid, cCol, kp_col_start, a_col_start, reg_i, reg_j);
+            //   printf("tid %d cCol %d tileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, tileKronCol, tileColA, reg_i, reg_j);
             if (cCol < colsA) {
-              VecT c = {Creg[aRow][reg_i][reg_j], Creg[aRow][reg_i+1][reg_j], Creg[aRow][reg_i+2][reg_j], Creg[aRow][reg_i+3][reg_j]};
+              VecT c = {regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]};
               *(VecT*)&glC[cIdx] = c;
             }
           }
         } else {
           for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {            
-            const uint cRow = (aRow + start_row);
-            uint cCol = kp_col_start*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + a_col_start + reg_i;
+            const uint cRow = (rowA + tileRowA);
+            uint cCol = tileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
             
             if (!K_EQUALS_VAR) {
               uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronRows>();
@@ -327,9 +330,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             const uint cIdx = cRow * colsC + cCol;
             // assert(tid == cCol);
             // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("tid %d cCol %d kp_col_start %d a_col_start %d reg_i %d reg_j %d\n", tid, cCol, kp_col_start, a_col_start, reg_i, reg_j);
+            //   printf("tid %d cCol %d tileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, tileKronCol, tileColA, reg_i, reg_j);
             if (cCol < colsA) {
-              glC[cIdx] = Creg[aRow][reg_i][reg_j];
+              glC[cIdx] = regC[rowA][reg_i][reg_j];
             }
           }
         }
