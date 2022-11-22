@@ -259,6 +259,7 @@ for case in cases:
             case["CUDATime"] = kront
         case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
         case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
+        print(o)
         print(case)
 
 row_format = "{:>20}" * 9
