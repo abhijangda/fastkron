@@ -76,7 +76,7 @@ __device__ void loadVecToRegs(float& vec, float* regs) {
 
 // __launch_bounds__(N_THREADS)
 template<typename ElemT, typename VecT, uint N_THREADS, uint N_COARSE_TB, uint TILE_X, uint MAX_K, uint MAX_KP_N, uint MAX_KP_K, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
-__global__ void cuda_gemm(uint M, uint NVar, uint KVar, const ElemT * __restrict__ A, const ElemT * __restrict__ kron_fac, ElemT * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
+__global__ void kronGemmKernel(uint M, uint NVar, uint KVar, const ElemT * __restrict__ A, const ElemT * __restrict__ kron_fac, ElemT * __restrict__ C, uint kpNVar, uint kpKVar, uint kp_idx) {
   const uint KP_N_TILE = MIN(KP_N_TILE_, MAX_KP_N);
   const uint NUM_KP_N_TILES = MAX_KP_N/KP_N_TILE;
   const uint INTERNAL_KP_N_TILE = MIN(128, KP_N_TILE);
@@ -88,9 +88,6 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const ElemT * __restrict
   __shared__ ElemT kron_fac_sh[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
   const uint Ash_COLS = MAX_K/(MAX_KP_K/INTERNAL_KP_K_TILE);
   __shared__ ElemT Ash[TILE_X][Ash_COLS];
-  const uint C_ELEMS_STORE = N_THREADS * (sizeof(VecT)/sizeof(ElemT));
-  const uint Csh_COLS = MAX_K/(MAX_KP_N/KP_N_TILE);
-  const uint Csh_COLS_SIZE = MIN(Csh_COLS, C_ELEMS_STORE);
   
   const uint WarpSize = 32;
   const uint tid = threadIdx.x;
@@ -336,62 +333,6 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const ElemT * __restrict
       }
     }
     
-    // for (uint reg = 0; reg < Creg_SIZE; reg++) {
-    //   uint aRow = reg / (Creg_SIZE/TILE_X);
-    //   uint cRow = (aRow + start_row);
-    //   uint cIdx;
-    //   uint reg_col = reg % (Creg_SIZE/TILE_X);
-    //   uint cCol;
-    //   uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();      
-    //   //Cannot store N_THREADS values in shared memory. So may be not do it then?
-    //   cCol = (reg_col/(CRegCols * CRegRows)) * (MAX_K/kpK) * INTERNAL_KP_N_TILE  +
-    //   ((reg_col/CRegCols) % CRegRows) * N_THREADS +
-    //   (reg_col%CRegCols) * (N_THREADS * (MAX_K/kpK)/numKpColMult) + 
-    //   tid;
-
-    //   if (!K_EQUALS_VAR) {
-    //     uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-    //     cCol = tile_k * (MAX_K/kpK) + 
-    //             (cCol/(MAX_K/kpK)) * (K/kpK) +
-    //             cCol%(MAX_K/kpK);
-    //   }
-
-    //   if (KP_N_TILE != MAX_KP_N) {
-    //     cCol += external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); 
-    //   }
-      
-    //   cIdx = cRow * N + cCol;
-    //   //TODO: Store to shared memory and then to global memory using vector stores
-    //   if (cCol < K) {
-    //     C[cIdx] = Creg[reg];
-    //   }      
-        //Not worth storing in shared memory and then doing 128-bit stores
-        // for (uint reg2 = 0; reg2 < Creg_elems_in_sh; reg2++) {
-        //   uint reg = reg1 + reg2;
-        //   uint store_index = tid + reg2 * N_THREADS;
-
-        //   Creg_in_sh[store_index] = Creg[reg];
-        // }
-
-        // __syncthreads();
-        // // const int VecTNumElems = sizeof(ElemT)/sizeof(ElemT);
-        // for (uint csh_col = tid*VecTNumElems; csh_col < Creg_elems_in_sh*N_THREADS; csh_col += N_THREADS*VecTNumElems) {
-        //   uint cRow = (aRow + start_row);
-        //   uint cIdx;
-        //   uint external_tile_kp_n = get_external_tile_kp_n<MAX_KP_N, KP_N_TILE>();
-        //   uint cCol = csh_col + (reg1/Creg_elems_in_sh)*N_THREADS*Creg_elems_in_sh;
-
-        //   if (K_EQUALS_VAR) {
-        //     cIdx = cRow * N  + cCol + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)); //TODO: Fix when external_tile_kp_n > 0
-        //   } else {
-        //     uint tile_k = get_tile_k<MAX_KP_N, KP_N_TILE>();
-
-        //     cIdx = cRow * N + external_tile_kp_n*(K/(MAX_KP_N/KP_N_TILE)) + tile_k * (MAX_K/kpK) + (cCol/(MAX_K/kpK)) * (K/kpK) + cCol%(MAX_K/kpK);
-        //   }
-          
-        //   *(VecT*)&C[cIdx] = *(VecT*)&Creg_in_sh[csh_col];
-        // }
-
     __syncthreads();
   }}}
 }
