@@ -116,7 +116,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     colsC = colsA;
   } else {
     colsA = ColsA;
-    colsC = RowsC;
+    colsC = ColsC;
   }
 
   const uint KPK_SPLIT_SIZE = MIN(16, INTERNAL_KP_K_TILE);

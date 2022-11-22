@@ -20,7 +20,7 @@ use_torch_profiler = True
 epochs = 100
 
 # model and data 
-dataType = torch.float64
+dataType = torch.float32
 
 def doGPytorch(twoPowerL, npoints, d):
     outputDim = 1       # takes variable 'y'
@@ -80,7 +80,7 @@ def doGPytorch(twoPowerL, npoints, d):
             l = int(round(inputSize**(1./numFactors)))
 
             for i in range(numFactors):
-                self.weights += [Parameter(torch.ones(l,l, dtype=torch.float64).cuda())]    
+                self.weights += [Parameter(torch.ones(l,l, dtype=dataType).cuda())]    
             
             self.l1_weight = gp.lazy.KroneckerProductLazyTensor(*self.weights)
                     
@@ -249,7 +249,7 @@ for case in cases:
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
         dataTypeStr = "float" if dataType == torch.float32 else "double"
-        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t %s -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
+        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t %s -c -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
         if s != 0:
             print(o)
             case["CUDATime"] = -1

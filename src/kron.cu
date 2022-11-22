@@ -185,9 +185,9 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     
     //Create kernel args;
     void *args[] = {
-                    (void*)&M, (void*)&N, (void*)&K,
-                    (void*)&KronMatCols[NumKronMats-i-1], 
+                    (void*)&M, (void*)&N, (void*)&K, 
                     (void*)&KronMatRows[NumKronMats-i-1],
+                    (void*)&KronMatCols[NumKronMats-i-1],
                     &prevResult, 
                     (void*)&kronMats[NumKronMats-i-1], 
                     (void*)kronGemmResult, 
