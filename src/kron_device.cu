@@ -93,6 +93,25 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   __shared__ ElemT shKronMats[INTERNAL_KP_K_TILE][INTERNAL_KP_N_TILE];
   __shared__ ElemT shA[TileRowsA][TileColA];
 
+  const uint CRegSize = MAX((MaxColsA/(MaxKronCols/KP_N_TILE))/NumThreads, 1);
+  const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
+  const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
+  
+#ifndef EVAL
+  __syncthreads();
+  if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
+    printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
+    // for (int i = 0; i < kronRows; i++) 
+    //   for (int j = 0; j < kronCols; j++)
+    //     printf("%lf \n", (double)shKronMats[i][j]);
+  }
+#endif
+
+  const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
+  // assert(Creg_SIZE == CRegCols * CRegRows * NUM_INTERNAL_KP_N_TILES);
+
+  register ElemT Creg[TileRowsA][CRegRows][CRegCols];
+  
   const uint WarpSize   = 32;
   const uint tid        = threadIdx.x;
   const uint wid        = tid/WarpSize;
@@ -141,25 +160,6 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }
   } else {
   }
-
-  const uint CRegSize = MAX((MaxColsA/(MaxKronCols/KP_N_TILE))/NumThreads, 1);
-  const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1)); //MAX(MIN(Creg_SIZE, MIN(MaxColsA/MaxKronRows, 8*NumThreads)/NumThreads), 1); //Prefer rows > 4 than cols, to use 128-bit stores
-  const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows)); //MIN(MaxKronRows, Creg_SIZE/CRegRows);
-  
-#ifndef EVAL
-  __syncthreads();
-  if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
-    printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
-    // for (int i = 0; i < kronRows; i++) 
-    //   for (int j = 0; j < kronCols; j++)
-    //     printf("%lf \n", (double)shKronMats[i][j]);
-  }
-#endif
-
-  const uint NUM_INTERNAL_KP_N_TILES = KP_N_TILE/INTERNAL_KP_N_TILE; //2
-  // assert(Creg_SIZE == CRegCols * CRegRows * NUM_INTERNAL_KP_N_TILES);
-
-  register ElemT Creg[TileRowsA][CRegRows][CRegCols];
 
   const uint kp_col_start_ = (tid / ((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols;
   const uint a_col_start_  = (tid % ((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows; 
