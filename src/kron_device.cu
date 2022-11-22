@@ -83,25 +83,25 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
                                ElemT       * __restrict__ glC,
                                const uint kp_idx) {
   
-  const uint WarpSize   = 32;
-  const uint tid        = threadIdx.x;
-  const uint wid        = tid/WarpSize;
-  const uint lane       = tid%WarpSize;
-  const uint blockWarps = blockDim.x/WarpSize;
-                                
-  const uint MaxTileSizeKronRows = MIN(KP_N_TILE_, MaxKronCols);
-  const uint MaxTileSizeKronCols = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
+  const uint WarpSize     = 32;
+  const uint tid          = threadIdx.x;
+  const uint wid          = tid/WarpSize;
+  const uint lane         = tid%WarpSize;
+  const uint blockWarps   = blockDim.x/WarpSize;
+  const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
-  const uint TileSizeKronRows = MIN(128, MaxTileSizeKronRows);
-  const uint TileSizeKronCols = MIN(32, MaxTileSizeKronCols);
-  const uint TileSizeColsA = MaxColsA/(MaxKronRows/TileSizeKronCols);
+  const uint MaxTileSizeKronRows = MIN(KP_N_TILE_,          MaxKronCols);
+  const uint MaxTileSizeKronCols = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
+  const uint TileSizeKronRows    = MIN(128,                 MaxTileSizeKronRows);
+  const uint TileSizeKronCols    = MIN(32,                  MaxTileSizeKronCols);
+  const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronCols);
   
   const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronRows))/NumThreads, 1);
   const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
   const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
   
   register   ElemT Creg[TileSizeRowsA][CRegRows][CRegCols];
-  __shared__ ElemT sh[TileSizeRowsA][TileSizeColsA];
+  __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
   __shared__ ElemT shKronMats[TileSizeKronCols][TileSizeKronRows];
 
 #ifndef EVAL
@@ -139,29 +139,29 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
   const uint KPK_SPLIT_SIZE = MIN(16, TileSizeKronCols);
   const uint NUM_KPK_SPLITS = MAX(1, TileSizeKronCols/KPK_SPLIT_SIZE);
-  const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
   const uint external_tile_kp_k = blockIdx.z;
-  
-  if (MaxTileSizeKronRows == MaxKronCols && TileSizeKronRows == MaxKronCols && TileSizeKronCols == MaxKronRows) {
-    const uint ldSize = MIN(kronRows*kronCols, VecTNumElems);
-
-    for (uint i = tid*ldSize; i < kronRows * kronCols; i += blockDim.x*ldSize) {
-      // shKronMats[i%kronRows][i/kronCols] = glKronMats[i];
-      VecT a = *(VecT*)&glKronMats[i];
-      ElemT a1[VecTNumElems];
-      loadVecToRegs(a, a1);
-      #pragma unroll
-      for (uint j = 0; j < ldSize; j++) {
-        uint idx = i + j;
-        shKronMats[idx/MaxKronRows][idx%MaxKronRows] = a1[j];
-      }
-    }
-  } else {
-  }
 
   const uint kp_col_start_ = (tid / ((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols;
   const uint a_col_start_  = (tid % ((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows; 
+
+  if (MaxTileSizeKronRows == MaxKronCols && TileSizeKronRows == MaxKronCols && TileSizeKronCols == MaxKronRows) {
+    const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
+
+    for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
+      ElemT regElems[VecTNumElems];
+      VecT vec;
+
+      vec = *(VecT*)&glKronMats[eIdx];
+      loadVecToRegs(vec, regElems);
+
+      #pragma unroll
+      for (uint vecElem = 0; vecElem < loadInstr; vecElem++) {
+        uint idx = eIdx + vecElem;
+        shKronMats[idx/MaxKronRows][idx%MaxKronRows] = regElems[vecElem];
+      }
+    }
+  }
 
   for (uint start_row = blockIdx.x * TileSizeRowsA; start_row < gridDim.x * TileSizeRowsA * N_COARSE_TB; 
        start_row += gridDim.x * TileSizeRowsA) {
