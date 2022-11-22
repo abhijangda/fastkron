@@ -175,8 +175,8 @@ __global__ void cuda_gemm(uint M, uint NVar, uint KVar, const T * __restrict__ A
   }
 
   const uint MAX_CREG_SIZE = MAX((MAX_K/(MAX_KP_N/KP_N_TILE))/N_THREADS, 1);
-  const uint Creg_Rows = 1; //MIN(8, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
-  const uint Creg_Cols = 4; //MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
+  const uint Creg_Rows = 1 ; //MIN(8, MAX(uint_squareroot(MAX_CREG_SIZE), 1)); //MAX(MIN(Creg_SIZE, MIN(MAX_K/MAX_KP_K, 8*N_THREADS)/N_THREADS), 1); //Prefer rows > 4 than cols, to use 128-bit stores
+  const uint Creg_Cols = 8; //MIN(MAX_KP_K, MIN(8, MAX_CREG_SIZE/Creg_Rows)); //MIN(MAX_KP_K, Creg_SIZE/Creg_Rows);
   
 #ifndef EVAL
   __syncthreads();
