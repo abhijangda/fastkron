@@ -20,11 +20,12 @@ use_torch_profiler = True
 epochs = 100
 
 # model and data 
+dataType = torch.float64
 
 def doGPytorch(twoPowerL, npoints, d):
     outputDim = 1       # takes variable 'y'
     inputDim = twoPowerL ** d
-    x_train = np.zeros((npoints, inputDim)).astype(np.float32)
+    x_train = torch.ones((npoints, inputDim), dtype=dataType)
     y_train = None #func(x_train)
 
     # train adn prediciton 
@@ -34,7 +35,7 @@ def doGPytorch(twoPowerL, npoints, d):
         criterion = torch.nn.MSELoss() 
         optimizer = torch.optim.SGD(model.parameters(), lr=learningRate)
         model.cuda()
-        inputs = torch.from_numpy(x_train)
+        inputs = x_train
             # labels = torch.from_numpy(y_train)
             
         inputs = inputs.cuda()
@@ -79,7 +80,7 @@ def doGPytorch(twoPowerL, npoints, d):
             l = int(round(inputSize**(1./numFactors)))
 
             for i in range(numFactors):
-                self.weights += [Parameter(torch.ones(l,l).cuda())]    
+                self.weights += [Parameter(torch.ones(l,l, dtype=torch.float64).cuda())]    
             
             self.l1_weight = gp.lazy.KroneckerProductLazyTensor(*self.weights)
                     
@@ -109,7 +110,7 @@ def doGPytorch(twoPowerL, npoints, d):
                     cublas_time = 0
                     at_time = 0
                     for event in p.events():
-                        if "sgemm" in event.name or "gemmSN" in event.name:
+                        if "gemm" in event.name or "gemmSN" in event.name:
                             cublas_time += event.cuda_time
                         elif "at::native::elementwise_kernel" in event.name:
                             at_time += event.cuda_time
@@ -193,7 +194,7 @@ def doTorchKron(twoPower, npoints, d):
     # print(all_cublas_times)
     return all_cublas_times, all_at_times, all_cuda_times
 
-maxD = {32: 5} #, 32: 5, 64 : 4} #128:2 #2:22, 4:11, 8:7,
+maxD = {2:18, 4:8, 8:6, 16:5, 32: 4, 64 : 3} #, 64 : 4} #128:2
 
 cases = [{"npoints": 1024, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j])] 
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
@@ -247,8 +248,8 @@ for case in cases:
         
             # case["PyTorchTime"] = -1
         twoPowerL = case["2^l"]
-
-        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t float -r 100"%(case["npoints"], case["d"], twoPowerL))
+        dataTypeStr = "float" if dataType == torch.float32 else "double"
+        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t %s -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
         if s != 0:
             print(o)
             case["CUDATime"] = -1
