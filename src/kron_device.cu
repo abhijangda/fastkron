@@ -127,11 +127,11 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
   const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
-  const uint CRegRows = 1;//MIN(8, MAX(sqrt(CRegSize), 1));
-  const uint CRegCols = 1;//MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
+  const uint CRegRows = 2;//MIN(8, MAX(sqrt(CRegSize), 1));
+  const uint CRegCols = 4;//MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
   
   register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols];
-  __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA + padding];
+  __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
   __shared__ ElemT shKronMats[TileSizeKronRows][TileSizeKronCols];
 
 #ifndef EVAL

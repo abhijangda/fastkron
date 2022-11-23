@@ -30,9 +30,9 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 #include "kron_device.cu"
 
 #define N_THREADS 256
-#define KP_N_TILE 64
+#define KP_N_TILE 32
 
-#define TILE_X 2
+#define TILE_X 1
 
 #define K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
   (void*)kronGemmKernel<T, VecT, N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
