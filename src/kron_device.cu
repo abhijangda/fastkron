@@ -140,9 +140,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     colsC = ColsC;
   }
 
-  const uint KPK_SPLIT_SIZE = MIN(16, TileSizeKronCols);
-  const uint NUM_KPK_SPLITS = MAX(1, TileSizeKronCols/KPK_SPLIT_SIZE);
-  const uint RegTileSizeACols = MIN(8, KPK_SPLIT_SIZE);
+  const uint RegTileSizeACols = MIN(8, TileSizeKronCols);
   
   const uint external_tile_kp_k = blockIdx.z;
 
@@ -260,14 +258,13 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
-            #pragma unroll
-            for (uint rowC = 0; rowC < CRegRows; rowC++) {
+          #pragma unroll
+          for (uint rowC = 0; rowC < CRegRows; rowC++) {
               uint shACol = tileColA + rowC;
               #pragma unroll
               for (uint colC = 0; colC < RegTileSizeACols; colC++)
                 Ar[rowA][rowC][colC] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
-            }
-          }
+          }}
           
           #pragma unroll
           for (uint colC = 0; colC < CRegCols; colC++) {
@@ -279,13 +276,13 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
-            #pragma unroll
-            for (int i = 0; i < CRegRows; i++)
-              #pragma unroll
-              for (int j = 0; j < CRegCols; j++)
-                #pragma unroll
-                for (int k = 0; k < RegTileSizeACols; k++)
-                  regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+          #pragma unroll
+          for (uint i = 0;    i < CRegRows;         i++)
+          #pragma unroll
+          for (uint j = 0;    j < CRegCols;         j++)
+          #pragma unroll
+          for (uint k = 0;    k < RegTileSizeACols; k++)
+            regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
         }
       }
 
