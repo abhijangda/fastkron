@@ -105,7 +105,6 @@ __device__ void loadVecToRegs(float& vec, float* regs) {
 //KP_N is KronCols
 //KP_K is KronRows
 
-// __launch_bounds__(NumThreads)
 template<typename ElemT, typename VecT, uint NumThreads, uint N_COARSE_TB, uint TileSizeRowsA, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
 __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const uint ColsA,
                                const uint KronRows, const uint KronCols,
@@ -123,16 +122,16 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
   const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols);
   const uint MaxTileSizeKronRows = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
-  const uint TileSizeKronRows    = MIN(32,                 MaxTileSizeKronRows);
-  const uint TileSizeKronCols    = MIN(128,                  MaxTileSizeKronCols);
+  const uint TileSizeKronRows    = MIN(32,                  MaxTileSizeKronRows);
+  const uint TileSizeKronCols    = MIN(128,                 MaxTileSizeKronCols);
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
   const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
-  const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
-  const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
+  const uint CRegRows = 1;//MIN(8, MAX(sqrt(CRegSize), 1));
+  const uint CRegCols = 1;//MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
   
   register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols];
-  __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
+  __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA + padding];
   __shared__ ElemT shKronMats[TileSizeKronRows][TileSizeKronCols];
 
 #ifndef EVAL
@@ -170,15 +169,15 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
   const uint RegTileSizeACols = MIN(8, TileSizeKronCols);
   
-  const uint external_tile_kp_k = blockIdx.z;
+  const uint external_tile_kp_k = 0;//blockIdx.z;
 
   const uint kp_col_start_ = (tid / ((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols;
-  const uint a_col_start_  = (tid % ((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows; 
+  const uint a_col_start_  = (tid % ((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows; // (tid % 32)
 
   if (MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
     const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
 
-    for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
+    for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += NumThreads*loadInstr) {
       ElemT regElems[VecTNumElems];
       VecT vec;
 
@@ -258,11 +257,11 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
           const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
 
-          for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += blockDim.x/(TileSizeKronCols/loadInstr)) {
+          for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
             VecT  vec;
             ElemT elems[VecTNumElems];
 
-            const uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
+            const uint external_tile_kp_n = 0; //get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
             const uint col = external_tile_kp_n*MaxTileSizeKronCols + tileKronCol + (tid%(TileSizeKronCols/loadInstr))*loadInstr;
             const uint row = swid;
             // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * MaxTileSizeKronCols + tileKronRow + row) * kronRows + col];
@@ -285,7 +284,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           register ElemT Ar[TileSizeRowsA][CRegRows][RegTileSizeACols];
           register ElemT KPr[RegTileSizeACols][CRegCols];
 
-          uint round_start = (tileColA / CRegRows)%TileSizeKronRows;
+          uint round_start = (tileColA / CRegRows)%TileSizeKronRows; //(tid % 32) % 16
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
@@ -295,6 +294,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
               #pragma unroll
               for (uint colC = 0; colC < RegTileSizeACols; colC++)
                 Ar[rowA][rowC][colC] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
+                //0*16 + (0+0+0)%16, 1*16 + (0+0+1)%16, 2 * 16 + (0+0+2)%16, 3 * 16 + (0+0+3)%16, ... , 15 * 16 + (0+0+15)%16, 16 * 16 + (0+0+0)%16, 17 * 16 + (0+0+1)%16
+                //0, 17, 34, 51, ..., 255, 256, 273,
+                //0, 1, 3, 19, ..., 31, 0, 17,  
           }}
           
           #pragma unroll
