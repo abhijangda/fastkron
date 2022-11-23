@@ -59,8 +59,8 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 256) \
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 512) \
   MAX_K_KERNELS(T, VecT, N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
+  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
   // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 8192) \
   // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16384) 
 
@@ -71,7 +71,7 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
 #define NUM_TYPE_KERNELS 3
 #define MIN_K 16
-#define MAX_K 4096
+#define MAX_K 1024
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
 
 #define MIN_KP_K 2
