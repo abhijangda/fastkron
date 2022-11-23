@@ -261,20 +261,20 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
             #pragma unroll
-            for (uint cRow = 0; cRow < CRegRows; cRow++) {
-              uint shACol = tileColA + cRow;
+            for (uint rowC = 0; rowC < CRegRows; rowC++) {
+              uint shACol = tileColA + rowC;
               #pragma unroll
-              for (uint cCol = 0; cCol < RegTileSizeACols; cCol++)
-                Ar[rowA][cRow][cCol] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + cCol + round_start)%TileSizeKronRows];
+              for (uint colC = 0; colC < RegTileSizeACols; colC++)
+                Ar[rowA][rowC][colC] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
             }
           }
           
           #pragma unroll
-          for (uint _kp_col = 0; _kp_col < CRegCols; _kp_col++) {
-            uint kp_col = outerTileKronCol + _kp_col;//TODO: Should outerTileKronCol be here?
+          for (uint colC = 0; colC < CRegCols; colC++) {
+            uint shKronCol = outerTileKronCol + colC;//TODO: Should outerTileKronCol be here?
             #pragma unroll
             for (uint elem = 0; elem < RegTileSizeACols; elem++)    
-              KPr[elem][_kp_col] = shKronMats[regTileACol + elem][kp_col];
+              KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
           }
 
           #pragma unroll
@@ -292,9 +292,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       __syncthreads();
     }
 
-    #pragma unroll 
+    #pragma unroll
     for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
-      #pragma unroll 
+      #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
         if (CRegRows % 4 == 0) {
           for (uint reg_i = 0; reg_i < CRegRows; reg_i += 4) {          

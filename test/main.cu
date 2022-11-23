@@ -43,7 +43,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return one(i,j);} //rand()%5 + 1;}
+int randMod(int i, int j) {return rand()%5 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
