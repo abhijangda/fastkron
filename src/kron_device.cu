@@ -38,8 +38,9 @@ __device__ void loadVecToRegs(VecT& vec, ElemT* regs) {
   //Not implemented
 }
 
-template<>
-__device__ void loadVecToRegs(float4& vec, float* regs) {
+//Four Element Vectors
+template<typename VecT, typename ElemT>
+__device__ void load4ElemVecToRegs(VecT& vec, ElemT* regs) {
   regs[0] = vec.x;
   regs[1] = vec.y;
   regs[2] = vec.z;
@@ -47,28 +48,30 @@ __device__ void loadVecToRegs(float4& vec, float* regs) {
 }
 
 template<>
+__device__ void loadVecToRegs(float4& vec, float* regs) {
+  load4ElemVecToRegs(vec, regs);
+}
+
+template<>
 __device__ void loadVecToRegs(int4& vec, int* regs) {
-  regs[0] = vec.x;
-  regs[1] = vec.y;
-  regs[2] = vec.z;
-  regs[3] = vec.w;
+  load4ElemVecToRegs(vec, regs);
 }
 
 
 template<>
 __device__ void loadVecToRegs(double4& vec, double* regs) {
-  regs[0] = vec.x;
-  regs[1] = vec.y;
-  regs[2] = vec.z;
-  regs[3] = vec.w;
+  load4ElemVecToRegs(vec, regs);
 }
 
+//Two element vectors
 template<>
 __device__ void loadVecToRegs(double2& vec, double* regs) {
   regs[0] = vec.x;
   regs[1] = vec.y;
 }
 
+
+//Single element
 template<>
 __device__ void loadVecToRegs(float& vec, float* regs) {
   regs[0] = vec;
