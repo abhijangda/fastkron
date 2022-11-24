@@ -4,8 +4,7 @@ template<uint MaxKronCols, uint MaxTileSizeKronRows> __device__ uint get_externa
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
-__device__ constexpr uint sqrt(uint x)
-{
+__device__ constexpr uint sqrt(uint x) {
   switch (x) {
     case 1:
       return 1;
@@ -32,6 +31,7 @@ __device__ constexpr uint sqrt(uint x)
       return 1;
   }
 }
+
 
 template<typename VecT, typename ElemT>
 __device__ void globalLoadVec(const ElemT* addr, VecT& vec) {
@@ -100,6 +100,59 @@ __device__ void loadVecToRegs(double2& vec, double* regs) {
 template<>
 __device__ void loadVecToRegs(float& vec, float* regs) {
   regs[0] = vec;
+}
+
+//Store PTX instructions for each vector type
+template<typename ElemT>
+__device__ void globalStore4Elems(ElemT* addr, ElemT elem1, ElemT elem2, ElemT elem3, ElemT elem4) {
+}
+
+template<>
+__device__ void globalStore4Elems(float* addr, float elem1, float elem2, float elem3, float elem4) {
+  // asm ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(addr), "=f"(elem1), "=f"(elem2), "=f"(elem3), "=f"(elem4));
+  float4 vec = {elem1, elem2, elem3, elem4};
+  *(float4*)addr = vec;
+}
+
+template<>
+__device__ void globalStore4Elems(int* addr, int elem1, int elem2, int elem3, int elem4) {
+  // asm ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(addr), "=f"(elem1), "=f"(elem2), "=f"(elem3), "=f"(elem4));
+  int4 vec = {elem1, elem2, elem3, elem4};
+  *(int4*)addr = vec;
+}
+
+template<>
+__device__ void globalStore4Elems(double* addr, double elem1, double elem2, double elem3, double elem4) {
+  // asm ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(addr), "=f"(elem1), "=f"(elem2), "=f"(elem3), "=f"(elem4));
+  double4 vec = {elem1, elem2, elem3, elem4};
+  *(double4*)addr = vec;
+}
+
+template<typename ElemT>
+__device__ void globalStore2Elems(ElemT* addr, ElemT elem1, ElemT elem2) {
+}
+
+template<>
+__device__ void globalStore2Elems(float* addr, float elem1, float elem2) {
+  float2 vec = {elem1, elem2};
+  *(float2*)addr = vec;
+}
+
+template<>
+__device__ void globalStore2Elems(int* addr, int elem1, int elem2) {
+  int2 vec = {elem1, elem2};
+  *(int2*)addr = vec;
+}
+
+template<>
+__device__ void globalStore2Elems(double* addr, double elem1, double elem2) {
+  double2 vec = {elem1, elem2};
+  *(double2*)addr = vec;
+}
+
+template<typename ElemT>
+__device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
+  *addr = elem1;
 }
 
 //KP_N is KronCols
@@ -324,50 +377,37 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-        if (CRegRows % 4 == 0) {
-          for (uint reg_i = 0; reg_i < CRegRows; reg_i += 4) {          
-            const uint cRow = (rowA + tileRowA);
-            uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-            if (!K_EQUALS_VAR) {
-              uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
-              cCol = tile_k * (MaxColsA/kronCols) + 
-                  (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                  cCol%(MaxColsA/kronCols);
-            }
-            if (MaxTileSizeKronCols != MaxKronCols) {
-              uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-              cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
-            }
-            const uint cIdx = cRow * colsC + cCol;
-            // assert(tid == cCol);
-            // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
-            if (cCol < colsA) {
-              VecT c = {regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]};
-              *(VecT*)&glC[cIdx] = c;
-            }
+        //Three least significant bits of CRegRows can be either 4, 2, or 1
+        constexpr uint vecTyNumElems = CRegRows & (8 - 1);
+#ifndef EVAL
+        if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
+          printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
+#endif
+        for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
+          const uint cRow = (rowA + tileRowA);
+          uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+          if (!K_EQUALS_VAR) {
+            uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+            cCol = tile_k * (MaxColsA/kronCols) + 
+                (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+                cCol%(MaxColsA/kronCols);
           }
-        } else {
-          for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {            
-            const uint cRow = (rowA + tileRowA);
-            uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-            
-            if (!K_EQUALS_VAR) {
-              uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
-              cCol = tile_k * (MaxColsA/kronCols) + 
-                  (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                  cCol%(MaxColsA/kronCols);
-            }
-            if (MaxTileSizeKronCols != MaxKronCols) {
-              uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-              cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols));
-            }
-            const uint cIdx = cRow * colsC + cCol;
-            // assert(tid == cCol);
-            // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
-            if (cCol < colsA) {
-              glC[cIdx] = regC[rowA][reg_i][reg_j];
+          if (MaxTileSizeKronCols != MaxKronCols) {
+            uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
+            cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+          }
+          const uint cIdx = cRow * colsC + cCol;
+          // assert(tid == cCol);
+          // if (kp_idx == 0&& cRow == 0 && cCol < 64)
+          //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
+          if (cCol < colsA) {
+            switch (vecTyNumElems) {
+              case 4:
+                globalStore4Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]);
+              case 2:
+                globalStore2Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j]);
+              case 1:
+                globalStore1Elems(&glC[cIdx], regC[rowA][reg_i][reg_j]);
             }
           }
         }
