@@ -1,6 +1,6 @@
 // #define C_IN_SHMEM
-template<uint MaxKronCols, uint MaxTileSizeKronRows> __device__ uint get_tile_k() {return blockIdx.y/DIVUP(MaxKronCols, MaxTileSizeKronRows);}
-template<uint MaxKronCols, uint MaxTileSizeKronRows> __device__ uint get_external_tile_kp_n() {return blockIdx.y%DIVUP(MaxKronCols, MaxTileSizeKronRows);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_tile_k() {return blockIdx.y/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_external_tile_kp_n() {return blockIdx.y%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
@@ -272,8 +272,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
     for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) {
       for (uint rowA = 0; rowA < TileSizeRowsA; rowA += 1) {
-        for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += blockDim.x*VecTNumElems) {
-          uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronRows>();
+        for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
+          uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
           const ElemT* addrA;
           VecT  vec;
           ElemT elems[VecTNumElems];
@@ -287,7 +287,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             // }
           } else {
             addrA = &glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
-                         (a_col/TileSizeKronRows)*kronCols + external_tile_kp_k * MaxTileSizeKronCols + tileKronRow + a_col % TileSizeKronRows];
+                         (a_col/TileSizeKronRows)*kronCols + external_tile_kp_k * MaxTileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
             // *(VecT*)&shA[rowA][a_col] = a;
           }
 
@@ -311,7 +311,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
           const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
 
-          for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += blockDim.x/(TileSizeKronCols/loadInstr)) {
+          for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
             VecT  vec;
             ElemT elems[VecTNumElems];
 
