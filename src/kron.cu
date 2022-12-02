@@ -32,8 +32,6 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 #define N_THREADS 256
 #define KP_N_TILE 32
 
-#define TILE_X 1
-
 #include "kernel_decl.inc" 
 
 #define TYPE_KERNELS(T, VecT) \
@@ -59,7 +57,7 @@ static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_K_EQUALS_VAR][NUM_COARSE_TB_K
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float,  float4)
   TYPE_KERNELS(int,    int4)
-  TYPE_KERNELS(double, double4)
+  // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
     // COARSE_TB_KERNELS(4)
@@ -143,10 +141,10 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     cuda_gemm_func = (KronGemmKernel)KronGemmKernels[typeKernelIdx][k_equals_var][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
     
     assert(cuda_gemm_func != NULL);
-    
+    uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
     //Create the grid and thread block
     grid = {
-              DIVUP((M/TILE_X), N_COARSE_TB),
+              DIVUP(M, tileRowA),
               (K/min_k) * DIVUP(KronMatCols[0], KP_N_TILE), 
               DIVUP(KronMatRows[0], EXTERNAL_KP_K_TILE_)
            };
