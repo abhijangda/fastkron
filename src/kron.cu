@@ -30,45 +30,18 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 #include "kron_device.cu"
 
 #define N_THREADS 256
-#define KP_N_TILE 128
+#define KP_N_TILE 32
 
 #define TILE_X 1
 
-#define K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, K_EQUALS_VAR) \
-  (void*)kronGemmKernel<T, VecT, N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,1>,
-  // (void*)cuda_gemm<DATA_TYPE,N_THREADS,N_COARSE_TB,TILE_X,MAX_K,KP_N_K,KP_N_K,KP_N_TILE,K_EQUALS_VAR,0>,
-
-#define KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K) \
-  K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, 0) \
-  K_EQUALS_VAR_KERNELS(T, VecT, N_COARSE_TB, MAX_K, KP_N_K, 1)
-
-#define MAX_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 2) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 4) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 8) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 16) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 32) \
-  KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 64) \
-//   KP_N_K_KERNELS(T, VecT, N_COARSE_TB, MAX_K, 128) 
-
-#define COARSE_TB_KERNELS(T, VecT, N_COARSE_TB) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 32) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 64) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 128) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 256) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 512) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 1024) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 2048) \
-  MAX_K_KERNELS(T, VecT, N_COARSE_TB, 4096) \
-  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 8192) \
-  // MAX_K_KERNELS(T, VecT, N_COARSE_TB, 16384) 
+#include "kernel_decl.inc" 
 
 #define TYPE_KERNELS(T, VecT) \
-  COARSE_TB_KERNELS(T, VecT, 1)
+  KERNEL_DECL(T, VecT, 0),\
+  KERNEL_DECL(T, VecT, 1),
 
-//Two type kernels float/float4 and int/int4
 
+//Three type kernels float/float4, int/int4, and double/double4
 #define NUM_TYPE_KERNELS 3
 #define MIN_K 16
 #define MAX_K 4096
@@ -82,7 +55,7 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
 
-static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_K_EQUALS_VAR][NUM_KPK_EQUALS_VAR] = {
+static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_K_EQUALS_VAR][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float,  float4)
   TYPE_KERNELS(int,    int4)
@@ -167,7 +140,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     assert(log2(min_k)-log2(MIN_K) < NUM_MAX_K_KERNELS);
     assert(log2(KronMatRows[0])-log2(MIN_KP_K) < NUM_KP_N_K_KERNELS);
 
-    cuda_gemm_func = (KronGemmKernel)KronGemmKernels[typeKernelIdx][N_COARSE_TB/2][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][k_equals_var][0];
+    cuda_gemm_func = (KronGemmKernel)KronGemmKernels[typeKernelIdx][k_equals_var][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
     
     assert(cuda_gemm_func != NULL);
     
