@@ -34,7 +34,7 @@ for kronRows in pow_range(MinKronRows, 16):
         else:
             CRegRows = min(max((colsA//NumThreads)//CRegCols, 1), 8//CRegCols)
 
-        Configs[kronRows][colsA] = {"RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols}
+        Configs[kronRows][colsA] = {"RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32}
 
 Configs[32] = {}
 Configs[64] = {}
@@ -42,10 +42,10 @@ Configs[128] = {}
 Configs[256] = {}
 
 for colsA in pow_range(MinColsA, MaxColsA):
-    Configs[32][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 4}
-    Configs[64][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32}
-    Configs[128][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32}
-    Configs[256][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32}
+    Configs[32][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32}
+    Configs[64][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 16}
+    Configs[128][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32}
+    Configs[256][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32}
 
 
 with open("kernel_decl.inc", "w") as f:
@@ -69,7 +69,8 @@ with open("kernel_decl.inc", "w") as f:
                 rowsTileA = config["RowsTileA"]
                 regRows = config["CRegRows"]
                 regCols = config["CRegCols"]
-                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, {rowsTileA}, {colsA}, {kronRows}, {kronRows}, {MaxKronRowsTile}, K_EQUALS_VAR, 1, {regRows}, {regCols}>"
+                sharedTileKronRows = config["SharedTileKronRows"]
+                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, {rowsTileA}, {colsA}, {kronRows}, {kronRows}, {MaxKronRowsTile}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>"
         
             contents += ",\\\n"
 
