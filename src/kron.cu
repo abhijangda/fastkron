@@ -119,10 +119,24 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     KronGemmKernel cuda_gemm_func = NULL;
     dim3 grid;
     dim3 block;
+    const uint kronMat = NumKronMats-i-1;
 
     const int KP_K_BATCH = 1;
     int N_COARSE_TB = 1; //(M > 100) ? 2 : 1;
-    int min_k = min(K, MAX_K);
+    int max_k;
+    int min_k;
+
+    if (K > MAX_K) {
+      max_k = 1;
+      while (max_k <= MAX_K)
+        max_k *= KronMatCols[kronMat];
+      
+      max_k = max_k/KronMatCols[kronMat];
+      min_k = min(K, max_k);
+    } else {
+      min_k = K;
+    }
+
     int k_equals_var = (min_k == K) ? 1 : 0;
     // if (min_k/KronMatRows[0] >= 256) {
     //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
@@ -141,12 +155,12 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     cuda_gemm_func = (KronGemmKernel)KronGemmKernels[typeKernelIdx][k_equals_var][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
     
     assert(cuda_gemm_func != NULL);
-    uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
+    uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     //Create the grid and thread block
     grid = {
               DIVUP(M, tileRowA),
-              (K/min_k) * DIVUP(KronMatCols[0], KP_N_TILE), 
-              DIVUP(KronMatRows[0], EXTERNAL_KP_K_TILE_)
+              (K/min_k) * DIVUP(KronMatCols[kronMat], KP_N_TILE), 
+              DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
            };
     block = {
               N_THREADS, 
@@ -157,10 +171,10 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     //Create kernel args;
     void *args[] = {
                     (void*)&M, (void*)&N, (void*)&K, 
-                    (void*)&KronMatRows[NumKronMats-i-1],
-                    (void*)&KronMatCols[NumKronMats-i-1],
+                    (void*)&KronMatRows[kronMat],
+                    (void*)&KronMatCols[kronMat],
                     &prevResult, 
-                    (void*)&kronMats[NumKronMats-i-1], 
+                    (void*)&kronMats[kronMat], 
                     (void*)kronGemmResult, 
                     &i
                   };

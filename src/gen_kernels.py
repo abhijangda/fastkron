@@ -42,7 +42,7 @@ Configs[128] = {}
 Configs[256] = {}
 
 for colsA in pow_range(MinColsA, MaxColsA):
-    Configs[32][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 8}
+    Configs[32][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 4}
     Configs[64][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32}
     Configs[128][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32}
     Configs[256][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32}
