@@ -159,7 +159,7 @@ __device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
 //KP_K is KronRows
 
 // __launch_bounds__(NumThreads)
-template<typename ElemT, typename VecT, uint NumThreads, uint N_COARSE_TB, uint TileSizeRowsA, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR>
+template<typename ElemT, typename VecT, uint NumThreads, uint N_COARSE_TB, uint TileSizeRowsA, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols>
 __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const uint ColsA,
                                const uint KronRows, const uint KronCols,
                                const ElemT * __restrict__ glA, 
@@ -180,9 +180,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint TileSizeKronCols    = MIN(128,                  MaxTileSizeKronCols);
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
-  const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
-  const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
-  const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
+  // const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
+  // const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
+  // const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
   
   register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols];
   __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];

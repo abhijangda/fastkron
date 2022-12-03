@@ -14,21 +14,47 @@ MinKronRows = 2
 MaxKronRows = 64
 
 MaxKronRowsTile = 32
+NumThreads = 256
 
 AllColsA    = pow_range(MinColsA, MaxColsA)
 AllKronRows = pow_range(MinKronRows, MaxKronRows)
-RowTilesA   = {}
+Configs   = {}
+
 for kronRows in pow_range(MinKronRows, 16):
-    RowTilesA[kronRows] = 1
-RowTilesA[32] = 2
-RowTilesA[64] = 2
-RowTilesA[128] = 2
-RowTilesA[256] = 1
+    Configs[kronRows] = {}
+    for colsA in pow_range(MinColsA, MaxColsA):
+        CRegCols = 1
+        if colsA//NumThreads <= 1:
+            CRegCols = 1
+        else:
+            CRegCols = min(16, kronRows)
+        
+        if CRegCols > 8:
+            CRegRows = 1
+        else:
+            CRegRows = min(max((colsA//NumThreads)//CRegCols, 1), 8//CRegCols)
+
+        Configs[kronRows][colsA] = {"RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols}
+
+Configs[32] = {}
+Configs[64] = {}
+Configs[128] = {}
+Configs[256] = {}
+
+for colsA in pow_range(MinColsA, MaxColsA):
+    Configs[32][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 8}
+    Configs[64][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32}
+    Configs[128][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32}
+    Configs[256][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32}
+
 
 with open("kernel_decl.inc", "w") as f:
     f.write("static uint MaxTileRowsA[] = {")
     for d in pow_range(MinKronRows, MaxKronRows):
-        f.write(f"{RowTilesA[d]}")
+        config = Configs[d]
+        config = config[MaxColsA]
+        rowsTileA = config["RowsTileA"]
+        f.write(f"{rowsTileA}")
         if d != MaxKronRows:
             f.write(", ")
     f.write("};\n\n")
@@ -39,7 +65,11 @@ with open("kernel_decl.inc", "w") as f:
             if colsA < kronRows:
                 contents += "    NULL"
             else:
-                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS,1,{RowTilesA[kronRows]},{colsA},{kronRows},{kronRows},{MaxKronRowsTile},K_EQUALS_VAR,1>"
+                config = Configs[kronRows][colsA]
+                rowsTileA = config["RowsTileA"]
+                regRows = config["CRegRows"]
+                regCols = config["CRegCols"]
+                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, {rowsTileA}, {colsA}, {kronRows}, {kronRows}, {MaxKronRowsTile}, K_EQUALS_VAR, 1, {regRows}, {regCols}>"
         
             contents += ",\\\n"
 
