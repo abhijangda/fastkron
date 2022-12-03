@@ -41,7 +41,7 @@ static uint MaxTileRowsA[] = {1, 1, 1, 1, 2, 2};
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 1024, 4, 4, 32, K_EQUALS_VAR, 1, 1, 4>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 1024, 8, 8, 32, K_EQUALS_VAR, 1, 1, 4>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 1024, 16, 16, 32, K_EQUALS_VAR, 1, 1, 4>,\
-    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 2, 1024, 32, 32, 32, K_EQUALS_VAR, 1, 1, 8>,\
+    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 4, 1024, 32, 32, 32, K_EQUALS_VAR, 1, 1, 4>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 2, 1024, 64, 64, 32, K_EQUALS_VAR, 1, 1, 32>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 2048, 2, 2, 32, K_EQUALS_VAR, 1, 4, 2>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 2048, 4, 4, 32, K_EQUALS_VAR, 1, 2, 4>,\
@@ -53,5 +53,5 @@ static uint MaxTileRowsA[] = {1, 1, 1, 1, 2, 2};
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 4096, 4, 4, 32, K_EQUALS_VAR, 1, 2, 4>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 4096, 8, 8, 32, K_EQUALS_VAR, 1, 1, 8>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 4096, 16, 16, 32, K_EQUALS_VAR, 1, 1, 16>,\
-    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 2, 4096, 32, 32, 32, K_EQUALS_VAR, 1, 1, 8>,\
+    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 2, 4096, 32, 32, 32, K_EQUALS_VAR, 1, 2, 4>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 2, 4096, 64, 64, 32, K_EQUALS_VAR, 1, 1, 32>
