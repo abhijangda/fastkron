@@ -27,7 +27,7 @@ for kronRows in pow_range(MinKronRows, 16):
         if colsA//NumThreads <= 1:
             CRegCols = 1
         else:
-            CRegCols = min(16, kronRows)
+            CRegCols = min(16, min(colsA//NumThreads, kronRows))
         
         if CRegCols > 8:
             CRegRows = 1
