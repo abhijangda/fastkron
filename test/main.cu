@@ -47,8 +47,7 @@ int randMod(int i, int j) {return rand()%5 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
-  // #pragma omp parallel for collapse(2)
-  for (uint i = 0; i < M; i++) {
+  for (uint i = 0; i < M; i++) {    
     for (uint j = 0; j < N; j++) {
       mat[i*N + j] = (T)fnvalue(i,j);
     }
