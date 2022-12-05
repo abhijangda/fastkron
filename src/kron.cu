@@ -18,16 +18,12 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
-#define EXTERNAL_KP_K_TILE_ 128
-
 #define C_IN_REG
 #define EVAL
 
 //utils.h
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
-
-#include "kron_device.cu"
 
 #define N_THREADS 256
 
@@ -51,6 +47,10 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 #define NUM_COARSE_TB_KERNELS 1
 #define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
+
+#define EXTERNAL_KP_K_TILE_ MAX_K
+
+#include "kron_device.cu"
 
 static void* KronGemmKernels[NUM_TYPE_KERNELS][NUM_K_EQUALS_VAR][NUM_COARSE_TB_KERNELS][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
@@ -133,32 +133,35 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     // }
     // printf("min_k %d\n", min_k);
     uint typeKernelIdx = typeKernelIndex((T)0);
-    
-    while (max_k_kernel < MIN_K) {
-      max_k_kernel *= KronMatCols[0];
-    }
-    while (max_k_kernel < MAX_K && KronGemmKernels[typeKernelIdx][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0] != NULL) {
-      // printf("max_k_kernel %d KronMatCols[0] %d\n", max_k_kernel, KronMatCols[0]);
-      max_k_kernel *= KronMatCols[0];
-    }
-
-    // printf("max_k_kernel %d\n", max_k_kernel);
-
-    if (max_k_kernel > MAX_K || KronGemmKernels[typeKernelIdx][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0] == NULL)
-      max_k_kernel = max_k_kernel/KronMatCols[0];
-
-    // printf("max_k_kernel %d\n", max_k_kernel);
-
-
-    if (K > max_k_kernel) {
-      max_k = 1;
-      while (max_k <= max_k_kernel)
-        max_k *= KronMatCols[kronMat];
-      
-      max_k = max_k/KronMatCols[kronMat];
-      min_k = min(K, max_k);
+    if (K > MAX_K && KronMatCols[kronMat] >= 256) {
+      min_k = MAX_K;
     } else {
-      min_k = K;
+      while (max_k_kernel < MIN_K) {
+        max_k_kernel *= KronMatCols[0];
+      }
+      while (max_k_kernel < MAX_K && KronGemmKernels[typeKernelIdx][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0] != NULL) {
+        // printf("max_k_kernel %d KronMatCols[0] %d\n", max_k_kernel, KronMatCols[0]);
+        max_k_kernel *= KronMatCols[0];
+      }
+
+      // printf("max_k_kernel %d\n", max_k_kernel);
+
+      if (max_k_kernel > MAX_K || KronGemmKernels[typeKernelIdx][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0] == NULL)
+        max_k_kernel = max_k_kernel/KronMatCols[0];
+
+      // printf("max_k_kernel %d\n", max_k_kernel);
+
+
+      if (K > max_k_kernel) {
+        max_k = 1;
+        while (max_k <= max_k_kernel)
+          max_k *= KronMatCols[kronMat];
+        
+        max_k = max_k/KronMatCols[kronMat];
+        min_k = min(K, max_k);
+      } else {
+        min_k = K;
+      }
     }
 
     int k_equals_var = (min_k == K) ? 1 : 0;
@@ -179,7 +182,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     grid = {
               DIVUP(M, tileRowA),
               (K/min_k) * DIVUP(KronMatCols[kronMat], tileKronCols),
-              DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
+              1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
            };
     block = {
               N_THREADS, 
