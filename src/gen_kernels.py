@@ -50,7 +50,7 @@ for colsA in pow_range(MinColsA, MaxColsA):
 def tooMuchSharedMem(colsA, kronRows):
     return (colsA == 65536 and kronRows <= 128) or \
            (colsA == 32768 and kronRows <= 128) or \
-           (colsA == 16384 and kronRows <= 4)
+           (colsA > 4096 and kronRows <= 4) #for KronMat = 4, 4096 works best even for larger sizes
 
 with open("kernel_decl.inc", "w") as f:
     f.writelines([f"#define MAX_K {MaxColsA}\n"])
