@@ -133,8 +133,10 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     // }
     // printf("min_k %d\n", min_k);
     uint typeKernelIdx = typeKernelIndex((T)0);
-    if (K > MAX_K && KronMatCols[kronMat] >= 256) {
+    if (KronMatCols[kronMat] == 1024) {
       min_k = MAX_K;
+    } else if (K > MAX_K && KronMatCols[kronMat] >= 256) {
+      min_k = 32768;
     } else {
       while (max_k_kernel < MIN_K) {
         max_k_kernel *= KronMatCols[0];

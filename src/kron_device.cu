@@ -177,7 +177,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols);
   const uint MaxTileSizeKronRows = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
   const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxTileSizeKronRows);
-  const uint TileSizeKronCols    = MIN(128,                 MaxTileSizeKronCols);
+  const uint TileSizeKronCols    = MIN(256,                 MaxTileSizeKronCols);
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
   // const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
