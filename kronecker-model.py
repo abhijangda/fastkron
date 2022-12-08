@@ -276,8 +276,8 @@ for case in cases:
         print(o)
         print(case)
 
-row_format = "{:>20}" * 9
-print(row_format.format("Batch-Size", "d", "2^l", "PyTorchTime(us)", "cuBLASTime(us)", "atTime(us)", "CUDATime(us)", "Speedup-Pytorch", "Speedup-cublas"))
+row_format = "{:>10}"*3 + "{:>15}" * 6
+print(row_format.format("Batch-Size", "d", "2^l", "PyTorch(us)", "cuBLAS(us)", "at(us)", "CUDA(us)", "Speedup-Pytorch", "Speedup-cublas"))
 for case in cases:
     twoPowerL = case["2^l"]
     print(row_format.format(case["npoints"], case["d"],twoPowerL, 
