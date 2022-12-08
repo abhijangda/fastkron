@@ -87,7 +87,7 @@ with open("kernel_decl.inc", "w") as f:
             f.write(", ")
     f.write("};\n\n")
     
-    f.write("#define KERNEL_DECL(T, VecT, K_EQUALS_VAR) \\\n")
+    f.write("#define KERNEL_DECL(T, VecT, RowModTileIsZero, K_EQUALS_VAR) \\\n")
     contents = ""
     for colsA in AllColsA:
         for kronRows in AllKronRows:
@@ -100,7 +100,7 @@ with open("kernel_decl.inc", "w") as f:
                 regCols = config["CRegCols"]
                 tileKronCols = config["MaxTileKronCols"]
                 sharedTileKronRows = config["SharedTileKronRows"]
-                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, {rowsTileA}, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>"
+                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>"
         
             contents += ",\\\n"
 

@@ -159,7 +159,7 @@ __device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
 //KP_K is KronRows
 
 // __launch_bounds__(NumThreads)
-template<typename ElemT, typename VecT, uint NumThreads, uint N_COARSE_TB, uint TileSizeRowsA, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
+template<typename ElemT, typename VecT, uint NumThreads, uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
 __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const uint ColsA,
                                const uint KronRows, const uint KronCols,
                                const ElemT * __restrict__ glA, 
@@ -247,7 +247,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   }
 
   for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
-            tileRowA  < gridDim.x  * TileSizeRowsA * N_COARSE_TB;
+            tileRowA  < gridDim.x  * TileSizeRowsA;
             tileRowA += gridDim.x  * TileSizeRowsA) {
   // if (tid == 0) {
   //   printf("tileRowA %d blockIdx.x %d gridDim.x %d TileSizeRowsA %d\n", tileRowA, blockIdx.x, gridDim.x, TileSizeRowsA);
@@ -271,7 +271,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }}}
 
     for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) {
-      for (uint rowA = 0; rowA < (TileSizeRowsA > 1 ? MIN(TileSizeRowsA, RowsC - tileRowA) : TileSizeRowsA); rowA += 1) {
+      for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
         for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
           uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
           const ElemT* addrA;
@@ -342,7 +342,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
-          if ((TileSizeRowsA > 1 && rowA < RowsC - tileRowA) || TileSizeRowsA == 1) {
+          if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < RowsC - tileRowA)) {
             #pragma unroll
             for (uint rowC = 0; rowC < CRegRows; rowC++) {
               uint shACol = tileColA + rowC;
@@ -361,7 +361,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
-          if ((TileSizeRowsA > 1 && rowA < RowsC - tileRowA) || TileSizeRowsA == 1) {
+          if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < RowsC - tileRowA)) 
+          {
             #pragma unroll
             for (uint i = 0;    i < CRegRows;         i++)
             #pragma unroll
@@ -378,7 +379,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
     #pragma unroll
     for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
-      if ((TileSizeRowsA > 1 && rowA < RowsC - tileRowA) || TileSizeRowsA == 1) {
+      if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < RowsC - tileRowA)) {
         #pragma unroll
         for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
           //Three least significant bits of CRegRows can be either 4, 2, or 1
