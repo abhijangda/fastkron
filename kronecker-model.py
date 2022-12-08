@@ -148,7 +148,11 @@ def doGPytorch(twoPowerL, npoints, d):
     # for i in range(2, 3):
     model = NewlinearRegression(inputDim, outputDim, d)
     train_and_predict(model, x_train, y_train, True, trans=True,print_model=True)
-    
+    # t = torch.cuda.get_device_properties(0).total_memory
+    # r = torch.cuda.memory_reserved(0)
+    # a = torch.cuda.memory_allocated(0)
+    # f = r-a 
+    # print(f"r {r}")
     all_cuda_times = model.all_cuda_times
     all_cublas_times = model.all_cublas_times
     all_at_times = model.all_at_times
@@ -197,12 +201,12 @@ def doTorchKron(twoPower, npoints, d):
 npoints = 4
 maxD = {2:22, 4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 4, 256: 3, 512: 3, 1024:3}
 cases = []
-MaxSize = 4*(1024*1024*1024)//4
+MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
 for twoPower in maxD:
     krons = 2 if twoPower > 4 else 4
     while True:
-        size = npoints * (twoPower**krons)
-        if size <= MaxSize:
+        size = npoints * (twoPower**krons) * (4 if dataType == torch.float32 or dataType == torch.int32 else 8)
+        if size*5.1 <= MaxSize: #Pytorch allocates 5.1 times more memory
             cases += [{"npoints": npoints, "2^l": twoPower, "d": krons}]
         else:
             break
@@ -245,7 +249,6 @@ case_times = {}
 for case in cases:
         if True:
             (cublas_times, at_times, cuda_times) = doGPytorch(case["2^l"], case["npoints"], case["d"])
-            print(len(cuda_times), len(cublas_times), len(at_times))
             if len(cuda_times) > 1: 
                 case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
                 case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
