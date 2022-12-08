@@ -136,4 +136,4 @@ static uint MaxTileKronCols[] = {32, 32, 32, 32, 32, 64, 64, 64, 128, 256};
     NULL,\
     NULL,\
     NULL,\
-    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 65536, 1024, 1024, 256, K_EQUALS_VAR, 1, 1, 64, 32>
+    (void*)kronGemmKernel<T, VecT, N_THREADS, 1, 1, 65536, 1024, 1024, 256, K_EQUALS_VAR, 1, 1, 32, 32>

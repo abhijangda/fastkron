@@ -194,8 +194,20 @@ def doTorchKron(twoPower, npoints, d):
     # print(all_cublas_times)
     return all_cublas_times, all_at_times, all_cuda_times
 
+npoints = 4
 maxD = {2:22, 4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 4, 256: 3, 512: 3, 1024:3}
-cases = [{"npoints": 16, "2^l": j, "d": i} for j in maxD for i in range(2 if j > 4 else 4, maxD[j])]
+cases = []
+MaxSize = 4*(1024*1024*1024)//4
+for twoPower in maxD:
+    krons = 2 if twoPower > 4 else 4
+    while True:
+        size = npoints * (twoPower**krons)
+        if size <= MaxSize:
+            cases += [{"npoints": npoints, "2^l": twoPower, "d": krons}]
+        else:
+            break
+        krons += 1
+
 #  [       {"npoints": 100, "2^l": 32, "d": 2},
 #         {"npoints": 10, "2^l": 32, "d": 2},
 #         {"npoints": 1, "2^l": 32, "d": 2},
