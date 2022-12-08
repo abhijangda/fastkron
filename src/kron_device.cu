@@ -249,8 +249,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
             tileRowA  < gridDim.x  * TileSizeRowsA * N_COARSE_TB;
             tileRowA += gridDim.x  * TileSizeRowsA) {
-  // if (tileRowA == 0 && tid == 0) {
-  //   printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
+  // if (tid == 0) {
+  //   printf("tileRowA %d blockIdx.x %d gridDim.x %d TileSizeRowsA %d\n", tileRowA, blockIdx.x, gridDim.x, TileSizeRowsA);
   // }
 
   for (uint outerTileKronCol =  kp_col_start_;
@@ -271,7 +271,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }}}
 
     for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) {
-      for (uint rowA = 0; rowA < TileSizeRowsA; rowA += 1) {
+      for (uint rowA = 0; rowA < (TileSizeRowsA > 1 ? MIN(TileSizeRowsA, RowsC - tileRowA) : TileSizeRowsA); rowA += 1) {
         for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
           uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
           const ElemT* addrA;
@@ -342,13 +342,14 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
-          #pragma unroll
-          for (uint rowC = 0; rowC < CRegRows; rowC++) {
+          if ((TileSizeRowsA > 1 && rowA < RowsC - tileRowA) || TileSizeRowsA == 1) {
+            #pragma unroll
+            for (uint rowC = 0; rowC < CRegRows; rowC++) {
               uint shACol = tileColA + rowC;
               #pragma unroll
               for (uint colC = 0; colC < RegTileSizeACols; colC++)
                 Ar[rowA][rowC][colC] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
-          }}
+          }}}
           
           #pragma unroll
           for (uint colC = 0; colC < CRegCols; colC++) {
@@ -360,13 +361,15 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
           #pragma unroll
           for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
-          #pragma unroll
-          for (uint i = 0;    i < CRegRows;         i++)
-          #pragma unroll
-          for (uint j = 0;    j < CRegCols;         j++)
-          #pragma unroll
-          for (uint k = 0;    k < RegTileSizeACols; k++)
-            regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+          if ((TileSizeRowsA > 1 && rowA < RowsC - tileRowA) || TileSizeRowsA == 1) {
+            #pragma unroll
+            for (uint i = 0;    i < CRegRows;         i++)
+            #pragma unroll
+            for (uint j = 0;    j < CRegCols;         j++)
+            #pragma unroll
+            for (uint k = 0;    k < RegTileSizeACols; k++)
+              regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+          }
         }
       }
 
@@ -375,39 +378,41 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
     #pragma unroll
     for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
-      #pragma unroll
-      for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-        //Three least significant bits of CRegRows can be either 4, 2, or 1
-        constexpr uint vecTyNumElems = CRegRows & (8 - 1);
-#ifndef EVAL
-        if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
-          printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
-#endif
-        for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-          const uint cRow = (rowA + tileRowA);
-          uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-          if (!K_EQUALS_VAR) {
-            uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
-            cCol = tile_k * (MaxColsA/kronCols) + 
-                (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                cCol%(MaxColsA/kronCols);
-          }
-          if (MaxTileSizeKronCols != MaxKronCols) {
-            uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-            cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
-          }
-          const uint cIdx = cRow * colsC + cCol;
-          // assert(tid == cCol);
-          // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-          //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
-          if (cCol < colsA) {
-            switch (vecTyNumElems) {
-              case 4:
-                globalStore4Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]);
-              case 2:
-                globalStore2Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j]);
-              case 1:
-                globalStore1Elems(&glC[cIdx], regC[rowA][reg_i][reg_j]);
+      if ((TileSizeRowsA > 1 && rowA < RowsC - tileRowA) || TileSizeRowsA == 1) {
+        #pragma unroll
+        for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
+          //Three least significant bits of CRegRows can be either 4, 2, or 1
+          constexpr uint vecTyNumElems = CRegRows & (8 - 1);
+  #ifndef EVAL
+          if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
+            printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
+  #endif
+          for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
+            const uint cRow = (rowA + tileRowA);
+            uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+            if (!K_EQUALS_VAR) {
+              uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+              cCol = tile_k * (MaxColsA/kronCols) + 
+                  (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+                  cCol%(MaxColsA/kronCols);
+            }
+            if (MaxTileSizeKronCols != MaxKronCols) {
+              uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
+              cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+            }
+            const uint cIdx = cRow * colsC + cCol;
+            // assert(tid == cCol);
+            // if (kp_idx == 0&& cRow == 0 && cCol < 64)
+            //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
+            if (cCol < colsA) {
+              switch (vecTyNumElems) {
+                case 4:
+                  globalStore4Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]);
+                case 2:
+                  globalStore2Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j]);
+                case 1:
+                  globalStore1Elems(&glC[cIdx], regC[rowA][reg_i][reg_j]);
+              }
             }
           }
         }

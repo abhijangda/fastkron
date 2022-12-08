@@ -9,4 +9,4 @@ kron: test/main.cu libKron.so
 	nvcc $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@
 
 clean:
-	rm -rf kron
+	rm -rf kron libKron.so
