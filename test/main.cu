@@ -248,9 +248,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T* dKpMatmulResult[2];
   T* dKpMats[NUM_KP_MATS];
 
-  CUDACHECK(cudaMalloc(&dX, M * K * sizeof(T)));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], M * std::max(N,K) * sizeof(T)));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], M * std::max(N,K) * sizeof(T)));
+  uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
+  CUDACHECK(cudaMalloc(&dX, sizeX));
+  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
+  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
   
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     CUDACHECK(cudaMalloc(&dKpMats[i],            KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
@@ -258,10 +259,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
 
   for (uint i = 0; i < 2; i++) {
-    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, M * std::max(N,K) * sizeof(T)));
+    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, sizeX));
   }
 
-  CUDACHECK(cudaMemcpy(dX, hX, M * K * sizeof(T), cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
   
   if (checkResults) {
     T* dResult;
@@ -274,8 +275,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //Run GPU implementation
     dResult = kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     CUDACHECK(cudaDeviceSynchronize());
-    T* dResultToHost = new T[M*N];
-    CUDACHECK(cudaMemcpy(dResultToHost, dResult, M*N*sizeof(T), cudaMemcpyDeviceToHost));
+    T* dResultToHost = (T*)malloc(sizeX);
+    CUDACHECK(cudaMemcpy(dResultToHost, dResult, sizeX, cudaMemcpyDeviceToHost));
     
     //Check Results
     if (check(hResult, dResultToHost, M, N))

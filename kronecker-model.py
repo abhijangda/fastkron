@@ -198,7 +198,7 @@ def doTorchKron(twoPower, npoints, d):
     # print(all_cublas_times)
     return all_cublas_times, all_at_times, all_cuda_times
 
-npoints = 4
+npoints = 320
 maxD = {2:22, 4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 4, 256: 3, 512: 3, 1024:3}
 cases = []
 MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
