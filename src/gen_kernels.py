@@ -100,7 +100,7 @@ with open("kernel_decl.inc", "w") as f:
                 regCols = config["CRegCols"]
                 tileKronCols = config["MaxTileKronCols"]
                 sharedTileKronRows = config["SharedTileKronRows"]
-                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>"
+                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>"
         
             contents += ",\\\n"
 
