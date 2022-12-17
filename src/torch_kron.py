@@ -23,21 +23,20 @@ def matmulkron(input, kronmats):
         newinput = output.reshape(k.shape[0], shape[0] * (shape[1]//k.shape[0]))
         output = torch.matmul(k.T, newinput)
         # print(output)
-        print(24, output.shape, k.shape, newinput.shape)
+        # print(24, output.shape, k.shape, newinput.shape)
         output = output.view(k.shape[0], (shape[1]//k.shape[0]), shape[0])
-        print(25, output.shape)
+        # print(25, output.shape)
         output = output.transpose(-3,-2)
-        print(28, output.shape)
-        output = output.reshape(*[], -1, shape[0])
-        print(30, output.shape)
-        print(output)
+        # print(28, output.shape)
+        output = output.reshape(shape[1], shape[0])
+        # print(30, output.shape)
+        # print(output)
     return output.mT
-
 
 if __name__ == "__main__":
     npoints = 2
-    twoPower = 3
-    d = 2
+    twoPower = 8
+    d = 3
     input = initmat(npoints, twoPower**d)
     kronmats = []
     for s in range(d):
