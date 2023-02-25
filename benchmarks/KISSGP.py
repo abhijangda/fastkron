@@ -4,7 +4,7 @@ import copy
 import math
 import torch
 import gpytorch
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 import numpy as np
 
 from torch.utils.data import TensorDataset, DataLoader
@@ -32,8 +32,11 @@ def format_exception(e):
 
     return exception_str
 
-n = 1024
-dims = 5
+n = int(sys.argv[1])
+dims = int(sys.argv[2])
+grid_size = int(sys.argv[3])
+num_trace_samples = int(sys.argv[4])
+
 train_x = torch.zeros(n, dims)
 # for i in range(n):
 #     for j in range(dims):
@@ -42,7 +45,6 @@ train_x = torch.zeros(n, dims)
 train_y = torch.sin((train_x[:, 0] + train_x[:, 1]) * (2 * math.pi)) + torch.randn_like(train_x[:, 0]).mul(0.01)
 train_x = train_x.cuda()
 train_y = train_y.cuda()
-grid_size = 16
 
 print(train_x.shape)
 print(train_y.shape)
@@ -61,7 +63,7 @@ class GPRegressionModel(gpytorch.models.ExactGP):
             # )
             
             self.covar_module = GridInterpolationKernel(
-                    gpytorch.kernels.CosineKernel(), grid_size=grid_size, num_dims=dims
+                    gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=dims)), grid_size=grid_size, num_dims=dims
                 )
 
     def forward(self, x):
@@ -124,7 +126,9 @@ def train(training_iterations=10):
 
     # print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
 
-with gpytorch.settings.use_toeplitz(False):
-    with gpytorch.settings.num_trace_samples(255): # gpytorch.settings.fast_computations.log_prob(False):
-        with gpytorch.settings.debug(False):
-            train()
+with gpytorch.settings.use_toeplitz(True):
+    with gpytorch.settings.num_trace_samples(num_trace_samples): # gpytorch.settings.fast_computations.log_prob(False):
+        with gpytorch.settings.max_preconditioner_size(0):
+            with gpytorch.settings.min_preconditioning_size(0):
+                with gpytorch.settings.debug(False):
+                    train()
