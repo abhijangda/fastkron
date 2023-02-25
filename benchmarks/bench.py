@@ -6,14 +6,14 @@ results = []
 Ds = {
     2: [5, 18],
     4: [4, 10],
-    8: [2, 6],
-    16: [2, 5],
-    32: [2, 5],
-    64: [2, 3]
+    8: [2, 7],
+    16: [2, 6],
+    32: [2, 6],
+    64: [2, 4]
 }
 grids = [4,8,16,32,64]
 for n in [1024]:
-    for trace_samples in [255]:
+    for trace_samples in [7]:
         for grid in grids:
             for d in range(Ds[grid][0], Ds[grid][1] + 1):
                 command = "python3 KISSGP.py %d %d %d %d"%(n, d, grid, trace_samples)
