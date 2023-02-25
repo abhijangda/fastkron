@@ -24,10 +24,10 @@ for n in [1024]:
                     kron = re.findall(r'Kron Time so far: \s*([\d\.]+)', o)
                     kron = kron[-1]
                     print(kron, total)
-                    results += [(n, grid, d, trace_samples, kron, total)]
+                    results += [(n, d, grid, trace_samples, kron, total)]
                 else:
                     print (s)
-                    results += [(n, grid, d, trace_samples, -1, -1)]
+                    results += [(n, d, grid, trace_samples, -1, -1)]
 
 print("N & d & grid & TraceSamples & KronTime & TotalTime")
 for r in results:

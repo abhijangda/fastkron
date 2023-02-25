@@ -126,7 +126,7 @@ def train(training_iterations=10):
 
     # print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
 
-with gpytorch.settings.use_toeplitz(True):
+with gpytorch.settings.use_toeplitz(False):
     with gpytorch.settings.num_trace_samples(num_trace_samples): # gpytorch.settings.fast_computations.log_prob(False):
         with gpytorch.settings.max_preconditioner_size(0):
             with gpytorch.settings.min_preconditioning_size(0):
