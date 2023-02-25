@@ -62,9 +62,8 @@ class GPRegressionModel(gpytorch.models.ExactGP):
             #     )
             # )
             
-            self.covar_module = GridInterpolationKernel(
-                    gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=dims)), grid_size=grid_size, num_dims=dims
-                )
+            self.covar_module = gpytorch.kernels.ScaleKernel(GridInterpolationKernel(gpytorch.kernels.RBFKernel(ard_num_dims=dims),
+                                                        grid_size=grid_size, num_dims=dims))
 
     def forward(self, x):
             mean_x = self.mean_module(x)
@@ -72,7 +71,6 @@ class GPRegressionModel(gpytorch.models.ExactGP):
             return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
     # model = train_to_covergence(model, train_x, train_y)
-
 
 def train(training_iterations=10):
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
