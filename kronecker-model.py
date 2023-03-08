@@ -11,13 +11,20 @@ import gpytorch as gp
 import torch.nn.functional as F
 import torch_kron
 
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 import math
 
 # In[2]:
 
 use_torch_profiler = True
 epochs = 100
+use_command_args = False
+if len(sys.argv) > 1:
+    npointsArg = int(sys.argv[1])
+    dArg = int(sys.argv[2])
+    fArg = int(sys.argv[3])
+    epochs = int(sys.argv[4])
+    use_command_args = True
 
 # model and data 
 dataType = torch.float32
@@ -198,88 +205,92 @@ def doTorchKron(twoPower, npoints, d):
     # print(all_cublas_times)
     return all_cublas_times, all_at_times, all_cuda_times
 
-npoints = 320
-maxD = {2:22, 4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 4, 256: 3, 512: 3, 1024:3}
-cases = []
-MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
-for twoPower in maxD:
-    krons = 2 if twoPower > 4 else 4
-    while True:
-        size = npoints * (twoPower**krons) * (4 if dataType == torch.float32 or dataType == torch.int32 else 8)
-        if size*5.1 <= MaxSize: #Pytorch allocates 5.1 times more memory
-            cases += [{"npoints": npoints, "2^l": twoPower, "d": krons}]
-        else:
-            break
-        krons += 1
-
-#  [       {"npoints": 100, "2^l": 32, "d": 2},
-#         {"npoints": 10, "2^l": 32, "d": 2},
-#         {"npoints": 1, "2^l": 32, "d": 2},
-#         # {"npoints": 65536, "2^l^d": 1024, "d": 2},
-        
-#         # {"npoints": 100, "2^l^d": 256, "d": 2},
-#         {"npoints": 100, "2^l": 4, "d": 5},
-#         {"npoints": 10, "2^l": 4, "d": 5},
-#         {"npoints": 1, "2^l": 4, "d": 5},
-#         {"npoints": 100, "2^l": 2, "d": 10},
-#         {"npoints": 10, "2^l": 2, "d": 10},
-#         {"npoints": 1, "2^l": 2, "d": 10},
-
-#         {"npoints": 100, "2^l": 4, "d": 4},
-#         {"npoints": 100, "2^l": 4, "d": 5},
-#         {"npoints": 100, "2^l": 4, "d": 6},
-#         {"npoints": 100, "2^l": 4, "d": 7},
-#         {"npoints": 100, "2^l": 4, "d": 8},
-#         {"npoints": 100, "2^l": 4, "d": 9},
-#         {"npoints": 100, "2^l": 4, "d": 10},
-
-#         {"npoints": 100, "2^l": 8, "d": 5},
-        
-#         {"npoints": 10, "2^l": 4, "d": 4},
-#         {"npoints": 1, "2^l": 4, "d": 4},
-
-#         {"npoints": 100, "2^l": 4, "d": 6},
-#         {"npoints": 1, "2^l": 4, "d": 6},
-#         ]
-
-import subprocess
-import sys 
-
-case_times = {}
-for case in cases:
-        if True:
-            (cublas_times, at_times, cuda_times) = doGPytorch(case["2^l"], case["npoints"], case["d"])
-            if len(cuda_times) > 1: 
-                case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
-                case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
-                case["atTime"] = sum(at_times[1:])/len(at_times[1:])
+if use_command_args:
+    (cublas_times, at_times, cuda_times) = doGPytorch(fArg, npointsArg, dArg)
+    print("cuBLAS", cublas_times, "at", at_times, "Total", cuda_times)
+else:
+    npoints = 320
+    maxD = {2:22, 4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 4, 256: 3, 512: 3, 1024:3}
+    cases = []
+    MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
+    for twoPower in maxD:
+        krons = 2 if twoPower > 4 else 4
+        while True:
+            size = npoints * (twoPower**krons) * (4 if dataType == torch.float32 or dataType == torch.int32 else 8)
+            if size*5.1 <= MaxSize: #Pytorch allocates 5.1 times more memory
+                cases += [{"npoints": npoints, "2^l": twoPower, "d": krons}]
             else:
-                case["PyTorchTime"] = -1
-                case["cuBLASTime"] = -1
-                case["atTime"] = -1
-            bandwidth = 4 * 2 * (case["npoints"] * (case["2^l"] ** case["d"]))/(case["PyTorchTime"]/1e6)/1e9
-            case["PyTorchBandwidth"] = bandwidth
-        
-            # case["PyTorchTime"] = -1
-        twoPowerL = case["2^l"]
-        dataTypeStr = "float" if dataType == torch.float32 else "double"
-        (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t %s -c -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
-        if s != 0:
-            print(o)
-            case["CUDATime"] = -1
-            case["Speedup"] = -1
-        else:
-            kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
-            case["CUDATime"] = kront
-        case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
-        case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
-        print(o)
-        print(case)
+                break
+            krons += 1
 
-row_format = "{:>10}"*3 + "{:>15}" * 6
-print(row_format.format("Batch-Size", "d", "2^l", "PyTorch(us)", "cuBLAS(us)", "at(us)", "CUDA(us)", "Speedup-Pytorch", "Speedup-cublas"))
-for case in cases:
-    twoPowerL = case["2^l"]
-    print(row_format.format(case["npoints"], case["d"],twoPowerL, 
-                            "%.3f"%case["PyTorchTime"], "%.3f"%case["cuBLASTime"], "%.3f"%case["atTime"], 
-                            "%.3f"%case["CUDATime"], "%.3f"%case["Speedup-Pytorch"], "%.3f"%case["Speedup-cublas"]))
+    #  [       {"npoints": 100, "2^l": 32, "d": 2},
+    #         {"npoints": 10, "2^l": 32, "d": 2},
+    #         {"npoints": 1, "2^l": 32, "d": 2},
+    #         # {"npoints": 65536, "2^l^d": 1024, "d": 2},
+            
+    #         # {"npoints": 100, "2^l^d": 256, "d": 2},
+    #         {"npoints": 100, "2^l": 4, "d": 5},
+    #         {"npoints": 10, "2^l": 4, "d": 5},
+    #         {"npoints": 1, "2^l": 4, "d": 5},
+    #         {"npoints": 100, "2^l": 2, "d": 10},
+    #         {"npoints": 10, "2^l": 2, "d": 10},
+    #         {"npoints": 1, "2^l": 2, "d": 10},
+
+    #         {"npoints": 100, "2^l": 4, "d": 4},
+    #         {"npoints": 100, "2^l": 4, "d": 5},
+    #         {"npoints": 100, "2^l": 4, "d": 6},
+    #         {"npoints": 100, "2^l": 4, "d": 7},
+    #         {"npoints": 100, "2^l": 4, "d": 8},
+    #         {"npoints": 100, "2^l": 4, "d": 9},
+    #         {"npoints": 100, "2^l": 4, "d": 10},
+
+    #         {"npoints": 100, "2^l": 8, "d": 5},
+            
+    #         {"npoints": 10, "2^l": 4, "d": 4},
+    #         {"npoints": 1, "2^l": 4, "d": 4},
+
+    #         {"npoints": 100, "2^l": 4, "d": 6},
+    #         {"npoints": 1, "2^l": 4, "d": 6},
+    #         ]
+
+    import subprocess
+    import sys 
+
+    case_times = {}
+    for case in cases:
+            if True:
+                (cublas_times, at_times, cuda_times) = doGPytorch(case["2^l"], case["npoints"], case["d"])
+                if len(cuda_times) > 1: 
+                    case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])
+                    case["cuBLASTime"] = sum(cublas_times[1:])/len(cublas_times[1:])
+                    case["atTime"] = sum(at_times[1:])/len(at_times[1:])
+                else:
+                    case["PyTorchTime"] = -1
+                    case["cuBLASTime"] = -1
+                    case["atTime"] = -1
+                bandwidth = 4 * 2 * (case["npoints"] * (case["2^l"] ** case["d"]))/(case["PyTorchTime"]/1e6)/1e9
+                case["PyTorchBandwidth"] = bandwidth
+            
+                # case["PyTorchTime"] = -1
+            # twoPowerL = case["2^l"]
+            # dataTypeStr = "float" if dataType == torch.float32 else "double"
+            # (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t %s -c -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
+            # if s != 0:
+            #     print(o)
+            #     case["CUDATime"] = -1
+            #     case["Speedup"] = -1
+            # else:
+            #     kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
+            #     case["CUDATime"] = kront
+            # case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
+            # case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
+            # print(o)
+            # print(case)
+
+    row_format = "{:>10}"*3 + "{:>15}" * 6
+    print(row_format.format("Batch-Size", "d", "2^l", "PyTorch(us)", "cuBLAS(us)", "at(us)", "CUDA(us)", "Speedup-Pytorch", "Speedup-cublas"))
+    for case in cases:
+        twoPowerL = case["2^l"]
+        print(row_format.format(case["npoints"], case["d"],twoPowerL, 
+                                "%.3f"%case["PyTorchTime"], "%.3f"%case["cuBLASTime"], "%.3f"%case["atTime"], 
+                                "%.3f"%case["CUDATime"], "%.3f"%case["Speedup-Pytorch"], "%.3f"%case["Speedup-cublas"]))

@@ -227,7 +227,7 @@ static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[
 ***************************************************/
 template<typename T, typename VecT>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
-                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, bool checkResults) {
+                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, bool checkResults) {
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
 
   //Allocate host data
@@ -295,7 +295,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   cudaStreamCreate(&stream);
 
   //Warm Up iterations
-  for (uint i = 0; i < 10; i++) {
+  for (uint i = 0; i < warmup; i++) {
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaStreamSynchronize(stream));
@@ -338,6 +338,7 @@ int main(int argc, char* argv[]) {
   char* type = NULL;
   bool checkResults = false;
   int runs = 0;
+  int warmup = 0;
 
   AnyOption *opt = new AnyOption();
 
@@ -348,6 +349,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage("type:  Type of matrices (float, int, half, double)");
   opt->addUsage("check: Check results for first run");
   opt->addUsage("runs:  Number of runs");
+  opt->addUsage("warmup:  Number of warmup runs");
 
   opt->setOption("batch", 'b');
   opt->setOption("facs", 'f');
@@ -355,6 +357,7 @@ int main(int argc, char* argv[]) {
   opt->setOption("type", 't');
   opt->setFlag("check", 'c');
   opt->setOption("runs", 'r');
+  opt->setOption("warmup", 'w');
 
   opt->processCommandArgs(argc, argv);
   
@@ -386,6 +389,10 @@ int main(int argc, char* argv[]) {
     runs = atoi(opt->getValue('r'));
   }
 
+  if (opt->getValue('w') != NULL) {
+    warmup = atoi(opt->getValue('w'));
+  }
+
   if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
     printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
     return 1;
@@ -403,11 +410,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, checkResults);
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, checkResults);
   else if (strcmp(type, "int") == 0)
-    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, checkResults);
+    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, checkResults);
   else if (strcmp(type, "double") == 0)
-    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, checkResults);
+    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, checkResults);
   else
     printf("type not supported %s\n", type);
 
