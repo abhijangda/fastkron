@@ -2,28 +2,29 @@ import subprocess
 import re
 import os
 import sys
+import copy
 
 ENV_VAR = "PYTHONPATH=/home/parasail/.local/lib/python3.8/site-packages/:$PYTHONPATH LD_LIBRARY_PATH=%s:"%(os.getcwd())
 NVPROF_BIN="/usr/local/cuda/bin/nvprof"
-NVPROF_FLAGS="--metrics all"
+RequiredMetrics = ["shared_load_transactions_per_request", "gld_transactions_per_request", "global_load_requests"]
+NVPROF_FLAGS="--metrics "+",".join(RequiredMetrics)
 
 NVPROF_COMMAND=" ".join([NVPROF_BIN, NVPROF_FLAGS])
 
 npoints = 320
-cases = {4:(7,7)} #{4:(7, 10), 8:(3,6), 16:(2,5), 32: (2,4)}
+cases = {4:(7, 10), 8:(3,6), 16:(2,5), 32: (2,4)}
 
 FASTKRON_BIN = "./kron"
 FASTKRON_FLAGS = "-b 320 -f %d -s %d -t float -r 1 -w 0"
 GPYTORCH_BIN = "python3 kronecker-model.py"
 GPYTORCH_FLAGS = "320 %d %d 1" 
 MetricValues = {
-    "fastkron": {},
-    "cublas": {},
-    "transpose": {},
+    "fastkron": {m : 0 for m in RequiredMetrics},
+    "cublas": {m : 0 for m in RequiredMetrics},
+    "transpose": {m : 0 for m in RequiredMetrics},
 }
 metric_values = []
 
-RequiredMetrics = ["shared_load_transactions_per_request", "gld_transactions_per_request", "global_load_requests"]
 def parseMetricLine(line):
     # return re.findall(r'(\d+)\s+([\_\w\d\-]+)\s+([\w+\s\d\(\)\-]+)\s+(.+?)\s+(.+?)\s+(.+)',line)
     line = line.split("  ")
@@ -39,7 +40,6 @@ def parseMetric(metrics_value, nvprofOutput):
     l = 0
     while l < len(lines):
         line = lines[l]
-        print(line)
         if "Kernel:" in line:
             kernel_name = ""
             if "kronGemmKernel" in line:
@@ -57,16 +57,18 @@ def parseMetric(metrics_value, nvprofOutput):
             while l < len(lines) and "Kernel:" not in lines[l]:
                 line = lines[l]
                 parsed = parseMetricLine(line)
-                print(parsed)
                 if parsed[1] in RequiredMetrics:
-                    metrics_value[kernel_name][parsed[1]] = parsed[5]
+                    if parsed[1]=="global_load_requests":
+                        metrics_value[kernel_name][parsed[1]] += float(parsed[5])*int(parsed[0])
+                    else:
+                        metrics_value[kernel_name][parsed[1]] = max(float(parsed[5]), metrics_value[kernel_name][parsed[1]]) 
                 l += 1
         if l < len(lines) and "Kernel:" not in lines[l]:
             l += 1
 
 for g in cases:
     for d in range(cases[g][0], cases[g][1]+1):
-        metric_value = dict(MetricValues)
+        metric_value = copy.deepcopy(MetricValues)
         metric_values += [(g,d,metric_value)]
         if True:
             fastkron_command = FASTKRON_BIN + " " + FASTKRON_FLAGS%(d, g)
@@ -102,5 +104,5 @@ for metric_value in metric_values:
     row = []
     for kernel in kernels:
         for metric in RequiredMetrics:
-            row += [metric_value[0], metric_value[1], metric_value[2][kernel][metric]]
-    print("&".join(row))
+            row += [str(metric_value[2][kernel][metric])]
+    print("&".join([str(metric_value[0]), str(metric_value[1])]+row))

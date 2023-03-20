@@ -234,36 +234,40 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T* hX;
   T* hKpMats[NUM_KP_MATS];
   T* hKpMatmulResult[NUM_KP_MATS];
-
-  hX = new T[M*K];
+  
+  hX = new T[((uint64_t)M) * ((uint64_t)K)];
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
-    hKpMatmulResult[i] = new T[M*std::max(N,K)];
+    hKpMatmulResult[i] = new T[(uint64_t)M*std::max((uint64_t)N,(uint64_t)K)];
   }
-
-  setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
-
+  printf("setting values\n");
+  // setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+  printf("values set\n");
   //Allocate GPU data
   T* dX;
   T* dKpMatmulResult[2];
   T* dKpMats[NUM_KP_MATS];
+  printf("allocating\n");
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   CUDACHECK(cudaMalloc(&dX, sizeX));
   CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
   CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
-  
+  printf("allocated\n");
+
   for (uint i = 0; i < NUM_KP_MATS; i++) {
-    CUDACHECK(cudaMalloc(&dKpMats[i],            KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
   }
+  printf("memset\n");
 
   for (uint i = 0; i < 2; i++) {
-    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, sizeX));
+    // CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, sizeX));
   }
+  printf("memcpy\n");
 
-  CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
-  
+  // CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
+  printf("checkResults %d\n", checkResults);
   if (checkResults) {
     T* dResult;
     T* hResult;
@@ -293,7 +297,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   CUDACHECK(cudaEventCreate(&start));
   CUDACHECK(cudaEventCreate(&end));
   cudaStreamCreate(&stream);
-
+  printf("warmup\n");
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
@@ -301,9 +305,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   CUDACHECK(cudaStreamSynchronize(stream));
 
   //Run
+  printf("run\n");
   CUDACHECK(cudaEventRecord(start, stream));
-  for (uint i = 0; i < numIters; i++)
+  for (uint i = 0; i < numIters; i++) {
+    printf("iter i %d\n", i);
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+  }
   CUDACHECK(cudaEventRecord(end, stream));
   CUDACHECK(cudaEventSynchronize(end));
   CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));

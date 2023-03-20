@@ -124,6 +124,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   T* prevResult = x;
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
   for (uint i = 0; i < NumKronMats; i++) {
+    printf("do i %d\n",i);
     KronGemmKernel cuda_gemm_func = NULL;
     dim3 grid;
     dim3 block;

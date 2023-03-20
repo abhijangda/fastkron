@@ -16,6 +16,12 @@ import math
 
 # In[2]:
 
+# # Load the allocator
+# new_alloc = torch.cuda.memory.CUDAPluggableAllocator(
+#     'pytorch-alloc.so', 'my_malloc', 'my_free')
+# # Swap the current allocator
+# torch.cuda.memory.change_current_allocator(new_alloc)
+
 use_torch_profiler = True
 epochs = 100
 use_command_args = False
@@ -27,7 +33,7 @@ if len(sys.argv) > 1:
     use_command_args = True
 
 # model and data 
-dataType = torch.float32
+dataType = torch.float64
 
 def doGPytorch(twoPowerL, npoints, d):
     outputDim = 1       # takes variable 'y'
@@ -118,6 +124,7 @@ def doGPytorch(twoPowerL, npoints, d):
                     at_time = 0
                     for event in p.events():
                         if "gemm" in event.name or "gemmSN" in event.name:
+                            # print(event.name)
                             cublas_time += event.cuda_time
                         elif "at::native::elementwise_kernel" in event.name:
                             at_time += event.cuda_time
@@ -207,10 +214,10 @@ def doTorchKron(twoPower, npoints, d):
 
 if use_command_args:
     (cublas_times, at_times, cuda_times) = doGPytorch(fArg, npointsArg, dArg)
-    print("cuBLAS", cublas_times, "at", at_times, "Total", cuda_times)
+    print("cuBLAS", sum(cublas_times)/len(cublas_times), "at", sum(at_times)/len(at_times), "Total",sum(cuda_times)/len(cuda_times))
 else:
-    npoints = 320
-    maxD = {2:22, 4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 4, 256: 3, 512: 3, 1024:3}
+    npoints = 16
+    maxD = {4:11, 8:7, 16:6, 32: 5, 64 : 4} #2:22, 128: 4, 256: 3, 512: 3, 1024:3
     cases = []
     MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
     for twoPower in maxD:
@@ -272,20 +279,20 @@ else:
                 case["PyTorchBandwidth"] = bandwidth
             
                 # case["PyTorchTime"] = -1
-            # twoPowerL = case["2^l"]
-            # dataTypeStr = "float" if dataType == torch.float32 else "double"
-            # (s, o) = subprocess.getstatusoutput("./kron -b %d -f %d -s %d -t %s -c -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
-            # if s != 0:
-            #     print(o)
-            #     case["CUDATime"] = -1
-            #     case["Speedup"] = -1
-            # else:
-            #     kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
-            #     case["CUDATime"] = kront
-            # case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
-            # case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
-            # print(o)
-            # print(case)
+            twoPowerL = case["2^l"]
+            dataTypeStr = "float" if dataType == torch.float32 else "double"
+            (s, o) = subprocess.getstatusoutput("LD_LIBRARY_PATH=/home/parasail/KroneckerGPU: ./kron -b %d -f %d -s %d -t %s -c -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
+            if s != 0:
+                print(o)
+                case["CUDATime"] = -1
+                case["Speedup"] = -1
+            else:
+                kront = float(o[o.find("elapsedtime ") + len("elapsedtime"):o.find("milliseconds")].strip()) * 1000 #Convert ms to us
+                case["CUDATime"] = kront
+            case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
+            case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
+            print(o)
+            print(case)
 
     row_format = "{:>10}"*3 + "{:>15}" * 6
     print(row_format.format("Batch-Size", "d", "2^l", "PyTorch(us)", "cuBLAS(us)", "at(us)", "CUDA(us)", "Speedup-Pytorch", "Speedup-cublas"))
