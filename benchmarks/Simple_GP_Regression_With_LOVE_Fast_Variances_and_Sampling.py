@@ -140,7 +140,7 @@ if torch.cuda.is_available():
 # In[5]:
 
 
-training_iterations = 1 if smoke_test else 20
+training_iterations = 5 if smoke_test else 20
 
 
 # Find optimal model hyperparameters
@@ -175,7 +175,7 @@ with gpytorch.settings.use_toeplitz(False):
                     train()
 end = time.time()
 
-print("Total time ", (end - start)*1e3)
+print("Total training time ", (end - start)*1e3)
 import sys
 sys.exit(0)
 # ## Computing predictive variances (KISS-GP or Exact GPs)
