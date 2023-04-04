@@ -250,13 +250,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("allocating\n");
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
-  CUDACHECK(cudaMalloc(&dX, sizeX));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
+  CUDACHECK(cudaMallocManaged(&dX, sizeX));
+  CUDACHECK(cudaMallocManaged(&dKpMatmulResult[0], sizeX));
+  CUDACHECK(cudaMallocManaged(&dKpMatmulResult[1], sizeX));
   printf("allocated\n");
 
   for (uint i = 0; i < NUM_KP_MATS; i++) {
-    CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    CUDACHECK(cudaMallocManaged(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
   }
   printf("memset\n");
@@ -308,7 +308,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("run\n");
   CUDACHECK(cudaEventRecord(start, stream));
   for (uint i = 0; i < numIters; i++) {
-    printf("iter i %d\n", i);
+    //printf("iter i %d\n", i);
     kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaEventRecord(end, stream));
