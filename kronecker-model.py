@@ -33,7 +33,7 @@ if len(sys.argv) > 1:
     use_command_args = True
 
 # model and data 
-dataType = torch.float64
+dataType = torch.float32
 
 def doGPytorch(twoPowerL, npoints, d):
     outputDim = 1       # takes variable 'y'
