@@ -1,0 +1,17 @@
+wandb
+sklearn
+jupyter
+numpy
+scipy
+torch
+pandas
+submitit
+easydict
+bidict
+gpytorch
+tqdm
+fire
+gdown
+pyaml
+seaborn
+overrides
