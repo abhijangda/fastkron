@@ -33,19 +33,19 @@ enum RowParallelismTy {
 };
 
 
-#define N_THREADS 256
+#define N_THREADS 128
 
 #include "kernel_decl.inc" 
 
 #define TYPE_KERNELS(T, VecT) \
-  KERNEL_DECL(T, VecT, 0, 0),\
-  KERNEL_DECL(T, VecT, 1, 0),\
-  KERNEL_DECL(T, VecT, 0, 1),\
+  KERNEL_DECL(T, VecT, 1, 1),\
+  KERNEL_DECL(T, VecT, 1, 1),\
+  KERNEL_DECL(T, VecT, 1, 1),\
   KERNEL_DECL(T, VecT, 1, 1),
 
 
 //Three type kernels float/float4, int/int4, and double/double4
-#define NUM_TYPE_KERNELS 3
+#define NUM_TYPE_KERNELS 1
 // #define MIN_K 16
 // #define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
@@ -64,7 +64,7 @@ enum RowParallelismTy {
 static void* KronGemmKernels[NUM_TYPE_KERNELS][RowParallelismTy::Num][NUM_K_EQUALS_VAR][NUM_ROWS_MOD_TILE_IS_ZERO][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
   TYPE_KERNELS(float,  float4)
-  TYPE_KERNELS(int,    int4)
+  // TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
@@ -154,16 +154,16 @@ cudaError_t generalKronGemm(const uint NumKronMats,
         max_k_kernel *= KronMatCols[0];
       }
       while (max_k_kernel < MAX_K && KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0] != NULL) {
-        // printf("max_k_kernel %d KronMatCols[0] %d\n", max_k_kernel, KronMatCols[0]);
+        printf("max_k_kernel %d KronMatCols[0] %d\n", max_k_kernel, KronMatCols[0]);
         max_k_kernel *= KronMatCols[0];
       }
 
-      // printf("max_k_kernel %d\n", max_k_kernel);
+      printf("max_k_kernel %d\n", max_k_kernel);
 
       if (max_k_kernel > MAX_K || KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0] == NULL)
         max_k_kernel = max_k_kernel/KronMatCols[0];
 
-      // printf("max_k_kernel %d\n", max_k_kernel);
+      printf("max_k_kernel %d\n", max_k_kernel);
 
       if (K > max_k_kernel) {
         max_k = 1;
@@ -176,7 +176,8 @@ cudaError_t generalKronGemm(const uint NumKronMats,
         min_k = K;
       }
     }
-    
+    min_k = 16384;
+    printf("min_k %d K %d\n", min_k, K);
     int k_equals_var = (min_k == K) ? 1 : 0;
     // printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
@@ -188,10 +189,11 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     assert(log2(min_k)-log2(MIN_K) < NUM_MAX_K_KERNELS);
     assert(log2(KronMatRows[0])-log2(MIN_KP_K) < NUM_KP_N_K_KERNELS);
 
-    cuda_gemm_func = (KronGemmKernel)KronGemmKernels[typeKernelIdx][rowParallelism][k_equals_var][row_mod_tile_zero][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
+    cuda_gemm_func = (KronGemmKernel)KronGemmKernels[0][0][0][0][0][0][0] ;//[typeKernelIdx][rowParallelism][k_equals_var][row_mod_tile_zero][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
     
     assert(cuda_gemm_func != NULL);
     uint tileKronCols = MaxTileKronCols[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
+    printf("KronMatCols[kronMat] %d tileKronCols %d\n", KronMatCols[kronMat], tileKronCols);
     //Create the grid and thread block
     grid = {
               DIVUP(M, tileRowA),

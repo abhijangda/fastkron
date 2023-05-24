@@ -2,11 +2,14 @@
 #define MIN_K 16
 #define MIN_KP_K 2
 #define MAX_KP_K 1024
-static uint MaxTileRowsA[] = {1, 1, 1, 1, 2, 2, 2, 1, 1, 1};
+static uint MaxTileRowsA[] = {1, 1, 1, 1, 2, 2, 2, 2, 1, 1};
 
-static uint MaxTileKronCols[] = {32, 32, 32, 32, 32, 64, 64, 64, 128, 256};
+static uint MaxTileKronCols[] = {32, 32, 32, 32, 32, 128, 128, 128, 128, 256};
 
 #define KERNEL_DECL(T, VecT, RowModTileIsZero, K_EQUALS_VAR) \
+    (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 2, RowModTileIsZero, 16384, 128, 128, 128, K_EQUALS_VAR, 1, 1, 64, 32>
+
+/*
     (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 1, RowModTileIsZero, 16, 2, 2, 32, K_EQUALS_VAR, 1, 1, 1, 32>,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 1, RowModTileIsZero, 16, 4, 4, 32, K_EQUALS_VAR, 1, 1, 1, 32>,\
     NULL,\
@@ -93,6 +96,7 @@ static uint MaxTileKronCols[] = {32, 32, 32, 32, 32, 64, 64, 64, 128, 256};
     (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 1, RowModTileIsZero, 4096, 16, 16, 32, K_EQUALS_VAR, 1, 1, 16, 32>,\
     NULL,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 2, RowModTileIsZero, 4096, 64, 64, 64, K_EQUALS_VAR, 1, 1, 8, 16>,\
+    (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 2, RowModTileIsZero, 4096, 128, 128, 64, K_EQUALS_VAR, 1, 1, 32, 64>,\
     NULL,\
     NULL,\
     NULL,\
@@ -113,7 +117,6 @@ static uint MaxTileKronCols[] = {32, 32, 32, 32, 32, 64, 64, 64, 128, 256};
     NULL,\
     NULL,\
     NULL,\
-    (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 2, RowModTileIsZero, 16384, 128, 128, 64, K_EQUALS_VAR, 1, 1, 32, 16>,\
     NULL,\
     NULL,\
     NULL,\
@@ -137,3 +140,4 @@ static uint MaxTileKronCols[] = {32, 32, 32, 32, 32, 64, 64, 64, 128, 256};
     NULL,\
     NULL,\
     (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::High, 1, RowModTileIsZero, 65536, 1024, 1024, 256, K_EQUALS_VAR, 1, 1, 32, 32>
+*/

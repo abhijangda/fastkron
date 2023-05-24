@@ -175,11 +175,11 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint blockWarps   = blockDim.x/WarpSize;
   const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
-  const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols);
-  const uint MaxTileSizeKronRows = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
-  const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxTileSizeKronRows);
-  const uint TileSizeKronCols    = MIN(256,                 MaxTileSizeKronCols);
-  const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
+  const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols); //128
+  const uint MaxTileSizeKronRows = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows); //128
+  const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxTileSizeKronRows); //32
+  const uint TileSizeKronCols    = MIN(256,                 MaxTileSizeKronCols); //128
+  const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows); //16384/(128/32) = 4096
   
   // const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
   // const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
@@ -255,12 +255,12 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   // }
 
   for (uint outerTileKronCol =  kp_col_start_;
-            outerTileKronCol <  MaxTileSizeKronCols;
-            outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) {
+            outerTileKronCol <  MaxTileSizeKronCols; //128
+            outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) { //MAX(1, 128/((16384/128)/1))*32; //MAX(1, 256/128)*32)
 
   for (uint tileColA    =  a_col_start_ ;
-            tileColA    <  MaxColsA/MaxKronRows;
-            tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) {
+            tileColA    <  MaxColsA/MaxKronRows; //128
+            tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) { //MAX(1, 128/((16384/128)/1))*1 = 128
 
     #pragma unroll
     for (uint r = 0; r < TileSizeRowsA; r++) {
@@ -271,8 +271,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       regC[r][i][j] = 0;
     }}}
 
-    for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) {
-      for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
+    for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) { //Runs for 128/32 = 4
+      for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) { //Loads 4096 elements
         for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
           uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
           const ElemT* addrA;
@@ -307,12 +307,12 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       }
     
       //TODO: nvcc unrolls this loop, which leads to high register usage
-      for (uint tileKronCol = 0; tileKronCol < MaxTileSizeKronCols; tileKronCol += TileSizeKronCols) {
+      for (uint tileKronCol = 0; tileKronCol < MaxTileSizeKronCols; tileKronCol += TileSizeKronCols) { //Run once 
         if (!(MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
           //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
           const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
 
-          for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
+          for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) { //Loads 128*32
             VecT  vec;
             ElemT elems[VecTNumElems];
 
@@ -354,7 +354,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           
           #pragma unroll
           for (uint colC = 0; colC < CRegCols; colC++) {
-            uint shKronCol = outerTileKronCol + colC;//TODO: Should outerTileKronCol be here?
+            uint shKronCol = outerTileKronCol + colC;
             #pragma unroll
             for (uint elem = 0; elem < RegTileSizeACols; elem++)    
               KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
