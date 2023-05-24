@@ -158,7 +158,9 @@ __device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
 //KP_N is KronCols
 //KP_K is KronRows
 // __launch_bounds__(NumThreads)
-template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
+template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, uint TileSizeRowsA, 
+         bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR,
+         uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
 __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const uint ColsA,
                                const uint KronRows, const uint KronCols,
                                const ElemT * __restrict__ glA, 

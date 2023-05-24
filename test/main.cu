@@ -241,7 +241,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     hKpMatmulResult[i] = new T[(uint64_t)M*std::max((uint64_t)N,(uint64_t)K)];
   }
   printf("setting values\n");
-  // setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+  setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   printf("values set\n");
   //Allocate GPU data
   T* dX;
@@ -262,11 +262,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("memset\n");
 
   for (uint i = 0; i < 2; i++) {
-    // CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, sizeX));
+    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, sizeX));
   }
   printf("memcpy\n");
 
-  // CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
   printf("checkResults %d\n", checkResults);
   if (checkResults) {
     T* dResult;
