@@ -4,6 +4,9 @@ import copy
 import math
 import torch
 import gpytorch
+from scipy.io import loadmat
+from math import floor
+
 # from matplotlib import pyplot as plt
 import numpy as np
 
@@ -37,12 +40,38 @@ dims = int(sys.argv[2])
 grid_size = int(sys.argv[3])
 num_trace_samples = int(sys.argv[4])
 
-train_x = torch.zeros(n, dims)
-# for i in range(n):
-#     for j in range(dims):
-#         train_x[i * dims + j] = float(i) / (n-1)
-# True function is sin( 2*pi*(x0+x1))
-train_y = torch.sin((train_x[:, 0] + train_x[:, 1]) * (2 * math.pi)) + torch.randn_like(train_x[:, 0]).mul(0.01)
+if False:
+    train_x = torch.zeros(n, dims)
+    # for i in range(n):
+    #     for j in range(dims):
+    #         train_x[i * dims + j] = float(i) / (n-1)
+    # True function is sin( 2*pi*(x0+x1))
+    train_y = torch.sin((train_x[:, 0] + train_x[:, 1]) * (2 * math.pi)) + torch.randn_like(train_x[:, 0]).mul(0.01)
+else:
+    #Datasets: (SingleGPU) 
+    #airfoil: 5, 16 50% in kron
+    #yacht: 6, 16: 87% in kron
+    #servo: 4, 64: 85% in kron
+    #autompg: 7, 8: 63% in kron
+    #Datasets: (MultiGPU) 
+    #airfoil: 5, 32 57%
+    #yacht: 6, 32: ??
+    #servo: 4, 128: ?? (illegal memory access)
+    #autompg: 7, 16: (illegal memory access)
+    path = "/home/parasail/KroneckerGPU-2/data/uci"
+    dataset_name = "autompg"
+    data = torch.Tensor(loadmat(os.path.join(path,dataset_name,dataset_name+".mat"))['data'])
+    X = data[:, :-1]
+    X = X - X.min(0)[0]
+    X = 2 * (X / X.max(0)[0]) - 1
+    y = data[:, -1]
+    train_n = int(floor(0.64 * len(X)))
+    train_x = X[:train_n, :].contiguous()
+    train_y = y[:train_n].contiguous()
+    print(train_x.shape, train_y.shape)
+    test_x = X[train_n:, :].contiguous()
+    test_y = y[train_n:].contiguous()
+
 train_x = train_x.cuda()
 train_y = train_y.cuda()
 
@@ -72,7 +101,7 @@ class GPRegressionModel(gpytorch.models.ExactGP):
     
     # model = train_to_covergence(model, train_x, train_y)
 
-def train(training_iterations=10):
+def train(training_iterations=5):
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
     model = GPRegressionModel(train_x, train_y, likelihood)
 
@@ -129,4 +158,5 @@ with gpytorch.settings.use_toeplitz(False):
         # with gpytorch.settings.max_preconditioner_size(0):
         #     with gpytorch.settings.min_preconditioning_size(0):
                 with gpytorch.settings.debug(False):
-                    train()
+                    with gpytorch.settings.max_cholesky_size(10):
+                        train()

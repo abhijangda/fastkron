@@ -42,12 +42,12 @@ from math import floor
 import sys
 
 # this is for running the notebook in our testing framework
-smoke_test = True #('CI' in os.environ)
+smoke_test = False #('CI' in os.environ)
 
 
-if not smoke_test and not os.path.isfile('../elevators.mat'):
-    print('Downloading \'elevators\' UCI dataset...')
-    urllib.request.urlretrieve('https://drive.google.com/uc?export=download&id=1jhWL3YUHvXIaftia4qeAyDwVxo6j1alk', '../elevators.mat')
+# if not smoke_test and not os.path.isfile('../elevators.mat'):
+#     print('Downloading \'elevators\' UCI dataset...')
+#     urllib.request.urlretrieve('https://drive.google.com/uc?export=download&id=1jhWL3YUHvXIaftia4qeAyDwVxo6j1alk', '../elevators.mat')
 
 n = int(sys.argv[1])
 dims = int(sys.argv[2])
@@ -57,20 +57,34 @@ num_trace_samples = int(sys.argv[4])
 if smoke_test:  # this is for running the notebook in our testing framework
     X = torch.randn(n, dims)
     y = torch.sin((X[:, 0] + X[:, 1]) * (2 * math.pi)) + torch.randn_like(X[:, 0]).mul(0.01)
+    train_n = int(floor(0.8 * len(X)))
+    train_x = X #X[:train_n, :].contiguous()
+    train_y = y # y[:train_n].contiguous()
+    print(train_x.shape, train_y.shape)
+    test_x = X[train_n:, :].contiguous()
+    test_y = y[train_n:].contiguous()
+
 else:
-    data = torch.Tensor(loadmat('../elevators.mat')['data'])
+    #Datasets: (SingleGPU) 
+    #airfoil: 5, 16: 44% in kron
+    #yacht: 6, 16: 87% in kron
+    #servo: 4, 64: 85% in kron
+    #autompg: 7, 8: 60% in kron
+    path = "/home/parasail/KroneckerGPU-2/data/uci"
+    dataset_name = "autompg"
+    data = torch.Tensor(loadmat(os.path.join(path,dataset_name,dataset_name+".mat"))['data'])
     X = data[:, :-1]
     X = X - X.min(0)[0]
     X = 2 * (X / X.max(0)[0]) - 1
     y = data[:, -1]
+    train_n = int(floor(0.64 * len(X)))
+    train_x = X[:train_n, :].contiguous()
+    train_y = y[:train_n].contiguous()
+    print(train_x.shape, train_y.shape)
+    test_x = X[train_n:, :].contiguous()
+    test_y = y[train_n:].contiguous()
 
 
-train_n = int(floor(0.8 * len(X)))
-train_x = X #X[:train_n, :].contiguous()
-train_y = y # y[:train_n].contiguous()
-print(train_x.shape, train_y.shape)
-test_x = X[train_n:, :].contiguous()
-test_y = y[train_n:].contiguous()
 
 if torch.cuda.is_available():
     train_x, train_y, test_x, test_y = train_x.cuda(), train_y.cuda(), test_x.cuda(), test_y.cuda()
@@ -140,7 +154,7 @@ if torch.cuda.is_available():
 # In[5]:
 
 
-training_iterations = 5 if smoke_test else 20
+training_iterations = 5 if smoke_test else 5
 
 
 # Find optimal model hyperparameters
@@ -171,8 +185,9 @@ with gpytorch.settings.use_toeplitz(False):
     with gpytorch.settings.num_trace_samples(num_trace_samples): # gpytorch.settings.fast_computations.log_prob(False):
         # with gpytorch.settings.max_preconditioner_size(0):
         #     with gpytorch.settings.min_preconditioning_size(0):
-                with gpytorch.settings.debug(False):
-                    train()
+                with gpytorch.settings.max_cholesky_size(10):
+                    with gpytorch.settings.debug(False):
+                        train()
 end = time.time()
 
 print("Total training time ", (end - start)*1e3)
