@@ -38,7 +38,7 @@ enum RowParallelismTy {
 #include "kernel_decl.inc" 
 
 #define TYPE_KERNELS(T, VecT) \
-  KERNEL_DECL(T, VecT, 1, 1),\
+  KERNEL_DECL(T, VecT, 1, 0),\
   KERNEL_DECL(T, VecT, 1, 1),\
   KERNEL_DECL(T, VecT, 1, 1),\
   KERNEL_DECL(T, VecT, 1, 1),
@@ -176,7 +176,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
         min_k = K;
       }
     }
-    min_k = 16384;
+    min_k = 8192;
     printf("min_k %d K %d\n", min_k, K);
     int k_equals_var = (min_k == K) ? 1 : 0;
     // printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
