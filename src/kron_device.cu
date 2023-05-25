@@ -172,7 +172,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint tid          = threadIdx.x;
   const uint wid          = tid/WarpSize;
   const uint lane         = tid%WarpSize;
-  const uint blockWarps   = blockDim.x/WarpSize;
+  const uint blockWarps   = N_THREADS/WarpSize;
   const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
   const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols); //128
@@ -233,7 +233,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   if (MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
     const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
 
-    for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
+    for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += N_THREADS*loadInstr) {
       ElemT regElems[VecTNumElems];
       VecT vec;
 
@@ -396,11 +396,11 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   #endif
           for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
             if (vecTyNumElems > 1) {
-              shA[0][threadIdx.x * vecTyNumElems] = regC[rowA][reg_i][reg_j];
-              shA[0][threadIdx.x * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
+              shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
+              shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
               if (vecTyNumElems > 2) {
-                shA[0][threadIdx.x * vecTyNumElems+2] = regC[rowA][reg_i+2][reg_j];
-                shA[0][threadIdx.x * vecTyNumElems+3] = regC[rowA][reg_i+3][reg_j];
+                shA[0][tid * vecTyNumElems+2] = regC[rowA][reg_i+2][reg_j];
+                shA[0][tid * vecTyNumElems+3] = regC[rowA][reg_i+3][reg_j];
               }
               
               __syncwarp();
