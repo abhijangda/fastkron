@@ -248,20 +248,24 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }
   }
 
-  for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
-            tileRowA  < gridDim.x  * TileSizeRowsA;
-            tileRowA += gridDim.x  * TileSizeRowsA) {
+  uint tileRowA  = blockIdx.x * TileSizeRowsA;
+  // for (
+  //           tileRowA  < gridDim.x  * TileSizeRowsA;
+  //           tileRowA += gridDim.x  * TileSizeRowsA) 
+            {
   // if (tid == 0) {
   //   printf("tileRowA %d blockIdx.x %d gridDim.x %d TileSizeRowsA %d\n", tileRowA, blockIdx.x, gridDim.x, TileSizeRowsA);
   // }
-
-  for (uint outerTileKronCol =  kp_col_start_;
-            outerTileKronCol <  MaxTileSizeKronCols; //128
-            outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) { //MAX(1, 128/((16384/128)/1))*32; MAX(1, (128/(64/4))*16) = 128
-
-  for (uint tileColA    =  a_col_start_ ;
-            tileColA    <  MaxColsA/MaxKronRows; //16384/128 = 128;; 8192/128 = 64
-            tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) { //256*MAX(1, 256/((16384/128)/4))*1 = 128*MAX(1, 128/16)*4 >> 128 
+  uint outerTileKronCol =  kp_col_start_;
+  // for (
+  //           outerTileKronCol <  MaxTileSizeKronCols; //128
+  //           outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols)
+   { //MAX(1, 128/((16384/128)/1))*32; MAX(1, (128/(64/4))*16) = 128
+              uint tileColA    =  a_col_start_ ;
+  // for (
+  //           tileColA    <  MaxColsA/MaxKronRows; //16384/128 = 128;; 8192/128 = 64
+  //           tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) 
+  { //256*MAX(1, 256/((16384/128)/4))*1 = 128*MAX(1, 128/16)*4 >> 128 
 
     #pragma unroll
     for (uint r = 0; r < TileSizeRowsA; r++) {
@@ -392,9 +396,6 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   #endif
           for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
             if (vecTyNumElems > 1) {
-              
-              ElemT elem1 = regC[rowA][reg_i][reg_j];
-
               shA[0][threadIdx.x * vecTyNumElems] = regC[rowA][reg_i][reg_j];
               shA[0][threadIdx.x * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
               if (vecTyNumElems > 2) {
