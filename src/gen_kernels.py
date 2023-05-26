@@ -34,18 +34,21 @@ for kronRows in pow_range(MinKronRows, 16):
         else:
             CRegRows = min(max((colsA//NumThreads)//CRegCols, 1), 8//CRegCols)
 
-        Configs[kronRows][colsA] = {"RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32, "MaxTileKronCols": 32}
+        Configs[kronRows][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32, "MaxTileKronCols": 32}
 
 for kronRows in pow_range(32, MaxKronRows):
     Configs[kronRows] = {}
 
 for colsA in pow_range(MinColsA, MaxColsA):
-    Configs[32][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 32}
-    Configs[64][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 16, "MaxTileKronCols": 64}
-    Configs[128][colsA] = {"RowsTileA": 2, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 16, "MaxTileKronCols": 64}
-    Configs[256][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
-    Configs[512][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 128}
-    Configs[1024][colsA] = {"RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 256}
+    Configs[32][colsA] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 32}
+    if colsA != 4096:
+        Configs[64][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
+    else:
+        Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
+    Configs[128][colsA] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 16, "MaxTileKronCols": 64}
+    Configs[256][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
+    Configs[512][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 128}
+    Configs[1024][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 256}
 
 def tooMuchSharedMem(colsA, kronRows):
     return (colsA == 65536 and kronRows <= 128) or \
@@ -93,15 +96,17 @@ with open("kernel_decl.inc", "w") as f:
         for kronRows in AllKronRows:
             config = Configs[kronRows][colsA]
             if colsA < kronRows or not isValid(colsA, kronRows, config) or tooMuchSharedMem(colsA, kronRows):
-                contents += "    NULL"
+                contents += "KernelInfo{NULL}"
             else:
                 rowsTileA = config["RowsTileA"]
                 regRows = config["CRegRows"]
                 regCols = config["CRegCols"]
                 tileKronCols = config["MaxTileKronCols"]
                 sharedTileKronRows = config["SharedTileKronRows"]
-                contents += f"    (void*)kronGemmKernel<T, VecT, N_THREADS, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>"
-        
+                numThreads = config["NumThreads"]
+                contents += "KernelInfo{"+ \
+                    f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}>,"+\
+                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {colsA}, {regRows}, {regCols}"+ "}"
             contents += ",\\\n"
 
     #Remove last comma and backslash

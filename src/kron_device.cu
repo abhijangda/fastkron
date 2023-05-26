@@ -247,20 +247,25 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     }
   }
 
-  for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
-            tileRowA  < gridDim.x  * TileSizeRowsA;
-            tileRowA += gridDim.x  * TileSizeRowsA) {
+  const uint tileRowA  = blockIdx.x * TileSizeRowsA;
+  // for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
+  //           tileRowA  < gridDim.x  * TileSizeRowsA;
+  //           tileRowA += gridDim.x  * TileSizeRowsA) 
+  {
   // if (tid == 0) {
   //   printf("tileRowA %d blockIdx.x %d gridDim.x %d TileSizeRowsA %d\n", tileRowA, blockIdx.x, gridDim.x, TileSizeRowsA);
   // }
-
-  for (uint outerTileKronCol =  kp_col_start_;
-            outerTileKronCol <  MaxTileSizeKronCols;
-            outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) {
-
-  for (uint tileColA    =  a_col_start_ ;
-            tileColA    <  MaxColsA/MaxKronRows;
-            tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) {
+  const uint outerTileKronCol =  kp_col_start_;
+  // for (uint outerTileKronCol =  kp_col_start_;
+  //           outerTileKronCol <  MaxTileSizeKronCols;
+  //           outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) 
+  {
+  const uint tileColA    =  a_col_start_ ;
+  // for (uint tileColA    =  a_col_start_ ;
+  //           tileColA    <  MaxColsA/MaxKronRows;
+  //           tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) 
+  
+  {
 
     #pragma unroll
     for (uint r = 0; r < TileSizeRowsA; r++) {

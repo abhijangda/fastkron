@@ -250,13 +250,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("allocating\n");
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
-  CUDACHECK(cudaMallocManaged(&dX, sizeX));
-  CUDACHECK(cudaMallocManaged(&dKpMatmulResult[0], sizeX));
-  CUDACHECK(cudaMallocManaged(&dKpMatmulResult[1], sizeX));
+  CUDACHECK(cudaMalloc(&dX, sizeX));
+  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
+  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
   printf("allocated\n");
 
   for (uint i = 0; i < NUM_KP_MATS; i++) {
-    CUDACHECK(cudaMallocManaged(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
   }
   printf("memset\n");
