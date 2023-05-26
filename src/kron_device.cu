@@ -225,9 +225,10 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint RegTileSizeACols = MIN(8, TileSizeKronCols);
   
   const uint external_tile_kp_k = blockIdx.z;
+  constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows);
 
-  const uint kp_col_start_ = (tid / ((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols;
-  const uint a_col_start_  = (tid % ((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows; 
+  const uint kp_col_start_ = (tid / wSz) * CRegCols;
+  const uint a_col_start_  = (tid % wSz) * CRegRows; 
 
   if (MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
     const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
@@ -395,30 +396,66 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
   #endif
           for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-            const uint cRow = (rowA + tileRowA);
-            uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-            if (!K_EQUALS_VAR) {
-              uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
-              cCol = tile_k * (MaxColsA/kronCols) + 
-                  (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                  cCol%(MaxColsA/kronCols);
-            }
-            if (MaxTileSizeKronCols != MaxKronCols) {
-              uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-              cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
-            }
-            const uint cIdx = cRow * colsC + cCol;
-            // assert(tid == cCol);
-            // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-            //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
-            if (cCol < colsA) {
-              switch (vecTyNumElems) {
-                case 4:
-                  globalStore4Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]);
-                case 2:
-                  globalStore2Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j]);
-                case 1:
-                  globalStore1Elems(&glC[cIdx], regC[rowA][reg_i][reg_j]);
+            if (vecTyNumElems > 1) {
+              shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
+              shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
+              if (vecTyNumElems > 2) {
+                shA[0][tid * vecTyNumElems+2] = regC[rowA][reg_i+2][reg_j];
+                shA[0][tid * vecTyNumElems+3] = regC[rowA][reg_i+3][reg_j];
+              }
+              
+              __syncwarp();
+              for (uint shVecI = tid%wSz; shVecI < vecTyNumElems*wSz; shVecI += wSz) {
+                const uint cRow = rowA + tileRowA;
+                uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
+                //(0,0,0,0,0,16,16,16)*128 + (0,1,2,3,..16)*128
+                if (!K_EQUALS_VAR) {
+                  uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+                  cCol = tile_k * (MaxColsA/kronCols) + 
+                      (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+                      cCol%(MaxColsA/kronCols);
+                }
+                if (MaxTileSizeKronCols != MaxKronCols) {
+                  uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
+                  cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+                }
+                const uint cIdx = cRow * colsC + cCol;
+                // assert(tid == cCol);
+                // if (kp_idx == 0&& cRow == 0)
+                //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d vecTyNumElems %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j, vecTyNumElems);
+                if (cCol < colsA) {
+                  // printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d vecTyNumElems %d shVecI %d\n", 
+                  // tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j, vecTyNumElems, shVecI);
+                  glC[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
+                }
+              }
+              __syncwarp();
+            } else {
+              const uint cRow = (rowA + tileRowA);
+              uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+              if (!K_EQUALS_VAR) {
+                uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+                cCol = tile_k * (MaxColsA/kronCols) + 
+                    (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+                    cCol%(MaxColsA/kronCols);
+              }
+              if (MaxTileSizeKronCols != MaxKronCols) {
+                uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
+                cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+              }
+              const uint cIdx = cRow * colsC + cCol;
+              // assert(tid == cCol);
+              // if (kp_idx == 0&& cRow == 0 && cCol < 64)
+              //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
+              if (cCol < colsA) {
+                switch (vecTyNumElems) {
+                  case 4:
+                    globalStore4Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]);
+                  case 2:
+                    globalStore2Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j]);
+                  case 1:
+                    globalStore1Elems(&glC[cIdx], regC[rowA][reg_i][reg_j]);
+                }
               }
             }
           }
