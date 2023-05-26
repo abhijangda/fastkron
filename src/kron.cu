@@ -63,8 +63,8 @@ enum RowParallelismTy {
 
 static void* KronGemmKernels[NUM_TYPE_KERNELS][RowParallelismTy::Num][NUM_K_EQUALS_VAR][NUM_ROWS_MOD_TILE_IS_ZERO][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
-  TYPE_KERNELS(float,  float4)
-  // TYPE_KERNELS(int,    int4)
+  // TYPE_KERNELS(float,  float4)
+  TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
@@ -142,7 +142,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     //   k_equals_var = 0;
     // }
     // printf("min_k %d\n", min_k);
-    uint typeKernelIdx = typeKernelIndex((T)0);
+    uint typeKernelIdx = 0 ;//typeKernelIndex((T)0);
 
     if (KronMatCols[kronMat] >= 256) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
