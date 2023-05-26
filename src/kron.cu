@@ -188,7 +188,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     }
     
     int k_equals_var = (min_k == K) ? 1 : 0;
-    // printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
+    printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
 
@@ -210,11 +210,12 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       uint c1 = MAX(1, NumThreads/((kernelInfo.MaxColsA/kernelInfo.KronRows)/CRegRows));
       
       if (kernelInfo.KP_N_TILE_ != c1 * CRegCols) {
-        printf("Invalid configuration: KP_N_TILE_ %d NumThreads %d CRegRows %d CRegCols %d\n", 
-               kernelInfo.KP_N_TILE_, NumThreads, CRegRows, CRegCols);
+        printf("Invalid configuration: KP_N_TILE_ %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsA %d\n", 
+               kernelInfo.KP_N_TILE_, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsA);
         abort();
       }
       if (MaxColsA/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
+        printf("MaxColsA/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsA/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
         printf("Invalid configuration: MaxColsA %d KronRows %d NumThreads %d CRegRows %d CRegCols %d\n",
                MaxColsA, KronRows, NumThreads, CRegRows, CRegCols);
         abort();
