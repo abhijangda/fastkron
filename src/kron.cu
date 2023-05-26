@@ -188,7 +188,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     }
     
     int k_equals_var = (min_k == K) ? 1 : 0;
-    printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
+    // printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
 

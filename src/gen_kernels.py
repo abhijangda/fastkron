@@ -36,11 +36,14 @@ for kronRows in pow_range(MinKronRows, 16):
 
         Configs[kronRows][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32, "MaxTileKronCols": kronRows}
 
+Configs[4][4096] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
+
 Configs[8][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8}
 Configs[8][512] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8}
 Configs[8][4096] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 8}
 
 #KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 8, 8, 8, K_EQUALS_VAR, 1, 1, 8, 32>,512, 8, 8, 8, 4096, 1, 8},\
+# KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 4, 4, 4, K_EQUALS_VAR, 1, 1, 4, 32>,1024, 4, 4, 4, 4096, 1, 4},\
 
 for kronRows in pow_range(32, MaxKronRows):
     Configs[kronRows] = {}
