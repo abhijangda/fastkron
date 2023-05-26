@@ -41,11 +41,15 @@ for kronRows in pow_range(32, MaxKronRows):
 
 for colsA in pow_range(MinColsA, MaxColsA):
     Configs[32][colsA] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 32}
-    if colsA != 4096:
+    if colsA < 4096:
         Configs[64][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
+    elif colsA == 4096:
+        Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
+    elif colsA == 8192:
+        Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
     else:
         Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
-    Configs[128][colsA] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 16, "MaxTileKronCols": 64}
+    Configs[128][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 128}
     Configs[256][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 64}
     Configs[512][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 128}
     Configs[1024][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 256}
@@ -62,7 +66,14 @@ def isValid(colsA, kronRows, config):
         if colsA == 32768:
             return True
         return False
-
+    if kronRows == 64:
+        if colsA == 8192:
+            return True
+    if kronRows == 128:
+        if colsA == 8192:
+            return True
+        else:
+            return False
     return math.log(colsA, kronRows).is_integer()
 
 with open("kernel_decl.inc", "w") as f:
