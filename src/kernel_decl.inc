@@ -27,8 +27,8 @@ KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 64, 2, 2, 2, K_EQUALS_VAR, 1, 1, 1, 32>,256, 2, 2, 2, 64, 1, 1},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 64, 4, 4, 4, K_EQUALS_VAR, 1, 1, 1, 32>,256, 4, 4, 4, 64, 1, 1},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 64, RowParallelismTy::Low, 1, RowModTileIsZero, 64, 2, 2, 2, K_EQUALS_VAR, 1, 1, 1, 32>,64, 2, 2, 2, 64, 1, 1},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 64, RowParallelismTy::Low, 1, RowModTileIsZero, 64, 4, 4, 4, K_EQUALS_VAR, 1, 1, 1, 32>,64, 4, 4, 4, 64, 1, 1},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 64, RowParallelismTy::Low, 1, RowModTileIsZero, 64, 8, 8, 8, K_EQUALS_VAR, 1, 1, 1, 32>,64, 8, 8, 8, 64, 1, 1},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
@@ -37,7 +37,7 @@ KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 128, 2, 2, 2, K_EQUALS_VAR, 1, 1, 1, 32>,256, 2, 2, 2, 128, 1, 1},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, RowModTileIsZero, 128, 2, 2, 2, K_EQUALS_VAR, 1, 1, 1, 32>,128, 2, 2, 2, 128, 1, 1},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
@@ -67,7 +67,7 @@ KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 1024, 2, 2, 2, K_EQUALS_VAR, 1, 2, 2, 32>,256, 2, 2, 2, 1024, 2, 2},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 1024, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,512, 2, 2, 2, 1024, 1, 2},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 1024, 4, 4, 4, K_EQUALS_VAR, 1, 1, 4, 32>,256, 4, 4, 4, 1024, 1, 4},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
@@ -77,7 +77,7 @@ KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 1024, 1024, 1024, 256, K_EQUALS_VAR, 1, 1, 32, 32>,256, 1024, 1024, 256, 1024, 1, 32},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 2048, 2, 2, 2, K_EQUALS_VAR, 1, 4, 2, 32>,256, 2, 2, 2, 2048, 4, 2},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 2048, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,1024, 2, 2, 2, 2048, 1, 2},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
@@ -87,7 +87,7 @@ KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 2, 2, 2, K_EQUALS_VAR, 1, 4, 2, 32>,256, 2, 2, 2, 4096, 4, 2},\
+KernelInfo{NULL},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 4, 4, 4, K_EQUALS_VAR, 1, 1, 4, 32>,1024, 4, 4, 4, 4096, 1, 4},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 8, 8, 8, K_EQUALS_VAR, 1, 1, 8, 32>,512, 8, 8, 8, 4096, 1, 8},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 16, 16, 16, K_EQUALS_VAR, 1, 1, 16, 32>,256, 16, 16, 16, 4096, 1, 16},\

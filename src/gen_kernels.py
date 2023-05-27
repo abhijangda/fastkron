@@ -36,6 +36,17 @@ for kronRows in pow_range(MinKronRows, 16):
 
         Configs[kronRows][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32, "MaxTileKronCols": kronRows}
 
+
+Configs[2][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 2}
+Configs[2][128] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 2}
+Configs[2][256] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 2}
+Configs[2][1024] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 2, "SharedTileKronRows": 32, "MaxTileKronCols": 2}
+Configs[2][2048] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 2, "SharedTileKronRows": 32, "MaxTileKronCols": 2}
+
+# KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 1024, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,512, 2, 2, 2, 1024, 1, 2},\
+# KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 2048, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,1024, 2, 2, 2, 2048, 1, 2},\
+
+Configs[4][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
 Configs[4][4096] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
 
 Configs[8][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8}
@@ -83,6 +94,8 @@ def isValid(colsA, kronRows, config):
             return True
         else:
             return False
+    if kronRows == 2 and colsA >= 4096:
+        return False
     return math.log(colsA, kronRows).is_integer()
 
 with open("kernel_decl.inc", "w") as f:

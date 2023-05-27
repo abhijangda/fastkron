@@ -225,9 +225,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint RegTileSizeACols = MIN(8, TileSizeKronCols);
   
   const uint external_tile_kp_k = blockIdx.z;
-  constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows); //(4096/8)/4 = 128;
+  constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows);
 
-  const uint kp_col_start_ = (tid / wSz) * CRegCols; //tid/128 
+  const uint kp_col_start_ = (tid / wSz) * CRegCols; 
   const uint a_col_start_  = (tid % wSz) * CRegRows; 
 
   if (MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
