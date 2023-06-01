@@ -155,6 +155,54 @@ __device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
   *addr = elem1;
 }
 
+template<typename ElemT, typename VecT, uint NumThreads>
+__global__ void copyXtoUVAX(const uint RowsC,    const uint ColsC,   const uint ColsA,
+                            const uint KronRows, const uint KronCols,
+                            ElemT * __restrict__ uvaTemp,
+                            const uint uvaRows, const uint uvaCols,
+                            const ElemT * __restrict__ glA,
+                            const uint uvaPart) {
+  const uint WarpSize     = 32;
+  const uint tid          = threadIdx.x;
+  const uint wid          = tid/WarpSize;
+  const uint lane         = tid%WarpSize;
+  const uint blockWarps   = blockDim.x/WarpSize;
+  
+  const uint rowA = blockIdx.x;
+
+  for (uint uvaElem = tid; uvaElem < uvaCols; uvaElem += NumThreads) {
+    uvaTemp[rowA * uvaCols + uvaElem] = glA[rowA * ColsA + uvaPart * 4096 + uvaElem];  
+  }
+}
+
+template<typename ElemT, typename VecT, uint NumThreads>
+__global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const uint ColsA,
+                            const uint KronRows, const uint KronCols,
+                            const ElemT * __restrict__ uvaTemp,
+                            const uint uvaRows, const uint uvaCols,
+                            ElemT * __restrict__ glC,
+                            const uint uvaPart) {
+  const uint WarpSize     = 32;
+  const uint tid          = threadIdx.x;
+  const uint wid          = tid/WarpSize;
+  const uint lane         = tid%WarpSize;
+  const uint blockWarps   = blockDim.x/WarpSize;
+  const uint rowA = blockIdx.x;
+
+  for (uint uvaElem = tid; uvaElem < uvaCols; uvaElem += NumThreads) {
+    // uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
+    // //(0,0,0,0,0,16,16,16)*128 + (0,1,2,3,..16)*128
+    // if (!K_EQUALS_VAR) {
+    //   uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+    //   cCol = tile_k * (MaxColsA/kronCols) + 
+    //       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+    //       cCol%(MaxColsA/kronCols);
+    // }
+    uint cCol = uvaPart * 64 + (uvaElem/64)*uvaCols + uvaElem%64;
+    glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+  }
+}
+
 //KP_N is KronCols
 //KP_K is KronRows
 // __launch_bounds__(NumThreads)
@@ -167,7 +215,6 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
                                const ElemT * __restrict__ glKronMats, 
                                ElemT       * __restrict__ glC,
                                const uint kp_idx) {
-  
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
   const uint wid          = tid/WarpSize;

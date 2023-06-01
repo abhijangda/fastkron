@@ -122,19 +122,47 @@ cudaError_t generalKronGemm(const uint NumKronMats,
                             cudaStream_t stream) {
   typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
-  const bool useUVA = true;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
-
+  
+  const bool useUVA = true;
+  const uint uvaRows = M;
+  const uint uvaColsX = 64 * 64;
+  T *uvaX, * uvaTemp1, *uvaTemp2;
+  CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
+  CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));
+  CUDA_CHECK(cudaMalloc(&uvaTemp2, uvaColsX * uvaRows * sizeof(T)));
+  
   //Only row major layout of all matrics is supported.
   
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
   
-  *kronGemmResult = kronGemmResults[0];
   T* prevResult = x;
+  // T* origKronGemmResults[2];
+  // origKronGemmResults[0] = kronGemmResults[0];
+  // origKronGemmResults[1] = kronGemmResults[1];
+  T* uvaPrevResult = uvaX;
+  T* uvaCurrResult;
+  T* uvaResults[2] = {uvaTemp1, uvaTemp2};
+  //TODO: create a different function for UVA that calls this function
+  uvaCurrResult = uvaResults[0];
+  *kronGemmResult = kronGemmResults[0];
+  
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
   for (uint i = 0; i < NumKronMats; i++) {
+    for (uint uvaPart = 0; uvaPart < K/uvaColsX; uvaPart++) {
+    //Copy prevResult to uvaPrevResult
+    {
+      CUDA_CHECK(cudaDeviceSynchronize());
+      printf("copyXtoUVAX\n");
+      dim3 grid = {M, 1,1};
+      dim3 block = {256, 1, 1};
+      copyXtoUVAX<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[i], KronMatRows[i], uvaPrevResult, M, uvaColsX, prevResult, uvaPart);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      printf("Done\n");
+    }
+
     KronGemmKernel cuda_gemm_func = NULL;
     dim3 grid;
     dim3 block;
@@ -153,10 +181,10 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     // }
     // printf("min_k %d\n", min_k);
     uint typeKernelIdx = typeKernelIndex((T)0);
-
+    uint effectiveK = (useUVA) ? uvaColsX : K;
     if (KronMatCols[kronMat] >= 64) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
-      min_k = min(K, MAX_K); //TODO: find MAX_K lower than K
+      min_k = min(effectiveK, MAX_K);
       while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
         min_k = min_k / 2;
     } else {
@@ -175,7 +203,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
 
       // printf("max_k_kernel %d\n", max_k_kernel);
 
-      if (K > max_k_kernel) {
+      if (effectiveK > max_k_kernel) {
         max_k = 1;
         while (max_k <= max_k_kernel)
           max_k *= KronMatCols[kronMat];
@@ -187,7 +215,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       }
     }
     
-    int k_equals_var = (min_k == K) ? 1 : 0;
+    int k_equals_var = (min_k == effectiveK) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
 
@@ -224,29 +252,43 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     //Create the grid and thread block
     grid = {
               DIVUP(M, tileRowA),
-              (K/min_k) * DIVUP(KronMatCols[kronMat], tileKronCols),
+              (effectiveK/min_k) * DIVUP(KronMatCols[kronMat], tileKronCols),
               1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
            };
     block = {
               NumThreads, 
-              1, 
+              1,
               1
             };
     
     //Create kernel args;
+    T* argPrevResult = (useUVA) ? uvaPrevResult : prevResult;
+    T* argResult = (useUVA) ? uvaCurrResult : *kronGemmResult;
     void *args[] = {
-                    (void*)&M, (void*)&N, (void*)&K, 
+                    (void*)&M, (void*)&N, (void*)&effectiveK, 
                     (void*)&KronMatRows[kronMat],
                     (void*)&KronMatCols[kronMat],
-                    &prevResult, 
+                    &argPrevResult,
                     (void*)&kronMats[kronMat], 
-                    (void*)kronGemmResult, 
+                    &argResult, 
                     &i
                   };
 
     status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
     if (status != cudaSuccess)
       return status;
+    
+    //Copy uvaCurrResult to kronGemmResult
+    {
+      CUDA_CHECK(cudaDeviceSynchronize());
+      printf("copyUVATempToY\n");
+      dim3 grid = {M, 1,1};
+      dim3 block = {256, 1, 1};
+      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[i], KronMatRows[i], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      printf("Done\n");
+    }
+    }
 
     //Double/ring/circular buffer previous result and new result
     if (i < NumKronMats - 1) {

@@ -287,10 +287,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //CPU implementation of algorithm
     slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
     hResult = hKpMatmulResult[NUM_KP_MATS-1];
-
+    printf("running kron gemm\n");
     //Run GPU implementation
     dResult = kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     CUDACHECK(cudaDeviceSynchronize());
+    printf("checking results\n");
     T* dResultToHost = (T*)malloc(sizeX);
     CUDACHECK(cudaMemcpy(dResultToHost, dResult, sizeX, cudaMemcpyDeviceToHost));
     
