@@ -122,12 +122,11 @@ cudaError_t generalKronGemm(const uint NumKronMats,
                             cudaStream_t stream) {
   typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-    return cudaErrorInvalidValue;
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
+  const uint uvaColsX = KronMatCols[0] * KronMatCols[0];
+  const uint batchedKronMuls = 1; 
   T *uvaX, * uvaTemp1, *uvaTemp2;
   CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
   CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));
@@ -150,7 +149,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   *kronGemmResult = kronGemmResults[0];
   
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
-  for (uint i = 0; i < NumKronMats; i++) {
+  for (uint io = 0; io < NumKronMats; io += batchedKronMuls) {
     for (uint uvaPart = 0; uvaPart < K/uvaColsX; uvaPart++) {
     //Copy prevResult to uvaPrevResult
     {
@@ -158,11 +157,11 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       printf("copyXtoUVAX\n");
       dim3 grid = {M, 1,1};
       dim3 block = {256, 1, 1};
-      copyXtoUVAX<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[i], KronMatRows[i], uvaPrevResult, M, uvaColsX, prevResult, uvaPart);
+      copyXtoUVAX<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaPrevResult, M, uvaColsX, prevResult, uvaPart);
       CUDA_CHECK(cudaDeviceSynchronize());
       printf("Done\n");
     }
-
+    for (uint i = io; i < io+batchedKronMuls; i++) {
     KronGemmKernel cuda_gemm_func = NULL;
     dim3 grid;
     dim3 block;
@@ -277,21 +276,32 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
     if (status != cudaSuccess)
       return status;
-    
+
+    //Double/ring/circular buffer previous result and new result
+    if (i < io+batchedKronMuls - 1) {
+      uvaPrevResult = uvaCurrResult;
+      if (uvaPrevResult == uvaResults[0]) {        
+        uvaCurrResult = uvaResults[1];
+      } else if (uvaPrevResult == uvaResults[1]) {
+        uvaCurrResult = uvaResults[0];
+      }
+    }
+    }
+
     //Copy uvaCurrResult to kronGemmResult
     {
       CUDA_CHECK(cudaDeviceSynchronize());
       printf("copyUVATempToY\n");
       dim3 grid = {M, 1,1};
       dim3 block = {256, 1, 1};
-      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[i], KronMatRows[i], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart);
+      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart);
       CUDA_CHECK(cudaDeviceSynchronize());
       printf("Done\n");
     }
     }
 
     //Double/ring/circular buffer previous result and new result
-    if (i < NumKronMats - 1) {
+    if (io < NumKronMats - 1) {
       prevResult = *kronGemmResult;
       if (prevResult == kronGemmResults[0]) {        
         *kronGemmResult = kronGemmResults[1];
@@ -312,17 +322,31 @@ cudaError_t generalKronGemm(const uint NumKronMats,
 cudaError_t kronSGEMM(const uint NumKronMats, float* kronGemmResults[], float* x, float* kronMats[], float** result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return cudaErrorInvalidValue;
   return generalKronGemm<float, float4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
 }
 
 cudaError_t kronIGEMM(const uint NumKronMats, int* kronGemmResults[], int* x, int* kronMats[], int** result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return cudaErrorInvalidValue;
   return generalKronGemm<int, int4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
 }
 
 cudaError_t kronDGEMM(const uint NumKronMats, double* kronGemmResults[], double* x, double* kronMats[], double** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return cudaErrorInvalidValue;
   return generalKronGemm<double, double4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
+}
+
+cudaError_t kronSGEMMUVA(const uint NumKronMats, float* kronGemmResults[], float* x, float* kronMats[], float** result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+if (result == NULL) return cudaErrorInvalidValue;
+if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+  return cudaErrorInvalidValue;
+return generalKronGemm<float, float4>(NumKronMats, kronGemmResults, x, kronMats, result, M, N, K, KronMatCols, KronMatRows, stream);
 }
