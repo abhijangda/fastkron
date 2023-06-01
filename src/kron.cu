@@ -127,7 +127,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = 64 * 64;
+  const uint uvaColsX = KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
   T *uvaX, * uvaTemp1, *uvaTemp2;
   CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
   CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));
@@ -209,12 +209,12 @@ cudaError_t generalKronGemm(const uint NumKronMats,
           max_k *= KronMatCols[kronMat];
         
         max_k = max_k/KronMatCols[kronMat];
-        min_k = min(K, max_k);
+        min_k = min(effectiveK, max_k);
       } else {
-        min_k = K;
+        min_k = effectiveK;
       }
     }
-    
+    printf("min_k %d effectiveK %d\n", min_k, effectiveK);
     int k_equals_var = (min_k == effectiveK) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
@@ -265,7 +265,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     T* argPrevResult = (useUVA) ? uvaPrevResult : prevResult;
     T* argResult = (useUVA) ? uvaCurrResult : *kronGemmResult;
     void *args[] = {
-                    (void*)&M, (void*)&N, (void*)&effectiveK, 
+                    (void*)&M, (void*)&effectiveK, (void*)&effectiveK, //TODO: make effectiveN 
                     (void*)&KronMatRows[kronMat],
                     (void*)&KronMatCols[kronMat],
                     &argPrevResult,

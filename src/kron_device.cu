@@ -171,7 +171,7 @@ __global__ void copyXtoUVAX(const uint RowsC,    const uint ColsC,   const uint 
   const uint rowA = blockIdx.x;
 
   for (uint uvaElem = tid; uvaElem < uvaCols; uvaElem += NumThreads) {
-    uvaTemp[rowA * uvaCols + uvaElem] = glA[rowA * ColsA + uvaPart * 4096 + uvaElem];  
+    uvaTemp[rowA * uvaCols + uvaElem] = glA[rowA * ColsA + uvaPart * uvaCols + uvaElem];  
   }
 }
 
@@ -198,7 +198,7 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
     //       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
     //       cCol%(MaxColsA/kronCols);
     // }
-    uint cCol = uvaPart * 64 + (uvaElem/64)*uvaCols + uvaElem%64;
+    uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*uvaCols + uvaElem%(uvaCols/KronRows);
     glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
   }
 }
