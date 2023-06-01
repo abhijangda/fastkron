@@ -122,7 +122,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
                             cudaStream_t stream) {
   typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
-
+  const bool useUVA = true;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
 
@@ -156,7 +156,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
 
     if (KronMatCols[kronMat] >= 64) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
-      min_k = K; //TODO: find MAX_K lower than K
+      min_k = min(K, MAX_K); //TODO: find MAX_K lower than K
       while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
         min_k = min_k / 2;
     } else {
@@ -188,7 +188,6 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     }
     
     int k_equals_var = (min_k == K) ? 1 : 0;
-    // printf("min_k %d k_equals_var %d\n", min_k, k_equals_var);
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
 

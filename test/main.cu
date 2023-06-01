@@ -227,7 +227,7 @@ static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[
 ***************************************************/
 template<typename T, typename VecT>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
-                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, bool checkResults) {
+                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, bool useUVA, bool checkResults) {
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
 
   //Allocate host data
@@ -240,8 +240,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
     hKpMatmulResult[i] = new T[(uint64_t)M*std::max((uint64_t)N,(uint64_t)K)];
   }
-  printf("setting values\n");
-  setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+  printf("setting values on host\n");
+  if (checkResults)
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   printf("values set\n");
   //Allocate GPU data
   T* dX;
@@ -250,13 +251,23 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("allocating\n");
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
-  CUDACHECK(cudaMalloc(&dX, sizeX));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
-  CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
+  if (useUVA) {
+    CUDACHECK(cudaMallocManaged(&dX, sizeX));
+    CUDACHECK(cudaMallocManaged(&dKpMatmulResult[0], sizeX));
+    CUDACHECK(cudaMallocManaged(&dKpMatmulResult[1], sizeX));  
+  } else {
+    CUDACHECK(cudaMalloc(&dX, sizeX));
+    CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
+    CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
+  }
   printf("allocated\n");
 
   for (uint i = 0; i < NUM_KP_MATS; i++) {
-    CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    if (useUVA) {
+      CUDACHECK(cudaMallocManaged(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    } else {
+      CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+    }
     CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
   }
   printf("memset\n");
@@ -266,7 +277,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   printf("memcpy\n");
 
-  CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
+  if (checkResults)
+    CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
   printf("checkResults %d\n", checkResults);
   if (checkResults) {
     T* dResult;
@@ -346,6 +358,7 @@ int main(int argc, char* argv[]) {
   bool checkResults = false;
   int runs = 0;
   int warmup = 0;
+  bool useUVA = false;
 
   AnyOption *opt = new AnyOption();
 
@@ -357,14 +370,17 @@ int main(int argc, char* argv[]) {
   opt->addUsage("check: Check results for first run");
   opt->addUsage("runs:  Number of runs");
   opt->addUsage("warmup:  Number of warmup runs");
+  opt->addUsage("uva: Allocate and run using NVIDIA UVA");
 
   opt->setOption("batch", 'b');
   opt->setOption("facs", 'f');
   opt->setOption("size", 's');
   opt->setOption("type", 't');
-  opt->setFlag("check", 'c');
   opt->setOption("runs", 'r');
   opt->setOption("warmup", 'w');
+
+  opt->setFlag("check", 'c');
+  opt->setFlag("uva", 'u');
 
   opt->processCommandArgs(argc, argv);
   
@@ -400,6 +416,8 @@ int main(int argc, char* argv[]) {
     warmup = atoi(opt->getValue('w'));
   }
 
+  useUVA = opt->getFlag('u');
+  printf("useUVA %d\n", useUVA);
   if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
     printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
     return 1;
@@ -417,11 +435,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, checkResults);
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, checkResults);
   else if (strcmp(type, "int") == 0)
-    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, checkResults);
+    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, checkResults);
   else if (strcmp(type, "double") == 0)
-    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, checkResults);
+    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, checkResults);
   else
     printf("type not supported %s\n", type);
 
