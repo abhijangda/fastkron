@@ -198,7 +198,8 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
     //       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
     //       cCol%(MaxColsA/kronCols);
     // }
-    uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*uvaCols + uvaElem%(uvaCols/KronRows);
+    
+    uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
     glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
   }
 }
