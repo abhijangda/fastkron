@@ -125,8 +125,8 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = KronMatCols[0] * KronMatCols[0] * KronMatCols[0]* KronMatCols[0];
-  const uint batchedKronMuls = 3;
+  const uint uvaColsX = KronMatCols[0] * KronMatCols[0];
+  const uint batchedKronMuls = 2;
   //TODO: batchedKronMuls > log(uvaColsX, P)
   T *uvaX, * uvaTemp1, *uvaTemp2;
   CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
@@ -151,6 +151,9 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
   for (uint io = 0; io < NumKronMats; io += batchedKronMuls) {
+    uint KronMulBatchSize = min(batchedKronMuls,NumKronMats-io);
+    printf("KronMulBatchSize %d io %d\n", KronMulBatchSize, io);
+    uint MaxI = io + KronMulBatchSize;
     for (uint uvaPart = 0; uvaPart < K/uvaColsX; uvaPart++) {
     //Copy prevResult to uvaPrevResult
     {
@@ -162,7 +165,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       CUDA_CHECK(cudaDeviceSynchronize());
       // printf("Done\n");
     }
-    for (uint i = io; i < io+batchedKronMuls; i++) {
+    for (uint i = io; i < MaxI; i++) {
     KronGemmKernel cuda_gemm_func = NULL;
     dim3 grid;
     dim3 block;
@@ -279,7 +282,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       return status;
 
     //Double/ring/circular buffer previous result and new result
-    if (i < io+batchedKronMuls - 1) {
+    if (i < MaxI - 1) {
       uvaPrevResult = uvaCurrResult;
       if (uvaPrevResult == uvaResults[0]) {        
         uvaCurrResult = uvaResults[1];
@@ -295,7 +298,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       // printf("copyUVATempToY\n");
       dim3 grid = {M, 1,1};
       dim3 block = {256, 1, 1};
-      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart, batchedKronMuls, io);
+      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart, KronMulBatchSize, io);
       CUDA_CHECK(cudaDeviceSynchronize());
       // printf("Done\n");
     }
