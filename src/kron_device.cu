@@ -181,7 +181,7 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
                             const ElemT * __restrict__ uvaTemp,
                             const uint uvaRows, const uint uvaCols,
                             ElemT * __restrict__ glC,
-                            const uint uvaPart) {
+                            const uint uvaPart, const uint batchedKronMuls, const uint startKronIdx) {
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
   const uint wid          = tid/WarpSize;
@@ -199,8 +199,18 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
     //       cCol%(MaxColsA/kronCols);
     // }
     
-    uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
-    glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+    if (batchedKronMuls == 1) {
+      uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+    } else if (batchedKronMuls == 2) {
+      uint cCol = uvaPart + (uvaElem/KronRows)*(ColsA/KronRows) + (uvaElem%KronRows)*KronRows*KronRows; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      if (cCol < ColsC) {
+        glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+        // if (rowA * ColsA + cCol == 0) printf("209: %f to %p\n", uvaTemp[rowA * uvaCols + uvaElem], glC);
+      } else {
+        // printf("cCol %d uvaPart %d uvaElem %d\n", cCol, uvaPart, uvaElem);
+      }      
+    }
   }
 }
 

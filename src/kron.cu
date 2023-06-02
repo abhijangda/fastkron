@@ -126,7 +126,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   const bool useUVA = true;
   const uint uvaRows = M;
   const uint uvaColsX = KronMatCols[0] * KronMatCols[0];
-  const uint batchedKronMuls = 1; 
+  const uint batchedKronMuls = 2; 
   T *uvaX, * uvaTemp1, *uvaTemp2;
   CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
   CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));
@@ -294,14 +294,14 @@ cudaError_t generalKronGemm(const uint NumKronMats,
       printf("copyUVATempToY\n");
       dim3 grid = {M, 1,1};
       dim3 block = {256, 1, 1};
-      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart);
+      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart, batchedKronMuls, io);
       CUDA_CHECK(cudaDeviceSynchronize());
       printf("Done\n");
     }
     }
 
     //Double/ring/circular buffer previous result and new result
-    if (io < NumKronMats - 1) {
+    if (io < NumKronMats - batchedKronMuls) {
       prevResult = *kronGemmResult;
       if (prevResult == kronGemmResults[0]) {        
         *kronGemmResult = kronGemmResults[1];
@@ -312,7 +312,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     
     // CUDA_CHECK(cudaDeviceSynchronize());
   }
-
+  printf("kronGemmResult %p Results[0] %p Results[1] %p\n", *kronGemmResult, kronGemmResults[0], kronGemmResults[1]);
   return status;
 }
 
