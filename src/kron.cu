@@ -125,8 +125,9 @@ cudaError_t generalKronGemm(const uint NumKronMats,
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = KronMatCols[0] * KronMatCols[0];
+  const uint uvaColsX = KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
   const uint batchedKronMuls = 2; 
+  //TODO: batchedKronMuls > log(uvaColsX, P)
   T *uvaX, * uvaTemp1, *uvaTemp2;
   CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
   CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));

@@ -178,7 +178,7 @@ __global__ void copyXtoUVAX(const uint RowsC,    const uint ColsC,   const uint 
 template<typename ElemT, typename VecT, uint NumThreads>
 __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const uint ColsA,
                             const uint KronRows, const uint KronCols,
-                            const ElemT * __restrict__ uvaTemp,
+                            ElemT * __restrict__ uvaTemp,
                             const uint uvaRows, const uint uvaCols,
                             ElemT * __restrict__ glC,
                             const uint uvaPart, const uint batchedKronMuls, const uint startKronIdx) {
@@ -206,6 +206,24 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
       uint cCol = uvaPart + (uvaElem/KronRows)*(ColsA/KronRows) + (uvaElem%KronRows)*(ColsC/uvaCols); //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
       // if (rowA * ColsA + cCol == 0) printf("209: %f to %p\n", uvaTemp[rowA * uvaCols + uvaElem], glC);      
+    } else if (batchedKronMuls == 2 && uvaCols == KronRows * KronRows * KronRows) {
+      uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
+      //uvaPart = 0 to P^3 - 1; uvaPart*KronRows = 0 to P^4 - P; (uvaPart/KronRows) = 0 to P^2 - 1; (uvaPart/KronRows)*KronRows*KronRows = 0 to P^4 - P  
+      //uvaElem = 0 to P^3-1; uvaElem%(uvaCols/KronRows) = 0 to P^2 - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) = 0 to P - 1; 
+      //uvaElem%KronRows = 0 to P - 1
+
+      if (rowA == 0 and withinP5 > ColsC/KronRows) {
+        printf("withinP5 %d uvaPart %d uvaElem %d\n", withinP5, uvaPart, uvaElem);
+      }
+      uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+      uint cCol =  p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      // if (startKronIdx == 0 && rowA == 0 && uvaTemp[rowA * uvaCols + uvaElem] != 256) printf("209: %f to %p (prev %f) at %d\n", uvaTemp[rowA * uvaCols + uvaElem], glC, glC[rowA * ColsA + cCol], uvaElem);
+      // uvaTemp[rowA * uvaCols + uvaElem] = (ElemT)1.0f;
+      // if (rowA * ColsA + cCol < 16) printf("209: %f to %p\n", uvaTemp[rowA * uvaCols + uvaElem], glC);
+      if (cCol < ColsA)
+        glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      // else
+      //   printf("cCol %d uvaElem %d\n", cCol, uvaElem);
     }
   }
 }
