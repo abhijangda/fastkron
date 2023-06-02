@@ -220,7 +220,7 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
         glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
       // else
       //   printf("cCol %d uvaElem %d\n", cCol, uvaElem);
-    } else if (batchedKronMuls == 2 && uvaCols == KronRows * KronRows * KronRows * KronRows) {
+    } else if (batchedKronMuls == 3) {
       uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
       //uvaPart = 0 to P^3 - 1; uvaPart*KronRows = 0 to P^4 - P; (uvaPart/KronRows) = 0 to P^2 - 1; (uvaPart/KronRows)*KronRows*KronRows = 0 to P^4 - P  
       //uvaElem = 0 to P^3-1; uvaElem%(uvaCols/KronRows) = 0 to P^2 - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) = 0 to P - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) * (ColsA/(uvaCols/KronRows)) = 0 to P^5 - P^4 
