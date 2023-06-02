@@ -273,6 +273,14 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
         // if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
         if (cCol < ColsA)
           glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      } else if (uvaCols == KronRows * KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
       }
     }
     
