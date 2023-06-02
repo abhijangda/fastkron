@@ -202,14 +202,10 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
     if (batchedKronMuls == 1) {
       uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
-    } else if (batchedKronMuls == 2) {
-      uint cCol = uvaPart + (uvaElem/KronRows)*(ColsA/KronRows) + (uvaElem%KronRows)*KronRows*KronRows; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
-      if (cCol < ColsC) {
-        glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
-        // if (rowA * ColsA + cCol == 0) printf("209: %f to %p\n", uvaTemp[rowA * uvaCols + uvaElem], glC);
-      } else {
-        // printf("cCol %d uvaPart %d uvaElem %d\n", cCol, uvaPart, uvaElem);
-      }      
+    } else if (batchedKronMuls == 2 && uvaCols == KronRows * KronRows) {
+      uint cCol = uvaPart + (uvaElem/KronRows)*(ColsA/KronRows) + (uvaElem%KronRows)*(ColsC/uvaCols); //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      // if (rowA * ColsA + cCol == 0) printf("209: %f to %p\n", uvaTemp[rowA * uvaCols + uvaElem], glC);      
     }
   }
 }

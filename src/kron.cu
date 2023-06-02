@@ -154,12 +154,12 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     //Copy prevResult to uvaPrevResult
     {
       CUDA_CHECK(cudaDeviceSynchronize());
-      printf("copyXtoUVAX\n");
+      // printf("copyXtoUVAX\n");
       dim3 grid = {M, 1,1};
       dim3 block = {256, 1, 1};
       copyXtoUVAX<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaPrevResult, M, uvaColsX, prevResult, uvaPart);
       CUDA_CHECK(cudaDeviceSynchronize());
-      printf("Done\n");
+      // printf("Done\n");
     }
     for (uint i = io; i < io+batchedKronMuls; i++) {
     KronGemmKernel cuda_gemm_func = NULL;
@@ -213,7 +213,7 @@ cudaError_t generalKronGemm(const uint NumKronMats,
         min_k = effectiveK;
       }
     }
-    printf("min_k %d effectiveK %d\n", min_k, effectiveK);
+    // printf("min_k %d effectiveK %d\n", min_k, effectiveK);
     int k_equals_var = (min_k == effectiveK) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[kronMat])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
@@ -291,12 +291,12 @@ cudaError_t generalKronGemm(const uint NumKronMats,
     //Copy uvaCurrResult to kronGemmResult
     {
       CUDA_CHECK(cudaDeviceSynchronize());
-      printf("copyUVATempToY\n");
+      // printf("copyUVATempToY\n");
       dim3 grid = {M, 1,1};
       dim3 block = {256, 1, 1};
       copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], uvaCurrResult, M, uvaColsX, *kronGemmResult, uvaPart, batchedKronMuls, io);
       CUDA_CHECK(cudaDeviceSynchronize());
-      printf("Done\n");
+      // printf("Done\n");
     }
     }
 
