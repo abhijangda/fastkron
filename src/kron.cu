@@ -279,6 +279,91 @@ cudaError_t singleGPUKronMatmul(const uint NumKronMats, T* kronGemmResults[], T*
 
   return cudaSuccess;
 }
+
+template<typename T, typename VecT>
+cudaError_t singleGPUOutOfCoreKronMatmul(const uint NumKronMats, T* kronGemmResults[], T* x, T* kronMats[], T** result,
+                                         uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+  if (result == NULL) return cudaErrorInvalidValue;
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return cudaErrorInvalidValue;
+  
+  const bool useUVA = true;
+  const uint uvaRows = M;
+  const uint uvaColsX = KronMatCols[0] * KronMatCols[0]* KronMatCols[0];
+  const uint batchedKronMuls = 2;
+  //TODO: batchedKronMuls > log(uvaColsX, P)
+  T *uvaX, * uvaTemp1, *uvaTemp2;
+  CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
+  CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));
+  CUDA_CHECK(cudaMalloc(&uvaTemp2, uvaColsX * uvaRows * sizeof(T)));
+  T* internalPrevResult = uvaX;
+  T* internalResults[2] = {uvaTemp1, uvaTemp2};
+  T* internalCurrResult = internalResults[0];
+
+  T* outerPrevResult = x;
+  T* outerCurrResult = kronGemmResults[0];
+
+  for (uint io = 0; io < NumKronMats; io += batchedKronMuls) {
+    uint KronMulBatchSize = min(batchedKronMuls,NumKronMats-io);
+    uint MaxI = io + KronMulBatchSize;
+    for (uint uvaPart = 0; uvaPart < K/uvaColsX; uvaPart++) {
+      //Copy prevResult to uvaPrevResult
+      {
+        CUDA_CHECK(cudaDeviceSynchronize());
+        // printf("copyXtoUVAX\n");
+        dim3 grid = {M, 1,1};
+        dim3 block = {256, 1, 1};
+        copyXtoUVAX<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], internalPrevResult, M, uvaColsX, outerPrevResult, uvaPart);
+        CUDA_CHECK(cudaDeviceSynchronize());
+        // printf("Done\n");
+      }
+      for (uint i = io; i < MaxI; i++) {
+        const uint kronMat = NumKronMats - i - 1;
+        cudaError_t status = generalSlicedMatmul<T, VecT>(i, internalPrevResult, 
+            kronMats[kronMat], internalCurrResult, uvaRows, uvaColsX, uvaColsX, 
+            KronMatCols[kronMat], KronMatRows[kronMat], stream);
+
+        if (status != cudaSuccess) return status;
+
+        //Double/ring/circular buffer previous result and new result
+        if (i < MaxI - 1) {
+          internalPrevResult = internalCurrResult;
+          if (internalPrevResult == internalResults[0]) {        
+            internalCurrResult = internalResults[1];
+          } else if (outerPrevResult == internalResults[1]) {
+            internalCurrResult = internalResults[0];
+          }
+        }
+      }
+
+       //Copy uvaCurrResult to kronGemmResult
+      {
+      CUDA_CHECK(cudaDeviceSynchronize());
+      // printf("copyUVATempToY\n");
+      dim3 grid = {M, 1,1};
+      dim3 block = {256, 1, 1};
+      copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], internalCurrResult, M, uvaColsX, outerCurrResult, uvaPart, KronMulBatchSize, io);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      // printf("Done\n");
+      }
+    }
+
+    //Double/ring/circular buffer previous result and new result
+    if (io < NumKronMats - batchedKronMuls) {
+      outerPrevResult = outerCurrResult;
+      if (outerPrevResult == kronGemmResults[0]) {        
+        outerCurrResult = kronGemmResults[1];
+      } else if (outerPrevResult == kronGemmResults[1]) {
+        outerCurrResult = kronGemmResults[0];
+      }
+    }
+  }
+
+  *result = outerCurrResult;
+
+  return cudaSuccess;
+}
+
 /**************************************************
           Library Functions
 ***************************************************/
@@ -298,4 +383,10 @@ cudaError_t kronDGEMM(const uint NumKronMats, double* kronGemmResults[], double*
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   return singleGPUKronMatmul<double, double4>(NumKronMats, kronGemmResults, x, kronMats, result, 
       M, N, K, KronMatCols, KronMatRows, stream);
+}
+
+cudaError_t kronSGEMMOutofCore(const uint NumKronMats, float* kronGemmResults[], float* x, float* kronMats[], float** result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+  return singleGPUOutOfCoreKronMatmul<float, float4>(NumKronMats, kronGemmResults, x, kronMats, result, 
+                        M, N, K, KronMatCols, KronMatRows, stream);
 }

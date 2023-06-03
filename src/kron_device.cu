@@ -155,6 +155,167 @@ __device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
   *addr = elem1;
 }
 
+
+template<typename ElemT, typename VecT, uint NumThreads>
+__global__ void copyXtoUVAX(const uint RowsC,    const uint ColsC,   const uint ColsA,
+                            const uint KronRows, const uint KronCols,
+                            ElemT * __restrict__ uvaTemp,
+                            const uint uvaRows, const uint uvaCols,
+                            const ElemT * __restrict__ glA,
+                            const uint uvaPart) {
+  const uint WarpSize     = 32;
+  const uint tid          = threadIdx.x;
+  const uint wid          = tid/WarpSize;
+  const uint lane         = tid%WarpSize;
+  const uint blockWarps   = blockDim.x/WarpSize;
+  
+  const uint rowA = blockIdx.x;
+
+  for (uint uvaElem = tid; uvaElem < uvaCols; uvaElem += NumThreads) {
+    uvaTemp[rowA * uvaCols + uvaElem] = glA[rowA * ColsA + uvaPart * uvaCols + uvaElem];  
+  }
+}
+
+template<typename ElemT, typename VecT, uint NumThreads>
+__global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const uint ColsA,
+                            const uint KronRows, const uint KronCols,
+                            ElemT * __restrict__ uvaTemp,
+                            const uint uvaRows, const uint uvaCols,
+                            ElemT * __restrict__ glC,
+                            const uint uvaPart, const uint batchedKronMuls, const uint startKronIdx) {
+  const uint WarpSize     = 32;
+  const uint tid          = threadIdx.x;
+  const uint wid          = tid/WarpSize;
+  const uint lane         = tid%WarpSize;
+  const uint blockWarps   = blockDim.x/WarpSize;
+  const uint rowA = blockIdx.x;
+
+  for (uint uvaElem = tid; uvaElem < uvaCols; uvaElem += NumThreads) {
+    // uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
+    // //(0,0,0,0,0,16,16,16)*128 + (0,1,2,3,..16)*128
+    // if (!K_EQUALS_VAR) {
+    //   uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+    //   cCol = tile_k * (MaxColsA/kronCols) + 
+    //       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+    //       cCol%(MaxColsA/kronCols);
+    // }
+    
+    if (batchedKronMuls == 1) {
+      uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+    } else if (batchedKronMuls == 2) {
+      uint UVAColsRatioKronRowsSquare = (uvaCols/(KronRows * KronRows));
+      uint withinP5 = uvaPart * UVAColsRatioKronRowsSquare + 
+                      ((uvaElem%(uvaCols/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(uvaCols/UVAColsRatioKronRowsSquare)) + 
+                      uvaElem % UVAColsRatioKronRowsSquare;
+      uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+      uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+        
+      continue;
+
+      if (uvaCols == KronRows * KronRows) {
+        uint withinP5 = uvaPart + ((uvaElem%(uvaCols/KronRows))/1)*(ColsC/(uvaCols/1)) + uvaElem % 1; 
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+        glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+        // if (rowA * ColsA + cCol == 0) printf("208: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);      
+      } else if (uvaCols == KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      } else if (uvaCols == KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows*KronRows + ((uvaElem%(uvaCols/KronRows))/(KronRows*KronRows))*(ColsA/(uvaCols/(KronRows*KronRows))) + uvaElem%(KronRows*KronRows);
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      } else if (uvaCols == KronRows * KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows*KronRows*KronRows + ((uvaElem%(uvaCols/KronRows))/(KronRows*KronRows*KronRows))*(ColsA/(uvaCols/(KronRows*KronRows*KronRows))) + uvaElem%(KronRows*KronRows*KronRows);
+        //uvaPart = 0 to P^3 - 1; uvaPart*KronRows = 0 to P^4 - P; (uvaPart/KronRows) = 0 to P^2 - 1; (uvaPart/KronRows)*KronRows*KronRows = 0 to P^4 - P  
+        //uvaElem = 0 to P^3-1; uvaElem%(uvaCols/KronRows) = 0 to P^2 - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) = 0 to P - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) * (ColsA/(uvaCols/KronRows)) = 0 to P^5 - P^4 
+        //uvaElem%KronRows = 0 to P - 1
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+        // if (startKronIdx == 0 && rowA == 0 && uvaTemp[rowA * uvaCols + uvaElem] != 256) printf("209: %f to %p (prev %f) at %d\n", uvaTemp[rowA * uvaCols + uvaElem], glC, glC[rowA * ColsA + cCol], uvaElem);
+        // uvaTemp[rowA * uvaCols + uvaElem] = (ElemT)1.0f;
+        if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+        // else
+        //   printf("cCol %d uvaElem %d\n", cCol, uvaElem);
+      }
+    } else if (batchedKronMuls == 3) {
+      if (uvaCols == KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + (uvaElem%KronRows)*(ColsC/uvaCols);
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      } else if (uvaCols == KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        // if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      } else if (uvaCols == KronRows * KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows*KronRows + ((uvaElem%(uvaCols/KronRows))/(KronRows*KronRows))*(ColsA/(uvaCols/(KronRows*KronRows))) + uvaElem%(KronRows*KronRows);
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      }
+    } else if (batchedKronMuls == 4) {
+      if (uvaCols == KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + (uvaElem%KronRows)*(ColsC/uvaCols);;
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        // if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      } else if (uvaCols == KronRows * KronRows * KronRows * KronRows * KronRows) {
+        //Assuming ColsA = KronRows ** 6
+        uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol =  p5Index + withinP5;
+        if (rowA * ColsA + cCol == 0) printf("209: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);
+        if (cCol < ColsA)
+          glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+      }
+    }
+    
+    
+    // else {
+    //   uint withinP5 = uvaPart*KronRows + ((uvaElem%(uvaCols/KronRows))/KronRows)*(ColsA/(uvaCols/KronRows)) + uvaElem%KronRows;
+    //   //uvaPart = 0 to P^3 - 1; uvaPart*KronRows = 0 to P^4 - P; (uvaPart/KronRows) = 0 to P^2 - 1; (uvaPart/KronRows)*KronRows*KronRows = 0 to P^4 - P  
+    //   //uvaElem = 0 to P^3-1; uvaElem%(uvaCols/KronRows) = 0 to P^2 - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) = 0 to P - 1; ((uvaElem%(uvaCols/KronRows))/KronRows) * (ColsA/(uvaCols/KronRows)) = 0 to P^5 - P^4 
+    //   //uvaElem%KronRows = 0 to P - 1
+    //   uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+    //   uint cCol =  p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+    //   // if (startKronIdx == 0 && rowA == 0 && uvaTemp[rowA * uvaCols + uvaElem] != 256) printf("209: %f to %p (prev %f) at %d\n", uvaTemp[rowA * uvaCols + uvaElem], glC, glC[rowA * ColsA + cCol], uvaElem);
+    //   // uvaTemp[rowA * uvaCols + uvaElem] = (ElemT)1.0f;
+    //   // if (rowA * ColsA + cCol < 16) printf("209: %f to %p\n", uvaTemp[rowA * uvaCols + uvaElem], glC);
+    //   if (cCol < ColsA)
+    //     glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+    //   // else
+    //   //   printf("cCol %d uvaElem %d\n", cCol, uvaElem);
+    // }
+  }
+}
+
 //KP_N is KronCols
 //KP_K is KronRows
 // __launch_bounds__(NumThreads)
