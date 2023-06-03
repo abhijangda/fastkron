@@ -204,7 +204,9 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
     } else if (batchedKronMuls == 2) {
       if (uvaCols == KronRows * KronRows) {
-        uint cCol = uvaPart + (uvaElem/KronRows)*(ColsA/KronRows) + (uvaElem%KronRows)*(ColsC/uvaCols); //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+        uint withinP5 = uvaPart + ((uvaElem%(uvaCols/KronRows))/1)*(ColsC/(uvaCols/1)) + uvaElem % 1; 
+        uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+        uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
         glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
         // if (rowA * ColsA + cCol == 0) printf("208: from %p %f to %p\n", uvaTemp, uvaTemp[rowA * uvaCols + uvaElem], glC);      
       } else if (uvaCols == KronRows * KronRows * KronRows) {
