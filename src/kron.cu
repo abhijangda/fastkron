@@ -289,8 +289,8 @@ cudaError_t singleGPUOutOfCoreKronMatmul(const uint NumKronMats, T* kronGemmResu
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = KronMatCols[0] * KronMatCols[0]* KronMatCols[0];
-  const uint batchedKronMuls = 2;
+  const uint uvaColsX = KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0];
+  const uint batchedKronMuls = 3;
   //TODO: batchedKronMuls > log(uvaColsX, P)
   T *uvaX, * uvaTemp1, *uvaTemp2;
   CUDA_CHECK(cudaMalloc(&uvaX, uvaColsX * uvaRows * sizeof(T)));
