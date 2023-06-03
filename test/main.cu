@@ -198,20 +198,20 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
               Call KronGEMM Library Functions
 ***************************************************/
 template<typename T>
-static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+static T* kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
   T* result;
   if (std::is_same<T, float>::value) {
-    CUDACHECK(kronSGEMM(NUM_KP_MATS,
-                        (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
+    CUDACHECK(kronSGEMM(handle, NUM_KP_MATS,
+                        (float*)x, (float**)kpMats, (float**)&result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
-    CUDACHECK(kronIGEMM(NUM_KP_MATS, 
-                        (int**)kpMatmulResult, (int*)x, (int**)kpMats, (int**)&result, 
+    CUDACHECK(kronIGEMM(handle, NUM_KP_MATS, 
+                        (int*)x, (int**)kpMats, (int**)&result, 
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, double>::value) {
-    CUDACHECK(kronDGEMM(NUM_KP_MATS, 
-                        (double**)kpMatmulResult, (double*)x, (double**)kpMats, (double**)&result,
+    CUDACHECK(kronDGEMM(handle, NUM_KP_MATS, 
+                        (double*)x, (double**)kpMats, (double**)&result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else {
     printf("Invalid type\n");
@@ -223,14 +223,13 @@ static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[
 
 
 template<typename T>
-static T* kronGEMMOutOfCore(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream, 
-            bool useUVA, uint OnGPURows, uint MaxInnerKrons) {
+static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
+            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
   T* result;
   if (std::is_same<T, float>::value) {
-    CUDACHECK(kronSGEMMOutofCoreX(NUM_KP_MATS,
-                        (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
-                        M, N, K, KP_MAT_N, KP_MAT_K, OnGPURows, MaxInnerKrons, stream));
+    CUDACHECK(kronSGEMMOutofCoreX(handle, NUM_KP_MATS,
+                                  (float*)x, (float**)kpMats, (float**)&result,
+                                  M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
     result = NULL;
   } else if (std::is_same<T, double>::value) {
@@ -267,35 +266,32 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   printf("values set\n");
   //Allocate GPU data
-  T* dX;
-  T* dKpMatmulResult[2];
-  T* dKpMats[NUM_KP_MATS];
+  FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
   printf("allocating\n");
+  if (useUVA) {
+    handle.setOutOfCoreRowsCols(OnGPURows, MaxInnerKrons);
+    handle.init<T>(true);
+  } else {
+    handle.init<T>(false);
+  }
+  T* dX;
+  T* dKpMats[NUM_KP_MATS];
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useUVA) {
-    CUDACHECK(cudaMallocManaged(&dX, sizeX));
-    CUDACHECK(cudaMallocManaged(&dKpMatmulResult[0], sizeX));
-    CUDACHECK(cudaMallocManaged(&dKpMatmulResult[1], sizeX));  
+    CUDACHECK(cudaMallocManaged(&dX, sizeX));  
   } else {
     CUDACHECK(cudaMalloc(&dX, sizeX));
-    CUDACHECK(cudaMalloc(&dKpMatmulResult[0], sizeX));
-    CUDACHECK(cudaMalloc(&dKpMatmulResult[1], sizeX));
   }
   printf("allocated\n");
 
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     if (useUVA) {
-      CUDACHECK(cudaMallocManaged(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+      CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     } else {
       CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     }
     CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
-  }
-  printf("memset\n");
-
-  for (uint i = 0; i < 2; i++) {
-    CUDACHECK(cudaMemset(dKpMatmulResult[i], 0, sizeX));
   }
   printf("memcpy\n");
 
@@ -312,10 +308,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     printf("running kron gemm\n");
     //Run GPU implementation
     if (useUVA) {
-      dResult = kronGEMMOutOfCore<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0, 
-                            useUVA, OnGPURows, MaxInnerKrons);
+      dResult = kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     } else {
-      dResult = kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      dResult = kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     }
     CUDACHECK(cudaDeviceSynchronize());
     printf("checking results\n");
@@ -340,7 +335,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("warmup\n");
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
-    kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaStreamSynchronize(stream));
 
@@ -349,7 +344,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   CUDACHECK(cudaEventRecord(start, stream));
   for (uint i = 0; i < numIters; i++) {
     //printf("iter i %d\n", i);
-    kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaEventRecord(end, stream));
   CUDACHECK(cudaEventSynchronize(end));
@@ -361,8 +356,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaFree(dKpMats[i]));
   }
 
-  CUDACHECK(cudaFree(dKpMatmulResult[0]));
-  CUDACHECK(cudaFree(dKpMatmulResult[1]));
+  handle.free();
   CUDACHECK(cudaFree(dX));
 
   //Free CPU RAM
