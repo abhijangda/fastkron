@@ -203,6 +203,16 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
       uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
     } else if (batchedKronMuls == 2) {
+      uint UVAColsRatioKronRowsSquare = (uvaCols/(KronRows * KronRows));
+      uint withinP5 = uvaPart * UVAColsRatioKronRowsSquare + 
+                      ((uvaElem%(uvaCols/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(uvaCols/UVAColsRatioKronRowsSquare)) + 
+                      uvaElem % UVAColsRatioKronRowsSquare;
+      uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+      uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
+        
+      continue;
+
       if (uvaCols == KronRows * KronRows) {
         uint withinP5 = uvaPart + ((uvaElem%(uvaCols/KronRows))/1)*(ColsC/(uvaCols/1)) + uvaElem % 1; 
         uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
