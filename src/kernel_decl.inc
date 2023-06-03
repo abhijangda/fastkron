@@ -59,7 +59,7 @@ KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 256, RowParallelismTy::Low, 1, RowModTileIsZero, 512, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,256, 2, 2, 2, 512, 1, 2},\
 KernelInfo{NULL},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 64, RowParallelismTy::Low, 1, RowModTileIsZero, 512, 8, 8, 8, K_EQUALS_VAR, 1, 1, 1, 32>,64, 8, 8, 8, 512, 1, 1},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 512, 8, 8, 8, K_EQUALS_VAR, 1, 1, 1, 32>,512, 8, 8, 8, 512, 1, 1},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
 KernelInfo{NULL},\
