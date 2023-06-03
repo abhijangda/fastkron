@@ -175,7 +175,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
 
-    //#pragma omp parallel for
+    #pragma omp parallel for
     for (uint i = 0; i < M; i++) {
       for (uint j = 0; j < resultCols; j++) {
         T r = 0;
@@ -335,7 +335,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("warmup\n");
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
-    kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    if (useUVA) {
+      kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    } else {
+      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    }
   }
   CUDACHECK(cudaStreamSynchronize(stream));
 
@@ -344,7 +348,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   CUDACHECK(cudaEventRecord(start, stream));
   for (uint i = 0; i < numIters; i++) {
     //printf("iter i %d\n", i);
-    kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    if (useUVA) {
+      kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    } else {
+      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    }
   }
   CUDACHECK(cudaEventRecord(end, stream));
   CUDACHECK(cudaEventSynchronize(end));

@@ -292,13 +292,9 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   const uint uvaColsX = power(KronMatRows[0], handle.OutofCoreKrons_); //KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
   const uint batchedKronMuls = handle.OutofCoreKrons_;
 
-  printf("MaxInnerKrons %d uvaColsX %d K %d\n", handle.OutofCoreKrons_, uvaColsX, K);
+  printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
 
-  T * uvaTemp1, *uvaTemp2;
-  CUDA_CHECK(cudaMalloc(&uvaTemp1, uvaColsX * uvaRows * sizeof(T)));
-  CUDA_CHECK(cudaMalloc(&uvaTemp2, uvaColsX * uvaRows * sizeof(T)));
-
-  T* innerResults[2] = {uvaTemp1, uvaTemp2};
+  T* innerResults[2] = {(T*)handle.outOfCoreTemp1_, (T*)handle.outOfCoreTemp2_};
   T* innerPrevResult = innerResults[0];
   T* innerCurrResult = innerResults[1];
   
@@ -406,7 +402,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     size_t sz = handle.M_ * handle.N_ * sizeof(T);
     CUDA_CHECK(cudaMallocManaged(&handle.temp_, sz));
     CUDA_CHECK(cudaMallocManaged(&handle.result_, sz));
-    size_t outOfCoreSz = handle.OutofCoreRows_ * handle.OutofCoreKrons_ * sizeof(T);
+    size_t outOfCoreSz = handle.OutofCoreRows_ * power(handle.KronMatCols_[0], handle.OutofCoreKrons_) * sizeof(T);
     CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp1_, outOfCoreSz));
     CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp2_, outOfCoreSz));
   } else {
@@ -416,7 +412,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));
   }
 }
-
 
 template<> void FastKronHandle::init<float>(bool useUVA) {
   FastKronHandle_init<float>(*this, useUVA);
