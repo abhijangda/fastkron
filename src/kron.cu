@@ -290,8 +290,8 @@ cudaError_t singleGPUOutOfCoreKronMatmul(const uint NumKronMats, T* kronGemmResu
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0]; //power(KronMatRows[0], MaxInnerKrons);
-  const uint batchedKronMuls = 4; //MaxInnerKrons;
+  const uint uvaColsX = power(KronMatRows[0], MaxInnerKrons); //KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
+  const uint batchedKronMuls = MaxInnerKrons;
   printf("MaxInnerKrons %d uvaColsX %d K %d\n", MaxInnerKrons, uvaColsX, K);
   //TODO: batchedKronMuls > log(uvaColsX, P)
   T *uvaX, * uvaTemp1, *uvaTemp2;
