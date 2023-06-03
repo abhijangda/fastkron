@@ -12,4 +12,7 @@ cudaError_t kronDGEMM(const uint NumKronMats, double* kronGemmResults[], double*
 
 cudaError_t kronSGEMMOutofCore(const uint NumKronMats, float* kronGemmResults[], float* x, float* kronMats[], float** result,
                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
+cudaError_t kronSGEMMOutofCoreX(const uint NumKronMats, float* kronGemmResults[], float* x, float* kronMats[], float** result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], uint OnGPURows, uint MaxInnerKrons, cudaStream_t stream);
+
 #endif

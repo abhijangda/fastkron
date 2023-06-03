@@ -199,18 +199,12 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
 ***************************************************/
 template<typename T>
 static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream, bool useUVA) {
+            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
   T* result;
   if (std::is_same<T, float>::value) {
-    if (useUVA) {
-      CUDACHECK(kronSGEMMOutofCore(NUM_KP_MATS, 
-                          (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
-                          M, N, K, KP_MAT_N, KP_MAT_K, stream));
-    } else {
-      CUDACHECK(kronSGEMM(NUM_KP_MATS, 
-                          (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
-                          M, N, K, KP_MAT_N, KP_MAT_K, stream));
-    }
+    CUDACHECK(kronSGEMM(NUM_KP_MATS,
+                        (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
+                        M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
     CUDACHECK(kronIGEMM(NUM_KP_MATS, 
                         (int**)kpMatmulResult, (int*)x, (int**)kpMats, (int**)&result, 
@@ -228,14 +222,36 @@ static T* kronGEMM(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[
 }
 
 
+template<typename T>
+static T* kronGEMMOutOfCore(const uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream, 
+            bool useUVA, uint OnGPURows, uint MaxInnerKrons) {
+  T* result;
+  if (std::is_same<T, float>::value) {
+    CUDACHECK(kronSGEMMOutofCoreX(NUM_KP_MATS,
+                        (float**)kpMatmulResult, (float*)x, (float**)kpMats, (float**)&result,
+                        M, N, K, KP_MAT_N, KP_MAT_K, OnGPURows, MaxInnerKrons, stream));
+  } else if (std::is_same<T, int>::value) {
+    result = NULL;
+  } else if (std::is_same<T, double>::value) {
+    result = NULL;
+  } else {
+    printf("Invalid type\n");
+    return NULL;
+  }
+
+  return result;
+}
+
 /**************************************************
               Test Driver
 ***************************************************/
 template<typename T, typename VecT>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
-                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, bool useUVA, bool checkResults) {
+                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
+                bool useUVA, uint OnGPURows, uint MaxInnerKrons, bool checkResults) {
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
-
+  
   //Allocate host data
   T* hX;
   T* hKpMats[NUM_KP_MATS];
@@ -295,7 +311,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     hResult = hKpMatmulResult[NUM_KP_MATS-1];
     printf("running kron gemm\n");
     //Run GPU implementation
-    dResult = kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0, useUVA);
+    if (useUVA) {
+      dResult = kronGEMMOutOfCore<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0, 
+                            useUVA, OnGPURows, MaxInnerKrons);
+    } else {
+      dResult = kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+    }
     CUDACHECK(cudaDeviceSynchronize());
     printf("checking results\n");
     T* dResultToHost = (T*)malloc(sizeX);
@@ -319,7 +340,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   printf("warmup\n");
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
-    kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream, useUVA);
+    kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaStreamSynchronize(stream));
 
@@ -328,7 +349,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   CUDACHECK(cudaEventRecord(start, stream));
   for (uint i = 0; i < numIters; i++) {
     //printf("iter i %d\n", i);
-    kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream, useUVA);
+    kronGEMM<T>(NUM_KP_MATS, dKpMatmulResult, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
   }
   CUDACHECK(cudaEventRecord(end, stream));
   CUDACHECK(cudaEventSynchronize(end));
@@ -366,6 +387,8 @@ int main(int argc, char* argv[]) {
   int runs = 0;
   int warmup = 0;
   bool useUVA = false;
+  int gpurows = 0;
+  int maxkronbatch = 0;
 
   AnyOption *opt = new AnyOption();
 
@@ -378,6 +401,8 @@ int main(int argc, char* argv[]) {
   opt->addUsage("runs:  Number of runs");
   opt->addUsage("warmup:  Number of warmup runs");
   opt->addUsage("uva: Allocate and run using NVIDIA UVA");
+  opt->addUsage("gpurows: Rows for temp on GPU. valid only with uva");
+  opt->addUsage("maxkronbatch: Factors batch per inner iteration. valid only with uva");
 
   opt->setOption("batch", 'b');
   opt->setOption("facs", 'f');
@@ -388,6 +413,8 @@ int main(int argc, char* argv[]) {
 
   opt->setFlag("check", 'c');
   opt->setFlag("uva", 'u');
+  opt->setOption("gpurows");
+  opt->setOption("maxkronbatch");
 
   opt->processCommandArgs(argc, argv);
   
@@ -424,7 +451,18 @@ int main(int argc, char* argv[]) {
   }
 
   useUVA = opt->getFlag('u');
-  printf("useUVA %d\n", useUVA);
+  if (opt->getValue("gpurows") != NULL)
+    gpurows = atoi(opt->getValue("gpurows"));
+  if (opt->getValue("maxkronbatch") != NULL)
+    maxkronbatch = atoi(opt->getValue("maxkronbatch"));
+
+  if (useUVA) {
+    if (gpurows <= 0 || maxkronbatch <= 0) {
+      printf("Invalid gpurows %d , maxkronbatch %d\n", gpurows, maxkronbatch);
+      return 1;
+    }
+  }
+
   if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
     printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
     return 1;
@@ -442,11 +480,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, checkResults);
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, checkResults);
   else if (strcmp(type, "int") == 0)
-    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, checkResults);
+    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, checkResults);
   else if (strcmp(type, "double") == 0)
-    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, checkResults);
+    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, checkResults);
   else
     printf("type not supported %s\n", type);
 

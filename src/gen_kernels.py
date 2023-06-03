@@ -47,7 +47,7 @@ Configs[2][2048] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols
 # KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 2048, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,1024, 2, 2, 2, 2048, 1, 2},\
 
 Configs[4][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
-Configs[4][4096] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
+# Configs[4][4096] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
 
 Configs[8][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8}
 Configs[8][512] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8}

@@ -32,6 +32,14 @@ __device__ constexpr uint sqrt(uint x) {
   }
 }
 
+//Compute x**y
+__device__ __host__ uint power(uint x, int y) {
+  uint result = 1;
+  for (uint i = 0; i < y; i++) {
+    result = result * x;
+  }
+  return result;
+}
 
 template<typename VecT, typename ElemT>
 __device__ void globalLoadVec(const ElemT* addr, VecT& vec) {
@@ -205,10 +213,8 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
     } else {
       uint UVAColsRatioKronRowsSquare;
-      uint KronRowsPower = 1;
-      for (int i = 0; i < batchedKronMuls; i++) {
-        KronRowsPower *= KronRows;
-      }
+      uint KronRowsPower = power(KronRows, batchedKronMuls);
+      
       UVAColsRatioKronRowsSquare = (uvaCols/KronRowsPower);
       uint withinP5 = uvaPart * UVAColsRatioKronRowsSquare + 
                       ((uvaElem%(uvaCols/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(uvaCols/UVAColsRatioKronRowsSquare)) + 
