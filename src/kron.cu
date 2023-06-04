@@ -74,8 +74,8 @@ enum RowParallelismTy {
 
 static KernelInfo KronGemmKernels[NUM_TYPE_KERNELS][RowParallelismTy::Num][NUM_K_EQUALS_VAR][NUM_ROWS_MOD_TILE_IS_ZERO][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
-  // TYPE_KERNELS(float,  float4)
-  TYPE_KERNELS(int,    int4)
+  TYPE_KERNELS(float,  float4)
+  // TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
     // COARSE_TB_KERNELS(2)
@@ -87,9 +87,9 @@ static_assert(sizeof(KronGemmKernels)/sizeof(KernelInfo) == NUM_TYPE_KERNELS * R
 template<typename T>
 static int typeKernelIndex(T x) {
   if (std::is_same<T, float>::value)
-    return 1;
-  if (std::is_same<T, int>::value)
     return 0;
+  if (std::is_same<T, int>::value)
+    return 1;
   if (std::is_same<T, double>::value)
     return 2;
 }
@@ -293,7 +293,6 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   const uint batchedKronMuls = handle.OutofCoreKrons_;
 
   printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
-
   T* innerResults[2] = {(T*)handle.outOfCoreTemp1_, (T*)handle.outOfCoreTemp2_};
   T* innerPrevResult = innerResults[0];
   T* innerCurrResult = innerResults[1];
@@ -329,7 +328,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
           innerPrevResult = innerCurrResult;
           if (innerPrevResult == innerResults[0]) {        
             innerCurrResult = innerResults[1];
-          } else if (outerPrevResult == innerResults[1]) {
+          } else if (innerPrevResult == innerResults[1]) {
             innerCurrResult = innerResults[0];
           }
         }
@@ -408,9 +407,14 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     size_t sz = handle.M_ * handle.N_ * sizeof(T);
     CUDA_CHECK(cudaMallocManaged(&handle.temp_, sz));
     CUDA_CHECK(cudaMallocManaged(&handle.result_, sz));
+    CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));
+    CUDA_CHECK(cudaMemset(handle.result_, 0, sz));
+
     size_t outOfCoreSz = handle.OutofCoreRows_ * handle.OutofCoreKronBatch_  * power(handle.KronMatCols_[0], handle.OutofCoreKrons_) * sizeof(T);
     CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp1_, outOfCoreSz));
     CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp2_, outOfCoreSz));
+    CUDA_CHECK(cudaMemset(handle.outOfCoreTemp1_, 0, outOfCoreSz));
+    CUDA_CHECK(cudaMemset(handle.outOfCoreTemp2_, 0, outOfCoreSz));
   } else {
     size_t sz = handle.M_ * handle.N_ * sizeof(T);
     CUDA_CHECK(cudaMalloc(&handle.temp_, sz));

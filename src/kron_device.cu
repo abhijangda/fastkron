@@ -212,17 +212,15 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
       uint cCol = uvaPart * (uvaCols/KronRows) + (uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
     } else {
-      uint UVAColsRatioKronRowsSquare;
       uint KronRowsPower = power(KronRows, batchedKronMuls);
       
-      UVAColsRatioKronRowsSquare = (uvaCols/KronRowsPower);
+      uint UVAColsRatioKronRowsSquare = (uvaCols/KronRowsPower);
       uint withinP5 = uvaPart * UVAColsRatioKronRowsSquare + 
                       ((uvaElem%(uvaCols/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(uvaCols/UVAColsRatioKronRowsSquare)) + 
                       uvaElem % UVAColsRatioKronRowsSquare;
       uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
       uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
       glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
-
     }
   }
 }
