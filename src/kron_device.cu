@@ -180,7 +180,7 @@ __global__ void copyXtoUVAX(const uint RowsC,    const uint ColsC,   const uint 
   const uint rowA = blockIdx.x;
 
   for (uint uvaElem = tid; uvaElem < uvaCols; uvaElem += NumThreads) {
-    uvaTemp[rowA * uvaCols + uvaElem] = glA[rowA * ColsA + uvaPart * uvaCols + uvaElem];  
+    uvaTemp[rowA * uvaCols + uvaElem] = glA[rowA* ColsA + uvaPart * uvaCols + uvaElem];  
   }
 }
 
