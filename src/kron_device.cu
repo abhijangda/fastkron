@@ -240,9 +240,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
-  const uint wid          = tid/WarpSize;
-  const uint lane         = tid%WarpSize;
-  const uint blockWarps   = blockDim.x/WarpSize;
+  // const uint wid          = tid/WarpSize;
+  // const uint lane         = tid%WarpSize;
+  // const uint blockWarps   = blockDim.x/WarpSize;
   const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
   const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols);
