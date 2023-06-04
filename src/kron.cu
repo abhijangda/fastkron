@@ -74,7 +74,7 @@ enum RowParallelismTy {
 
 static KernelInfo KronGemmKernels[NUM_TYPE_KERNELS][RowParallelismTy::Num][NUM_K_EQUALS_VAR][NUM_ROWS_MOD_TILE_IS_ZERO][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
   // KP_N_K_KERNELS(8, 1024, 32)
-  TYPE_KERNELS(float,  float4)
+  // TYPE_KERNELS(float,  float4)
   TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
@@ -87,9 +87,9 @@ static_assert(sizeof(KronGemmKernels)/sizeof(KernelInfo) == NUM_TYPE_KERNELS * R
 template<typename T>
 static int typeKernelIndex(T x) {
   if (std::is_same<T, float>::value)
-    return 0;
-  if (std::is_same<T, int>::value)
     return 1;
+  if (std::is_same<T, int>::value)
+    return 0;
   if (std::is_same<T, double>::value)
     return 2;
 }
@@ -289,7 +289,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   
   const bool useUVA = true;
   const uint uvaRows = M;
-  const uint uvaColsX = power(KronMatRows[0], handle.OutofCoreKrons_); //KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
+  const uint uvaColsX = handle.OutofCoreKronBatch_ * power(KronMatRows[0], handle.OutofCoreKrons_); //KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
   const uint batchedKronMuls = handle.OutofCoreKrons_;
 
   printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
@@ -397,12 +397,18 @@ cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, 
                                                      M, N, K, KronMatCols, KronMatRows, stream);
 }
 
+cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+  return singleGPUOutOfCoreKronMatmul<int, int4>(handle, NumKronMats, x, kronMats, result, 
+                                                 M, N, K, KronMatCols, KronMatRows, stream);
+}
+
 template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUVA) {
   if (useUVA) {
     size_t sz = handle.M_ * handle.N_ * sizeof(T);
     CUDA_CHECK(cudaMallocManaged(&handle.temp_, sz));
     CUDA_CHECK(cudaMallocManaged(&handle.result_, sz));
-    size_t outOfCoreSz = handle.OutofCoreRows_ * power(handle.KronMatCols_[0], handle.OutofCoreKrons_) * sizeof(T);
+    size_t outOfCoreSz = handle.OutofCoreRows_ * handle.OutofCoreKronBatch_  * power(handle.KronMatCols_[0], handle.OutofCoreKrons_) * sizeof(T);
     CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp1_, outOfCoreSz));
     CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp2_, outOfCoreSz));
   } else {

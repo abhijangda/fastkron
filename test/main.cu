@@ -43,7 +43,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return rand()%4 + 1;}
+int randMod(int i, int j) {return rand()%2 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
@@ -231,7 +231,9 @@ static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x
                                   (float*)x, (float**)kpMats, (float**)&result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
-    result = NULL;
+    CUDACHECK(kronIGEMMOutofCoreX(handle, NUM_KP_MATS,
+                                  (int*)x, (int**)kpMats, (int**)&result,
+                                  M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, double>::value) {
     result = NULL;
   } else {
@@ -248,7 +250,7 @@ static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x
 template<typename T, typename VecT>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
                 uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
-                bool useUVA, uint OnGPURows, uint MaxInnerKrons, bool checkResults) {
+                bool useUVA, uint OnGPURows, uint MaxInnerKrons, uint NumMaxInnerKrons, bool checkResults) {
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
   
   //Allocate host data
@@ -263,13 +265,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
   printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
   printf("allocating\n");
   if (useUVA) {
-    handle.setOutOfCoreRowsCols(OnGPURows, MaxInnerKrons);
+    handle.setOutOfCoreRowsCols(OnGPURows, MaxInnerKrons, NumMaxInnerKrons);
     handle.init<T>(true);
   } else {
     handle.init<T>(false);
@@ -391,6 +393,7 @@ int main(int argc, char* argv[]) {
   bool useUVA = false;
   int gpurows = 0;
   int maxkronbatch = 0;
+  int nummaxkronbatch = 0;
 
   AnyOption *opt = new AnyOption();
 
@@ -405,6 +408,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage("uva: Allocate and run using NVIDIA UVA");
   opt->addUsage("gpurows: Rows for temp on GPU. valid only with uva");
   opt->addUsage("maxkronbatch: Factors batch per inner iteration. valid only with uva");
+  opt->addUsage("nummaxkronbatch");
 
   opt->setOption("batch", 'b');
   opt->setOption("facs", 'f');
@@ -417,6 +421,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag("uva", 'u');
   opt->setOption("gpurows");
   opt->setOption("maxkronbatch");
+  opt->setOption("nummaxkronbatch");
 
   opt->processCommandArgs(argc, argv);
   
@@ -457,10 +462,12 @@ int main(int argc, char* argv[]) {
     gpurows = atoi(opt->getValue("gpurows"));
   if (opt->getValue("maxkronbatch") != NULL)
     maxkronbatch = atoi(opt->getValue("maxkronbatch"));
+  if (opt->getValue("nummaxkronbatch") != NULL)
+    nummaxkronbatch = atoi(opt->getValue("nummaxkronbatch"));
 
   if (useUVA) {
-    if (gpurows <= 0 || maxkronbatch <= 0) {
-      printf("Invalid gpurows %d , maxkronbatch %d\n", gpurows, maxkronbatch);
+    if (gpurows <= 0 || maxkronbatch <= 0 || nummaxkronbatch <= 0) {
+      printf("Invalid gpurows %d , maxkronbatch %d nummaxkronbatch %d\n", gpurows, maxkronbatch, nummaxkronbatch);
       return 1;
     }
   }
@@ -482,11 +489,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, checkResults);
+    status = run<float, float4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, checkResults);
   else if (strcmp(type, "int") == 0)
-    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, checkResults);
+    status = run<int, int4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, checkResults);
   else if (strcmp(type, "double") == 0)
-    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, checkResults);
+    status = run<double, double4>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, checkResults);
   else
     printf("type not supported %s\n", type);
 
