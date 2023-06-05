@@ -14,7 +14,7 @@
     if( e != cudaSuccess ) {                          \
       printf("Failed: Cuda error %s:%d '%s'\n",             \
           __FILE__,__LINE__,cudaGetErrorString(e));   \
-      exit(EXIT_FAILURE);                             \
+      abort();                             \
     }                                                 \
   } while(0)
 
@@ -224,7 +224,7 @@ static T* kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMa
 
 template<typename T>
 static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
-            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
+            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream[]) {
   T* result;
   if (std::is_same<T, float>::value) {
     CUDACHECK(kronSGEMMOutofCoreX(handle, NUM_KP_MATS,
@@ -254,7 +254,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
                 int gpus,  
                 bool checkResults) {
   printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
-  
+  cudaStream_t stream[gpus];
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaSetDevice(g));
+    cudaStreamCreate(&stream[g]);
+  }
+
   //Allocate host data
   T* hX;
   T* hKpMats[NUM_KP_MATS];
@@ -279,7 +284,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     handle.init<T>(false);
   }
   T* dX;
-  T* dKpMats[NUM_KP_MATS];
+  T* dKpMats[gpus*NUM_KP_MATS];
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useUVA) {
@@ -291,11 +296,17 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
 
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     if (useUVA) {
-      CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+      for (int g = 0; g < gpus; g++) {
+        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cudaMalloc(&dKpMats[g * NUM_KP_MATS + i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+        printf("297: g %d i %d, %p\n", g, i, dKpMats[g * NUM_KP_MATS + i]);
+      }
     } else {
       CUDACHECK(cudaMalloc(&dKpMats[i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     }
-    CUDACHECK(cudaMemcpy(dKpMats[i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
+    for (int g = 0; g < gpus; g++) {  
+      CUDACHECK(cudaMemcpy(dKpMats[g * NUM_KP_MATS + i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
+    }
   }
   printf("memcpy\n");
 
@@ -312,11 +323,14 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     printf("running kron gemm\n");
     //Run GPU implementation
     if (useUVA) {
-      dResult = kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      dResult = kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      dResult = kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      dResult = kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
-    CUDACHECK(cudaDeviceSynchronize());
+    for (int g = 0; g < gpus; g++) {
+      CUDACHECK(cudaSetDevice(g));
+      CUDACHECK(cudaDeviceSynchronize());
+    }
     printf("checking results\n");
     T* dResultToHost = (T*)malloc(sizeX);
     CUDACHECK(cudaMemcpy(dResultToHost, dResult, sizeX, cudaMemcpyDeviceToHost));
@@ -328,45 +342,57 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       return false;
   }
 
-  cudaStream_t stream;
-  cudaEvent_t start;
-  cudaEvent_t end;
+  cudaEvent_t start[gpus];
+  cudaEvent_t end[gpus];
   float elapsedTime = 0;
   
-  CUDACHECK(cudaEventCreate(&start));
-  CUDACHECK(cudaEventCreate(&end));
-  cudaStreamCreate(&stream);
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaSetDevice(g));
+    CUDACHECK(cudaEventCreate(&start[g]));
+    CUDACHECK(cudaEventCreate(&end[g]));
+    cudaStreamCreate(&stream[g]);
+  }
   printf("warmup\n");
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
     if (useUVA) {
       kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
   }
-  CUDACHECK(cudaStreamSynchronize(stream));
-
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaSetDevice(g));
+    CUDACHECK(cudaStreamSynchronize(stream[g]));
+  }
   //Run
   printf("run\n");
-  CUDACHECK(cudaEventRecord(start, stream));
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaSetDevice(g));
+    CUDACHECK(cudaEventRecord(start[g], stream[g]));
+  }
   for (uint i = 0; i < numIters; i++) {
     //printf("iter i %d\n", i);
     if (useUVA) {
       kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
   }
-  CUDACHECK(cudaEventRecord(end, stream));
-  CUDACHECK(cudaEventSynchronize(end));
-  CUDACHECK(cudaEventElapsedTime(&elapsedTime, start, end));
-  printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
+
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaSetDevice(g));
+    CUDACHECK(cudaEventRecord(end[g], stream[g]));
+    CUDACHECK(cudaEventSynchronize(end[g]));
+    CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
+    printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
+  }
 
   //Free GPU Memory
-  for (uint i = 0; i < NUM_KP_MATS; i++) {
-    CUDACHECK(cudaFree(dKpMats[i]));
-  }
+  for (int g = 0; g < gpus; g++)
+    for (uint i = 0; i < NUM_KP_MATS; i++) {
+      CUDACHECK(cudaFree(dKpMats[g * NUM_KP_MATS + i]));
+    }
 
   handle.free();
   CUDACHECK(cudaFree(dX));
