@@ -297,25 +297,29 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   T* outerPrevResult, *outerCurrResult;
 
   for (uint startOutofCoreRows = 0; startOutofCoreRows < M; startOutofCoreRows += handle.OutofCoreRows_) {
-    const uint outOfCoreRows = min(handle.OutofCoreRows_, M - startOutofCoreRows);
-    outerPrevResult = x;
-    outerCurrResult = kronGemmResults[0];
-    T* innerResults[2] = {(T*)handle.outOfCoreTemp1_[0], (T*)handle.outOfCoreTemp2_[0]};
+  const uint outOfCoreRows = min(handle.OutofCoreRows_, M - startOutofCoreRows);
+
+  outerPrevResult = x;
+  outerCurrResult = kronGemmResults[0];
+  
+  for (uint g = 0; g < handle.numGPUs_; g++) {
+    T* innerResults[2] = {(T*)handle.outOfCoreTemp1_[g], (T*)handle.outOfCoreTemp2_[g]};
     T* innerPrevResult = innerResults[0];
     T* innerCurrResult = innerResults[1];
-  
+
     if (uvaColsX == K) {
       innerResults[0] = &kronGemmResults[0][startOutofCoreRows * K];
       innerResults[1] = &kronGemmResults[1][startOutofCoreRows * K];
       innerPrevResult = &x[startOutofCoreRows * K];
       innerCurrResult = innerResults[0];
     }
-    
+
     for (uint io = 0; io < NumKronMats; io += batchedKronMuls) {
       uint KronMulBatchSize = min(batchedKronMuls, NumKronMats - io);
       uint MaxI = io + KronMulBatchSize;
       
-      for (uint uvaPart = 0; uvaPart < K; uvaPart += uvaColsX) {
+      for (uint uvaPart = g * uvaColsX; uvaPart < K; uvaPart += uvaColsX * handle.numGPUs_) {
+        CUDA_CHECK(cudaSetDevice(g));
         //Copy outerPrevResult to innerPrevResult
         if (uvaColsX < K) {
           // CUDA_CHECK(cudaDeviceSynchronize());
@@ -380,6 +384,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
         }
       }
     }
+  }
   }
 
   *result = outerCurrResult;
@@ -477,7 +482,7 @@ void FastKronHandle::free() {
 
   temp_ = nullptr;
   result_ = nullptr;
-   
+
   if (outOfCoreTemp1_ != nullptr) {
     for (uint g = 0; g < numGPUs_; g++) {
       CUDA_CHECK(cudaFree(outOfCoreTemp1_[g]));
