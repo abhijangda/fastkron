@@ -223,15 +223,15 @@ static T* kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMa
 
 
 template<typename T>
-static T* kronGEMMOutOfCore(FastKronHandle& handle, int gpus, const uint NUM_KP_MATS, T* x, T* kpMats[],
+static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
   T* result;
   if (std::is_same<T, float>::value) {
-    CUDACHECK(kronSGEMMOutofCoreX(handle, gpus, NUM_KP_MATS,
+    CUDACHECK(kronSGEMMOutofCoreX(handle, NUM_KP_MATS,
                                   (float*)x, (float**)kpMats, (float**)&result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
-    CUDACHECK(kronIGEMMOutofCoreX(handle, gpus, NUM_KP_MATS,
+    CUDACHECK(kronIGEMMOutofCoreX(handle, NUM_KP_MATS,
                                   (int*)x, (int**)kpMats, (int**)&result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, double>::value) {
@@ -273,7 +273,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
   printf("allocating\n");
   if (useUVA) {
-    handle.setOutOfCoreRowsCols(OnGPURows, MaxInnerKrons, NumMaxInnerKrons);
+    handle.setOutOfCoreRowsCols(gpus, OnGPURows, MaxInnerKrons, NumMaxInnerKrons);
     handle.init<T>(true);
   } else {
     handle.init<T>(false);
@@ -312,7 +312,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     printf("running kron gemm\n");
     //Run GPU implementation
     if (useUVA) {
-      dResult = kronGEMMOutOfCore<T>(handle, gpus, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
+      dResult = kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     } else {
       dResult = kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, 0);
     }
@@ -340,7 +340,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
     if (useUVA) {
-      kronGEMMOutOfCore<T>(handle, gpus, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
       kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     }
@@ -353,7 +353,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   for (uint i = 0; i < numIters; i++) {
     //printf("iter i %d\n", i);
     if (useUVA) {
-      kronGEMMOutOfCore<T>(handle, gpus, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
       kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     }

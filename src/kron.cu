@@ -277,7 +277,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
 }
 
 template<typename T, typename VecT>
-cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, int gpus, const uint NumKronMats, T* x, T* kronMats[], T** result,
+cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], T** result,
                                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                                          cudaStream_t stream) {
   if (result == NULL)              return cudaErrorInvalidValue;
@@ -300,7 +300,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, int gpus, const
     const uint outOfCoreRows = min(handle.OutofCoreRows_, M - startOutofCoreRows);
     outerPrevResult = x;
     outerCurrResult = kronGemmResults[0];
-    T* innerResults[2] = {(T*)handle.outOfCoreTemp1_, (T*)handle.outOfCoreTemp2_};
+    T* innerResults[2] = {(T*)handle.outOfCoreTemp1_[0], (T*)handle.outOfCoreTemp2_[0]};
     T* innerPrevResult = innerResults[0];
     T* innerCurrResult = innerResults[1];
   
@@ -318,13 +318,13 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, int gpus, const
       for (uint uvaPart = 0; uvaPart < K; uvaPart += uvaColsX) {
         //Copy outerPrevResult to innerPrevResult
         if (uvaColsX < K) {
-          CUDA_CHECK(cudaDeviceSynchronize());
+          // CUDA_CHECK(cudaDeviceSynchronize());
           // printf("copyXtoUVAX\n");
           dim3 grid = {outOfCoreRows, 1,1};
           dim3 block = {256, 1, 1};
           copyXtoUVAX<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatCols[io], innerPrevResult, outOfCoreRows, uvaColsX, 
                                                      &outerPrevResult[startOutofCoreRows * K], uvaPart/uvaColsX);
-          CUDA_CHECK(cudaDeviceSynchronize());
+          // CUDA_CHECK(cudaDeviceSynchronize());
           // printf("Done\n");
         }
 
@@ -349,13 +349,13 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, int gpus, const
 
         //Copy uvaCurrResult to kronGemmResult
         if (uvaColsX < K) {
-          CUDA_CHECK(cudaDeviceSynchronize());
+          // CUDA_CHECK(cudaDeviceSynchronize());
           // printf("copyUVATempToY\n");
           dim3 grid = {outOfCoreRows, 1,1};
           dim3 block = {256, 1, 1};
           copyUVATempToY<T, VecT, 256><<<grid, block>>>(M, N, K, KronMatRows[io], KronMatRows[io], innerCurrResult, outOfCoreRows, uvaColsX, 
                                                         &outerCurrResult[startOutofCoreRows * K], uvaPart/uvaColsX, KronMulBatchSize, io);
-          CUDA_CHECK(cudaDeviceSynchronize());
+          // CUDA_CHECK(cudaDeviceSynchronize());
           // printf("Done\n");
         } else {
           if (innerPrevResult == innerResults[0]) {
@@ -411,19 +411,19 @@ cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x,
 
 cudaError_t kronSGEMMOutofCore(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
-  return singleGPUOutOfCoreKronMatmul<float, float4>(handle, 1, NumKronMats, x, kronMats, result, 
+  return singleGPUOutOfCoreKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, 
                                                      M, N, K, KronMatCols, KronMatRows, stream);
 }
 
-cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, int gpus, const uint NumKronMats, float* x, float* kronMats[], float** result,
+cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
-  return singleGPUOutOfCoreKronMatmul<float, float4>(handle, gpus, NumKronMats, x, kronMats, result, 
+  return singleGPUOutOfCoreKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, 
                                                      M, N, K, KronMatCols, KronMatRows, stream);
 }
 
-cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, int gpus, const uint NumKronMats, int* x, int* kronMats[], int** result,
+cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
-  return singleGPUOutOfCoreKronMatmul<int, int4>(handle, gpus, NumKronMats, x, kronMats, result, 
+  return singleGPUOutOfCoreKronMatmul<int, int4>(handle, NumKronMats, x, kronMats, result, 
                                                  M, N, K, KronMatCols, KronMatRows, stream);
 }
 
@@ -434,14 +434,22 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     CUDA_CHECK(cudaMallocManaged(&handle.result_, sz));
     CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));
     CUDA_CHECK(cudaMemset(handle.result_, 0, sz));
+    
+    assert(handle.numGPUs_ != 0);
 
     uint outOfCoreCols = handle.OutofCoreKronBatch_  * power(handle.KronMatCols_[0], handle.OutofCoreKrons_) * sizeof(T);
     if (outOfCoreCols < handle.K_) {
+      handle.outOfCoreTemp1_ = new void*[handle.numGPUs_];
+      handle.outOfCoreTemp2_ = new void*[handle.numGPUs_];
+
       size_t outOfCoreSz = handle.OutofCoreRows_ * outOfCoreCols;
-      CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp1_, outOfCoreSz));
-      CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp2_, outOfCoreSz));
-      CUDA_CHECK(cudaMemset(handle.outOfCoreTemp1_, 0, outOfCoreSz));
-      CUDA_CHECK(cudaMemset(handle.outOfCoreTemp2_, 0, outOfCoreSz));
+      for (int g = 0; g < handle.numGPUs_; g++) {
+        CUDA_CHECK(cudaSetDevice(g));
+        CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp1_[g], outOfCoreSz));
+        CUDA_CHECK(cudaMalloc(&handle.outOfCoreTemp2_[g], outOfCoreSz));
+        CUDA_CHECK(cudaMemset(handle.outOfCoreTemp1_[g], 0, outOfCoreSz));
+        CUDA_CHECK(cudaMemset(handle.outOfCoreTemp2_[g], 0, outOfCoreSz));
+      }
     }
   } else {
     size_t sz = handle.M_ * handle.N_ * sizeof(T);
@@ -467,8 +475,19 @@ void FastKronHandle::free() {
   CUDA_CHECK(cudaFree(temp_));
   CUDA_CHECK(cudaFree(result_));
 
+  temp_ = nullptr;
+  result_ = nullptr;
+   
   if (outOfCoreTemp1_ != nullptr) {
-    CUDA_CHECK(cudaFree(outOfCoreTemp1_));
-    CUDA_CHECK(cudaFree(outOfCoreTemp2_));
+    for (uint g = 0; g < numGPUs_; g++) {
+      CUDA_CHECK(cudaFree(outOfCoreTemp1_[g]));
+      CUDA_CHECK(cudaFree(outOfCoreTemp2_[g]));
+    }
+
+    delete[] outOfCoreTemp1_;
+    delete[] outOfCoreTemp2_;
+
+    outOfCoreTemp1_ = nullptr;
+    outOfCoreTemp2_ = nullptr;
   }
 }

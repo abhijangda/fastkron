@@ -20,16 +20,18 @@ struct FastKronHandle {
   
   void* temp_;
   
+  uint numGPUs_;
   uint OutofCoreRows_;
   uint OutofCoreKrons_;
   uint OutofCoreKronBatch_;
-  void *outOfCoreTemp1_;
-  void *outOfCoreTemp2_;
+  void **outOfCoreTemp1_;
+  void **outOfCoreTemp2_;
 
-  void setOutOfCoreRowsCols(uint rows, uint cols, uint batch) {
+  void setOutOfCoreRowsCols(uint gpus, uint rows, uint cols, uint batch) {
     OutofCoreRows_ = rows;
     OutofCoreKrons_ = cols;
     OutofCoreKronBatch_ = batch;
+    numGPUs_ = gpus;
   }
 
   template<typename T> void init(bool useUVA);
@@ -47,9 +49,9 @@ cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x,
 
 cudaError_t kronSGEMMOutofCore(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
-cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, int gpus, const uint NumKronMats, float* x, float* kronMats[], float** result,
+cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
-cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, int gpus, const uint NumKronMats, int* x, int* kronMats[], int** result,
+cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
 
 #endif
