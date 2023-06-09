@@ -6,7 +6,7 @@ libKron.so: src/kron.cu src/kron.h src/kron_device.cu src/kernel_decl.inc
 	nvcc -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -o $@ -Xptxas=-v -gencode arch=compute_70,code=sm_70 -g -G
 
 kron: test/main.cu libKron.so 
-	nvcc $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@
+	nvcc $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@ -g
 
 clean:
 	rm -rf kron libKron.so
