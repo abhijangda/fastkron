@@ -479,8 +479,10 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   //All gpus with same row shares the same barrier
   pthread_barrier_t barriers[gpusInRows];
 
-  int s = pthread_barrier_init(&barriers[0], NULL, handle.numGPUs_);
-  assert (s == 0);
+  for (int i = 0; i < gpusInRows; i++) {
+    int s = pthread_barrier_init(&barriers[i], NULL, gpusInRows);
+    assert (s == 0);
+  }
 
   ThreadArgs<T>* threadArgs = new ThreadArgs<T>[handle.numGPUs_];
 
@@ -501,7 +503,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
       thread % gpusInCols,
       gpusInRows,
       gpusInCols,
-      &barriers[0]
+      &barriers[thread/gpusInCols]
     );
     
     threadArgs[thread] = args;
