@@ -23,4 +23,7 @@ struct timeval getTimeOfDay () {
   return _time;
 }
 
+double getCurrTime() {
+  return convertTimeValToDouble(getTimeOfDay());
+}
 #endif

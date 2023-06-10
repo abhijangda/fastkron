@@ -2,8 +2,9 @@
 #include <cassert>
 #include <cstdio>
 #include <type_traits>
-#include <pthread.h>
+#include <thread>
 
+#include "utils.h"
 #include "kron.h"
 
 #define CUDA_CHECK(cmd) do {                         \
@@ -312,16 +313,16 @@ struct ThreadArgs {
   uint gpusInRows;
   uint gpusInCols;
   pthread_barrier_t* barrier;
-};
 
-struct ThreadResult {
-  cudaError_t status;
-  void* result;
+  struct ThreadResult {
+    cudaError_t status;
+    void* result;
+  } threadResult;
 };
 
 template<typename T, typename VecT>
-static void * singleGPUOutOfCoreThreadFunc(void *arg) {
-  ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
+void singleGPUOutOfCoreThreadFunc(ThreadArgs<T>& thArgs) {
+  // ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
 
   FastKronHandle& handle = *thArgs.handle;
   uint NumKronMats = thArgs.NumKronMats;
@@ -448,7 +449,7 @@ static void * singleGPUOutOfCoreThreadFunc(void *arg) {
   }
 
   end:
-  return new ThreadResult{status, (void*)outerCurrResult};
+  thArgs.threadResult = {status, (void*)outerCurrResult};
 }
 
 template<typename T, typename VecT>
@@ -467,6 +468,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   const uint batchedKronMuls = handle.OutofCoreKrons_;
 
   // printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
+  double timeStart = getCurrTime();
 
   uint gpusInRows = 2;
   uint gpusInCols = 2; //handle.numGPUs_;
@@ -475,7 +477,7 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
   assert(gpusInRows * handle.OutofCoreRows_ <= M);
   assert(M % (gpusInRows * handle.OutofCoreRows_) == 0);
   
-  pthread_t threads[handle.numGPUs_];
+  // pthread_t threads[handle.numGPUs_];
   //All gpus with same row shares the same barrier
   pthread_barrier_t barriers[gpusInRows];
 
@@ -484,10 +486,12 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
     assert (s == 0);
   }
 
+  std::thread* threads = new std::thread[handle.numGPUs_];
+
   ThreadArgs<T>* threadArgs = new ThreadArgs<T>[handle.numGPUs_];
 
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
-    ThreadArgs<T> args(
+    ThreadArgs<T> args = ThreadArgs<T>(
       &handle,
       NumKronMats,
       x,
@@ -505,26 +509,29 @@ cudaError_t singleGPUOutOfCoreKronMatmul(FastKronHandle& handle, const uint NumK
       gpusInCols,
       &barriers[thread/gpusInCols]
     );
-    
-    threadArgs[thread] = args;
 
-    int s = pthread_create(&threads[thread], NULL, 
-                       singleGPUOutOfCoreThreadFunc<T, VecT>,
-                       (void *)&threadArgs[thread]);
-    assert (s == 0);
+    threadArgs[thread] = args;
+    threads[thread] = std::thread(singleGPUOutOfCoreThreadFunc<T, VecT>, std::ref(threadArgs[thread]));
+    
+    // int s = pthread_create(&threads[thread], NULL, 
+    //                    singleGPUOutOfCoreThreadFunc<T, VecT>,
+    //                    (void *)&threadArgs[thread]);
+    // assert (s == 0);
       // return cudaErrorInitializationError;
   }
 
   cudaError_t status;
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
-    ThreadResult * res;
-    int s = pthread_join(threads[thread], (void**)&res);
-    assert (s == 0);
+    threads[thread].join();
+
     if (thread == 0) {
-      status = res->status;
-      *result = (T*)res->result;
+      status = threadArgs[thread].threadResult.status;
+      *result = (T*)threadArgs[thread].threadResult.result;
     }
   }
+  double timeEnd = getCurrTime();
+
+  printf("531: time %lf microseconds\n", timeEnd - timeStart);
   // 
   // printf("*result %p\n", *result);
   return status;
