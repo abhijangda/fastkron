@@ -19,25 +19,6 @@
   } while(0)
 
 /**************************************************
-                    Timing functions
-**************************************************/
-// static double convertTimeValToDouble(struct timeval _time) {
-//   return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
-// }
-
-// static struct timeval getTimeOfDay () {
-//   struct timeval _time;
-
-//   if (gettimeofday (&_time, NULL) == -1) {
-//     fprintf (stderr, "gettimeofday returned -1\n");
-//     perror ("");
-//     abort ();
-//   }
-
-//   return _time;
-// }
-
-/**************************************************
                 Matrix Functions
 ***************************************************/
 int one(int i, int j) {return 1;}
