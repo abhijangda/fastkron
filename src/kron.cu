@@ -255,6 +255,18 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[2], T* kr
   return status;
 }
 
+template<typename T>
+__global__ void checkKernel(T* mem, T value) {
+  if (threadIdx.x == 0) {
+    for (int i = 0; i < 1024; i++) {
+      if (mem[i] != value) {
+        printf("incorrect %f != %f at %d\n", mem[i], value, i);
+        break;
+      }
+    }
+  }
+}
+
 template<typename T, typename VecT>
 cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], T** result,
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
@@ -267,15 +279,16 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
 
   for (uint i = 0; i < NumKronMats; i += 2) {
     const uint kronMat = NumKronMats - i - 1;
-    T* nextTwoKronMats[2] = {kronMats[0], kronMats[1]};
+    T* nextTwoKronMats[2] = {kronMats[kronMat], kronMats[kronMat-1]};
     cudaError_t status = generalSlicedMatmul<T, VecT>(i, prevKronResult, 
         nextTwoKronMats, currKronResult, M, N, K, 
         KronMatCols[kronMat], KronMatRows[kronMat], stream);
 
     if (status != cudaSuccess) return status;
-
+    // if (i == 0)
+    // checkKernel<T><<<1,32>>>(currKronResult, (T)(1 << (i + 2)));
     //Double/ring/circular buffer previous result and new result
-    if (i < NumKronMats - 1) {
+    if (i < NumKronMats - 2 - 1) {
       prevKronResult = currKronResult;
       if (prevKronResult == kronGemmResults[0]) {        
         currKronResult = kronGemmResults[1];

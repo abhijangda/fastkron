@@ -364,7 +364,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
         globalLoadVec(addrA, vec);
         loadVecToRegs(vec, elems);
-
+        
         #pragma unroll
         for (uint i = 0; i < VecTNumElems; i++) {
           uint ash_col = a_col + i;
@@ -378,7 +378,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   
     //TODO: nvcc unrolls this loop, which leads to high register usage
     for (uint tileKronCol = 0; tileKronCol < MaxTileSizeKronCols; tileKronCol += TileSizeKronCols) {
-      if (FusedSlicedMuls > 1 && !(MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
+      if (FusedSlicedMuls == 1 && !(MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
         //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
         const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
 
@@ -439,14 +439,17 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
           #pragma unroll
           for (uint j = 0;    j < CRegCols;         j++)
           #pragma unroll
-          for (uint k = 0;    k < RegTileSizeACols; k++)
+          for (uint k = 0;    k < RegTileSizeACols; k++) {
             regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+          }
         }
       }
     }
 
     __syncthreads();
   }
+
+  __syncthreads();
 
   if (FusedSlicedMuls > 1) {
     for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
@@ -455,22 +458,54 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
         for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
           const uint cRow = rowA;
           uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-          if (!K_EQUALS_VAR) {
-            uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
-            cCol = tile_k * (MaxColsA/kronCols) + 
-                (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                cCol%(MaxColsA/kronCols);
-          }
-          if (MaxTileSizeKronCols != MaxKronCols) {
-            uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-            cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
-          }
+          // if (!K_EQUALS_VAR) {
+          //   uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+          //   cCol = tile_k * (MaxColsA/kronCols) + 
+          //       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+          //       cCol%(MaxColsA/kronCols);
+          // }
+          // if (MaxTileSizeKronCols != MaxKronCols) {
+          //   uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
+          //   cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+          // }
           const uint cIdx = cRow * colsC + cCol;
+          // if (kp_idx == 0 && fusedFac == 0)
+          //   printf("474: %f kp %d\n", regC[rowA][reg_i][reg_j], kp_idx);
           // assert(tid == cCol);
           // if (kp_idx == 0&& cRow == 0 && cCol < 64)
           //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
           fusedShC[cRow][cCol] = regC[rowA][reg_i][reg_j];
         }
+      }
+    }
+    // __syncthreads();
+    // if (blockIdx.x == 0 && threadIdx.x == 0 && kp_idx == 0 && fusedFac == 0) {
+    //   for (int i = 0; i < 1024; i++) {
+    //     printf("%f, %d\n", fusedShC[0][i], i);
+    //   }
+    // }
+  }
+  __syncthreads();
+  if (fusedFac == FusedSlicedMuls - 1) {
+    for (int rowShC = 0; rowShC < TileSizeRowsA; rowShC++) {
+      for (uint colShC = threadIdx.x; colShC < TileSizeColsA; colShC += blockDim.x) {
+        const uint rowC = rowShC + tileRowA;
+        // uint KronRowsPower = power(KronRows, FusedSlicedMuls); //4
+        // uint UVAColsRatioKronRowsSquare = (TileSizeColsA/KronRowsPower); //1024/4 = 256
+        // uint withinP5 = 0 + //uvaPart * UVAColsRatioKronRowsSquare + //
+        //                 ((colShC%512)/256)*256 +  // ((colShC%(TileSizeColsA/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(TileSizeColsA/UVAColsRatioKronRowsSquare)) + 
+        //                 colShC % 256;
+                      
+        // uint p5Index = (colShC/512)*512;
+        // uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+        uint cCol = colShC;
+        if (kp_idx == 0 && blockIdx.x == 0) {
+          // for (int i = 0; i < TileSizeRowsA; i++) {
+            // printf("%f at %d\n", fusedShC[rowShC][colShC], colShC);
+          // }
+        }
+          
+        glC[rowC * ColsA + cCol] = fusedShC[rowShC][colShC];
       }
     }
   }
