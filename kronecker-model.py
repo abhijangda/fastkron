@@ -216,8 +216,8 @@ if use_command_args:
     (cublas_times, at_times, cuda_times) = doGPytorch(fArg, npointsArg, dArg)
     print("cuBLAS", sum(cublas_times)/len(cublas_times), "at", sum(at_times)/len(at_times), "Total",sum(cuda_times)/len(cuda_times))
 else:
-    npoints = 16
-    maxD = {4:11, 8:7, 16:6, 32: 5, 64 : 4} #2:22, 128: 4, 256: 3, 512: 3, 1024:3
+    npoints = 1
+    maxD = {4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 3} #2:22, 128: 4, 256: 3, 512: 3, 1024:3
     cases = []
     MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
     for twoPower in maxD:
@@ -265,7 +265,7 @@ else:
 
     case_times = {}
     for case in cases:
-            if True:
+            if False:
                 (cublas_times, at_times, cuda_times) = doGPytorch(case["2^l"], case["npoints"], case["d"])
                 if len(cuda_times) > 1: 
                     case["PyTorchTime"] = sum(cuda_times[1:])/len(cuda_times[1:])

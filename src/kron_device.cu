@@ -229,7 +229,7 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
 //KP_K is KronRows
 // __launch_bounds__(NumThreads)
 template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, uint TileSizeRowsA, 
-         bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint KP_N_TILE_, uint K_EQUALS_VAR,
+         bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
          uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
 __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const uint ColsA,
                                const uint KronRows, const uint KronCols,
@@ -245,10 +245,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   // const uint blockWarps   = blockDim.x/WarpSize;
   const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
-  const uint MaxTileSizeKronCols = MIN(KP_N_TILE_,          MaxKronCols);
   const uint MaxTileSizeKronRows = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
   const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxTileSizeKronRows);
-  const uint TileSizeKronCols    = MIN(256,                 MaxTileSizeKronCols);
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
   // const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
@@ -300,7 +298,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint kp_col_start_ = (tid / wSz) * CRegCols; 
   const uint a_col_start_  = (tid % wSz) * CRegRows; 
 
-  if (MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
+  if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
     const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
 
     for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
@@ -319,25 +317,11 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   }
 
   const uint tileRowA  = blockIdx.x * TileSizeRowsA;
-  // for (uint tileRowA  = blockIdx.x * TileSizeRowsA;
-  //           tileRowA  < gridDim.x  * TileSizeRowsA;
-  //           tileRowA += gridDim.x  * TileSizeRowsA) 
   {
-  // if (tid == 0) {
-  //   printf("tileRowA %d blockIdx.x %d gridDim.x %d TileSizeRowsA %d\n", tileRowA, blockIdx.x, gridDim.x, TileSizeRowsA);
-  // }
   const uint outerTileKronCol =  kp_col_start_;
-  // for (uint outerTileKronCol =  kp_col_start_;
-  //           outerTileKronCol <  MaxTileSizeKronCols;
-  //           outerTileKronCol += MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegCols) 
   {
   const uint tileColA    =  a_col_start_ ;
-  // for (uint tileColA    =  a_col_start_ ;
-  //           tileColA    <  MaxColsA/MaxKronRows;
-  //           tileColA    += NumThreads * MAX(1, NumThreads/((MaxColsA/MaxKronRows)/CRegRows)) * CRegRows) 
-  
   {
-
     #pragma unroll
     for (uint r = 0; r < TileSizeRowsA; r++) {
     #pragma unroll
@@ -350,7 +334,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) {
       for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
         for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
-          uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+          uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
           const ElemT* addrA;
           VecT  vec;
           ElemT elems[VecTNumElems];
@@ -383,8 +367,9 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       }
     
       //TODO: nvcc unrolls this loop, which leads to high register usage
-      for (uint tileKronCol = 0; tileKronCol < MaxTileSizeKronCols; tileKronCol += TileSizeKronCols) {
-        if (!(MaxTileSizeKronCols == MaxKronCols && TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
+      const uint tileKronCol = 0;
+      {
+        if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
           //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
           const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
 
@@ -392,10 +377,10 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             VecT  vec;
             ElemT elems[VecTNumElems];
 
-            const uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-            const uint col = external_tile_kp_n*MaxTileSizeKronCols + tileKronCol + (tid%(TileSizeKronCols/loadInstr))*loadInstr;
+            const uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
+            const uint col = external_tile_kp_n*TileSizeKronCols + tileKronCol + (tid%(TileSizeKronCols/loadInstr))*loadInstr;
             const uint row = swid;
-            // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * MaxTileSizeKronCols + tileKronRow + row) * kronRows + col];
+            // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
             globalLoadVec(&glKronMats[(external_tile_kp_k * MaxTileSizeKronRows + tileKronRow + row) * kronRows + col], vec);
             loadVecToRegs(vec, elems);
@@ -480,14 +465,14 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
                 uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
                 //(0,0,0,0,0,16,16,16)*128 + (0,1,2,3,..16)*128
                 if (!K_EQUALS_VAR) {
-                  uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+                  uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
                   cCol = tile_k * (MaxColsA/kronCols) + 
                       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
                       cCol%(MaxColsA/kronCols);
                 }
-                if (MaxTileSizeKronCols != MaxKronCols) {
-                  uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-                  cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+                if (TileSizeKronCols != MaxKronCols) {
+                  uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
+                  cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
                 }
                 const uint cIdx = cRow * colsC + cCol;
                 // assert(tid == cCol);
@@ -504,14 +489,14 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
               const uint cRow = (rowA + tileRowA);
               uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
               if (!K_EQUALS_VAR) {
-                uint tile_k = get_tile_k<MaxKronCols, MaxTileSizeKronCols>();
+                uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
                 cCol = tile_k * (MaxColsA/kronCols) + 
                     (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
                     cCol%(MaxColsA/kronCols);
               }
-              if (MaxTileSizeKronCols != MaxKronCols) {
-                uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, MaxTileSizeKronCols>();
-                cCol += external_tile_kp_n*(colsA/(MaxKronCols/MaxTileSizeKronCols)); 
+              if (TileSizeKronCols != MaxKronCols) {
+                uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
+                cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
               }
               const uint cIdx = cRow * colsC + cCol;
               // assert(tid == cCol);
