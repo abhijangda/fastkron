@@ -129,11 +129,11 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
 
 //Launch cuda kernels
 template<typename T, typename VecT>
-cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[2], T* kronGemmResult,
+cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[3], T* kronGemmResult,
                             const uint M, const uint N, const uint K, 
                             const uint KronMatCols, const uint KronMatRows, 
                             cudaStream_t stream) {
-  typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*[2], T*);
+  typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*[3], T*);
   cudaError_t status;
 
   //Only row major layout of all matrics is supported.
@@ -246,6 +246,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[2], T* kr
                     &x, 
                     (void*)&kronMat[0],
                     (void*)&kronMat[1],
+                    (void*)&kronMat[2],
                     (void*)&kronGemmResult, 
                     (void*)&kronIndex
                   };
@@ -253,7 +254,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[2], T* kr
     status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
     if (status != cudaSuccess)
       return status;
-    CUDA_CHECK(cudaDeviceSynchronize());
+
   return status;
 }
 
@@ -279,9 +280,9 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
 
-  for (uint i = 0; i < NumKronMats; i += 2) {
+  for (uint i = 0; i < NumKronMats; i += 3) {
     const uint kronMat = NumKronMats - i - 1;
-    T* nextTwoKronMats[2] = {kronMats[kronMat], kronMats[kronMat-1]};
+    T* nextTwoKronMats[] = {kronMats[kronMat], kronMats[kronMat-1], kronMats[kronMat-2]};
     cudaError_t status = generalSlicedMatmul<T, VecT>(i, prevKronResult, 
         nextTwoKronMats, currKronResult, M, N, K, 
         KronMatCols[kronMat], KronMatRows[kronMat], stream);
@@ -290,7 +291,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     // if (i == 0)
     // checkKernel<T><<<1,32>>>(currKronResult, (T)(1 << (i + 2)));
     //Double/ring/circular buffer previous result and new result
-    if (i < NumKronMats - 2 - 1) {
+    if (i < NumKronMats - 3 - 1) {
       prevKronResult = currKronResult;
       if (prevKronResult == kronGemmResults[0]) {        
         currKronResult = kronGemmResults[1];
