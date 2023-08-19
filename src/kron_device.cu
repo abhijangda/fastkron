@@ -1,5 +1,5 @@
 // #define C_IN_SHMEM
-template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_tile_k() {return blockIdx.y/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_tile_k() {return blockIdx.x/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_external_tile_kp_n() {return blockIdx.y%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
@@ -307,7 +307,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint kp_col_start_ = (tid / wSz) * CRegCols; 
   const uint a_col_start_  = (tid % wSz) * CRegRows; 
 
-  const uint tileRowA  = blockIdx.x * TileSizeRowsA;
+  const uint tileRowA  = blockIdx.y * TileSizeRowsA;
   const uint outerTileKronCol =  kp_col_start_;
   const uint tileColA    =  a_col_start_ ;
 

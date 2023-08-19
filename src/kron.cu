@@ -229,8 +229,8 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[3], T* kr
     uint tileKronCols = MaxTileKronCols[log2(KronMatRows)-log2(MIN_KP_K)];
     //Create the grid and thread block
     grid = {
-              DIVUP(M, tileRowA),
               (K/min_k) * DIVUP(KronMatCols, tileKronCols),
+              DIVUP(M, tileRowA),
               1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
            };
     block = {
