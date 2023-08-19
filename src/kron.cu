@@ -60,11 +60,13 @@ enum RowParallelismTy {
 #include "kernel_decl.inc" 
 
 #define TYPE_KERNELS(T, VecT) \
+  KERNEL_DECL(T, VecT, 1, 0),\
   KERNEL_DECL(T, VecT, 1, 1)
+
   // KERNEL_DECL(T, VecT, 0, 0),\
   // KERNEL_DECL(T, VecT, 1, 0),\
   // KERNEL_DECL(T, VecT, 0, 1),\
-  KERNEL_DECL(T, VecT, 1, 1),
+  // KERNEL_DECL(T, VecT, 1, 1),
 
 
 //Three type kernels float/float4, int/int4, and double/double4
@@ -77,7 +79,7 @@ enum RowParallelismTy {
 // #define MAX_KP_K 64
 #define NUM_KP_N_K_KERNELS (log2(MAX_KP_K)-log2(MIN_KP_K) + 1)
 
-#define NUM_K_EQUALS_VAR 1
+#define NUM_K_EQUALS_VAR 2
 #define NUM_KPK_EQUALS_VAR 1
 #define NUM_ROWS_MOD_TILE_IS_ZERO 1
 #define EXTERNAL_KP_K_TILE_ MAX_K
@@ -192,7 +194,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[2], T* kr
       }
     }
     //min_k=8192;
-    int k_equals_var = 0; //(min_k == K) ? 1 : 0;
+    int k_equals_var = (min_k == K) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows)-log2(MIN_KP_K)];
     row_mod_tile_zero = 0; //(M % tileRowA) == 0;
     //Check that kernel index is valid only in debug mode
