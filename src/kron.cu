@@ -60,14 +60,15 @@ enum RowParallelismTy {
 #include "kernel_decl.inc" 
 
 #define TYPE_KERNELS(T, VecT) \
-  KERNEL_DECL(T, VecT, 0, 0),\
-  KERNEL_DECL(T, VecT, 1, 0),\
-  KERNEL_DECL(T, VecT, 0, 1),\
+  KERNEL_DECL(T, VecT, 1, 1)
+  // KERNEL_DECL(T, VecT, 0, 0),\
+  // KERNEL_DECL(T, VecT, 1, 0),\
+  // KERNEL_DECL(T, VecT, 0, 1),\
   KERNEL_DECL(T, VecT, 1, 1),
 
 
 //Three type kernels float/float4, int/int4, and double/double4
-#define NUM_TYPE_KERNELS 2
+#define NUM_TYPE_KERNELS 1
 // #define MIN_K 16
 // #define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
@@ -76,9 +77,9 @@ enum RowParallelismTy {
 // #define MAX_KP_K 64
 #define NUM_KP_N_K_KERNELS (log2(MAX_KP_K)-log2(MIN_KP_K) + 1)
 
-#define NUM_K_EQUALS_VAR 2
+#define NUM_K_EQUALS_VAR 1
 #define NUM_KPK_EQUALS_VAR 1
-#define NUM_ROWS_MOD_TILE_IS_ZERO 2
+#define NUM_ROWS_MOD_TILE_IS_ZERO 1
 #define EXTERNAL_KP_K_TILE_ MAX_K
 
 #include "kron_device.cu"
@@ -126,11 +127,11 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
 
 //Launch cuda kernels
 template<typename T, typename VecT>
-cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronGemmResult,
+cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[2], T* kronGemmResult,
                             const uint M, const uint N, const uint K, 
                             const uint KronMatCols, const uint KronMatRows, 
                             cudaStream_t stream) {
-  typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
+  typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*[2], T*);
   cudaError_t status;
 
   //Only row major layout of all matrics is supported.
@@ -160,6 +161,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
     if (KronMatCols >= 64) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
       min_k = K; //TODO: find MAX_K lower than K
+      
       while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows)-log2(MIN_KP_K)][0].kernel == NULL)
         min_k = min_k / 2;
     } else {
@@ -189,11 +191,10 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
         min_k = K;
       }
     }
-    
-    int k_equals_var = (min_k == K) ? 1 : 0;
+    //min_k=8192;
+    int k_equals_var = 0; //(min_k == K) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows)-log2(MIN_KP_K)];
-    row_mod_tile_zero = (M % tileRowA) == 0;
-
+    row_mod_tile_zero = 0; //(M % tileRowA) == 0;
     //Check that kernel index is valid only in debug mode
     assert(typeKernelIdx < NUM_TYPE_KERNELS);
     assert(row_mod_tile_zero < NUM_ROWS_MOD_TILE_IS_ZERO);
@@ -241,7 +242,8 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
                     (void*)&KronMatRows,
                     (void*)&KronMatCols,
                     &x, 
-                    (void*)&kronMat, 
+                    (void*)&kronMat[0],
+                    (void*)&kronMat[1],
                     (void*)&kronGemmResult, 
                     (void*)&kronIndex
                   };
@@ -249,7 +251,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
     status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
     if (status != cudaSuccess)
       return status;
-
+    CUDA_CHECK(cudaDeviceSynchronize());
   return status;
 }
 
@@ -263,10 +265,11 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
 
-  for (uint i = 0; i < NumKronMats; i++) {
+  for (uint i = 0; i < NumKronMats; i += 2) {
     const uint kronMat = NumKronMats - i - 1;
+    T* nextTwoKronMats[2] = {kronMats[0], kronMats[1]};
     cudaError_t status = generalSlicedMatmul<T, VecT>(i, prevKronResult, 
-        kronMats[kronMat], currKronResult, M, N, K, 
+        nextTwoKronMats, currKronResult, M, N, K, 
         KronMatCols[kronMat], KronMatRows[kronMat], stream);
 
     if (status != cudaSuccess) return status;
@@ -390,9 +393,9 @@ void singleGPUOutOfCoreThreadFunc(ThreadArgs<T>& thArgs) {
       for (uint i = io; i < MaxI; i++) {
         const uint kronMat = NumKronMats - i - 1;
         // printf("g %d, kronMat %d %p\n", g, kronMat, kronMats[g * NumKronMats + kronMat]);
-        cudaError_t status = generalSlicedMatmul<T, VecT>(i, innerPrevResult, 
-            kronMats[g * NumKronMats + kronMat], innerCurrResult, outOfCoreRows, uvaColsX, uvaColsX, 
-            KronMatCols[kronMat], KronMatRows[kronMat], stream[g]);
+        // cudaError_t status = generalSlicedMatmul<T, VecT>(i, innerPrevResult, 
+        //     kronMats[g * NumKronMats + kronMat], innerCurrResult, outOfCoreRows, uvaColsX, uvaColsX, 
+        //     KronMatCols[kronMat], KronMatRows[kronMat], stream[g]);
 
         // printf("innerCurrResult %p innerPrevResult %p\n", innerCurrResult, innerPrevResult);
         if (status != cudaSuccess) goto end;
