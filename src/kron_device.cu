@@ -245,8 +245,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   // const uint blockWarps   = blockDim.x/WarpSize;
   const uint VecTNumElems = (sizeof(VecT)/sizeof(ElemT));
 
-  const uint MaxTileSizeKronRows = MIN(EXTERNAL_KP_K_TILE_, MaxKronRows);
-  const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxTileSizeKronRows);
+  const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxKronRows);
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
   // const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
@@ -331,7 +330,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       regC[r][i][j] = 0;
     }}}
 
-    for (uint tileKronRow = 0; tileKronRow < MaxTileSizeKronRows; tileKronRow += TileSizeKronRows) {
+    for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileSizeKronRows) 
+    {
       for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
         for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
           uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
@@ -348,7 +348,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             // }
           } else {
             addrA = &glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
-                         (a_col/TileSizeKronRows)*kronCols + external_tile_kp_k * MaxTileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
+                         (a_col/TileSizeKronRows)*kronCols + external_tile_kp_k * TileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
             // *(VecT*)&shA[rowA][a_col] = a;
           }
 
@@ -382,7 +382,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
             const uint row = swid;
             // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
-            globalLoadVec(&glKronMats[(external_tile_kp_k * MaxTileSizeKronRows + tileKronRow + row) * kronRows + col], vec);
+            globalLoadVec(&glKronMats[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronRows + col], vec);
             loadVecToRegs(vec, elems);
 
             #pragma unroll

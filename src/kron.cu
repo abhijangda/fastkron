@@ -160,6 +160,9 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
     if (KronMatCols >= 64) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
       min_k = K; //TODO: find MAX_K lower than K
+      while (min_k > MAX_K)
+        min_k = min_k / 2;
+  
       while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows)-log2(MIN_KP_K)][0].kernel == NULL)
         min_k = min_k / 2;
     } else {
