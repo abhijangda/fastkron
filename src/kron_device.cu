@@ -423,7 +423,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
                                                           tile_k, external_tile_kp_k, 
                                                           params.glA, &shA[0][0]);
 
-  
+    #pragma unroll
     for (uint fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
       #pragma unroll
       for (uint r = 0; r < TileSizeRowsA; r++) {
@@ -513,6 +513,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
 
   if (NumFusedKerns > 1) {
     for (int rowShC = 0; rowShC < TileSizeRowsA; rowShC++) {
+      //TODO: Improve code below like in the paper
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
@@ -520,6 +521,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
 
         const uint rowC = rowShC + tileRowA;
         const uint KronRowsPower = power(kronRows, NumFusedKerns);
+        //Need below to work well
+        //KronRowsPower = 512;
+        //colsC = 8*8*8*8*8*8;
+        //colsA = 8*8*8*8*8*8;
         uint UVAColsRatioKronRowsSquare = (TileSizeColsA/KronRowsPower);
         uint tile_k = 0;
         if (!K_EQUALS_VAR) {
@@ -529,12 +534,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
                         ((colShC%(TileSizeColsA/kronRows))/UVAColsRatioKronRowsSquare)*(colsC/(TileSizeColsA/UVAColsRatioKronRowsSquare)) + 
                         colShC%UVAColsRatioKronRowsSquare;
         
-        // uint UVAColsRatioKronRowsSquare = 256;
-        // uint withinP5 = tile_k * 256 +
-        //                 ((colShC%512)/256)*1024 + 
-        //                 colShC%256;
-        // uint p5Index = (colShC/512)*2048;
-        uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsA/kronRows); //(colShC/(TileSizeColsA/KronRows))*(ColsA/KronRows);
+        uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsA/kronRows);
         uint cCol = p5Index + withinP5;
           
         params.glC[rowC * colsA + cCol] =  regC[rowShC][reg_i][reg_j];
