@@ -45,6 +45,7 @@ struct KernelInfo {
   uint MaxColsA;
   uint CRegRows;
   uint CRegCols;
+  uint NumFusedKerns;
 };
 
 enum RowParallelismTy {
@@ -125,19 +126,13 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
 }
 
 //Launch cuda kernels
-template<typename T, typename VecT>
-cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronGemmResult,
+template<typename T, typename VecT, uint NumFusedKerns>
+cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedKerns], T* kronGemmResult,
                             const uint M, const uint N, const uint K, 
-                            const uint KronMatCols, const uint KronMatRows, 
+                            const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
                             cudaStream_t stream) {
   typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
-
-  //Only row major layout of all matrics is supported.
-  
-  //Use double buffering for writing result and using output 
-  //of previous iteration as input to current
-  
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
     KronGemmKernel cuda_gemm_func = NULL;
     dim3 grid;
@@ -157,36 +152,36 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
     // printf("min_k %d\n", min_k);
     uint typeKernelIdx = typeKernelIndex((T)0);
 
-    if (KronMatCols >= 64) {
+    if (KronMatCols[0] >= 64) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
       min_k = K; //TODO: find MAX_K lower than K
       while (min_k > MAX_K)
         min_k = min_k / 2;
   
-      while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows)-log2(MIN_KP_K)][0].kernel == NULL)
+      while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
         min_k = min_k / 2;
     } else {
       while (max_k_kernel < MIN_K) {
-        max_k_kernel *= KronMatCols;
+        max_k_kernel *= KronMatCols[0];
       }
-      while (max_k_kernel < MAX_K && KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows)-log2(MIN_KP_K)][0].kernel != NULL) {
+      while (max_k_kernel < MAX_K && KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel != NULL) {
         // printf("max_k_kernel %d KronMatCols[0] %d\n", max_k_kernel, KronMatCols[0]);
-        max_k_kernel *= KronMatCols;
+        max_k_kernel *= KronMatCols[0];
       }
 
       // printf("max_k_kernel %d\n", max_k_kernel);
 
-      if (max_k_kernel > MAX_K || KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows)-log2(MIN_KP_K)][0].kernel == NULL)
-        max_k_kernel = max_k_kernel/KronMatCols;
+      if (max_k_kernel > MAX_K || KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
+        max_k_kernel = max_k_kernel/KronMatCols[0];
 
       // printf("max_k_kernel %d\n", max_k_kernel);
 
       if (K > max_k_kernel) {
         max_k = 1;
         while (max_k <= max_k_kernel)
-          max_k *= KronMatCols;
+          max_k *= KronMatCols[0];
         
-        max_k = max_k/KronMatCols;
+        max_k = max_k/KronMatCols[0];
         min_k = min(K, max_k);
       } else {
         min_k = K;
@@ -194,16 +189,16 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
     }
     
     int k_equals_var = (min_k == K) ? 1 : 0;
-    uint tileRowA = MaxTileRowsA[log2(KronMatRows)-log2(MIN_KP_K)];
+    uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
 
     //Check that kernel index is valid only in debug mode
     assert(typeKernelIdx < NUM_TYPE_KERNELS);
     assert(row_mod_tile_zero < NUM_ROWS_MOD_TILE_IS_ZERO);
     assert(log2(min_k)-log2(MIN_K) < NUM_MAX_K_KERNELS);
-    assert(log2(KronMatRows)-log2(MIN_KP_K) < NUM_KP_N_K_KERNELS);
+    assert(log2(KronMatRows[0])-log2(MIN_KP_K) < NUM_KP_N_K_KERNELS);
 
-    KernelInfo kernelInfo = KronGemmKernels[typeKernelIdx][rowParallelism][k_equals_var][row_mod_tile_zero][log2(min_k)-log2(MIN_K)][log2(KronMatRows)-log2(MIN_KP_K)][0];
+    KernelInfo kernelInfo = KronGemmKernels[typeKernelIdx][rowParallelism][k_equals_var][row_mod_tile_zero][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
     cuda_gemm_func = (KronGemmKernel)kernelInfo.kernel;
     assert(cuda_gemm_func != NULL);
     const uint NumThreads = kernelInfo.NumThreads;
@@ -226,11 +221,11 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
         abort();
       }
     }
-    uint tileKronCols = MaxTileKronCols[log2(KronMatRows)-log2(MIN_KP_K)];
+    uint tileKronCols = MaxTileKronCols[log2(KronMatRows[0])-log2(MIN_KP_K)];
     //Create the grid and thread block
     grid = {
               DIVUP(M, tileRowA),
-              (K/min_k) * DIVUP(KronMatCols, tileKronCols),
+              (K/min_k) * DIVUP(KronMatCols[0], tileKronCols),
               1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
            };
     block = {
@@ -239,8 +234,12 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
               1
             };
     
-    KernelParams<T> params {M, N, K, KronMatRows, KronMatCols, x, 
-                            kronMat, kronGemmResult, kronIndex};
+    KernelParams<T, NumFusedKerns> params {M, N, K, 
+      KronMatRows, 
+      KronMatCols, x, 
+                                  kronMat, 
+                                  kronGemmResult, 
+                                  kronIndex};
     //Create kernel args;
     void *args[] = {(void*)&params};
 
@@ -256,23 +255,37 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
                                 T** result,
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
                                 cudaStream_t stream) {
+  //Only row major layout of all matrics is supported.
   if (result == NULL) return cudaErrorInvalidValue;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
   T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
-
-  for (uint i = 0; i < NumKronMats; i++) {
+  const int NumFusedKerns = 1;
+  assert(NumKronMats % NumFusedKerns == 0); //TODO: Handle
+  
+  //Use double buffering for writing result and using output 
+  //of previous iteration as input to current
+  
+  for (uint i = 0; i < NumKronMats; i += NumFusedKerns) {
     const uint kronMat = NumKronMats - i - 1;
-    cudaError_t status = generalSlicedMatmul<T, VecT>(i, prevKronResult, 
-        kronMats[kronMat], currKronResult, M, N, K, 
-        KronMatCols[kronMat], KronMatRows[kronMat], stream);
+    T* krons[NumFusedKerns];
+    uint FusedKronMatCols[NumFusedKerns];
+    uint FusedKronMatRows[NumFusedKerns];
+    for (int k = 0; k < NumFusedKerns; k++) {
+      krons[k] = kronMats[kronMat - k];
+      FusedKronMatCols[k] = KronMatCols[kronMat - k];
+      FusedKronMatRows[k] = KronMatRows[kronMat - k];
+    }
+    cudaError_t status = generalSlicedMatmul<T, VecT, NumFusedKerns>(i, prevKronResult,
+        krons, currKronResult, M, N, K, 
+        FusedKronMatCols, FusedKronMatRows, stream);
 
     if (status != cudaSuccess) return status;
 
     //Double/ring/circular buffer previous result and new result
-    if (i < NumKronMats - 1) {
+    if (i < NumKronMats - NumFusedKerns) {
       prevKronResult = currKronResult;
       if (prevKronResult == kronGemmResults[0]) {        
         currKronResult = kronGemmResults[1];
@@ -390,9 +403,10 @@ void singleGPUOutOfCoreThreadFunc(ThreadArgs<T>& thArgs) {
       for (uint i = io; i < MaxI; i++) {
         const uint kronMat = NumKronMats - i - 1;
         // printf("g %d, kronMat %d %p\n", g, kronMat, kronMats[g * NumKronMats + kronMat]);
-        cudaError_t status = generalSlicedMatmul<T, VecT>(i, innerPrevResult, 
-            kronMats[g * NumKronMats + kronMat], innerCurrResult, outOfCoreRows, uvaColsX, uvaColsX, 
-            KronMatCols[kronMat], KronMatRows[kronMat], stream[g]);
+        printf("TODO:");
+        // cudaError_t status = generalSlicedMatmul<T, VecT>(i, innerPrevResult, 
+        //     kronMats[g * NumKronMats + kronMat], innerCurrResult, outOfCoreRows, uvaColsX, uvaColsX, 
+        //     KronMatCols[kronMat], KronMatRows[kronMat], stream[g]);
 
         // printf("innerCurrResult %p innerPrevResult %p\n", innerCurrResult, innerPrevResult);
         if (status != cudaSuccess) goto end;

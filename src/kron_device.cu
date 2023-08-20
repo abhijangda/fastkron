@@ -313,17 +313,28 @@ void fullDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCols
   }
 }
 
-template<typename ElemT>
+template<typename ElemT, uint NumFusedKerns>
 struct KernelParams {
   const uint RowsC;
   const uint ColsC;
   const uint ColsA;
-  const uint KronRows;
-  const uint KronCols;
+  uint KronRows[NumFusedKerns];
+  uint KronCols[NumFusedKerns];
   const ElemT * __restrict__ glA;
-  const ElemT * __restrict__ glKronMats;
+  const ElemT * __restrict__ glKronMats[NumFusedKerns];
   ElemT       * __restrict__ glC;
   const uint kp_idx;
+
+  KernelParams(const uint RowsC, const uint ColsC, const uint ColsA, const uint KronRows[NumFusedKerns],
+               const uint KronCols[NumFusedKerns], const ElemT* glA,
+               ElemT* glKronMats[NumFusedKerns], ElemT* glC, uint kp_idx) :
+               RowsC(RowsC), ColsC(ColsC), ColsA(ColsA), glA(glA), glC(glC), kp_idx(kp_idx) {
+    for (int i = 0; i < NumFusedKerns; i++) {
+      this->KronRows[i] = KronRows[i];
+      this->KronCols[i] = KronCols[i];
+      this->glKronMats[i] = glKronMats[i];      
+    }
+  }
 };
 
 //KP_N is KronCols
@@ -331,9 +342,9 @@ struct KernelParams {
 template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, 
          uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, 
          uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
-         uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
+         uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns>
 __launch_bounds__(NumThreads)
-__global__ void kronGemmKernel(KernelParams<ElemT> params) {
+__global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
@@ -376,8 +387,8 @@ __global__ void kronGemmKernel(KernelParams<ElemT> params) {
     kronCols = MaxKronCols;
     kronRows = MaxKronRows;
   } else {
-    kronCols = params.KronCols;
-    kronRows = params.KronRows;
+    kronCols = params.KronCols[0];
+    kronRows = params.KronRows[0];
   }
 
   if (K_EQUALS_VAR) {
@@ -401,7 +412,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT> params) {
   if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
     fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
                                                   NumThreads, MaxKronRows, kronRows, 
-                                                  kronCols, tid, params.glKronMats, &shKronMats[0][0]);
+                                                  kronCols, tid, params.glKronMats[0], &shKronMats[0][0]);
   }
 
   const uint tileRowA  = blockIdx.x * TileSizeRowsA;
@@ -429,10 +440,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT> params) {
   
     if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
       tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
-                                                      NumThreads, external_tile_kp_n,
-                                                      external_tile_kp_k, tileKronRow, 
-                                                      kronRows, tid, params.glKronMats, 
-                                                      &shKronMats[0][0]);
+                                                     NumThreads, external_tile_kp_n,
+                                                     external_tile_kp_k, tileKronRow, 
+                                                     kronRows, tid, params.glKronMats[0],
+                                                     &shKronMats[0][0]);
     }
 
     __syncthreads();
