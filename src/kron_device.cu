@@ -1,5 +1,5 @@
-template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_tile_k() {return blockIdx.y/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
-template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_external_tile_kp_n() {return blockIdx.y%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_tile_k() {return blockIdx.x/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_external_tile_kp_n() {return blockIdx.x%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 
 __device__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
@@ -408,7 +408,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   const uint kp_col_start_ = (tid / wSz) * CRegCols; 
   const uint a_col_start_  = (tid % wSz) * CRegRows;
 
-  const uint tileRowA  = blockIdx.x * TileSizeRowsA;
+  const uint tileRowA  = blockIdx.y * TileSizeRowsA;
   const uint outerTileKronCol =  kp_col_start_;
   const uint tileColA    =  a_col_start_ ;
 
@@ -433,7 +433,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
       for (uint j = 0; j < CRegCols;      j++) {
         regC[r][i][j] = 0;
       }}}
-      
+
       if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
         //Optimized to load full factor matrix
         fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
