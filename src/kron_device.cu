@@ -1,4 +1,3 @@
-// #define C_IN_SHMEM
 template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_tile_k() {return blockIdx.y/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ uint get_external_tile_kp_n() {return blockIdx.y%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 
@@ -314,18 +313,26 @@ void fullDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCols
   }
 }
 
+template<typename ElemT>
+struct KernelParams {
+  const uint RowsC;
+  const uint ColsC;
+  const uint ColsA;
+  const uint KronRows;
+  const uint KronCols;
+  const ElemT * __restrict__ glA;
+  const ElemT * __restrict__ glKronMats;
+  ElemT       * __restrict__ glC;
+  const uint kp_idx;
+};
+
 //KP_N is KronCols
 //KP_K is KronRows
 // __launch_bounds__(NumThreads)
 template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, uint TileSizeRowsA, 
          bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
          uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows>
-__global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const uint ColsA,
-                               const uint KronRows, const uint KronCols,
-                               const ElemT * __restrict__ glA, 
-                               const ElemT * __restrict__ glKronMats, 
-                               ElemT       * __restrict__ glC,
-                               const uint kp_idx) {
+__global__ void kronGemmKernel(KernelParams<ElemT> params) {
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
@@ -366,16 +373,16 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
     kronCols = MaxKronCols;
     kronRows = MaxKronRows;
   } else {
-    kronCols = KronCols;
-    kronRows = KronRows;
+    kronCols = params.KronCols;
+    kronRows = params.KronRows;
   }
 
   if (K_EQUALS_VAR) {
     colsA = MaxColsA;
     colsC = colsA;
   } else {
-    colsA = ColsA;
-    colsC = ColsC;
+    colsA = params.ColsA;
+    colsC = params.ColsC;
   }
 
   const uint RegTileSizeACols = MIN(8, TileSizeKronCols);
@@ -390,15 +397,13 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
   if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
     fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, NumThreads, MaxKronRows, kronRows, 
-    kronCols, tid, glKronMats, &shKronMats[0][0]);
+    kronCols, tid, params.glKronMats, &shKronMats[0][0]);
   }
 
   const uint tileRowA  = blockIdx.x * TileSizeRowsA;
-  {
   const uint outerTileKronCol =  kp_col_start_;
-  {
   const uint tileColA    =  a_col_start_ ;
-  {
+
     #pragma unroll
     for (uint r = 0; r < TileSizeRowsA; r++) {
     #pragma unroll
@@ -412,15 +417,16 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
 
       shiftAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(RowsCModTileIsZero, TileSizeRowsA, TileSizeColsA, 
-                                                            MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, RowsC,
-                                                            kronCols, colsA, tid, tileKronRow, tileRowA, 
-                                                            tile_k, external_tile_kp_k, glA, &shA[0][0]);
+                                                            MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, params.RowsC,
+                                                            kronCols, colsA, tid, 
+                                                            tileKronRow, tileRowA, 
+                                                            tile_k, external_tile_kp_k, params.glA, &shA[0][0]);
     
       if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
         tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
                                                        NumThreads, external_tile_kp_n,
                                                        external_tile_kp_k, tileKronRow, 
-                                                       kronRows, tid, glKronMats, 
+                                                       kronRows, tid, params.glKronMats, 
                                                        &shKronMats[0][0]);
       }
 
@@ -435,7 +441,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
         #pragma unroll
         for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
-        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < RowsC - tileRowA)) {
+        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
           #pragma unroll
           for (uint rowC = 0; rowC < CRegRows; rowC++) {
             uint shACol = tileColA + rowC;
@@ -454,7 +460,7 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
 
         #pragma unroll
         for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
-        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < RowsC - tileRowA)) 
+        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) 
         {
           #pragma unroll
           for (uint i = 0;    i < CRegRows;         i++)
@@ -469,51 +475,31 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
       __syncthreads();
     }
 
-    #pragma unroll
-    for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
-      if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < RowsC - tileRowA)) {
-        #pragma unroll
-        for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-          //Three least significant bits of CRegRows can be either 4, 2, or 1
-          constexpr uint vecTyNumElems = CRegRows & (8 - 1);
-  #ifndef EVAL
-          if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
-            printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
-  #endif
-          for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-            if (vecTyNumElems > 1) {
-              shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
-              shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
-              if (vecTyNumElems > 2) {
-                shA[0][tid * vecTyNumElems+2] = regC[rowA][reg_i+2][reg_j];
-                shA[0][tid * vecTyNumElems+3] = regC[rowA][reg_i+3][reg_j];
-              }
-              
-              __syncwarp();
-              for (uint shVecI = tid%wSz; shVecI < vecTyNumElems*wSz; shVecI += wSz) {
-                const uint cRow = rowA + tileRowA;
-                uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
+  #pragma unroll
+  for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
+    if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+      #pragma unroll
+      for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
+        //Three least significant bits of CRegRows can be either 4, 2, or 1
+        constexpr uint vecTyNumElems = CRegRows & (8 - 1);
+#ifndef EVAL
+        if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
+          printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
+#endif
+        for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
+          if (vecTyNumElems > 1) {
+            shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
+            shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
+            if (vecTyNumElems > 2) {
+              shA[0][tid * vecTyNumElems+2] = regC[rowA][reg_i+2][reg_j];
+              shA[0][tid * vecTyNumElems+3] = regC[rowA][reg_i+3][reg_j];
+            }
+            
+            __syncwarp();
+            for (uint shVecI = tid%wSz; shVecI < vecTyNumElems*wSz; shVecI += wSz) {
+              const uint cRow = rowA + tileRowA;
+              uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
 
-                if (!K_EQUALS_VAR) {
-                  uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
-                  cCol = tile_k * (MaxColsA/kronCols) + 
-                      (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                      cCol%(MaxColsA/kronCols);
-                }
-                if (TileSizeKronCols != MaxKronCols) {
-                  uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
-                  cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
-                }
-
-                const uint cIdx = cRow * colsC + cCol;
-                if (cCol < colsA) {
-                  glC[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
-                }
-              }
-              __syncwarp();
-            } else {
-              const uint cRow = (rowA + tileRowA);
-              uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
               if (!K_EQUALS_VAR) {
                 uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
                 cCol = tile_k * (MaxColsA/kronCols) + 
@@ -524,26 +510,49 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
                 uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
                 cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
               }
+
               const uint cIdx = cRow * colsC + cCol;
-              // assert(tid == cCol);
-              // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-              //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
               if (cCol < colsA) {
-                switch (vecTyNumElems) {
-                  case 4:
-                    globalStore4Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j], regC[rowA][reg_i+2][reg_j], regC[rowA][reg_i+3][reg_j]);
-                  case 2:
-                    globalStore2Elems(&glC[cIdx], regC[rowA][reg_i][reg_j], regC[rowA][reg_i+1][reg_j]);
-                  case 1:
-                    globalStore1Elems(&glC[cIdx], regC[rowA][reg_i][reg_j]);
-                }
+                params.glC[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
+              }
+            }
+            __syncwarp();
+          } else {
+            const uint cRow = (rowA + tileRowA);
+            uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+            if (!K_EQUALS_VAR) {
+              uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
+              cCol = tile_k * (MaxColsA/kronCols) + 
+                  (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
+                  cCol%(MaxColsA/kronCols);
+            }
+            if (TileSizeKronCols != MaxKronCols) {
+              uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
+              cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
+            }
+            const uint cIdx = cRow * colsC + cCol;
+            // assert(tid == cCol);
+            // if (kp_idx == 0&& cRow == 0 && cCol < 64)
+            //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
+            if (cCol < colsA) {
+              switch (vecTyNumElems) {
+                case 4:
+                  globalStore4Elems(&params.glC[cIdx], 
+                                    regC[rowA][reg_i][reg_j], 
+                                    regC[rowA][reg_i+1][reg_j],
+                                    regC[rowA][reg_i+2][reg_j], 
+                                    regC[rowA][reg_i+3][reg_j]);
+                case 2:
+                  globalStore2Elems(&params.glC[cIdx],
+                                    regC[rowA][reg_i][reg_j],
+                                    regC[rowA][reg_i+1][reg_j]);
+                case 1:
+                  globalStore1Elems(&params.glC[cIdx], regC[rowA][reg_i][reg_j]);
               }
             }
           }
         }
       }
     }
-
-    __syncthreads();
-  }}}
+  }
 }

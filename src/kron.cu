@@ -238,16 +238,11 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
               1, 
               1
             };
+    
+    KernelParams<T> params {M, N, K, KronMatRows, KronMatCols, x, 
+                            kronMat, kronGemmResult, kronIndex};
     //Create kernel args;
-    void *args[] = {
-                    (void*)&M, (void*)&N, (void*)&K, 
-                    (void*)&KronMatRows,
-                    (void*)&KronMatCols,
-                    &x, 
-                    (void*)&kronMat, 
-                    (void*)&kronGemmResult, 
-                    (void*)&kronIndex
-                  };
+    void *args[] = {(void*)&params};
 
     status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
     if (status != cudaSuccess)
