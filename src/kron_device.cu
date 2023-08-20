@@ -357,10 +357,9 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
   static_assert(TileSizeKronCols <= MaxKronCols, "");
-  
-  // const uint CRegSize = MAX((MaxColsA/(MaxKronCols/MaxTileSizeKronCols))/NumThreads, 1);
-  // const uint CRegRows = MIN(8, MAX(sqrt(CRegSize), 1));
-  // const uint CRegCols = MIN(MaxKronRows, MIN(8, CRegSize/CRegRows));
+  static_assert(NumFusedKerns == 1 || 
+                (NumFusedKerns > 1 && TileSizeKronRows >= MaxKronRows && TileSizeKronCols >= MaxKronCols),
+                "Invalid tile size params for fusion");
   
   register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols];
   __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
@@ -407,28 +406,14 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows);
 
   const uint kp_col_start_ = (tid / wSz) * CRegCols; 
-  const uint a_col_start_  = (tid % wSz) * CRegRows; 
-
-  if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
-    fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
-                                                  NumThreads, MaxKronRows, kronRows, 
-                                                  kronCols, tid, params.glKronMats[0], &shKronMats[0][0]);
-  }
+  const uint a_col_start_  = (tid % wSz) * CRegRows;
 
   const uint tileRowA  = blockIdx.x * TileSizeRowsA;
   const uint outerTileKronCol =  kp_col_start_;
   const uint tileColA    =  a_col_start_ ;
 
-  #pragma unroll
-  for (uint r = 0; r < TileSizeRowsA; r++) {
-  #pragma unroll
-  for (uint i = 0; i < CRegRows;      i++) {
-  #pragma unroll
-  for (uint j = 0; j < CRegCols;      j++) {
-    regC[r][i][j] = 0;
-  }}}
-
   for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileSizeKronRows) {
+    //Loop iterates only once when NumFusedKerns == 1
     uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
 
     shiftAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(RowsCModTileIsZero, TileSizeRowsA, TileSizeColsA, 
@@ -437,59 +422,124 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
                                                           tileKronRow, tileRowA, 
                                                           tile_k, external_tile_kp_k, 
                                                           params.glA, &shA[0][0]);
+
   
-    if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
-      tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
-                                                     NumThreads, external_tile_kp_n,
-                                                     external_tile_kp_k, tileKronRow, 
-                                                     kronRows, tid, params.glKronMats[0],
-                                                     &shKronMats[0][0]);
-    }
-
-    __syncthreads();
-
-    //Load RegTileSizeACols elements at a time to limit the register usage
-    for (uint regTileACol = 0; regTileACol < TileSizeKronRows; regTileACol += RegTileSizeACols) {
-      register ElemT Ar[TileSizeRowsA][CRegRows][RegTileSizeACols];
-      register ElemT KPr[RegTileSizeACols][CRegCols];
-
-      uint round_start = (tileColA / CRegRows)%TileSizeKronRows;
-
+    for (uint fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
       #pragma unroll
-      for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
-      if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
-        #pragma unroll
-        for (uint rowC = 0; rowC < CRegRows; rowC++) {
-          uint shACol = tileColA + rowC;
-          #pragma unroll
-          for (uint colC = 0; colC < RegTileSizeACols; colC++)
-            Ar[rowA][rowC][colC] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
+      for (uint r = 0; r < TileSizeRowsA; r++) {
+      #pragma unroll
+      for (uint i = 0; i < CRegRows;      i++) {
+      #pragma unroll
+      for (uint j = 0; j < CRegCols;      j++) {
+        regC[r][i][j] = 0;
       }}}
       
-      #pragma unroll
-      for (uint colC = 0; colC < CRegCols; colC++) {
-        uint shKronCol = outerTileKronCol + colC;//TODO: Should outerTileKronCol be here?
+      if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
+        //Optimized to load full factor matrix
+        fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
+                                                      NumThreads, MaxKronRows, kronRows, 
+                                                      kronCols, tid, params.glKronMats[fusedFac], &shKronMats[0][0]);
+      } else if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
+        tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
+                                                      NumThreads, external_tile_kp_n,
+                                                      external_tile_kp_k, tileKronRow, 
+                                                      kronRows, tid, params.glKronMats[fusedFac],
+                                                      &shKronMats[0][0]);
+      } else {
+      }
+      
+      __syncthreads();
+
+      //Load RegTileSizeACols elements at a time to limit the register usage
+      for (uint regTileACol = 0; regTileACol < TileSizeKronRows; regTileACol += RegTileSizeACols) {
+        register ElemT Ar[TileSizeRowsA][CRegRows][RegTileSizeACols];
+        register ElemT KPr[RegTileSizeACols][CRegCols];
+
+        uint round_start = (tileColA / CRegRows)%TileSizeKronRows;
+
         #pragma unroll
-        for (uint elem = 0; elem < RegTileSizeACols; elem++)    
-          KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
+        for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
+        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+          #pragma unroll
+          for (uint rowC = 0; rowC < CRegRows; rowC++) {
+            uint shACol = tileColA + rowC;
+            #pragma unroll
+            for (uint colC = 0; colC < RegTileSizeACols; colC++)
+              Ar[rowA][rowC][colC] = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
+        }}}
+        
+        #pragma unroll
+        for (uint colC = 0; colC < CRegCols; colC++) {
+          uint shKronCol = outerTileKronCol + colC;//TODO: Should outerTileKronCol be here?
+          #pragma unroll
+          for (uint elem = 0; elem < RegTileSizeACols; elem++)    
+            KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
+        }
+
+        //Matrix Multiply Accumulate
+        #pragma unroll
+        for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
+        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+          #pragma unroll
+          for (uint i = 0;    i < CRegRows;         i++)
+          #pragma unroll
+          for (uint j = 0;    j < CRegCols;         j++)
+          #pragma unroll
+          for (uint k = 0;    k < RegTileSizeACols; k++)
+            regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+        }
       }
 
-      #pragma unroll
-      for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
-      if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+      __syncthreads();
+
+      if (NumFusedKerns > 1 && fusedFac < NumFusedKerns - 1) {
+      //Store C to shared memory using shift method
+      for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
         #pragma unroll
-        for (uint i = 0;    i < CRegRows;         i++)
-        #pragma unroll
-        for (uint j = 0;    j < CRegCols;         j++)
-        #pragma unroll
-        for (uint k = 0;    k < RegTileSizeACols; k++)
-          regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+        for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
+        for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
+          const uint cRow = rowA;
+          uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+          uint tileColA = (cCol/TileSizeKronRows)/CRegRows;
+          
+          cCol = (cCol/TileSizeKronRows)*TileSizeKronRows + (tileColA + cCol%TileSizeKronRows)%TileSizeKronRows;
+
+          shA[rowA][cCol] = regC[rowA][reg_i][reg_j];
+      }}}
+      __syncthreads();
       }
     }
-
-    __syncthreads();
   }
 
+  if (NumFusedKerns > 1) {
+    for (int rowShC = 0; rowShC < TileSizeRowsA; rowShC++) {
+      #pragma unroll
+      for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
+      for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
+        uint colShC = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+
+        const uint rowC = rowShC + tileRowA;
+        const uint KronRowsPower = power(kronRows, NumFusedKerns);
+        uint UVAColsRatioKronRowsSquare = (TileSizeColsA/KronRowsPower);
+        uint tile_k = 0;
+        if (!K_EQUALS_VAR) {
+          tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
+        }
+        uint withinP5 = tile_k * UVAColsRatioKronRowsSquare +
+                        ((colShC%(TileSizeColsA/kronRows))/UVAColsRatioKronRowsSquare)*(colsC/(TileSizeColsA/UVAColsRatioKronRowsSquare)) + 
+                        colShC%UVAColsRatioKronRowsSquare;
+        
+        // uint UVAColsRatioKronRowsSquare = 256;
+        // uint withinP5 = tile_k * 256 +
+        //                 ((colShC%512)/256)*1024 + 
+        //                 colShC%256;
+        // uint p5Index = (colShC/512)*2048;
+        uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsA/kronRows); //(colShC/(TileSizeColsA/KronRows))*(ColsA/KronRows);
+        uint cCol = p5Index + withinP5;
+          
+        params.glC[rowC * colsA + cCol] =  regC[rowShC][reg_i][reg_j];
+    }}}
+  } else {
   #pragma unroll
   for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
   if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
@@ -567,5 +617,5 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
         }
       }
     }}}
-  }
+  }}
 }

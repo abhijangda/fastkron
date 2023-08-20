@@ -262,7 +262,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
-  const int NumFusedKerns = 1;
+  const int NumFusedKerns = 3;
   assert(NumKronMats % NumFusedKerns == 0); //TODO: Handle
   
   //Use double buffering for writing result and using output 

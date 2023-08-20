@@ -115,11 +115,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, false);
+    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, true);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, false);
+    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, true);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, false);
+    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, true);
   else
     printf("type not supported %s\n", type);
 
