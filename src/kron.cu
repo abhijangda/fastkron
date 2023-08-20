@@ -252,8 +252,10 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat, T* kronG
 }
 
 template<typename T, typename VecT>
-cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], T** result,
-                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
+                                T** result,
+                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+                                cudaStream_t stream) {
   if (result == NULL) return cudaErrorInvalidValue;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;

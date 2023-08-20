@@ -230,7 +230,7 @@ static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x
 /**************************************************
               Test Driver
 ***************************************************/
-template<typename T, typename VecT>
+template<typename T>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
                 uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
                 bool useUVA, uint OnGPURows, uint MaxInnerKrons, uint NumMaxInnerKrons,
