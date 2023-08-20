@@ -32,7 +32,7 @@ __device__ constexpr uint sqrt(uint x) {
 }
 
 //Compute x**y
-__device__ __host__ uint power(uint x, int y) {
+__device__ __host__ constexpr uint power(const uint x, const uint y) {
   uint result = 1;
   for (uint i = 0; i < y; i++) {
     result = result * x;
@@ -520,7 +520,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
         uint colShC = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
 
         const uint rowC = rowShC + tileRowA;
-        const uint KronRowsPower = power(kronRows, NumFusedKerns);
+        const uint KronRowsPower = power(kronRows, NumFusedKerns); //TODO: Can be provided when compiling kernel.
         //Need below to work well
         //KronRowsPower = 512;
         //colsC = 8*8*8*8*8*8;
