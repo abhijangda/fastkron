@@ -294,6 +294,26 @@ void tiledDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCol
   }
 }
 
+template<typename ElemT, typename VecT, uint VecTNumElems>
+__device__ __forceinline__ 
+void fullDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCols, const uint NumThreads, const uint MaxKronRows, const uint kronRows, const uint kronCols, const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+  const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
+
+  for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
+    ElemT regElems[VecTNumElems];
+    VecT vec;
+
+    vec = *(VecT*)&Fgl[eIdx];
+    loadVecToRegs(vec, regElems);
+
+    #pragma unroll
+    for (uint vecElem = 0; vecElem < loadInstr; vecElem++) {
+      uint idx = eIdx + vecElem;
+      Fsh[(idx/MaxKronRows) * TileSizeKronCols + idx%MaxKronRows] = regElems[vecElem];
+    }
+  }
+}
+
 //KP_N is KronCols
 //KP_K is KronRows
 // __launch_bounds__(NumThreads)
@@ -369,21 +389,8 @@ __global__ void kronGemmKernel(const uint RowsC,    const uint ColsC,   const ui
   const uint a_col_start_  = (tid % wSz) * CRegRows; 
 
   if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
-    const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
-
-    for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
-      ElemT regElems[VecTNumElems];
-      VecT vec;
-
-      vec = *(VecT*)&glKronMats[eIdx];
-      loadVecToRegs(vec, regElems);
-
-      #pragma unroll
-      for (uint vecElem = 0; vecElem < loadInstr; vecElem++) {
-        uint idx = eIdx + vecElem;
-        shKronMats[idx/MaxKronRows][idx%MaxKronRows] = regElems[vecElem];
-      }
-    }
+    fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, NumThreads, MaxKronRows, kronRows, 
+    kronCols, tid, glKronMats, &shKronMats[0][0]);
   }
 
   const uint tileRowA  = blockIdx.x * TileSizeRowsA;
