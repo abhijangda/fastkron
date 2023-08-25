@@ -368,7 +368,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaEventRecord(end[g], stream[g]));
     CUDACHECK(cudaEventSynchronize(end[g]));
     CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
-    if (verbose) printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
+    printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
   }
 
   //Free GPU Memory

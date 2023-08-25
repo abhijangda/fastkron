@@ -216,7 +216,7 @@ if use_command_args:
     (cublas_times, at_times, cuda_times) = doGPytorch(fArg, npointsArg, dArg)
     print("cuBLAS", sum(cublas_times)/len(cublas_times), "at", sum(at_times)/len(at_times), "Total",sum(cuda_times)/len(cuda_times))
 else:
-    npoints = 1
+    npoints = 320
     maxD = {4:11, 8:7, 16:6, 32: 5, 64 : 4, 128: 3} #2:22, 128: 4, 256: 3, 512: 3, 1024:3
     cases = []
     MaxSize = 16*1024*1024*1024 #16 GB V100 #4*(1024*1024*1024)//4
@@ -277,11 +277,15 @@ else:
                     case["atTime"] = -1
                 bandwidth = 4 * 2 * (case["npoints"] * (case["2^l"] ** case["d"]))/(case["PyTorchTime"]/1e6)/1e9
                 case["PyTorchBandwidth"] = bandwidth
-            
+            else:
+                case["PyTorchTime"] = -1
+                case["cuBLASTime"] = -1
+                case["atTime"] = -1
+
                 # case["PyTorchTime"] = -1
             twoPowerL = case["2^l"]
             dataTypeStr = "float" if dataType == torch.float32 else "double"
-            (s, o) = subprocess.getstatusoutput("LD_LIBRARY_PATH=/home/parasail/KroneckerGPU: ./kron -b %d -f %d -s %d -t %s -c -r 100"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
+            (s, o) = subprocess.getstatusoutput("LD_LIBRARY_PATH=/home/parasail/KroneckerGPU: ./kron -b %d -f %d -s %d -t %s -r 100 -w 10"%(case["npoints"], case["d"], twoPowerL, dataTypeStr))
             if s != 0:
                 print(o)
                 case["CUDATime"] = -1
@@ -291,7 +295,7 @@ else:
                 case["CUDATime"] = kront
             case["Speedup-Pytorch"] = case["PyTorchTime"]/case["CUDATime"]
             case["Speedup-cublas"] = case["cuBLASTime"]/case["CUDATime"]
-            print(o)
+            # print(o)
             print(case)
 
     row_format = "{:>10}"*3 + "{:>15}" * 6

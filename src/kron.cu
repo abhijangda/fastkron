@@ -151,42 +151,13 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
     // }
     // printf("min_k %d\n", min_k);
     uint typeKernelIdx = typeKernelIndex((T)0);
+    //Go through all MaxColsA starting from MAX_K and select the relevant
+    min_k = K; //TODO: find MAX_K lower than K
+    while (min_k > MAX_K)
+      min_k = min_k / 2;
 
-    if (true) {// || KronMatCols[0] >= 64) {
-      //Go through all MaxColsA starting from MAX_K and select the relevant
-      min_k = K; //TODO: find MAX_K lower than K
-      while (min_k > MAX_K)
-        min_k = min_k / 2;
-  
-      while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
-        min_k = min_k / 2;
-    } else {
-      while (max_k_kernel < MIN_K) {
-        max_k_kernel *= KronMatCols[0];
-      }
-      while (max_k_kernel < MAX_K && KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel != NULL) {
-        // printf("max_k_kernel %d KronMatCols[0] %d\n", max_k_kernel, KronMatCols[0]);
-        max_k_kernel *= KronMatCols[0];
-      }
-
-      // printf("max_k_kernel %d\n", max_k_kernel);
-
-      if (max_k_kernel > MAX_K || KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(max_k_kernel)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
-        max_k_kernel = max_k_kernel/KronMatCols[0];
-
-      // printf("max_k_kernel %d\n", max_k_kernel);
-
-      if (K > max_k_kernel) {
-        max_k = 1;
-        while (max_k <= max_k_kernel)
-          max_k *= KronMatCols[0];
-        
-        max_k = max_k/KronMatCols[0];
-        min_k = min(K, max_k);
-      } else {
-        min_k = K;
-      }
-    }
+    while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
+      min_k = min_k / 2;
     
     int k_equals_var = (min_k == K) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
