@@ -4,6 +4,10 @@
 #include <type_traits>
 #include <thread>
 
+#include <unordered_map>
+#include <vector>
+#include <iostream>
+
 #include "utils.h"
 #include "kron.h"
 
@@ -36,6 +40,13 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
+enum ElementType {
+  Float,
+  Double,
+  Int,
+  Long
+};
+
 struct KernelInfo {
   void* kernel;
   uint NumThreads;
@@ -46,6 +57,9 @@ struct KernelInfo {
   uint CRegRows;
   uint CRegCols;
   uint NumFusedKerns;
+  ElementType elemType;
+  bool RowModTileIsZero;
+  bool KEqVar;
 };
 
 enum RowParallelismTy {
@@ -55,26 +69,40 @@ enum RowParallelismTy {
   Num = 3,
 };
 
+struct KronMatmulShape {
+  uint KronCols;
+  uint KronRows;
+  uint MaxColsA;
+
+  bool operator==(const KronMatmulShape& other) const {
+    return KronCols == other.KronCols && KronRows == other.KronRows &&
+      MaxColsA == other.MaxColsA;
+  }
+};
+
+template<>
+struct std::hash<KronMatmulShape> {
+  std::size_t operator()(const KronMatmulShape& k) const {
+    return hash<uint>()(k.KronCols) ^ hash<uint>()(k.KronRows) ^ hash<uint>()(k.MaxColsA);
+  }
+};
+
+//Map from Factor size and Number of factors to KernelInfos
+static std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
 
 #define N_THREADS 256
 
 #include "kernel_decl.inc" 
 
-#define TYPE_KERNELS(T, VecT) \
-  KERNEL_DECL(T, VecT, 0, 0),\
-  KERNEL_DECL(T, VecT, 1, 0),\
-  KERNEL_DECL(T, VecT, 0, 1),\
-  KERNEL_DECL(T, VecT, 1, 1),
-
+#define TYPE_KERNELS(T, VecT, ElemType) \
+  KERNEL_DECL(T, VecT, ElemType, 0, 0),\
+  KERNEL_DECL(T, VecT, ElemType, 1, 0),\
+  KERNEL_DECL(T, VecT, ElemType, 0, 1),\
+  KERNEL_DECL(T, VecT, ElemType, 1, 1),
 
 //Three type kernels float/float4, int/int4, and double/double4
 #define NUM_TYPE_KERNELS 2
-// #define MIN_K 16
-// #define MAX_K 4096
 #define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
-
-// #define MIN_KP_K 2
-// #define MAX_KP_K 64
 #define NUM_KP_N_K_KERNELS (log2(MAX_KP_K)-log2(MIN_KP_K) + 1)
 
 #define NUM_K_EQUALS_VAR 2
@@ -84,9 +112,9 @@ enum RowParallelismTy {
 
 #include "kron_device.cu"
 
-static KernelInfo KronGemmKernels[NUM_TYPE_KERNELS][RowParallelismTy::Num][NUM_K_EQUALS_VAR][NUM_ROWS_MOD_TILE_IS_ZERO][NUM_MAX_K_KERNELS][NUM_KP_N_K_KERNELS][NUM_KPK_EQUALS_VAR] = {
+static KernelInfo KronGemmKernels[] = {
   // KP_N_K_KERNELS(8, 1024, 32)
-  TYPE_KERNELS(float,  float4)
+  TYPE_KERNELS(float,  float4, ElementType::Float)
   // TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
     // COARSE_TB_KERNELS(1)
@@ -94,7 +122,7 @@ static KernelInfo KronGemmKernels[NUM_TYPE_KERNELS][RowParallelismTy::Num][NUM_K
     // COARSE_TB_KERNELS(4)
   };
 
-static_assert(sizeof(KronGemmKernels)/sizeof(KernelInfo) == NUM_TYPE_KERNELS * RowParallelismTy::Num * NUM_ROWS_MOD_TILE_IS_ZERO * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
+// static_assert(sizeof(KronGemmKernels)/sizeof(KernelInfo) == NUM_TYPE_KERNELS * RowParallelismTy::Num * NUM_ROWS_MOD_TILE_IS_ZERO * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
 template<typename T>
 static int typeKernelIndex(T x) {
@@ -134,89 +162,87 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
-    KronGemmKernel cuda_gemm_func = NULL;
-    dim3 grid;
-    dim3 block;
+  KronGemmKernel cuda_gemm_func = NULL;
+  dim3 grid;
+  dim3 block;
 
-    const int KP_K_BATCH = 1;
-    int N_COARSE_TB = 1; //(M > 100) ? 2 : 1;
-    int max_k;
-    int min_k;
-    int max_k_kernel = 1;
-    int row_mod_tile_zero = 0;
-    // if (min_k/KronMatRows[0] >= 256) {
-    //   //K dimension is very high. Divide it in different threadblocks to have better parallelism
-    //   min_k = min_k/KronMatRows[0];
-    //   k_equals_var = 0;
-    // }
-    // printf("min_k %d\n", min_k);
-    uint typeKernelIdx = typeKernelIndex((T)0);
-    //Go through all MaxColsA starting from MAX_K and select the relevant
-    min_k = K; //TODO: find MAX_K lower than K
-    while (min_k > MAX_K)
-      min_k = min_k / 2;
-
-    while (KronGemmKernels[typeKernelIdx][rowParallelism][0][0][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0].kernel == NULL)
-      min_k = min_k / 2;
-    
-    int k_equals_var = (min_k == K) ? 1 : 0;
-    uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
-    row_mod_tile_zero = (M % tileRowA) == 0;
-
-    //Check that kernel index is valid only in debug mode
-    assert(typeKernelIdx < NUM_TYPE_KERNELS);
-    assert(row_mod_tile_zero < NUM_ROWS_MOD_TILE_IS_ZERO);
-    assert(log2(min_k)-log2(MIN_K) < NUM_MAX_K_KERNELS);
-    assert(log2(KronMatRows[0])-log2(MIN_KP_K) < NUM_KP_N_K_KERNELS);
-
-    KernelInfo kernelInfo = KronGemmKernels[typeKernelIdx][rowParallelism][k_equals_var][row_mod_tile_zero][log2(min_k)-log2(MIN_K)][log2(KronMatRows[0])-log2(MIN_KP_K)][0];
-    cuda_gemm_func = (KronGemmKernel)kernelInfo.kernel;
-    assert(cuda_gemm_func != NULL);
-    const uint NumThreads = kernelInfo.NumThreads;
-    {
-      const uint CRegRows = kernelInfo.CRegRows;
-      const uint CRegCols = kernelInfo.CRegCols;
-      const uint MaxColsA = kernelInfo.MaxColsA;
-      const uint KronRows = kernelInfo.KronRows;
-      uint c1 = MAX(1, NumThreads/((kernelInfo.MaxColsA/kernelInfo.KronRows)/CRegRows));
-      
-      if (kernelInfo.KP_N_TILE_ != c1 * CRegCols) {
-        printf("Invalid configuration: KP_N_TILE_ %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsA %d\n", 
-               kernelInfo.KP_N_TILE_, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsA);
-        abort();
-      }
-      if (MaxColsA/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
-        printf("MaxColsA/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsA/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
-        printf("Invalid configuration: MaxColsA %d KronRows %d NumThreads %d CRegRows %d CRegCols %d\n",
-               MaxColsA, KronRows, NumThreads, CRegRows, CRegCols);
-        abort();
-      }
+  const int KP_K_BATCH = 1;
+  uint N_COARSE_TB = 1; //(M > 100) ? 2 : 1;
+  uint max_k;
+  uint min_k;
+  uint max_k_kernel = 1;
+  uint row_mod_tile_zero = 0;
+  uint typeKernelIdx = typeKernelIndex((T)0);
+  //Go through all MaxColsA starting from MAX_K and select the relevant
+  min_k = K;
+  while (compiledKernels.find(KronMatmulShape{KronMatCols[0], KronMatRows[0], min_k}) == compiledKernels.end()) {
+    min_k = min_k / 2;
+  }
+  
+  int kEqVar = (min_k == K) ? 1 : 0;
+  uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
+  row_mod_tile_zero = (M % tileRowA) == 0;
+  auto iter = compiledKernels.find(KronMatmulShape{KronMatCols[0], KronMatRows[0], min_k});
+  if (iter == compiledKernels.end()) {
+    std::cout << "No kernel found" << std::endl;
+    return cudaErrorInvalidValue;
+  }
+  auto kernelInfos = iter->second;
+  KernelInfo kernelInfo;
+  for (auto info : kernelInfos) {
+    //TODO: need to check for tupe
+    if (info.KEqVar == kEqVar && info.RowModTileIsZero == row_mod_tile_zero) {
+      kernelInfo = info;
+      break;
     }
-    uint tileKronCols = MaxTileKronCols[log2(KronMatRows[0])-log2(MIN_KP_K)];
-    //Create the grid and thread block
-    grid = {
-              (K/min_k) * DIVUP(KronMatCols[0], tileKronCols),
-              DIVUP(M, tileRowA),
-              1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
-           };
-    block = {
-              NumThreads, 
-              1, 
-              1
-            };
+  }
+  cuda_gemm_func = (KronGemmKernel)kernelInfo.kernel;
+  assert(cuda_gemm_func != NULL);
+  const uint NumThreads = kernelInfo.NumThreads;
+  {
+    const uint CRegRows = kernelInfo.CRegRows;
+    const uint CRegCols = kernelInfo.CRegCols;
+    const uint MaxColsA = kernelInfo.MaxColsA;
+    const uint KronRows = kernelInfo.KronRows;
+    uint c1 = MAX(1, NumThreads/((kernelInfo.MaxColsA/kernelInfo.KronRows)/CRegRows));
     
-    KernelParams<T, NumFusedKerns> params {M, N, K, 
-      KronMatRows, 
-      KronMatCols, x, 
-                                  kronMat, 
-                                  kronGemmResult, 
-                                  kronIndex};
-    //Create kernel args;
-    void *args[] = {(void*)&params};
+    if (kernelInfo.KP_N_TILE_ != c1 * CRegCols) {
+      printf("Invalid configuration: KP_N_TILE_ %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsA %d\n", 
+              kernelInfo.KP_N_TILE_, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsA);
+      abort();
+    }
+    if (MaxColsA/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
+      printf("MaxColsA/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsA/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
+      printf("Invalid configuration: MaxColsA %d KronRows %d NumThreads %d CRegRows %d CRegCols %d\n",
+              MaxColsA, KronRows, NumThreads, CRegRows, CRegCols);
+      abort();
+    }
+  }
+  uint tileKronCols = MaxTileKronCols[log2(KronMatRows[0])-log2(MIN_KP_K)];
+  //Create the grid and thread block
+  grid = {
+            (K/min_k) * DIVUP(KronMatCols[0], tileKronCols),
+            DIVUP(M, tileRowA),
+            1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
+          };
+  block = {
+            NumThreads, 
+            1, 
+            1
+          };
+  
+  KernelParams<T, NumFusedKerns> params {M, N, K, 
+                                         KronMatRows, 
+                                         KronMatCols, x, 
+                                         kronMat, 
+                                         kronGemmResult, 
+                                         kronIndex};
+  //Create kernel args;
+  void *args[] = {(void*)&params};
 
-    status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
-    if (status != cudaSuccess)
-      return status;
+  status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
+  if (status != cudaSuccess)
+    return status;
 
   return status;
 }
@@ -594,6 +620,20 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     CUDA_CHECK(cudaMalloc(&handle.result_, sz));
     CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));
   }
+
+  //Initialize compiledKernels map
+
+  for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
+    KernelInfo& info = KronGemmKernels[i];
+    KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA};
+    auto iter = compiledKernels.find(shape);
+    if (iter == compiledKernels.end()) {
+      compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
+    }
+    compiledKernels.at(shape).push_back(info);
+  }
+  //TODO: Add if debug
+  // std::cout << "KronMatmulShapes: " << compiledKernels.size() << std::endl;
 }
 
 template<> void FastKronHandle::init<float>(bool useUVA) {

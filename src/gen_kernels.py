@@ -129,7 +129,7 @@ with open("kernel_decl.inc", "w") as f:
         for kronRows in AllKronRows:
             config = Configs[kronRows][colsA]
             if colsA < kronRows or not isValid(colsA, kronRows, config) or tooMuchSharedMem(colsA, kronRows):
-                contents += "KernelInfo{NULL}"
+                pass # contents += "KernelInfo{NULL}"
             else:
                 rowsTileA = config["RowsTileA"]
                 regRows = config["CRegRows"]
@@ -140,7 +140,7 @@ with open("kernel_decl.inc", "w") as f:
                 numFusedKerns = config["NumFusedKernels"]
                 contents += "KernelInfo{"+ \
                     f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
-                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {colsA}, {regRows}, {regCols}, {numFusedKerns}"+ "}"
+                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, RowModTileIsZero, K_EQUALS_VAR"+ "}"
             contents += ",\\\n"
 
     #Remove last comma and backslash
