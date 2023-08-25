@@ -152,7 +152,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
     // printf("min_k %d\n", min_k);
     uint typeKernelIdx = typeKernelIndex((T)0);
 
-    if (KronMatCols[0] >= 64) {
+    if (true) {// || KronMatCols[0] >= 64) {
       //Go through all MaxColsA starting from MAX_K and select the relevant
       min_k = K; //TODO: find MAX_K lower than K
       while (min_k > MAX_K)
@@ -188,6 +188,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
       }
     }
     
+    printf("min_k %d\n", min_k);
     int k_equals_var = (min_k == K) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;
@@ -262,12 +263,11 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
-  const int NumFusedKerns = 3;
+  const int NumFusedKerns = 1;
   assert(NumKronMats % NumFusedKerns == 0); //TODO: Handle
   
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  
   for (uint i = 0; i < NumKronMats; i += NumFusedKerns) {
     const uint kronMat = NumKronMats - i - 1;
     T* krons[NumFusedKerns];
