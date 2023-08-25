@@ -188,7 +188,6 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
       }
     }
     
-    printf("min_k %d\n", min_k);
     int k_equals_var = (min_k == K) ? 1 : 0;
     uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
     row_mod_tile_zero = (M % tileRowA) == 0;

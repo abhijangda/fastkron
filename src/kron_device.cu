@@ -361,7 +361,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
                 (NumFusedKerns > 1 && TileSizeKronRows >= MaxKronRows && TileSizeKronCols >= MaxKronCols),
                 "Invalid tile size params for fusion");
   
-  register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols];
+  register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols] = {0};
   __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
   __shared__ ElemT shKronMats[TileSizeKronRows][TileSizeKronCols];
 
@@ -425,14 +425,16 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
 
     #pragma unroll
     for (uint fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
-      #pragma unroll
-      for (uint r = 0; r < TileSizeRowsA; r++) {
-      #pragma unroll
-      for (uint i = 0; i < CRegRows;      i++) {
-      #pragma unroll
-      for (uint j = 0; j < CRegCols;      j++) {
-        regC[r][i][j] = 0;
-      }}}
+      if (NumFusedKerns > 1) {
+        #pragma unroll
+        for (uint r = 0; r < TileSizeRowsA; r++) {
+        #pragma unroll
+        for (uint i = 0; i < CRegRows;      i++) {
+        #pragma unroll
+        for (uint j = 0; j < CRegCols;      j++) {
+          regC[r][i][j] = 0;
+        }}}
+      }
 
       if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
         //Optimized to load full factor matrix
