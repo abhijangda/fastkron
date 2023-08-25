@@ -22,19 +22,19 @@ Configs   = {}
 
 for kronRows in pow_range(MinKronRows, 16):
     Configs[kronRows] = {}
-    for colsA in pow_range(MinColsA, MaxColsA):
-        CRegCols = 1
-        if colsA//NumThreads <= 1:
-            CRegCols = 1
-        else:
-            CRegCols = min(16, min(colsA//NumThreads, kronRows))
+    # for colsA in pow_range(MinColsA, 8192):
+        # CRegCols = 1
+        # if colsA//NumThreads <= 1:
+        #     CRegCols = 1
+        # else:
+        #     CRegCols = min(16, min(colsA//NumThreads, kronRows))
         
-        if CRegCols > 8:
-            CRegRows = 1
-        else:
-            CRegRows = min(max((colsA//NumThreads)//CRegCols, 1), 8//CRegCols)
+        # if CRegCols > 8:
+        #     CRegRows = 1
+        # else:
+        #     CRegRows = min(max((colsA//NumThreads)//CRegCols, 1), 8//CRegCols)
 
-        Configs[kronRows][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32, "MaxTileKronCols": kronRows, "NumFusedKernels": 1}
+        # Configs[kronRows][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": CRegRows, "CRegCols": CRegCols, "SharedTileKronRows": 32, "MaxTileKronCols": kronRows, "NumFusedKernels": 1}
 
 
 Configs[2][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 2, "NumFusedKernels": 1}
@@ -43,37 +43,30 @@ Configs[2][256] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols":
 Configs[2][1024] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 2, "SharedTileKronRows": 32, "MaxTileKronCols": 2, "NumFusedKernels": 1}
 Configs[2][2048] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 2, "SharedTileKronRows": 32, "MaxTileKronCols": 2, "NumFusedKernels": 1}
 
-# KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 1024, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,512, 2, 2, 2, 1024, 1, 2},\
-# KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 2048, 2, 2, 2, K_EQUALS_VAR, 1, 1, 2, 32>,1024, 2, 2, 2, 2048, 1, 2},\
-
 Configs[4][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 4, "NumFusedKernels": 1}
-# Configs[4][4096] = {"NumThreads": 1024, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 4}
+Configs[4][256] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 4, "NumFusedKernels": 1}
+Configs[4][1024] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 4, "NumFusedKernels": 1}
 
 Configs[8][64] = {"NumThreads": 64, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8, "NumFusedKernels": 1}
 Configs[8][512] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 8, "NumFusedKernels": 1}
 Configs[8][4096] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 8, "NumFusedKernels": 1}
 
-#KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 8, 8, 8, K_EQUALS_VAR, 1, 1, 8, 32>,512, 8, 8, 8, 4096, 1, 8},\
-# KernelInfo{(void*)kronGemmKernel<T, VecT, 1024, RowParallelismTy::Low, 1, RowModTileIsZero, 4096, 4, 4, 4, K_EQUALS_VAR, 1, 1, 4, 32>,1024, 4, 4, 4, 4096, 1, 4},\
+Configs[16][256] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 1, "SharedTileKronRows": 32, "MaxTileKronCols": 16, "NumFusedKernels": 1}
+Configs[16][4096] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 16, "NumFusedKernels": 1}
 
 for kronRows in pow_range(32, MaxKronRows):
     Configs[kronRows] = {}
 
-for colsA in pow_range(MinColsA, MaxColsA):
-    Configs[32][colsA] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 32, "NumFusedKernels": 1}
-    if colsA < 4096:
-        Configs[64][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
-    elif colsA == 4096:
-        Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
-    elif colsA == 8192:
-        Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
-    else:
-        Configs[64][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
-    Configs[128][colsA] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 128, "NumFusedKernels": 1}
-    Configs[256][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
-    Configs[512][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 128, "NumFusedKernels": 1}
-    Configs[1024][colsA] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 256, "NumFusedKernels": 1}
+Configs[32][1024] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 32, "NumFusedKernels": 1}
+Configs[64][64] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
+Configs[64][4096] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
+Configs[64][8192] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
 
+Configs[128][8192] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 128, "NumFusedKernels": 1}
+Configs[256][32768] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
+Configs[512][32768] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 128, "NumFusedKernels": 1}
+Configs[1024][65536] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 32, "SharedTileKronRows": 32, "MaxTileKronCols": 256, "NumFusedKernels": 1}
+    
 def tooMuchSharedMem(colsA, kronRows):
     return (colsA == 65536 and kronRows <= 128) or \
            (colsA == 32768 and kronRows <= 128) or \
@@ -105,32 +98,33 @@ with open("kernel_decl.inc", "w") as f:
     f.writelines([f"#define MIN_KP_K {MinKronRows}\n"])
     f.writelines([f"#define MAX_KP_K {MaxKronRows}\n"])
     
-    f.write("static uint MaxTileRowsA[] = {")
-    for d in pow_range(MinKronRows, MaxKronRows):
-        config = Configs[d]
-        config = config[MaxColsA]
-        rowsTileA = config["RowsTileA"]
-        f.write(f"{rowsTileA}")
-        if d != MaxKronRows:
-            f.write(", ")
-    f.write("};\n\n")
-    f.write("static uint MaxTileKronCols[] = {")
-    for d in pow_range(MinKronRows, MaxKronRows):
-        config = Configs[d][MaxColsA]
-        tileKronCols = config["MaxTileKronCols"]
-        f.write(f"{tileKronCols}")
-        if d != MaxKronRows:
-            f.write(", ")
-    f.write("};\n\n")
+    # f.write("static uint MaxTileRowsA[] = {")
+    # for d in pow_range(MinKronRows, MaxKronRows):
+    #     config = Configs[d]
+    #     if MaxColsA in config:
+    #         config = config[MaxColsA]
+    #         rowsTileA = config["RowsTileA"]
+    #         f.write(f"{rowsTileA}")
+    #     else:
+    #         f.write("1")
+    #     if d != MaxKronRows:
+    #         f.write(", ")
+    # f.write("};\n\n")
+    # f.write("static uint MaxTileKronCols[] = {")
+    # for d in pow_range(MinKronRows, MaxKronRows):
+    #     config = Configs[d][MaxColsA]
+    #     tileKronCols = config["MaxTileKronCols"]
+    #     f.write(f"{tileKronCols}")
+    #     if d != MaxKronRows:
+    #         f.write(", ")
+    # f.write("};\n\n")
     
-    f.write("#define KERNEL_DECL(T, VecT, RowModTileIsZero, K_EQUALS_VAR) \\\n")
+    f.write("#define KERNEL_DECL(T, VecT, ElemType, RowModTileIsZero, K_EQUALS_VAR) \\\n")
     contents = ""
     for colsA in AllColsA:
         for kronRows in AllKronRows:
-            config = Configs[kronRows][colsA]
-            if colsA < kronRows or not isValid(colsA, kronRows, config) or tooMuchSharedMem(colsA, kronRows):
-                pass # contents += "KernelInfo{NULL}"
-            else:
+            try:
+                config = Configs[kronRows][colsA]
                 rowsTileA = config["RowsTileA"]
                 regRows = config["CRegRows"]
                 regCols = config["CRegCols"]
@@ -140,9 +134,10 @@ with open("kernel_decl.inc", "w") as f:
                 numFusedKerns = config["NumFusedKernels"]
                 contents += "KernelInfo{"+ \
                     f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
-                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, RowModTileIsZero, K_EQUALS_VAR"+ "}"
-            contents += ",\\\n"
-
+                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, RowModTileIsZero, K_EQUALS_VAR"+ "}"
+                contents += ",\\\n"
+            except:
+                pass
     #Remove last comma and backslash
     contents = contents[:contents.rfind(",")]
     contents += "\n"

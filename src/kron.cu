@@ -52,7 +52,8 @@ struct KernelInfo {
   uint NumThreads;
   uint KronCols;
   uint KronRows;
-  uint KP_N_TILE_;
+  uint TileKronCols;
+  uint TileRowsA;
   uint MaxColsA;
   uint CRegRows;
   uint CRegCols;
@@ -180,8 +181,6 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   }
   
   int kEqVar = (min_k == K) ? 1 : 0;
-  uint tileRowA = MaxTileRowsA[log2(KronMatRows[0])-log2(MIN_KP_K)];
-  row_mod_tile_zero = (M % tileRowA) == 0;
   auto iter = compiledKernels.find(KronMatmulShape{KronMatCols[0], KronMatRows[0], min_k});
   if (iter == compiledKernels.end()) {
     std::cout << "No kernel found" << std::endl;
@@ -191,9 +190,13 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   KernelInfo kernelInfo;
   for (auto info : kernelInfos) {
     //TODO: need to check for tupe
-    if (info.KEqVar == kEqVar && info.RowModTileIsZero == row_mod_tile_zero) {
-      kernelInfo = info;
-      break;
+    if (info.KEqVar == kEqVar) {
+      uint tileRowA = kernelInfo.TileRowsA;
+      bool row_mod_tile_zero = (M % tileRowA) == 0;    
+      if (info.RowModTileIsZero == row_mod_tile_zero) {
+        kernelInfo = info;
+        break;
+      }
     }
   }
   cuda_gemm_func = (KronGemmKernel)kernelInfo.kernel;
@@ -206,9 +209,9 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
     const uint KronRows = kernelInfo.KronRows;
     uint c1 = MAX(1, NumThreads/((kernelInfo.MaxColsA/kernelInfo.KronRows)/CRegRows));
     
-    if (kernelInfo.KP_N_TILE_ != c1 * CRegCols) {
-      printf("Invalid configuration: KP_N_TILE_ %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsA %d\n", 
-              kernelInfo.KP_N_TILE_, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsA);
+    if (kernelInfo.TileKronCols != c1 * CRegCols) {
+      printf("Invalid configuration: TileKronCols %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsA %d\n", 
+              kernelInfo.TileKronCols, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsA);
       abort();
     }
     if (MaxColsA/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
@@ -218,11 +221,11 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
       abort();
     }
   }
-  uint tileKronCols = MaxTileKronCols[log2(KronMatRows[0])-log2(MIN_KP_K)];
+
   //Create the grid and thread block
   grid = {
-            (K/min_k) * DIVUP(KronMatCols[0], tileKronCols),
-            DIVUP(M, tileRowA),
+            (K/min_k) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
+            DIVUP(M, kernelInfo.TileRowsA),
             1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
           };
   block = {
