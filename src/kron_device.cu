@@ -342,7 +342,7 @@ struct KernelParams {
     for (int i = 0; i < NumFusedKerns; i++) {
       this->KronRows[i] = KronRows[i];
       this->KronCols[i] = KronCols[i];
-      this->glKronMats[i] = glKronMats[i];      
+      this->glKronMats[i] = glKronMats[i];
     }
   }
 };
@@ -444,7 +444,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
           regC[r][i][j] = 0;
         }}}
       }
-
       if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
         //Optimized to load full factor matrix
         fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 

@@ -155,13 +155,28 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
   return true;
 }
 
-uint maxCompiledColsA(KronMatmulShape shape) {
+uint maxCompiledColsA(KronMatmulShape shape, uint NumFusedKerns = -1) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
     shape.ColsA /= 2;
     if (shape.ColsA == 1) {
-      std::cout << "Error: Cannot find compiled kernel\n";
+     break;
     }
   }
+  if (NumFusedKerns != -1 && shape.ColsA > 1) {
+    while (compiledKernels.find(shape) != compiledKernels.end()) {
+      bool found = false;
+      for (auto info : compiledKernels.find(shape)->second) {
+        if (info.NumFusedKerns == NumFusedKerns) {
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+      shape.ColsA /= 2;
+    }
+  }
+  if (shape.ColsA == 1)
+    std::cout << "Error: Cannot find compiled kernel\n";
   return shape.ColsA;
 }
 
@@ -181,10 +196,8 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
                             const uint M, const uint N, const uint K, 
                             const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
                             cudaStream_t stream) {
-  typedef int (*KronGemmKernel)(const uint, const uint, const uint, const uint, const uint, T*, T*, T*);
   cudaError_t status;
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
-  KronGemmKernel cuda_gemm_func = NULL;
   dim3 grid;
   dim3 block;
 
@@ -196,7 +209,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   uint row_mod_tile_zero = 0;
   uint typeKernelIdx = typeKernelIndex((T)0);
   //Go through all MaxColsA starting from MAX_K and select the relevant
-  min_k = maxCompiledColsA(KronMatmulShape{KronMatCols[0], KronMatRows[0], K});  
+  min_k = maxCompiledColsA(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}, NumFusedKerns);  
   int kEqVar = (min_k == K) ? 1 : 0;
   auto iter = compiledKernels.find(KronMatmulShape{KronMatCols[0], KronMatRows[0], min_k});
   if (iter == compiledKernels.end()) {
@@ -217,8 +230,6 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
     }
   }
 
-  cuda_gemm_func = (KronGemmKernel)kernelInfo.kernel;
-  assert(cuda_gemm_func != NULL);
   const uint NumThreads = kernelInfo.NumThreads;
   {
     const uint CRegRows = kernelInfo.CRegRows;
@@ -252,20 +263,22 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
             1
           };
   
-  KernelParams<T, NumFusedKerns> params {M, N, K, 
+  KernelParams<T, NumFusedKerns> params (M, N, K, 
                                          KronMatRows, 
                                          KronMatCols, x, 
                                          kronMat, 
                                          kronGemmResult, 
-                                         kronIndex};
+                                         kronIndex);
+  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>);
   //Create kernel args;
-  void *args[] = {(void*)&params};
-
-  status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
-  if (status != cudaSuccess)
-    return status;
-
-  return status;
+  // void *args[] = {(void*)&params};
+  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params);
+  // status = cudaGetLastError();
+  // status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
+  CUDA_CHECK(cudaDeviceSynchronize());
+  // if (status != cudaSuccess)
+  //   return status;
+  return cudaSuccess;
 }
 
 template<typename T, typename VecT>
@@ -287,8 +300,6 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
     const uint kronMat = NumKronMats - i - 1;
     const uint NumFusedKerns = min(MaxFusedKerns, NumKronMats - i);
-    printf("NumFusedKerns %d\n", NumFusedKerns);
-
     T* krons[NumFusedKerns];
     uint FusedKronMatCols[NumFusedKerns];
     uint FusedKronMatRows[NumFusedKerns];
