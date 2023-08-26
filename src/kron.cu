@@ -73,18 +73,18 @@ enum RowParallelismTy {
 struct KronMatmulShape {
   uint KronCols;
   uint KronRows;
-  uint MaxColsA;
+  uint ColsA;
 
   bool operator==(const KronMatmulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows &&
-      MaxColsA == other.MaxColsA;
+    ColsA == other.ColsA;
   }
 };
 
 template<>
 struct std::hash<KronMatmulShape> {
   std::size_t operator()(const KronMatmulShape& k) const {
-    return hash<uint>()(k.KronCols) ^ hash<uint>()(k.KronRows) ^ hash<uint>()(k.MaxColsA);
+    return hash<uint>()(k.KronCols) ^ hash<uint>()(k.KronRows) ^ hash<uint>()(k.ColsA);
   }
 };
 
@@ -92,6 +92,7 @@ struct std::hash<KronMatmulShape> {
 static std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
 
 #define N_THREADS 256
+// #define MaxFusedKerns 4
 
 #include "kernel_decl.inc" 
 
@@ -154,6 +155,26 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
   return true;
 }
 
+uint maxCompiledColsA(KronMatmulShape shape) {
+  while (compiledKernels.find(shape) == compiledKernels.end()) {
+    shape.ColsA /= 2;
+    if (shape.ColsA == 1) {
+      std::cout << "Error: Cannot find compiled kernel\n";
+    }
+  }
+  return shape.ColsA;
+}
+
+uint maxFusedKernels(KronMatmulShape shape) {
+  uint max_k = maxCompiledColsA(shape);
+  auto iter = compiledKernels.find(KronMatmulShape{shape.KronCols, shape.KronRows, max_k});
+  uint numFusedKernels = 1;
+  for (auto info : iter->second) {
+    numFusedKernels = std::max(numFusedKernels, info.NumFusedKerns);
+  }
+  return numFusedKernels;
+}
+
 //Launch cuda kernels
 template<typename T, typename VecT, uint NumFusedKerns>
 cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedKerns], T* kronGemmResult,
@@ -175,11 +196,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   uint row_mod_tile_zero = 0;
   uint typeKernelIdx = typeKernelIndex((T)0);
   //Go through all MaxColsA starting from MAX_K and select the relevant
-  min_k = K;
-  while (compiledKernels.find(KronMatmulShape{KronMatCols[0], KronMatRows[0], min_k}) == compiledKernels.end()) {
-    min_k = min_k / 2;
-  }
-  
+  min_k = maxCompiledColsA(KronMatmulShape{KronMatCols[0], KronMatRows[0], K});  
   int kEqVar = (min_k == K) ? 1 : 0;
   auto iter = compiledKernels.find(KronMatmulShape{KronMatCols[0], KronMatRows[0], min_k});
   if (iter == compiledKernels.end()) {
@@ -190,8 +207,8 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   KernelInfo kernelInfo;
   for (auto info : kernelInfos) {
     //TODO: need to check for tupe
-    if (info.KEqVar == kEqVar) {
-      uint tileRowA = kernelInfo.TileRowsA;
+    if (info.KEqVar == kEqVar && info.NumFusedKerns == NumFusedKerns) {
+      uint tileRowA = info.TileRowsA;
       bool row_mod_tile_zero = (M % tileRowA) == 0;    
       if (info.RowModTileIsZero == row_mod_tile_zero) {
         kernelInfo = info;
@@ -199,6 +216,7 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
       }
     }
   }
+
   cuda_gemm_func = (KronGemmKernel)kernelInfo.kernel;
   assert(cuda_gemm_func != NULL);
   const uint NumThreads = kernelInfo.NumThreads;
@@ -262,13 +280,15 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
-  const int NumFusedKerns = 1;
-  assert(NumKronMats % NumFusedKerns == 0); //TODO: Handle
-  
+  //TODO: Assumes all factors are of same size and square shape
+  const uint MaxFusedKerns = maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K});
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  for (uint i = 0; i < NumKronMats; i += NumFusedKerns) {
+  for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
     const uint kronMat = NumKronMats - i - 1;
+    const uint NumFusedKerns = min(MaxFusedKerns, NumKronMats - i);
+    printf("NumFusedKerns %d\n", NumFusedKerns);
+
     T* krons[NumFusedKerns];
     uint FusedKronMatCols[NumFusedKerns];
     uint FusedKronMatRows[NumFusedKerns];
@@ -277,14 +297,42 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       FusedKronMatCols[k] = KronMatCols[kronMat - k];
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
     }
-    cudaError_t status = generalSlicedMatmul<T, VecT, NumFusedKerns>(i, prevKronResult,
+    cudaError_t status;
+    switch(NumFusedKerns) {
+      case 1:
+        status = generalSlicedMatmul<T, VecT, 1>(i, prevKronResult,
         krons, currKronResult, M, N, K, 
         FusedKronMatCols, FusedKronMatRows, stream);
+        break;
+      case 2:
+        status = generalSlicedMatmul<T, VecT, 2>(i, prevKronResult,
+        krons, currKronResult, M, N, K, 
+        FusedKronMatCols, FusedKronMatRows, stream);
+        break;
+      case 3:
+        status = generalSlicedMatmul<T, VecT, 3>(i, prevKronResult,
+        krons, currKronResult, M, N, K, 
+        FusedKronMatCols, FusedKronMatRows, stream);
+        break;
+      case 4:
+        status = generalSlicedMatmul<T, VecT, 4>(i, prevKronResult,
+        krons, currKronResult, M, N, K, 
+        FusedKronMatCols, FusedKronMatRows, stream);
+        break;
+      case 5:
+        status = generalSlicedMatmul<T, VecT, 5>(i, prevKronResult,
+        krons, currKronResult, M, N, K, 
+        FusedKronMatCols, FusedKronMatRows, stream);
+        break;
+      default:
+          std::cout << "Invalid number of fused kernels" << std::endl;
+        status = cudaErrorInvalidValue;
+    }
 
     if (status != cudaSuccess) return status;
 
     //Double/ring/circular buffer previous result and new result
-    if (i < NumKronMats - NumFusedKerns) {
+    if (i < NumKronMats - MaxFusedKerns) {
       prevKronResult = currKronResult;
       if (prevKronResult == kronGemmResults[0]) {        
         currKronResult = kronGemmResults[1];

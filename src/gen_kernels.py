@@ -131,11 +131,18 @@ with open("kernel_decl.inc", "w") as f:
                 tileKronCols = config["MaxTileKronCols"]
                 sharedTileKronRows = config["SharedTileKronRows"]
                 numThreads = config["NumThreads"]
-                numFusedKerns = config["NumFusedKernels"]
-                contents += "KernelInfo{"+ \
-                    f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
-                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, RowModTileIsZero, K_EQUALS_VAR"+ "}"
-                contents += ",\\\n"
+                if sharedTileKronRows >= kronRows and tileKronCols >= kronRows:
+                    MaxFusedKerns = 1
+                    while kronRows ** MaxFusedKerns < colsA and MaxFusedKerns <= 4:
+                        MaxFusedKerns += 1
+                else:
+                    MaxFusedKerns = 1
+                
+                for numFusedKerns in range(1, MaxFusedKerns+1):
+                    contents += "KernelInfo{"+ \
+                        f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, RowModTileIsZero, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
+                        f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, RowModTileIsZero, K_EQUALS_VAR"+ "}"
+                    contents += ",\\\n"
             except:
                 pass
     #Remove last comma and backslash
