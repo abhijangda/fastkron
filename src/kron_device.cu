@@ -40,6 +40,15 @@ __device__ __host__ constexpr uint power(const uint x, const uint y) {
   return result;
 }
 
+template<uint x, uint y>
+__device__ __host__ constexpr uint iconstpower() {
+  uint result = 1;
+  for (uint i = 0; i < y; i++) {
+    result = result * x;
+  }
+  return result;
+}
+
 template<typename VecT, typename ElemT>
 __device__ void globalLoadVec(const ElemT* addr, VecT& vec) {
   //Not implemented
@@ -513,30 +522,35 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   if (NumFusedKerns > 1) {
     for (uint rowShC = 0; rowShC < TileSizeRowsA; rowShC++) {
     if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowShC < params.RowsC - tileRowA)) {
-      //TODO: Improve code below like in the paper
+      //TODO: Improve below code like in the paper
+      //TODO: Can be provided when compiling kernel.
+      #ifdef KPK_EQUALS_VAR
+      const uint KronRowsPower = iconstpower<kronRows, NumFusedKerns>();
+      #else
+      const uint KronRowsPower = power(kronRows, NumFusedKerns);
+      #endif
+      uint UVAColsRatioKronRowsSquare = (TileSizeColsA/KronRowsPower);
+      const uint ratio = colsC/KronRowsPower; //(colsC/(TileSizeColsA/UVAColsRatioKronRowsSquare));
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
         uint colShC = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-
         const uint rowC = rowShC + tileRowA;
-        const uint KronRowsPower = power(kronRows, NumFusedKerns); //TODO: Can be provided when compiling kernel.
         //Need below to work well
         //KronRowsPower = 512;
-        //colsC = 8*8*8*8*8*8;
+        
         //colsA = 8*8*8*8*8*8;
-        uint UVAColsRatioKronRowsSquare = (TileSizeColsA/KronRowsPower);
         uint tile_k = 0;
         if (!K_EQUALS_VAR) {
           tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
         }
         uint withinP5 = tile_k * UVAColsRatioKronRowsSquare +
-                        ((colShC%(TileSizeColsA/kronRows))/UVAColsRatioKronRowsSquare)*(colsC/(TileSizeColsA/UVAColsRatioKronRowsSquare)) + 
+                        ((colShC%(TileSizeColsA/kronRows))/UVAColsRatioKronRowsSquare)*ratio + 
                         colShC%UVAColsRatioKronRowsSquare;
         
-        uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsA/kronRows);
+        uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsC/kronRows);
         uint cCol = p5Index + withinP5;
-        params.glC[rowC * colsA + cCol] =  regC[rowShC][reg_i][reg_j];
+        params.glC[rowC * colsC + cCol] = regC[rowShC][reg_i][reg_j];
     }}}
   }} else {
   #pragma unroll
