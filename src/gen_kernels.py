@@ -58,6 +58,8 @@ for kronRows in pow_range(32, MaxKronRows):
     Configs[kronRows] = {}
 
 Configs[32][1024] = {"NumThreads": 256, "RowsTileA": 2, "CRegRows": 1, "CRegCols": 4, "SharedTileKronRows": 32, "MaxTileKronCols": 32, "NumFusedKernels": 1}
+Configs[32][8192] = {"NumThreads": 512, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 32, "NumFusedKernels": 2}
+
 Configs[64][64] = {"NumThreads": 256, "RowsTileA": 1, "CRegRows": 1, "CRegCols": 8, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
 Configs[64][4096] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 2, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}
 Configs[64][8192] = {"NumThreads": 128, "RowsTileA": 1, "CRegRows": 4, "CRegCols": 16, "SharedTileKronRows": 32, "MaxTileKronCols": 64, "NumFusedKernels": 1}

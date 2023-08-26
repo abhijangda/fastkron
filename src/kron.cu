@@ -175,6 +175,7 @@ uint maxCompiledColsA(KronMatmulShape shape, uint NumFusedKerns = -1) {
       shape.ColsA /= 2;
     }
   }
+
   if (shape.ColsA == 1)
     std::cout << "Error: Cannot find compiled kernel\n";
   return shape.ColsA;
@@ -273,12 +274,11 @@ cudaError_t generalSlicedMatmul(const uint kronIndex, T* x, T* kronMat[NumFusedK
   //Create kernel args;
   // void *args[] = {(void*)&params};
   ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params);
-  // status = cudaGetLastError();
+  status = cudaGetLastError();
   // status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
-  CUDA_CHECK(cudaDeviceSynchronize());
   // if (status != cudaSuccess)
   //   return status;
-  return cudaSuccess;
+  return status;
 }
 
 template<typename T, typename VecT>
