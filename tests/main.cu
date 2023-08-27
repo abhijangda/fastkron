@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
   int maxkronbatch = 0;
   int nummaxkronbatch = 0;
   int gpus = 1;
+  bool useFusion = true;
 
   AnyOption *opt = new AnyOption();
 
@@ -46,6 +47,8 @@ int main(int argc, char* argv[]) {
   opt->setOption("maxkronbatch");
   opt->setOption("nummaxkronbatch");
   opt->setOption("gpus");
+
+  opt->setFlag("fuse");
 
   opt->processCommandArgs(argc, argv);
   
@@ -90,6 +93,7 @@ int main(int argc, char* argv[]) {
     nummaxkronbatch = atoi(opt->getValue("nummaxkronbatch"));
   if (opt->getValue("gpus") != NULL)
     gpus = atoi(opt->getValue("gpus"));
+  useFusion = opt->getFlag("fuse");
 
   if (useUVA) {
     if (gpurows <= 0 || maxkronbatch <= 0 || nummaxkronbatch <= 0) {
@@ -115,11 +119,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, false);
+    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, false);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, false);
+    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, false);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, false);
+    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, false);
   else
     printf("type not supported %s\n", type);
 

@@ -16,6 +16,9 @@ struct FastKronHandle {
     temp_ = NULL;
     outOfCoreTemp1_ = NULL;
     outOfCoreTemp2_ = NULL;
+
+    //Optimization Options
+    useFusion_ = true;
   }
   
   void* temp_;
@@ -36,6 +39,11 @@ struct FastKronHandle {
 
   template<typename T> void init(bool useUVA);
   void free();
+
+  //Options
+  bool useFusion_;
+  void setUseFusion(bool v) {useFusion_ = v;}
+  bool getUseFusion()       {return useFusion_;}
 };
 
 cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,

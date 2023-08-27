@@ -234,7 +234,7 @@ template<typename T>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
                 uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
                 bool useUVA, uint OnGPURows, uint MaxInnerKrons, uint NumMaxInnerKrons,
-                int gpus, bool checkResults, bool verbose) {
+                int gpus, bool checkResults, bool useFusion, bool verbose) {
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
   cudaStream_t stream[gpus];
@@ -266,6 +266,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   } else {
     handle.init<T>(false);
   }
+  handle.setUseFusion(useFusion);
   T* dX;
   T* dKpMats[gpus*NUM_KP_MATS];
 

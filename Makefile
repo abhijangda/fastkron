@@ -11,11 +11,14 @@ libKron.so: src/kron.cu src/kron.h src/kron_device.cu src/kernel_decl.inc
 kron: tests/main.cu libKron.so tests/testBase.h
 	nvcc $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@
 
-single-gpu-tests: tests/single-gpu-tests.cu libKron.so tests/testBase.h
+single-gpu-no-fusion-tests: tests/single-gpu-no-fusion-tests.cu libKron.so tests/testBase.h
 	nvcc $< $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
-run-tests: single-gpu-tests
-	LD_LIBRARY_PATH=./: ./single-gpu-tests
+single-gpu-tests: tests/single-gpu-fusion-tests.cu libKron.so tests/testBase.h
+	nvcc $< $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-tests: single-gpu-tests single-gpu-no-fusion-tests
+	LD_LIBRARY_PATH=./: ./single-gpu-tests ; LD_LIBRARY_PATH=./: ./single-gpu-no-fusion-tests
 
 clean:
 	rm -rf kron libKron.so

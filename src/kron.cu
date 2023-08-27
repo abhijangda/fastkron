@@ -294,7 +294,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
   //TODO: Assumes all factors are of same size and square shape
-  const uint MaxFusedKerns = maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K});
+  const uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}) : 1;
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
   for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
@@ -312,28 +312,33 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, VecT, 1>(i, prevKronResult,
-        krons, currKronResult, M, N, K, 
-        FusedKronMatCols, FusedKronMatRows, stream);
+                                                 krons, currKronResult, M, N, K, 
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
         break;
       case 2:
         status = generalSlicedMatmul<T, VecT, 2>(i, prevKronResult,
-        krons, currKronResult, M, N, K, 
-        FusedKronMatCols, FusedKronMatRows, stream);
+                                                 krons, currKronResult, M, N, K, 
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
         break;
       case 3:
         status = generalSlicedMatmul<T, VecT, 3>(i, prevKronResult,
-        krons, currKronResult, M, N, K, 
-        FusedKronMatCols, FusedKronMatRows, stream);
+                                                 krons, currKronResult, M, N, K, 
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
         break;
       case 4:
         status = generalSlicedMatmul<T, VecT, 4>(i, prevKronResult,
-        krons, currKronResult, M, N, K, 
-        FusedKronMatCols, FusedKronMatRows, stream);
+                                                 krons, currKronResult, M, N, K,
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
         break;
       case 5:
         status = generalSlicedMatmul<T, VecT, 5>(i, prevKronResult,
-        krons, currKronResult, M, N, K, 
-        FusedKronMatCols, FusedKronMatRows, stream);
+                                                 krons, currKronResult, M, N, K,
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
         break;
       default:
           std::cout << "Invalid number of fused kernels" << std::endl;
