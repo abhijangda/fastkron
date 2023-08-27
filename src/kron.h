@@ -62,4 +62,13 @@ cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, 
 cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
 
+cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
+                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                          cudaStream_t stream);
+cudaError_t kronDGEMMTune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
+                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                          cudaStream_t stream);
+cudaError_t kronIGEMMTune(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[],
+                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                          cudaStream_t stream);
 #endif

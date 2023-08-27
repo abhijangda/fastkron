@@ -234,7 +234,7 @@ template<typename T>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
                 uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
                 bool useUVA, uint OnGPURows, uint MaxInnerKrons, uint NumMaxInnerKrons,
-                int gpus, bool checkResults, bool useFusion, bool verbose) {
+                int gpus, bool checkResults, bool useFusion, bool tune, bool verbose) {
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
   cudaStream_t stream[gpus];
@@ -277,7 +277,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaMalloc(&dX, sizeX));
   }
   if (verbose) printf("allocated\n");
-
+  if (tune) {
+    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
+                            stream[0]);
+    return true;
+  }
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     if (useUVA) {
       for (int g = 0; g < gpus; g++) {

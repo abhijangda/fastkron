@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   int nummaxkronbatch = 0;
   int gpus = 1;
   bool useFusion = true;
-
+  bool tune = false;
   AnyOption *opt = new AnyOption();
 
   opt->addUsage("usage: ");
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
   opt->setOption("type", 't');
   opt->setOption("runs", 'r');
   opt->setOption("warmup", 'w');
-
+  
   opt->setFlag("check", 'c');
   opt->setFlag("uva", 'u');
   opt->setOption("gpurows");
@@ -49,6 +49,7 @@ int main(int argc, char* argv[]) {
   opt->setOption("gpus");
 
   opt->setFlag("fuse");
+  opt->setFlag("tune");
 
   opt->processCommandArgs(argc, argv);
   
@@ -84,6 +85,7 @@ int main(int argc, char* argv[]) {
     warmup = atoi(opt->getValue('w'));
   }
 
+  tune = opt->getFlag("tune");
   useUVA = opt->getFlag('u');
   if (opt->getValue("gpurows") != NULL)
     gpurows = atoi(opt->getValue("gpurows"));
@@ -119,11 +121,11 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, false);
+    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, tune, false);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, false);
+    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, tune, false);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, false);
+    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, tune, false);
   else
     printf("type not supported %s\n", type);
 
