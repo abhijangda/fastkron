@@ -5,7 +5,7 @@ TEST_LFLAGS = -lgtest -lpthread
 
 all: kron
 
-libKron.so: src/kron.cu src/kron.h src/kron_device.cu src/kernel_decl.inc
+libKron.so: src/kron.cu src/kron.h src/kernel.cuh src/kernel_decl.inc src/kernel_defs.cuh src/device_functions.cuh
 	nvcc -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -o $@ -Xptxas=-v,-O3 -gencode arch=compute_70,code=sm_70
 
 kron: tests/main.cu libKron.so tests/testBase.h

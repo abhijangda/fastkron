@@ -1,7 +1,5 @@
-#include<device.cuh>
+#include<device_functions.cuh>
 
-//KP_N is KronCols
-//KP_K is KronRows
 template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, 
          uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, 
          uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,

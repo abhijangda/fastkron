@@ -94,35 +94,7 @@ static std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKern
 #define N_THREADS 256
 // #define MaxFusedKerns 4
 
-#include "kernel_decl.inc" 
-
-#define TYPE_KERNELS(T, VecT, ElemType) \
-  KERNEL_DECL(T, VecT, ElemType, 0, 0),\
-  KERNEL_DECL(T, VecT, ElemType, 1, 0),\
-  KERNEL_DECL(T, VecT, ElemType, 0, 1),\
-  KERNEL_DECL(T, VecT, ElemType, 1, 1),
-
-//Three type kernels float/float4, int/int4, and double/double4
-#define NUM_TYPE_KERNELS 2
-#define NUM_MAX_K_KERNELS (log2(MAX_K)-log2(MIN_K) + 1)
-#define NUM_KP_N_K_KERNELS (log2(MAX_KP_K)-log2(MIN_KP_K) + 1)
-
-#define NUM_K_EQUALS_VAR 2
-#define NUM_KPK_EQUALS_VAR 1
-#define NUM_ROWS_MOD_TILE_IS_ZERO 2
-#define EXTERNAL_KP_K_TILE_ MAX_K
-
-#include "kron_device.cu"
-
-static KernelInfo KronGemmKernels[] = {
-  // KP_N_K_KERNELS(8, 1024, 32)
-  TYPE_KERNELS(float,  float4, ElementType::Float)
-  // TYPE_KERNELS(int,    int4)
-  // TYPE_KERNELS(double, double4)
-    // COARSE_TB_KERNELS(1)
-    // COARSE_TB_KERNELS(2)
-    // COARSE_TB_KERNELS(4)
-  };
+#include "kernel_defs.cuh"
 
 // static_assert(sizeof(KronGemmKernels)/sizeof(KernelInfo) == NUM_TYPE_KERNELS * RowParallelismTy::Num * NUM_ROWS_MOD_TILE_IS_ZERO * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
 
