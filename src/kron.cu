@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <vector>
 #include <iostream>
+#include <sstream>
+#include <limits>
 
 #include "utils.h"
 #include "kron.h"
@@ -47,6 +49,31 @@ enum ElementType {
   Long
 };
 
+//TODO: Change this to SlicedMatMulShape
+struct KronMatmulShape {
+  uint KronCols;
+  uint KronRows;
+  uint ColsA;
+  uint RowsA;
+
+  bool operator==(const KronMatmulShape& other) const {
+    return KronCols == other.KronCols && KronRows == other.KronRows &&
+    ColsA == other.ColsA;
+  }
+
+  bool sameKronSize(const KronMatmulShape& other) const {
+    return KronCols == other.KronCols && KronRows == other.KronRows;
+  }
+  // bool operator>(const KronMatmulShape& other) const {
+  //   return KronCols > other.KronCols && KronRows > other.KronRows && ColsA > other.ColsA;
+  // }
+
+  friend std::ostream& operator<<(std::ostream &out, const KronMatmulShape &shape) {
+    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA;
+    return out;
+  }
+};
+
 struct KernelInfo {
   void* kernel;
   uint NumThreads;
@@ -61,6 +88,20 @@ struct KernelInfo {
   ElementType elemType;
   bool RowModTileIsZero;
   bool KEqVar;
+  //TODO: Add SharedTileKronRows??
+
+  friend std::ostream& operator<<(std::ostream &out, const KernelInfo &shape) {
+    out << shape.TileRowsA << "x" << shape.MaxColsA << "_" 
+       << shape.KronRows << "x" << shape.KronCols << "_" << shape.TileKronCols << "_"
+       << shape.CRegRows << "x" << shape.CRegCols << "_"
+       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.KEqVar << "_" << shape.RowModTileIsZero;
+      
+    return out;
+  }
+
+  bool canCompute(KronMatmulShape shape, uint NumFusedKerns) {
+    return KEqVar == (shape.ColsA == MaxColsA) && RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) && this->NumFusedKerns == NumFusedKerns;
+  }
 };
 
 enum RowParallelismTy {
@@ -68,23 +109,6 @@ enum RowParallelismTy {
   Medium,
   High,
   Num = 3,
-};
-
-//TODO: Change this to SlicedMatMulShape
-struct KronMatmulShape {
-  uint KronCols;
-  uint KronRows;
-  uint ColsA;
-  uint RowsA;
-
-  bool operator==(const KronMatmulShape& other) const {
-    return KronCols == other.KronCols && KronRows == other.KronRows &&
-    ColsA == other.ColsA;
-  }
-
-  bool operator>(const KronMatmulShape& other) const {
-    return KronCols > other.KronCols && KronRows > other.KronRows && ColsA > other.ColsA;
-  }
 };
 
 template<>
@@ -181,7 +205,8 @@ KernelInfo selectKernel(KronMatmulShape shape, const uint NumFusedKerns) {
   auto kernelInfos = iter->second;
   KernelInfo kernelInfo;
   for (auto info : kernelInfos) {
-    //TODO: need to check for tupe
+    //TODO: need to check for type
+    //TODO: make use of KernelInfo.canCompute
     if (info.KEqVar == kEqVar && info.NumFusedKerns == NumFusedKerns) {
       uint tileRowA = info.TileRowsA;
       bool row_mod_tile_zero = (shape.RowsA % tileRowA) == 0;    
@@ -364,7 +389,11 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   //                            maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}) : 1;
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  for (int maxFusedKerns = 1; maxFusedKerns < 1; maxFusedKerns++) {
+  cudaEvent_t start, end;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
+  
+  for (int maxFusedKerns = 1; maxFusedKerns < 2; maxFusedKerns++) {
     for (uint i = 0; i < NumKronMats; i += maxFusedKerns) {
       const uint kronMat = NumKronMats - i - 1;
       const uint NumFusedKerns = min(maxFusedKerns, NumKronMats - i);
@@ -381,48 +410,66 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       if (bestKernels.find(shape) != bestKernels.end()) {
         continue;
       }
+      KernelInfo bestKernel;
+      float minTime = std::numeric_limits<float>::max();
       for (auto shapeAndKernels : compiledKernels) {
-        if (shapeAndKernels.first > shape)
+        if (!shapeAndKernels.first.sameKronSize(shape))
           continue;
         for (auto kernel : shapeAndKernels.second) {
+          if (!kernel.canCompute(shape, NumFusedKerns)) continue;
+          std::cout << kernel << std::endl;
+          std::cout << prevKronResult << std::endl;
+          CUDA_CHECK(cudaStreamSynchronize(stream));
+          CUDA_CHECK(cudaEventRecord(start, stream));
           switch(NumFusedKerns) {
             case 1:
               status = generalSlicedMatmul<T, 1>(kernel, i, prevKronResult,
-                                                       krons, currKronResult, M, N, K, 
-                                                       FusedKronMatCols, FusedKronMatRows,
-                                                       stream);
+                                                 krons, currKronResult, M, N, K, 
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
               break;
             case 2:
               status = generalSlicedMatmul<T, 2>(kernel, i, prevKronResult,
-                                                      krons, currKronResult, M, N, K, 
-                                                      FusedKronMatCols, FusedKronMatRows,
-                                                      stream);
+                                                 krons, currKronResult, M, N, K, 
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
               break;
             case 3:
               status = generalSlicedMatmul<T, 3>(kernel, i, prevKronResult,
-                                                      krons, currKronResult, M, N, K, 
-                                                      FusedKronMatCols, FusedKronMatRows,
-                                                      stream);
+                                                 krons, currKronResult, M, N, K, 
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
               break;
             case 4:
               status = generalSlicedMatmul<T, 4>(kernel, i, prevKronResult,
-                                                      krons, currKronResult, M, N, K,
-                                                      FusedKronMatCols, FusedKronMatRows,
-                                                      stream);
+                                                 krons, currKronResult, M, N, K,
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
               break;
             case 5:
               status = generalSlicedMatmul<T, 5>(kernel, i, prevKronResult,
-                                                      krons, currKronResult, M, N, K,
-                                                      FusedKronMatCols, FusedKronMatRows,
-                                                      stream);
+                                                 krons, currKronResult, M, N, K,
+                                                 FusedKronMatCols, FusedKronMatRows,
+                                                 stream);
               break;
             default:
                 std::cout << "Invalid number of fused kernels" << std::endl;
               status = cudaErrorInvalidValue;
           }
+          CUDA_CHECK(cudaEventRecord(end, stream));
+          CUDA_CHECK(cudaEventSynchronize(end));
+          float kernelTime;
+          CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
+          std::cout << "Kernel " << kernel << " time " << kernelTime << std::endl;
+          if (kernelTime < minTime) {
+            bestKernel = kernel;
+            minTime = kernelTime;
+          }
           if (status != cudaSuccess) return status;
         }
       }
+
+      std::cout << "Best kernel " << bestKernel << " time " << minTime << std::endl;
     }
   }
 

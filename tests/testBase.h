@@ -277,11 +277,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaMalloc(&dX, sizeX));
   }
   if (verbose) printf("allocated\n");
-  if (tune) {
-    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
-                            stream[0]);
-    return true;
-  }
+  
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     if (useUVA) {
       for (int g = 0; g < gpus; g++) {
@@ -296,7 +292,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
   }
   if (verbose) printf("memcpy\n");
-
+  if (tune) {
+    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
+                            stream[0]);
+    return true;
+  }
   if (checkResults)
     CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
   if (verbose) printf("checkResults %d\n", checkResults);
