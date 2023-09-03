@@ -22,7 +22,7 @@ class KernelConfig:
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM: int, 
                cRegRows: int, cRegCols: int, FusedKernel : int, elemType : str):
     self.shape = shape
-    self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
+    self.num_threads = ((shape.k//tileP)//cRegRows) * (tileQ//cRegCols)
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
@@ -51,16 +51,16 @@ class KernelConfig:
   def isValid(self):
     return self.wsz > 0 and \
            self.shape.k > self.tileP and \
-           self.num_threads >= 32 and \
+           self.num_threads >= 32 and self.num_threads <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM
 
 def generate_kernel_decls(m, k, n, p, q):
   TilePs = [min(p, 32)]
-  TileQs = [2**i for i in range(2, max(3, int(math.log2(q))))]
-  TileKs = [2**i for i in range(2, max(3, int(math.log2(k))))]
+  TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
+  TileKs = [2**i for i in range(2, max(2, int(math.log2(k)))+1)]
   TileMs = [1, 2]
-  CRows = [2**i for i in range(0, max(1, int(math.log2(p))))]
-  CCols = [2**i for i in range(0, max(1, int(math.log2(q))))]
+  CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
+  CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
   print(TilePs)
   # print(range(2, min(3, int(math.log2(q)))), int(math.log2(q)))
   print(TileKs)

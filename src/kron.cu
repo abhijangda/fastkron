@@ -121,9 +121,6 @@ struct std::hash<KronMatmulShape> {
 //Map from Factor size and Number of factors to KernelInfos
 static std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
 
-#define N_THREADS 256
-// #define MaxFusedKerns 4
-
 #include "kernel_defs.cuh"
 
 // static_assert(sizeof(KronGemmKernels)/sizeof(KernelInfo) == NUM_TYPE_KERNELS * RowParallelismTy::Num * NUM_ROWS_MOD_TILE_IS_ZERO * NUM_KP_N_K_KERNELS * NUM_MAX_K_KERNELS*NUM_K_EQUALS_VAR*NUM_KPK_EQUALS_VAR);
@@ -271,7 +268,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
             1, 
             1
           };
-  
+
   KernelParams<T, NumFusedKerns> params (M, N, K, 
                                          KronMatRows, 
                                          KronMatCols, x, 
@@ -282,6 +279,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   //Create kernel args;
   // void *args[] = {(void*)&params};
   ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params);
+  // CUDA_CHECK(cudaDeviceSynchronize());
   status = cudaGetLastError();
   // status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
   // if (status != cudaSuccess)
@@ -412,55 +410,60 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       }
       KernelInfo bestKernel;
       float minTime = std::numeric_limits<float>::max();
+      const uint runs = 10;
       for (auto shapeAndKernels : compiledKernels) {
         if (!shapeAndKernels.first.sameKronSize(shape))
           continue;
         for (auto kernel : shapeAndKernels.second) {
           if (!kernel.canCompute(shape, NumFusedKerns)) continue;
           std::cout << kernel << std::endl;
-          std::cout << prevKronResult << std::endl;
           CUDA_CHECK(cudaStreamSynchronize(stream));
-          CUDA_CHECK(cudaEventRecord(start, stream));
-          switch(NumFusedKerns) {
-            case 1:
-              status = generalSlicedMatmul<T, 1>(kernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K, 
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
-              break;
-            case 2:
-              status = generalSlicedMatmul<T, 2>(kernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K, 
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
-              break;
-            case 3:
-              status = generalSlicedMatmul<T, 3>(kernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K, 
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
-              break;
-            case 4:
-              status = generalSlicedMatmul<T, 4>(kernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K,
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
-              break;
-            case 5:
-              status = generalSlicedMatmul<T, 5>(kernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K,
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
-              break;
-            default:
-                std::cout << "Invalid number of fused kernels" << std::endl;
-              status = cudaErrorInvalidValue;
+          for (int r = 0; r < 5 + runs; r++) {
+            if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
+            switch(NumFusedKerns) {
+              case 1:
+                status = generalSlicedMatmul<T, 1>(kernel, i, prevKronResult,
+                                                  krons, currKronResult, M, N, K, 
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 2:
+                status = generalSlicedMatmul<T, 2>(kernel, i, prevKronResult,
+                                                  krons, currKronResult, M, N, K, 
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 3:
+                status = generalSlicedMatmul<T, 3>(kernel, i, prevKronResult,
+                                                  krons, currKronResult, M, N, K, 
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 4:
+                status = generalSlicedMatmul<T, 4>(kernel, i, prevKronResult,
+                                                  krons, currKronResult, M, N, K,
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 5:
+                status = generalSlicedMatmul<T, 5>(kernel, i, prevKronResult,
+                                                  krons, currKronResult, M, N, K,
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              default:
+                  std::cout << "Invalid number of fused kernels" << std::endl;
+                status = cudaErrorInvalidValue;
+            }
+            if (status != cudaSuccess) break;
           }
           CUDA_CHECK(cudaEventRecord(end, stream));
           CUDA_CHECK(cudaEventSynchronize(end));
+          if (status != cudaSuccess)
+            std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
           float kernelTime;
           CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
-          std::cout << "Kernel " << kernel << " time " << kernelTime << std::endl;
+          std::cout << "Kernel " << kernel << " time " << (kernelTime/runs) << std::endl;
           if (kernelTime < minTime) {
             bestKernel = kernel;
             minTime = kernelTime;
@@ -469,7 +472,8 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         }
       }
 
-      std::cout << "Best kernel " << bestKernel << " time " << minTime << std::endl;
+      std::cout << "Best kernel " << bestKernel << " time " << (minTime/runs) << std::endl;
+      bestKernels.emplace(std::make_pair(shape, bestKernel));
     }
   }
 
@@ -836,8 +840,13 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     }
     compiledKernels.at(shape).push_back(info);
   }
+  
   //TODO: Add if debug
-  // std::cout << "KronMatmulShapes: " << compiledKernels.size() << std::endl;
+  uint numKernels = 0;
+  for (auto iter : compiledKernels) {
+    numKernels += iter.second.size();
+  }
+  std::cout << "Number of kernels loaded: " << numKernels << std::endl;
 }
 
 template<> void FastKronHandle::init<float>(bool useUVA) {
