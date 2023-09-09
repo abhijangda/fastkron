@@ -192,7 +192,7 @@ uint maxFusedKernels(KronMatmulShape shape) {
 
 KernelInfo selectKernel(KronMatmulShape shape, const uint NumFusedKerns) {
   //Go through all MaxColsA starting from MAX_K and select the relevant
-  KronMatmulShape maxColsAShape = maxCompiledColsA(shape, NumFusedKerns);  
+  KronMatmulShape maxColsAShape = maxCompiledColsA(shape, NumFusedKerns);
   int kEqVar = (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
@@ -301,6 +301,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* currKronResult = kronGemmResults[0];
   //TODO: Assumes all factors are of same size and square shape
   const uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M}) : 1;
+  printf("MaxFusedKerns %d %d\n", MaxFusedKerns, handle.getUseFusion());
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
   for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {

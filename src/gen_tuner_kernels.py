@@ -20,7 +20,7 @@ class KronMatMulShape:
 
 class KernelConfig:  
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM: int, 
-               cRegRows: int, cRegCols: int, FusedKernel : int, elemType : str):
+               rowModTileIsZero : int, cRegRows: int, cRegCols: int, FusedKernel : int, elemType : str):
     self.shape = shape
     self.num_threads = ((shape.k//tileP)//cRegRows) * (tileQ//cRegCols)
     self.kron_rows = kron_rows
@@ -28,6 +28,7 @@ class KernelConfig:
     self.tileQ = tileQ
     self.tileP = tileP
     self.tileM = tileM
+    self.rowModTileIsZero = rowModTileIsZero
     self.cRegRows = cRegRows
     self.cRegCols = cRegCols
     self.fused_kernels = FusedKernel
@@ -45,14 +46,16 @@ class KernelConfig:
 
   def code(self):
     return "KernelInfo{"+\
-            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, RowModTileIsZero, {self.shape.k}, {self.shape.p}, {self.shape.q}, {self.tileQ}, K_EQUALS_VAR, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}>,"+\
-            f"{self.num_threads}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, RowModTileIsZero, K_EQUALS_VAR"+ "}"
+            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.p}, {self.shape.q}, {self.tileQ}, K_EQUALS_VAR, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}>,"+\
+            f"{self.num_threads}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, {self.rowModTileIsZero}, K_EQUALS_VAR"+ "}"
 
   def isValid(self):
     return self.wsz > 0 and \
            self.shape.k > self.tileP and \
            self.num_threads >= 32 and self.num_threads <= 1024 and \
-           self.shared_mem_usage <= MAX_SHARED_MEM
+           self.shared_mem_usage <= MAX_SHARED_MEM and \
+           self.cRegRows in [1, 2, 4] and \
+           (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1))
 
 def generate_kernel_decls(m, k, n, p, q):
   TilePs = [min(p, 32)]
@@ -76,7 +79,8 @@ def generate_kernel_decls(m, k, n, p, q):
         for regRows in CRows:
           for regCols in CCols:
             for tP in TilePs:
-              configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), p, q, tQ, tP, tM, regRows, regCols, 1, "Float")]
+              for rowModTileIsZero in [0, 1]:
+                configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), p, q, tQ, tP, tM, rowModTileIsZero, regRows, regCols, 1, "Float")]
 
   print("Generated ", len(configs), " configs")
   
@@ -91,7 +95,7 @@ def generate_kernel_decls(m, k, n, p, q):
   contents += f"#define MIN_K {shape.k}\n"
   contents += f"#define MIN_KP_K {shape.p}\n"
   contents += f"#define MAX_KP_K {shape.p}\n"
-  contents += "#define KERNEL_DECL(T, VecT, ElemType, RowModTileIsZero, K_EQUALS_VAR) \\\n"
+  contents += "#define KERNEL_DECL(T, VecT, ElemType, K_EQUALS_VAR) \\\n"
   for config in configs:
     if config.isValid():
       contents += config.code() + ",\\\n"
@@ -103,11 +107,12 @@ def generate_kernel_decls(m, k, n, p, q):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-m')
-  parser.add_argument('-k')
-  parser.add_argument('-n')
-  parser.add_argument('-p')
-  parser.add_argument('-q')
+  parser.add_argument('-m', required=True, type=int)
+  parser.add_argument('-k', required=True, type=int)
+  parser.add_argument('-n', required=True, type=int)
+  parser.add_argument('-p', required=True, type=int)
+  parser.add_argument('-q', required=True, type=int)
 
   args = parser.parse_args()
-  generate_kernel_decls(int(args.m), int(args.k), int(args.n), int(args.p), int(args.q))
+
+  generate_kernel_decls(args.m, args.k, args.n, args.p, args.q)

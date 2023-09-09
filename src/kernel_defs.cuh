@@ -3,10 +3,8 @@
 #include "kernel.cuh"
 
 #define TYPE_KERNELS(T, VecT, ElemType) \
-  KERNEL_DECL(T, VecT, ElemType, 0, 0),\
-  KERNEL_DECL(T, VecT, ElemType, 1, 0),\
-  KERNEL_DECL(T, VecT, ElemType, 0, 1),\
-  KERNEL_DECL(T, VecT, ElemType, 1, 1),
+  KERNEL_DECL(T, VecT, ElemType, 0),\
+  KERNEL_DECL(T, VecT, ElemType, 1),
 
 //Three type kernels float/float4, int/int4, and double/double4
 #define NUM_TYPE_KERNELS 2
