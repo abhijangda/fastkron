@@ -42,68 +42,6 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
-enum ElementType {
-  Float,
-  Double,
-  Int,
-  Long
-};
-
-//TODO: Change this to SlicedMatMulShape
-struct KronMatmulShape {
-  uint KronCols;
-  uint KronRows;
-  uint ColsA;
-  uint RowsA;
-
-  bool operator==(const KronMatmulShape& other) const {
-    return KronCols == other.KronCols && KronRows == other.KronRows &&
-    ColsA == other.ColsA;
-  }
-
-  bool sameKronSize(const KronMatmulShape& other) const {
-    return KronCols == other.KronCols && KronRows == other.KronRows;
-  }
-  // bool operator>(const KronMatmulShape& other) const {
-  //   return KronCols > other.KronCols && KronRows > other.KronRows && ColsA > other.ColsA;
-  // }
-
-  friend std::ostream& operator<<(std::ostream &out, const KronMatmulShape &shape) {
-    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA;
-    return out;
-  }
-};
-
-struct KernelInfo {
-  void* kernel;
-  uint NumThreads;
-  uint KronCols;
-  uint KronRows;
-  uint TileKronCols;
-  uint TileRowsA;
-  uint MaxColsA;
-  uint CRegRows;
-  uint CRegCols;
-  uint NumFusedKerns;
-  ElementType elemType;
-  bool RowModTileIsZero;
-  bool KEqVar;
-  //TODO: Add SharedTileKronRows??
-
-  friend std::ostream& operator<<(std::ostream &out, const KernelInfo &shape) {
-    out << shape.TileRowsA << "x" << shape.MaxColsA << "_" 
-       << shape.KronRows << "x" << shape.KronCols << "_" << shape.TileKronCols << "_"
-       << shape.CRegRows << "x" << shape.CRegCols << "_"
-       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.KEqVar << "_" << shape.RowModTileIsZero;
-      
-    return out;
-  }
-
-  bool canCompute(KronMatmulShape shape, uint NumFusedKerns) {
-    return KEqVar == (shape.ColsA == MaxColsA) && RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) && this->NumFusedKerns == NumFusedKerns;
-  }
-};
-
 enum RowParallelismTy {
   Low = 0,
   Medium,
@@ -316,8 +254,15 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
     }
     cudaError_t status;
-    KernelInfo selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], K, M}, 
-                                             NumFusedKerns);
+
+    KernelInfo selectedKernel;
+    if (handle.tunedKernel.isValid()) {
+      selectedKernel = handle.tunedKernel;
+    } else {
+      selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], K, M}, 
+        NumFusedKerns);
+    }
+    
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, i, prevKronResult,
@@ -475,6 +420,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
 
       std::cout << "Best kernel " << bestKernel << " time " << (minTime/runs) << std::endl;
       bestKernels.emplace(std::make_pair(shape, bestKernel));
+      handle.tunedKernel = bestKernel;
     }
   }
 
@@ -485,8 +431,8 @@ cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float*
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                           cudaStream_t stream) {
   return autotune<float>(handle, NumKronMats, x, kronMats,
-                  M, N, K, KronMatCols, KronMatRows,
-                  stream);
+                         M, N, K, KronMatCols, KronMatRows,
+                         stream);
 }
 
 cudaError_t kronDGEMMTune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 

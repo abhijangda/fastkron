@@ -295,7 +295,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (tune) {
     kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
                             stream[0]);
-    return true;
   }
   if (checkResults)
     CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
