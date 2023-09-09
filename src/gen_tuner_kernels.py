@@ -57,30 +57,32 @@ class KernelConfig:
            self.cRegRows in [1, 2, 4] and \
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1))
 
-def generate_kernel_decls(m, k, n, p, q):
-  TilePs = [min(p, 32)]
-  TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
-  TileKs = [2**i for i in range(2, max(2, int(math.log2(k)))+1)]
-  TileMs = [1, 2]
-  CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
-  CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
-  print(TilePs)
-  # print(range(2, min(3, int(math.log2(q)))), int(math.log2(q)))
-  print(TileKs)
-  print(TileMs)
-  print(CRows)
-  print(CCols)
-
+def generate_kernel_decls(ms, ks, ns, ps, qs):
   configs = []
-  shape = KronMatMulShape(m, k, n, p, q)
-  for tM in TileMs:
-    for tQ in TileQs:
-      for tK in TileKs:
-        for regRows in CRows:
-          for regCols in CCols:
-            for tP in TilePs:
-              for rowModTileIsZero in [0, 1]:
-                configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), p, q, tQ, tP, tM, rowModTileIsZero, regRows, regCols, 1, "Float")]
+
+  for m, k, n, p, q in zip(ms, ks, ns, ps, qs): 
+    TilePs = [min(p, 32)]
+    TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
+    TileKs = [2**i for i in range(2, max(2, int(math.log2(k)))+1)]
+    TileMs = [1, 2]
+    CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
+    CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
+    print(TilePs)
+    # print(range(2, min(3, int(math.log2(q)))), int(math.log2(q)))
+    print(TileKs)
+    print(TileMs)
+    print(CRows)
+    print(CCols)
+
+    shape = KronMatMulShape(m, k, n, p, q)
+    for tM in TileMs:
+      for tQ in TileQs:
+        for tK in TileKs:
+          for regRows in CRows:
+            for regCols in CCols:
+              for tP in TilePs:
+                for rowModTileIsZero in [0, 1]:
+                  configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), p, q, tQ, tP, tM, rowModTileIsZero, regRows, regCols, 1, "Float")]
 
   print("Generated ", len(configs), " configs")
   
@@ -107,12 +109,30 @@ def generate_kernel_decls(m, k, n, p, q):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-m', required=True, type=int)
-  parser.add_argument('-k', required=True, type=int)
-  parser.add_argument('-n', required=True, type=int)
-  parser.add_argument('-p', required=True, type=int)
-  parser.add_argument('-q', required=True, type=int)
-
+  parser.add_argument('-m', required=True, nargs="+", type=int)
+  parser.add_argument('-k', required=True, nargs="+", type=int)
+  parser.add_argument('-n', required=True, nargs="+", type=int)
+  parser.add_argument('-p', required=True, nargs="+", type=int)
+  parser.add_argument('-q', required=True, nargs="+", type=int)
+  
   args = parser.parse_args()
+  ms = len(args.m)
+  try:
+    assert ms == len(args.k)
+    assert ms == len(args.n)
+    assert ms == len(args.p)
+    assert ms == len(args.q)
+  except:
+    print(f"Invalid # of m: {ms}, n: {len(args.n)}, p: {len(args.p)}, q: {len(args.q)}")
+    sys.exit(0)
+
+  for (m, k, n, p, q) in zip(args.m, args.k, args.n, args.p, args.q):
+    try:
+      assert m > 1 and k > 1 and p > 1 and n > 1 and q > 1
+      assert k == p**n
+      assert q > 1
+    except:
+      print(f"Invalid parameter m: {m}, k: {k}, n: {n}, p: {p}, q: {q}")
+      sys.exit(0)
 
   generate_kernel_decls(args.m, args.k, args.n, args.p, args.q)
