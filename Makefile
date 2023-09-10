@@ -13,16 +13,19 @@ kron: tests/main.cu libKron.so tests/testBase.h
 	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@
 
 #Make tests
-single-gpu-no-fusion-tests: tests/single-gpu-no-fusion-tests.cu libKron.so tests/testBase.h
-	$(NVCC) $< $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+gen-kernels: src/gen_kernels.py
+	python3 src/gen_kernels.py
+
+single-gpu-no-fusion-tests: gen-kernels tests/single-gpu-no-fusion-tests.cu libKron.so tests/testBase.h
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
 run-single-gpu-no-fusion-tests: single-gpu-no-fusion-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-no-fusion-tests
 
-single-gpu-tests: tests/single-gpu-fusion-tests.cu libKron.so tests/testBase.h
-	$(NVCC) $< $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+single-gpu-tests: gen-kernels tests/single-gpu-fusion-tests.cu libKron.so tests/testBase.h 
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
-run-tuner-test-no-fusion: single-gpu-tests
+run-single-gpu-tests: single-gpu-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-tests
 
 #Tests for the autotuner

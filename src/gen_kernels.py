@@ -96,7 +96,7 @@ def isValid(colsA, kronRows, config):
         return False
     return math.log(colsA, kronRows).is_integer()
 
-with open("kernel_decl.inc", "w") as f:
+with open(kernel_filename, "w") as f:
     f.writelines([f"#define MAX_K {MaxColsA}\n"])
     f.writelines([f"#define MIN_K {MinColsA}\n"])
     
