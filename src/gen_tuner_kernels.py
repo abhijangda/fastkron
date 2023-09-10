@@ -1,5 +1,6 @@
 import argparse
 import math 
+import sys
 
 kernel_filename = "kernel_decl.inc"
 

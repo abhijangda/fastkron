@@ -332,7 +332,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   cudaEvent_t start[gpus];
   cudaEvent_t end[gpus];
   float elapsedTime = 0;
-  
+
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
     CUDACHECK(cudaEventCreate(&start[g]));
@@ -372,7 +372,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaEventRecord(end[g], stream[g]));
     CUDACHECK(cudaEventSynchronize(end[g]));
     CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
-    printf("elapsedtime %f milliseconds\n", elapsedTime/numIters);
+    double perCallTime = elapsedTime/numIters;
+    size_t operations = 2 * ((long)NUM_KP_MATS) * ((long)M) * ((long)K) * KP_MAT_N[0];
+    double flops = operations/perCallTime;
+    double gFLOPS = flops/1e9;
+    printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
   }
 
   //Free GPU Memory
