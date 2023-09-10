@@ -73,12 +73,6 @@ def generate_kernel_decls(ms, ks, ns, ps, qs):
     TileMs = [1, 2]
     CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
     CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
-    print(TilePs)
-    # print(range(2, min(3, int(math.log2(q)))), int(math.log2(q)))
-    print(TileKs)
-    print(TileMs)
-    print(CRows)
-    print(CCols)
 
     shape = KronMatMulShape(m, k, n, p, q)
     for tM in TileMs:
