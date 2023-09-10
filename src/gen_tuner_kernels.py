@@ -1,8 +1,10 @@
 import argparse
 import math 
 import sys
-
-kernel_filename = "kernel_decl.inc"
+import os
+print(os.getcwd())
+assert 'src' in os.listdir('.')
+kernel_filename = "src/kernel_decl.inc"
 
 #Device limits
 MAX_SHARED_MEM = 48 * 1024
@@ -58,6 +60,9 @@ class KernelConfig:
            self.cRegRows in [1, 2, 4] and \
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1))
 
+  def __hash__(self):
+    return hash(repr(self))
+
 def generate_kernel_decls(ms, ks, ns, ps, qs):
   configs = []
 
@@ -92,19 +97,23 @@ def generate_kernel_decls(ms, ks, ns, ps, qs):
   for config in configs:
     if config.isValid():
       validConfigs += [config]
-  print("Generating code for ", len(validConfigs), " valid configs")
+  
+  print("Valid configs", len(validConfigs))
+
+  uniqueConfigs = list(set(validConfigs))
+
+  print("Unique configs", len(uniqueConfigs))
 
   contents = f"#define MAX_K {shape.k}\n"
   contents += f"#define MIN_K {shape.k}\n"
   contents += f"#define MIN_KP_K {shape.p}\n"
   contents += f"#define MAX_KP_K {shape.p}\n"
   contents += "#define KERNEL_DECL(T, VecT, ElemType, K_EQUALS_VAR) \\\n"
-  for config in configs:
-    if config.isValid():
-      contents += config.code() + ",\\\n"
+  for config in uniqueConfigs:
+    contents += config.code() + ",\\\n"
   contents = contents[:contents.rfind(",")]
   contents += "\n"
-  with open("kernel_decl.inc", "w") as f:
+  with open(kernel_filename, "w") as f:
     #Remove last comma and backslash
     f.write(contents)
 
@@ -129,7 +138,7 @@ if __name__ == "__main__":
 
   for (m, k, n, p, q) in zip(args.m, args.k, args.n, args.p, args.q):
     try:
-      assert m > 1 and k > 1 and p > 1 and n > 1 and q > 1
+      assert m >= 1 and k >= 1 and p >= 1 and n >= 1 and q >= 1
       assert k == p**n
       assert q > 1
     except:

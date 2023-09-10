@@ -1,6 +1,9 @@
 import os
 import math
 
+assert 'src' in os.listdir('.')
+kernel_filename = "src/kernel_decl.inc"
+
 def pow_range(start, end):
     l = []
     while start <= end:
