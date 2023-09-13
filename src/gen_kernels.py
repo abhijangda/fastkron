@@ -124,7 +124,7 @@ with open(kernel_filename, "w") as f:
     #         f.write(", ")
     # f.write("};\n\n")
     
-    f.write("#define KERNEL_DECL(T, VecT, ElemType, K_EQUALS_VAR) \\\n")
+    f.write("#define KERNEL_DECL(T, VecT, ElemType) \\\n")
     contents = ""
     for colsA in AllColsA:
         for kronRows in AllKronRows:
@@ -145,10 +145,11 @@ with open(kernel_filename, "w") as f:
                 
                 for numFusedKerns in range(1, MaxFusedKerns+1):
                     for RowModTileIsZero in [0, 1]:
-                        contents += "KernelInfo{"+ \
-                            f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, {RowModTileIsZero}, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, K_EQUALS_VAR, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
-                            f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, {RowModTileIsZero}, K_EQUALS_VAR"+ "}"
-                        contents += ",\\\n"
+                        for kEqVar in [0, 1]:
+                            contents += "KernelInfo{"+ \
+                                f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, {RowModTileIsZero}, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, {kEqVar}, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
+                                f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, {RowModTileIsZero}, {kEqVar}"+ "}"
+                            contents += ",\\\n"
             except:
                 pass
     #Remove last comma and backslash

@@ -17,11 +17,12 @@ struct KronMatmulShape {
   uint KronRows;
   uint ColsA;
   uint RowsA;
-  uint NumFusedKernels;
+  uint NumFusedKerns;
 
   bool operator==(const KronMatmulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows &&
-    ColsA == other.ColsA && NumFusedKernels == other.NumFusedKernels;
+    ColsA == other.ColsA && 
+    (other.NumFusedKerns <= 0 || NumFusedKerns == other.NumFusedKerns);
   }
 
   bool sameKronSize(const KronMatmulShape& other) const {
@@ -32,7 +33,7 @@ struct KronMatmulShape {
   // }
 
   friend std::ostream& operator<<(std::ostream &out, const KronMatmulShape &shape) {
-    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA << "**" << shape.NumFusedKernels;
+    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA << "**" << shape.NumFusedKerns;
     return out;
   }
 };

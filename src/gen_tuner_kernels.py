@@ -22,8 +22,10 @@ class KronMatMulShape:
     self.q = q
 
 class KernelConfig:  
-  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM: int, 
-               rowModTileIsZero : int, cRegRows: int, cRegCols: int, FusedKernel : int, elemType : str):
+  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
+               tileQ : int, tileP : int, tileM: int, 
+               rowModTileIsZero : int, cRegRows: int, cRegCols: int, kEqVar: int,
+               FusedKernel : int, elemType : str):
     self.shape = shape
     self.num_threads = ((shape.k//tileP)//cRegRows) * (tileQ//cRegCols)
     self.kron_rows = kron_rows
@@ -34,6 +36,7 @@ class KernelConfig:
     self.rowModTileIsZero = rowModTileIsZero
     self.cRegRows = cRegRows
     self.cRegCols = cRegCols
+    self.kEqVar = kEqVar
     self.fused_kernels = FusedKernel
     self.elemType = elemType
 
@@ -49,8 +52,8 @@ class KernelConfig:
 
   def code(self):
     return "KernelInfo{"+\
-            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.p}, {self.shape.q}, {self.tileQ}, K_EQUALS_VAR, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}>,"+\
-            f"{self.num_threads}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, {self.rowModTileIsZero}, K_EQUALS_VAR"+ "}"
+            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}>,"+\
+            f"{self.num_threads}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, {self.rowModTileIsZero}, {self.kEqVar}"+ "}"
 
   def isValid(self):
     return self.wsz > 0 and \
@@ -59,7 +62,8 @@ class KernelConfig:
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1)) and \
-           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ))
+           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
+           self.kEqVar in [0, 1]
 
   def __hash__(self):
     return hash(repr(self))
@@ -83,11 +87,12 @@ def generate_kernel_decls(ms, ks, ns, ps, qs):
             for regCols in CCols:
               for tP in TilePs:
                 for rowModTileIsZero in [0, 1]:
-                  for numFusedKerns in range(1, int(math.log(tK, tP))+1):
-                    configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                             p, q, tQ, tP, tM, 
-                                rowModTileIsZero, regRows, regCols, numFusedKerns,
-                                "Float")]
+                  for kEqVar in [0]:
+                    for numFusedKerns in range(1, int(math.log(tK, tP))+1):
+                      configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
+                                                               p, q, tQ, tP, tM, 
+                                  rowModTileIsZero, regRows, regCols, kEqVar,
+                                  numFusedKerns, "Float")]
 
   print("Generated ", len(configs), " configs")
   
@@ -107,7 +112,7 @@ def generate_kernel_decls(ms, ks, ns, ps, qs):
   contents += f"#define MIN_K {shape.k}\n"
   contents += f"#define MIN_KP_K {shape.p}\n"
   contents += f"#define MAX_KP_K {shape.p}\n"
-  contents += "#define KERNEL_DECL(T, VecT, ElemType, K_EQUALS_VAR) \\\n"
+  contents += "#define KERNEL_DECL(T, VecT, ElemType) \\\n"
   for config in uniqueConfigs:
     contents += config.code() + ",\\\n"
   contents = contents[:contents.rfind(",")]

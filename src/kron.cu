@@ -92,45 +92,52 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
   return true;
 }
 
-KronMatmulShape maxCompiledColsA(KronMatmulShape shape, uint NumFusedKerns = -1) {
+KronMatmulShape maxCompiledColsA(KronMatmulShape shape) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
     shape.ColsA /= 2;
     if (shape.ColsA == 1) {
      break;
     }
   }
-  if (NumFusedKerns != -1 && shape.ColsA > 1) {
-    while (compiledKernels.find(shape) != compiledKernels.end()) {
-      bool found = false;
-      for (auto info : compiledKernels.find(shape)->second) {
-        if (info.NumFusedKerns == NumFusedKerns) {
-          found = true;
-          break;
-        }
-      }
-      if (found) break;
-      shape.ColsA /= 2;
-    }
-  }
+  // if (NumFusedKerns != -1 && shape.ColsA > 1) {
+  //   while (compiledKernels.find(shape) != compiledKernels.end()) {
+  //     bool found = false;
+  //     for (auto info : compiledKernels.find(shape)->second) {
+  //       if (info.NumFusedKerns == NumFusedKerns) {
+  //         found = true;
+  //         break;
+  //       }
+  //     }
+  //     if (found) break;
+  //     shape.ColsA /= 2;
+  //   }
+  // }
 
-  if (shape.ColsA == 1)
-    std::cout << "Error: Cannot find compiled kernel\n";
+  // if (shape.ColsA == 1)
+  //   std::cout << "Error: Cannot find compiled kernel\n";
   return shape;
 }
 
 uint maxFusedKernels(KronMatmulShape shape) {
-  uint max_k = maxCompiledColsA(shape).ColsA;
-  auto iter = compiledKernels.find(KronMatmulShape{shape.KronCols, shape.KronRows, max_k});
   uint numFusedKernels = 1;
-  for (auto info : iter->second) {
-    numFusedKernels = std::max(numFusedKernels, info.NumFusedKerns);
+  //Go through fused kernels starting from 1 
+  //find if the shape exists for the fused kernel
+  //if it exist then go to next fused kernel
+  while (true) {
+    shape.NumFusedKerns = numFusedKernels;
+    auto shapeFound = maxCompiledColsA(shape);
+    if (shapeFound.ColsA == 1) {
+      break;
+    }
+    numFusedKernels++;
   }
+
   return numFusedKernels;
 }
 
-KernelInfo selectKernel(KronMatmulShape shape, const uint NumFusedKerns) {
+KernelInfo selectKernel(KronMatmulShape shape) {
   //Go through all MaxColsA starting from MAX_K and select the relevant
-  KronMatmulShape maxColsAShape = maxCompiledColsA(shape, NumFusedKerns);
+  KronMatmulShape maxColsAShape = maxCompiledColsA(shape);
   int kEqVar = (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
@@ -142,7 +149,7 @@ KernelInfo selectKernel(KronMatmulShape shape, const uint NumFusedKerns) {
   for (auto info : kernelInfos) {
     //TODO: need to check for type
     //TODO: make use of KernelInfo.canCompute
-    if (info.KEqVar == kEqVar && info.NumFusedKerns == NumFusedKerns) {
+    if (info.KEqVar == kEqVar) {
       uint tileRowA = info.TileRowsA;
       bool row_mod_tile_zero = (shape.RowsA % tileRowA) == 0;    
       if (info.RowModTileIsZero == row_mod_tile_zero) {
@@ -238,7 +245,8 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
   //TODO: Assumes all factors are of same size and square shape
-  const uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M}) : 1;
+  uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
+  MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
   printf("MaxFusedKerns %d %d\n", MaxFusedKerns, handle.getUseFusion());
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
@@ -259,8 +267,8 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     if (handle.tunedKernel.isValid()) {
       selectedKernel = handle.tunedKernel;
     } else {
-      selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], K, M}, 
-        NumFusedKerns);
+      selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], K, M, NumFusedKerns});
+      std::cout << "kernel selected " << selectedKernel << std::endl;
     }
     
     switch(NumFusedKerns) {
@@ -497,7 +505,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       handle.tunedKernel = bestKernel;
     }
   }}
-
+  std::cout << "Finding min execution time of the series" << std::endl;
   TunedKernelsSeries tunedKernels;
   float minTime = minExecTimeOfSeries(M, N, K, NumKronMats,
                                       KronMatCols, KronMatRows, 0,
@@ -866,7 +874,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
     KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns};
     auto iter = compiledKernels.find(shape);
     if (iter == compiledKernels.end()) {
-      std::cout << "791 " << shape << std::endl;
       compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
     }
     compiledKernels.at(shape).push_back(info);
@@ -874,8 +881,11 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
   
   //TODO: Add if debug
   uint numKernels = 0;
+  std::cout << "Loading compiled kernels" << std::endl;
   for (auto iter : compiledKernels) {
-    std::cout << "800 " << iter.first << " -- " << iter.second.size() << std::endl;
+    for (auto kernel : iter.second) {
+      std::cout << kernel << std::endl;
+    }
     numKernels += iter.second.size();
   }
   std::cout << "Number of kernels loaded: " << numKernels << std::endl;

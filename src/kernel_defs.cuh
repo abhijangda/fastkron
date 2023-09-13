@@ -5,8 +5,8 @@
 //TODO: No need to generate kernels for both values of K_EQUALS_VAR
 //when we know in autotuning that K will never be equal to MaxColsA
 #define TYPE_KERNELS(T, VecT, ElemType) \
-  KERNEL_DECL(T, VecT, ElemType, 0),\
-  KERNEL_DECL(T, VecT, ElemType, 1),
+  KERNEL_DECL(T, VecT, ElemType),\
+  KERNEL_DECL(T, VecT, ElemType),
 
 //Three type kernels float/float4, int/int4, and double/double4
 #define NUM_TYPE_KERNELS 2
