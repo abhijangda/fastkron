@@ -58,7 +58,8 @@ class KernelConfig:
            self.num_threads >= 32 and self.num_threads <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
-           (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1))
+           (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1)) and \
+           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ))
 
   def __hash__(self):
     return hash(repr(self))
@@ -82,7 +83,11 @@ def generate_kernel_decls(ms, ks, ns, ps, qs):
             for regCols in CCols:
               for tP in TilePs:
                 for rowModTileIsZero in [0, 1]:
-                  configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), p, q, tQ, tP, tM, rowModTileIsZero, regRows, regCols, 1, "Float")]
+                  for numFusedKerns in range(1, int(math.log(tK, tP))+1):
+                    configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
+                                                             p, q, tQ, tP, tM, 
+                                rowModTileIsZero, regRows, regCols, numFusedKerns,
+                                "Float")]
 
   print("Generated ", len(configs), " configs")
   
@@ -127,7 +132,7 @@ if __name__ == "__main__":
     assert ms == len(args.p)
     assert ms == len(args.q)
   except:
-    print(f"Invalid # of m: {ms}, n: {len(args.n)}, p: {len(args.p)}, q: {len(args.q)}")
+    print(f"Invalid no. of ms: {ms}, ns: {len(args.n)}, ps: {len(args.p)}, qs: {len(args.q)}")
     sys.exit(0)
 
   for (m, k, n, p, q) in zip(args.m, args.k, args.n, args.p, args.q):

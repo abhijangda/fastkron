@@ -10,15 +10,18 @@ enum ElementType {
 
 
 //TODO: Change this to SlicedMatMulShape
+//TODO: Add NumFusedKernels also as a parameter to KronmatmulShape for compiledKernels map
+//TODO: Add array of NumFusedKernels of KronCols and KronRows
 struct KronMatmulShape {
   uint KronCols;
   uint KronRows;
   uint ColsA;
   uint RowsA;
+  uint NumFusedKernels;
 
   bool operator==(const KronMatmulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows &&
-    ColsA == other.ColsA;
+    ColsA == other.ColsA && NumFusedKernels == other.NumFusedKernels;
   }
 
   bool sameKronSize(const KronMatmulShape& other) const {
@@ -29,7 +32,7 @@ struct KronMatmulShape {
   // }
 
   friend std::ostream& operator<<(std::ostream &out, const KronMatmulShape &shape) {
-    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA;
+    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA << "**" << shape.NumFusedKernels;
     return out;
   }
 };
