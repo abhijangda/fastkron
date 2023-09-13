@@ -317,14 +317,43 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   return cudaSuccess;
 }
 
+// template<typename T>
+// struct LinkedListNode {
+//   T data;
+//   std::vector<struct TreeNode> children;
+
+//   TreeNode(T& data_) : data(data_) {}
+//   void addChild(struct TreeNode child) {
+//     children.push_back(child);
+//   }
+// }
+
+struct TunedKernelFromStart {
+  KernelInfo kernel;
+  uint start, end;
+  float time;
+
+  TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, float time_):
+    kernel(kernel_), start(start_), end(end_), time(time_) {}
+  TunedKernelFromStart() {}
+  friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
+    out << "[" << k.start << ", " << k.end << "]" << k.kernel << " runs for " << k.time << " ms";
+    return out;
+  }
+};
+
+typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
+
 float minExecTimeOfSeries(uint M, uint N, uint K, const uint NumKronMats, 
                           uint KronMatCols[], uint KronMatRows[],
                           uint startKron,
+                          TunedKernelsSeries& tunedKernels,
                           std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels) {
   if (startKron >= NumKronMats) return 0;
 
   float minTime = std::numeric_limits<float>::max();
-
+  TunedKernelsSeries minEpilogueKernels;
+  TunedKernelFromStart minPrologueKernel;
   for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
     const uint kronMat = endKron;
     //Include KronMats [startKron, ..., endKron]
@@ -340,15 +369,21 @@ float minExecTimeOfSeries(uint M, uint N, uint K, const uint NumKronMats,
                                             K, M, NumFusedKerns};
     if (bestKernels.find(shape) == bestKernels.end()) continue;
     auto iter = bestKernels.find(shape);
+    TunedKernelsSeries epilogueKernels;
     float kernelTime = iter->second.second;
-    float prologueTime = minExecTimeOfSeries(M, N, K, NumKronMats, KronMatCols, KronMatRows, 
-                                             endKron + 1, bestKernels);
-    if (minTime > kernelTime + prologueTime) {
-      minTime = kernelTime + prologueTime;
+    float epilogueTime = minExecTimeOfSeries(M, N, K, NumKronMats, KronMatCols, KronMatRows, 
+                                             endKron + 1, epilogueKernels, bestKernels);
+    if (minTime > kernelTime + epilogueTime) {
+      minTime = kernelTime + epilogueTime;
+      minEpilogueKernels = epilogueKernels;
+      minPrologueKernel = TunedKernelFromStart(iter->second.first, startKron, endKron, kernelTime);
     }
   }
 
-  assert (minTime < std::numeric_limits<float>::max());
+  tunedKernels = minEpilogueKernels;
+  tunedKernels.push_back(minPrologueKernel);
+
+  assert(minTime < std::numeric_limits<float>::max());
   return minTime;
 }
 
@@ -401,7 +436,6 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         continue;
       for (auto kernel : shapeAndKernels.second) {
         if (!kernel.canCompute(shape, NumFusedKerns)) continue;
-        std::cout << kernel << std::endl;
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
@@ -448,6 +482,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
           std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
         float kernelTime;
         CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
+        std::cout << kernel << " runs in " << kernelTime << std::endl;
         if (kernelTime < minTime) {
           bestKernel = kernel;
           minTime = kernelTime;
@@ -457,16 +492,20 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     }
 
     if (minTime < std::numeric_limits<float>::max()) {
-      std::cout << "Best kernel for " << shape << ": " << bestKernel << "runs in " << (minTime/runs) << " secs " << std::endl;
+      std::cout << "Best kernel for " << shape << ": " << bestKernel << "runs in " << (minTime/runs) << " ms" << std::endl;
       bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
       handle.tunedKernel = bestKernel;
     }
   }}
 
+  TunedKernelsSeries tunedKernels;
   float minTime = minExecTimeOfSeries(M, N, K, NumKronMats,
                                       KronMatCols, KronMatRows, 0,
-                                      bestKernels);
-  std::cout << minTime << std::endl;
+                                      tunedKernels, bestKernels);
+  std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
+  for (auto iter = tunedKernels.rbegin(); iter != tunedKernels.rend(); iter++) {
+    std::cout << "  " << (*iter) << std::endl;
+  }
 
   return cudaSuccess;
 }
