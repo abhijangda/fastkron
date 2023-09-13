@@ -29,17 +29,17 @@ run-single-gpu-fusion-tests: single-gpu-fusion-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-fusion-tests
 
 #Tests for the autotuner
-gen-no-fusion-tuner-kernels: src/gen_tuner_kernels.py
-	python3 src/gen_tuner_kernels.py -m 1 2 1 -k 65536 256 32768 -n 4 2 3 -p 16 16 32 -q 16 16 32
+gen-tuner-kernels: src/gen_tuner_kernels.py
+	python3 src/gen_tuner_kernels.py -m 1 2 1 -k 65536 32768 16384 -n 4 3 2 -p 16 32 128 -q 16 32 128
 
-single-gpu-tuner-tests-no-fusion: gen-no-fusion-tuner-kernels tests/single-gpu-tuner-tests-no-fusion.cu libKron.so tests/testBase.h
+single-gpu-tuner-tests: gen-tuner-kernels tests/single-gpu-tuner-tests.cu libKron.so tests/testBase.h
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
-run-tuner-test-no-fusion: single-gpu-tuner-tests-no-fusion
-	LD_LIBRARY_PATH=./: ./single-gpu-tuner-tests-no-fusion
+run-single-gpu-tuner-tests: single-gpu-tuner-tests
+	LD_LIBRARY_PATH=./: ./single-gpu-tuner-tests
 
 #Run all tests
-run-tests: single-gpu-tests single-gpu-no-fusion-tests run-tuner-test-no-fusion
+run-tests: single-gpu-tests single-gpu-no-fusion-tests run-tuner-test
 
 clean:
 	rm -rf kron libKron.so

@@ -27,7 +27,7 @@ class KernelConfig:
                rowModTileIsZero : int, cRegRows: int, cRegCols: int, kEqVar: int,
                FusedKernel : int, elemType : str):
     self.shape = shape
-    self.num_threads = ((shape.k//tileP)//cRegRows) * (tileQ//cRegCols)
+    self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
