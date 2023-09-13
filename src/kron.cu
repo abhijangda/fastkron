@@ -119,12 +119,12 @@ KronMatmulShape maxCompiledColsA(KronMatmulShape shape) {
 }
 
 uint maxFusedKernels(KronMatmulShape shape) {
-  uint numFusedKernels = 1;
+  uint numFusedKernels = 0;
   //Go through fused kernels starting from 1 
   //find if the shape exists for the fused kernel
   //if it exist then go to next fused kernel
   while (true) {
-    shape.NumFusedKerns = numFusedKernels;
+    shape.NumFusedKerns = numFusedKernels + 1;
     auto shapeFound = maxCompiledColsA(shape);
     if (shapeFound.ColsA == 1) {
       break;
@@ -247,7 +247,6 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   //TODO: Assumes all factors are of same size and square shape
   uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
   MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
-  printf("MaxFusedKerns %d %d\n", MaxFusedKerns, handle.getUseFusion());
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
   for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
@@ -268,8 +267,9 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       selectedKernel = handle.tunedKernel;
     } else {
       selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], K, M, NumFusedKerns});
-      std::cout << "kernel selected " << selectedKernel << std::endl;
     }
+
+    std::cout << "kernel selected " << selectedKernel << std::endl;
     
     switch(NumFusedKerns) {
       case 1:
@@ -880,15 +880,17 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
   }
   
   //TODO: Add if debug
-  uint numKernels = 0;
-  std::cout << "Loading compiled kernels" << std::endl;
-  for (auto iter : compiledKernels) {
-    for (auto kernel : iter.second) {
-      std::cout << kernel << std::endl;
+  if (false) {
+    uint numKernels = 0;
+    std::cout << "Loading compiled kernels" << std::endl;
+    for (auto iter : compiledKernels) {
+      for (auto kernel : iter.second) {
+        std::cout << kernel << std::endl;
+      }
+      numKernels += iter.second.size();
     }
-    numKernels += iter.second.size();
+    std::cout << "Number of kernels loaded: " << numKernels << std::endl;
   }
-  std::cout << "Number of kernels loaded: " << numKernels << std::endl;
 }
 
 template<> void FastKronHandle::init<float>(bool useUVA) {

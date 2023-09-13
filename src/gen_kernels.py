@@ -144,6 +144,8 @@ with open(kernel_filename, "w") as f:
                     MaxFusedKerns = 1
                 
                 for numFusedKerns in range(1, MaxFusedKerns+1):
+                    if kronRows**numFusedKerns > colsA:
+                        continue
                     for RowModTileIsZero in [0, 1]:
                         for kEqVar in [0, 1]:
                             contents += "KernelInfo{"+ \

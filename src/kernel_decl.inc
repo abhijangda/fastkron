@@ -231,10 +231,6 @@ KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 0, 8192
 KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 0, 8192, 32, 32, 32, 1, 1, 1, 16, 32, 2>,512, 32, 32, 32, 1, 8192, 1, 16, 2, ElemType, 0, 1},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 1, 8192, 32, 32, 32, 0, 1, 1, 16, 32, 2>,512, 32, 32, 32, 1, 8192, 1, 16, 2, ElemType, 1, 0},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 1, 8192, 32, 32, 32, 1, 1, 1, 16, 32, 2>,512, 32, 32, 32, 1, 8192, 1, 16, 2, ElemType, 1, 1},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 0, 8192, 32, 32, 32, 0, 1, 1, 16, 32, 3>,512, 32, 32, 32, 1, 8192, 1, 16, 3, ElemType, 0, 0},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 0, 8192, 32, 32, 32, 1, 1, 1, 16, 32, 3>,512, 32, 32, 32, 1, 8192, 1, 16, 3, ElemType, 0, 1},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 1, 8192, 32, 32, 32, 0, 1, 1, 16, 32, 3>,512, 32, 32, 32, 1, 8192, 1, 16, 3, ElemType, 1, 0},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 512, RowParallelismTy::Low, 1, 1, 8192, 32, 32, 32, 1, 1, 1, 16, 32, 3>,512, 32, 32, 32, 1, 8192, 1, 16, 3, ElemType, 1, 1},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, 0, 8192, 64, 64, 64, 0, 1, 4, 16, 32, 1>,128, 64, 64, 64, 1, 8192, 4, 16, 1, ElemType, 0, 0},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, 0, 8192, 64, 64, 64, 1, 1, 4, 16, 32, 1>,128, 64, 64, 64, 1, 8192, 4, 16, 1, ElemType, 0, 1},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, 1, 8192, 64, 64, 64, 0, 1, 4, 16, 32, 1>,128, 64, 64, 64, 1, 8192, 4, 16, 1, ElemType, 1, 0},\

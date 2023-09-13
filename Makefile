@@ -22,11 +22,11 @@ single-gpu-no-fusion-tests: gen-kernels tests/single-gpu-no-fusion-tests.cu libK
 run-single-gpu-no-fusion-tests: single-gpu-no-fusion-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-no-fusion-tests
 
-single-gpu-tests: gen-kernels tests/single-gpu-fusion-tests.cu libKron.so tests/testBase.h 
+single-gpu-fusion-tests: gen-kernels tests/single-gpu-fusion-tests.cu libKron.so tests/testBase.h 
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
-run-single-gpu-tests: single-gpu-tests
-	LD_LIBRARY_PATH=./: ./single-gpu-tests
+run-single-gpu-fusion-tests: single-gpu-fusion-tests
+	LD_LIBRARY_PATH=./: ./single-gpu-fusion-tests
 
 #Tests for the autotuner
 gen-no-fusion-tuner-kernels: src/gen_tuner_kernels.py
