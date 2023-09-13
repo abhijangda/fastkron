@@ -232,6 +232,30 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   return status;
 }
 
+TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKronMats,
+                                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[]) {
+  uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
+  MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
+  TunedKernelsSeries tunedSeries;
+  for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
+    const uint kronMat = NumKronMats - i - 1;
+    const uint NumFusedKerns = min(MaxFusedKerns, NumKronMats - i);
+    // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
+    uint FusedKronMatCols[NumFusedKerns];
+    uint FusedKronMatRows[NumFusedKerns];
+    for (int k = 0; k < NumFusedKerns; k++) {
+      FusedKronMatCols[k] = KronMatCols[kronMat - k];
+      FusedKronMatRows[k] = KronMatRows[kronMat - k];
+    }
+
+    auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+                                       K, M, NumFusedKerns});
+    tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, 0.0f});
+  }
+
+  return tunedSeries;
+}
+
 template<typename T, typename VecT>
 cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
                                 T** result,
@@ -245,13 +269,18 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
   //TODO: Assumes all factors are of same size and square shape
-  uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
-  MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
+  TunedKernelsSeries kernelSeries;
+  if (handle.tunedKernelSeries.size() > 0) {
+    kernelSeries = handle.tunedKernelSeries;
+  } else {
+    kernelSeries = selectKernelSeries(handle, NumKronMats, M, N, K, 
+                                      KronMatCols, KronMatRows);
+  }
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
-    const uint kronMat = NumKronMats - i - 1;
-    const uint NumFusedKerns = min(MaxFusedKerns, NumKronMats - i);
+  for (auto kernel : kernelSeries) {
+    const uint kronMat = kernel.end;
+    const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
     T* krons[NumFusedKerns];
     uint FusedKronMatCols[NumFusedKerns];
     uint FusedKronMatRows[NumFusedKerns];
@@ -262,45 +291,40 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     }
     cudaError_t status;
 
-    KernelInfo selectedKernel;
-    if (handle.tunedKernel.isValid()) {
-      selectedKernel = handle.tunedKernel;
-    } else {
-      selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], K, M, NumFusedKerns});
-    }
+    KernelInfo selectedKernel = kernel.kernel;
 
     std::cout << "kernel selected " << selectedKernel << std::endl;
     
     switch(NumFusedKerns) {
       case 1:
-        status = generalSlicedMatmul<T, 1>(selectedKernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K, 
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
+        status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,
+                                           krons, currKronResult, M, N, K, 
+                                           FusedKronMatCols, FusedKronMatRows,
+                                           stream);
         break;
       case 2:
-        status = generalSlicedMatmul<T, 2>(selectedKernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K, 
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
+        status = generalSlicedMatmul<T, 2>(selectedKernel, kronMat, prevKronResult,
+                                           krons, currKronResult, M, N, K, 
+                                           FusedKronMatCols, FusedKronMatRows,
+                                           stream);
         break;
       case 3:
-        status = generalSlicedMatmul<T, 3>(selectedKernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K, 
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
+        status = generalSlicedMatmul<T, 3>(selectedKernel, kronMat, prevKronResult,
+                                           krons, currKronResult, M, N, K, 
+                                           FusedKronMatCols, FusedKronMatRows,
+                                           stream);
         break;
       case 4:
-        status = generalSlicedMatmul<T, 4>(selectedKernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K,
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
+        status = generalSlicedMatmul<T, 4>(selectedKernel, kronMat, prevKronResult,
+                                           krons, currKronResult, M, N, K,
+                                           FusedKronMatCols, FusedKronMatRows,
+                                           stream);
         break;
       case 5:
-        status = generalSlicedMatmul<T, 5>(selectedKernel, i, prevKronResult,
-                                                 krons, currKronResult, M, N, K,
-                                                 FusedKronMatCols, FusedKronMatRows,
-                                                 stream);
+        status = generalSlicedMatmul<T, 5>(selectedKernel, kronMat, prevKronResult,
+                                           krons, currKronResult, M, N, K,
+                                           FusedKronMatCols, FusedKronMatRows,
+                                           stream);
         break;
       default:
           std::cout << "Invalid number of fused kernels" << std::endl;
@@ -310,17 +334,16 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     if (status != cudaSuccess) return status;
 
     //Double/ring/circular buffer previous result and new result
-    if (i < NumKronMats - MaxFusedKerns) {
-      prevKronResult = currKronResult;
-      if (prevKronResult == kronGemmResults[0]) {        
-        currKronResult = kronGemmResults[1];
-      } else if (prevKronResult == kronGemmResults[1]) {
-        currKronResult = kronGemmResults[0];
-      }
+    
+    prevKronResult = currKronResult;
+    if (prevKronResult == kronGemmResults[0]) {        
+      currKronResult = kronGemmResults[1];
+    } else if (prevKronResult == kronGemmResults[1]) {
+      currKronResult = kronGemmResults[0];
     }
   }
 
-  *result = currKronResult;
+  *result = prevKronResult;
 
   return cudaSuccess;
 }
@@ -335,22 +358,6 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
 //     children.push_back(child);
 //   }
 // }
-
-struct TunedKernelFromStart {
-  KernelInfo kernel;
-  uint start, end;
-  float time;
-
-  TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, float time_):
-    kernel(kernel_), start(start_), end(end_), time(time_) {}
-  TunedKernelFromStart() {}
-  friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
-    out << "[" << k.start << ", " << k.end << "]" << k.kernel << " runs for " << k.time << " ms";
-    return out;
-  }
-};
-
-typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
 
 float minExecTimeOfSeries(uint M, uint N, uint K, const uint NumKronMats, 
                           uint KronMatCols[], uint KronMatRows[],
@@ -502,7 +509,6 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     if (minTime < std::numeric_limits<float>::max()) {
       std::cout << "Best kernel for " << shape << ": " << bestKernel << "runs in " << (minTime/runs) << " ms" << std::endl;
       bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
-      handle.tunedKernel = bestKernel;
     }
   }}
   std::cout << "Finding min execution time of the series" << std::endl;
@@ -514,7 +520,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   for (auto iter = tunedKernels.rbegin(); iter != tunedKernels.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
   }
-
+  handle.tunedKernelSeries = tunedKernels;
   return cudaSuccess;
 }
 

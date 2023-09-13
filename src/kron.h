@@ -1,3 +1,5 @@
+#include <vector>
+
 #ifndef __KRON_H__
 #define __KRON_H__
 
@@ -78,6 +80,23 @@ struct KernelInfo {
   }
 };
 
+
+struct TunedKernelFromStart {
+  KernelInfo kernel;
+  uint start, end;
+  float time;
+
+  TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, float time_):
+    kernel(kernel_), start(start_), end(end_), time(time_) {}
+  TunedKernelFromStart() {}
+  friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
+    out << "[" << k.start << ", " << k.end << "]" << k.kernel << " runs for " << k.time << " ms";
+    return out;
+  }
+};
+
+typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
+
 struct FastKronHandle {
   const uint M_, N_, K_;
   const uint* KronMatCols_;
@@ -87,7 +106,7 @@ struct FastKronHandle {
 
   FastKronHandle(uint M, uint N, uint K, uint* KronMatCols, uint* KronMatRows, uint NumKronMats) :
     M_(M), N_(N), K_(K), KronMatCols_(KronMatCols), KronMatRows_(KronMatRows), 
-    NumKronMats_(NumKronMats), tunedKernel()
+    NumKronMats_(NumKronMats), tunedKernelSeries()
   {
     OutofCoreRows_ = 0;
     OutofCoreKrons_ = 0;
@@ -123,7 +142,7 @@ struct FastKronHandle {
   void setUseFusion(bool v) {useFusion_ = v;}
   bool getUseFusion()       {return useFusion_;}
 
-  KernelInfo tunedKernel;
+  TunedKernelsSeries tunedKernelSeries;
 };
 
 cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
