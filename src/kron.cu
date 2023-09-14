@@ -232,6 +232,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   return status;
 }
 
+//TODO: These methods that take handle should be private methods of FastKronHandle
 TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKronMats,
                                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[]) {
   uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
@@ -402,6 +403,7 @@ float minExecTimeOfSeries(uint M, uint N, uint K, const uint NumKronMats,
   return minTime;
 }
 
+//TODO: Create another autotuning object?
 template<typename T>
 cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
