@@ -1,7 +1,18 @@
 #include <vector>
+#include <nccl.h>
 
 #ifndef __KRON_H__
 #define __KRON_H__
+
+
+#define NCCLCHECK(cmd) do {                         \
+  ncclResult_t r = cmd;                             \
+  if (r!= ncclSuccess) {                            \
+    printf("Failed, NCCL error %s:%d '%s'\n",             \
+        __FILE__,__LINE__,ncclGetErrorString(r));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
 
 enum ElementType {
   Float,
@@ -113,33 +124,36 @@ struct FastKronHandle {
     M_(M), N_(N), K_(K), KronMatCols_(KronMatCols), KronMatRows_(KronMatRows), 
     NumKronMats_(NumKronMats), tunedKernelSeries()
   {
-    OutofCoreRows_ = 0;
-    OutofCoreKrons_ = 0;
+    gpuM_ = 0;
+    gpuK_ = 0;
     temp_ = NULL;
-    outOfCoreTemp1_ = NULL;
-    outOfCoreTemp2_ = NULL;
+    gpuTemp1_ = NULL;
+    gpuTemp2_ = NULL;
 
     //Optimization Options
     useFusion_ = true;
+
+    //Is Distributed
+    isDistributed_ = false;
   }
-  
+
   void* temp_;
   
   uint numGPUs_;
-  uint OutofCoreRows_;
-  uint OutofCoreKrons_;
-  uint OutofCoreKronBatch_;
-  void **outOfCoreTemp1_;
-  void **outOfCoreTemp2_;
+  uint gpuM_;
+  uint gpuK_;
+  uint perGPUKronBatch_;
+  void **gpuTemp1_;
+  void **gpuTemp2_;
+  bool isDistributed_;
+  pthread_barrier_t* barriers_;
 
-  void setOutOfCoreRowsCols(uint gpus, uint rows, uint cols, uint batch) {
-    OutofCoreRows_ = rows;
-    OutofCoreKrons_ = cols;
-    OutofCoreKronBatch_ = batch;
-    numGPUs_ = gpus;
-  }
+  template<typename T> void init();
+  template<typename T> void initDistributed(int gpus);
+  //TODO: these two functions should be a part of utils?
+  template<typename T> cudaError_t allocDistributedX(T* dX[], T* hX);
+  template<typename T> cudaError_t gatherDistributedY(T* dY[], T* hY);
 
-  template<typename T> void init(bool useUVA);
   void free();
 
   //Options
@@ -148,8 +162,16 @@ struct FastKronHandle {
   bool getUseFusion()       {return useFusion_;}
 
   TunedKernelsSeries tunedKernelSeries;
+  
+  std::vector<ncclComm_t> ncclComms;
+
+  void clean() {
+    for (int i=0; i<ncclComms.size(); i++)
+      ncclCommDestroy(ncclComms[i]);
+  }
 };
 
+//TODO: modify such that the results are always written to the supplied result pointer 
 cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
 
@@ -165,6 +187,9 @@ cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, 
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
 cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
+
+cudaError_t kronDistributedSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
+                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
 
 cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],

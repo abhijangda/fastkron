@@ -41,6 +41,7 @@ int main(int argc, char* argv[]) {
   int maxkronbatch = 0;
   int nummaxkronbatch = 0;
   int gpus = 1;
+  bool multiGPU = false;
   bool useFusion = true;
   bool tune = false;
   AnyOption *opt = new AnyOption();
@@ -117,6 +118,10 @@ int main(int argc, char* argv[]) {
 
   tune = opt->getFlag("tune");
   useUVA = opt->getFlag('u');
+  if (useUVA == true) {
+    printf("UVA is not supported\n");
+    return 0;
+  }
   if (opt->getValue("gpurows") != NULL)
     gpurows = atoi(opt->getValue("gpurows"));
   if (opt->getValue("maxkronbatch") != NULL)
@@ -125,6 +130,8 @@ int main(int argc, char* argv[]) {
     nummaxkronbatch = atoi(opt->getValue("nummaxkronbatch"));
   if (opt->getValue("gpus") != NULL)
     gpus = atoi(opt->getValue("gpus"));
+  if (gpus > 1) multiGPU = true;
+
   useFusion = opt->getFlag("fuse");
 
   if (useUVA) {
@@ -136,7 +143,11 @@ int main(int argc, char* argv[]) {
 
   if (batch <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL || type == NULL || runs <= 0) {
     printf("Invalid value batch: %d, facs %d, fac_rows %s, fac_cols %s, type %p, runs %d\n", batch, facs, fac_rows, fac_cols, type, runs);
-    return 1;
+  if (multiGPU) {
+    // if (gpurows <= 0 || maxkronbatch <= 0 || nummaxkronbatch <= 0) {
+    //   printf("Invalid gpurows %d , maxkronbatch %d nummaxkronbatch %d\n", gpurows, maxkronbatch, nummaxkronbatch);
+    //   return 1;
+    // }
   }
 
   uint KP_MAT_N[facs];

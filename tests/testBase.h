@@ -181,27 +181,26 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
               Call KronGEMM Library Functions
 ***************************************************/
 template<typename T>
-static T* kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
+static void kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[], T* result[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
-  T* result;
   if (std::is_same<T, float>::value) {
     CUDACHECK(kronSGEMM(handle, NUM_KP_MATS,
-                        (float*)x, (float**)kpMats, (float**)&result,
+                        (float*)x, (float**)kpMats, (float**)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
     CUDACHECK(kronIGEMM(handle, NUM_KP_MATS, 
-                        (int*)x, (int**)kpMats, (int**)&result, 
+                        (int*)x, (int**)kpMats, (int**)result, 
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, double>::value) {
     CUDACHECK(kronDGEMM(handle, NUM_KP_MATS, 
-                        (double*)x, (double**)kpMats, (double**)&result,
+                        (double*)x, (double**)kpMats, (double**)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else {
     printf("Invalid type\n");
-    return NULL;
+    return;
   }
 
-  return result;
+  return;
 }
 
 
@@ -227,6 +226,27 @@ static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x
   return result;
 }
 
+template<typename T>
+static void kronDistributedGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x[], T* kpMats[], T* result[],
+            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream[]) {
+  if (std::is_same<T, float>::value) {
+    CUDACHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
+                                  (float**)x, (float**)kpMats, (float**)result,
+                                  M, N, K, KP_MAT_N, KP_MAT_K, stream));
+  } else if (std::is_same<T, int>::value) {
+    // CUDACHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
+    //                               (int**)x, (int**)kpMats, (int**)&result,
+    //                               M, N, K, KP_MAT_N, KP_MAT_K, stream));
+  } else if (std::is_same<T, double>::value) {
+    result[0] = NULL;
+  } else {
+    printf("Invalid type\n");
+    return;
+  }
+
+  return;
+}
+
 /**************************************************
               Test Driver
 ***************************************************/
@@ -237,6 +257,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
                 int gpus, bool checkResults, bool useFusion, bool tune, bool verbose) {
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
+  bool useDistributed = gpus > 1;
   cudaStream_t stream[gpus];
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
@@ -260,26 +281,26 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
   if (verbose) printf("allocating\n");
-  if (useUVA) {
-    handle.setOutOfCoreRowsCols(gpus, OnGPURows, MaxInnerKrons, NumMaxInnerKrons);
-    handle.init<T>(true);
+  if (useDistributed) {
+    handle.initDistributed<T>(gpus);
   } else {
-    handle.init<T>(false);
+    handle.init<T>();
   }
   handle.setUseFusion(useFusion);
-  T* dX;
+  T* dX[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
 
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
-  if (useUVA) {
-    CUDACHECK(cudaMallocManaged(&dX, sizeX));  
+  if (useDistributed) {
+    CUDACHECK(handle.allocDistributedX(dX, hX));  
   } else {
-    CUDACHECK(cudaMalloc(&dX, sizeX));
+    CUDACHECK(cudaMalloc(&dX[0], sizeX));
   }
   if (verbose) printf("allocated\n");
   
   for (uint i = 0; i < NUM_KP_MATS; i++) {
-    if (useUVA) {
+    //TODO: Add alloc distributed for KpMats
+    if (useDistributed) {
       for (int g = 0; g < gpus; g++) {
         CUDACHECK(cudaSetDevice(g));
         CUDACHECK(cudaMalloc(&dKpMats[g * NUM_KP_MATS + i],     KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
@@ -293,14 +314,20 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("memcpy\n");
   if (tune) {
-    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
-                            stream[0]);
+    assert (useDistributed == false);
+    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
+                  stream[0]);
   }
-  if (checkResults)
-    CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
-  if (verbose) printf("checkResults %d\n", checkResults);
   if (checkResults) {
-    T* dResult;
+    if (useDistributed) {
+      //Already done by allocDistributedX
+    } else {
+      CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
+    }
+  }
+  if (verbose) printf("checkResults %d\n", checkResults);
+  T* dResult[gpus];
+  if (checkResults) {
     T* hResult;
 
     //CPU implementation of algorithm
@@ -308,10 +335,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     hResult = hKpMatmulResult[NUM_KP_MATS-1];
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
-    if (useUVA) {
-      dResult = kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+    if (useDistributed) {
+      kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      dResult = kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
     for (int g = 0; g < gpus; g++) {
       CUDACHECK(cudaSetDevice(g));
@@ -320,8 +347,14 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
-    CUDACHECK(cudaMemcpy(dResultToHost, dResult, sizeResult, cudaMemcpyDeviceToHost));
     
+    T* dResultToHost = (T*)malloc(sizeResult);
+    if (useDistributed) {
+      CUDACHECK(handle.gatherDistributedY(dResult, dResultToHost));
+    } else {
+      CUDACHECK(cudaMemcpy(dResultToHost, dResult[0], sizeResult, cudaMemcpyDeviceToHost));
+    }
+
     //Check Results
     if (check(hResult, dResultToHost, M, N)) {
       if (verbose) printf("Results Correct\n");
@@ -345,9 +378,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
     if (useUVA) {
-      kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
   }
   for (int g = 0; g < gpus; g++) {
@@ -362,9 +395,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   for (uint i = 0; i < numIters; i++) {
     if (useUVA) {
-      kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
   }
 
