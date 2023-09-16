@@ -276,7 +276,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
@@ -315,14 +315,14 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (verbose) printf("memcpy\n");
   if (tune) {
     assert (useDistributed == false);
-    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX, (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
+    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
                   stream[0]);
   }
   if (checkResults) {
     if (useDistributed) {
       //Already done by allocDistributedX
     } else {
-      CUDACHECK(cudaMemcpy(dX, hX, sizeX, cudaMemcpyHostToDevice));
+      CUDACHECK(cudaMemcpy(dX[0], hX, sizeX, cudaMemcpyHostToDevice));
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
@@ -421,14 +421,15 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
 
   //Free GPU Memory
-  for (int g = 0; g < gpus; g++)
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaFree(dX[g]));
     for (uint i = 0; i < NUM_KP_MATS; i++) {
       CUDACHECK(cudaFree(dKpMats[g * NUM_KP_MATS + i]));
     }
+  }
 
   handle.free();
-  CUDACHECK(cudaFree(dX));
-
+  
   //Free CPU RAM
   delete[] hX;
   for (uint i = 0; i < NUM_KP_MATS; i++) {

@@ -616,136 +616,142 @@ struct ThreadArgs {
 };
 
 template<typename T, typename VecT>
-void singleGPUOutOfCoreThreadFunc(ThreadArgs<T>& thArgs) {
+void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
   // ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
 
-  // FastKronHandle& handle = *thArgs.handle;
-  // uint NumKronMats = thArgs.NumKronMats;
-  // T* x = thArgs.x;
-  // T** kronMats = thArgs.kronMats;
-  // T** result = thArgs.result;
-  // uint M = thArgs.M;
-  // uint N = thArgs.N;
-  // uint K = thArgs.K;
-  // uint *KronMatCols = thArgs.KronMatCols;
-  // uint *KronMatRows = thArgs.KronMatRows;
-  // cudaStream_t* stream = thArgs.stream;
-  // uint gr = thArgs.gpuRow;
-  // uint gc = thArgs.gpuCol;
-  // uint gpusInRows = thArgs.gpusInRows;
-  // uint gpusInCols = thArgs.gpusInCols; 
+  FastKronHandle& handle = *thArgs.handle;
+  uint NumKronMats = thArgs.NumKronMats;
+  T* x = thArgs.x;
+  T** kronMats = thArgs.kronMats;
+  T* result = thArgs.result;
+  uint M = thArgs.M;
+  uint N = thArgs.N;
+  uint K = thArgs.K;
+  uint *KronMatCols = thArgs.KronMatCols;
+  uint *KronMatRows = thArgs.KronMatRows;
+  cudaStream_t* stream = thArgs.stream;
+  uint gr = thArgs.gpuRow;
+  uint gc = thArgs.gpuCol;
+  uint gpusInRows = thArgs.gpusInRows;
+  uint gpusInCols = thArgs.gpusInCols; 
 
-  // uint g = gr * gpusInCols + gc;
-  // CUDA_CHECK(cudaSetDevice(g));
+  uint g = gr * gpusInCols + gc;
+  CUDA_CHECK(cudaSetDevice(g));
 
-  // cudaError_t status;
-
-  // const uint uvaRows = handle.OutofCoreRows_;
-  // const uint uvaColsX = handle.OutofCoreKronBatch_ * power(KronMatRows[0], handle.OutofCoreKrons_); //KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
-  // const uint batchedKronMuls = handle.OutofCoreKrons_;
-  // T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
-  // T* outerPrevResult, *outerCurrResult;
-
-  // for (uint startOutofCoreRows = handle.OutofCoreRows_ * gr;
-  //       startOutofCoreRows  < M; 
-  //       startOutofCoreRows += handle.OutofCoreRows_ * gpusInRows) {
-  // const uint outOfCoreRows = min(handle.OutofCoreRows_, M - startOutofCoreRows);
-
-  // outerPrevResult = x;
-  // outerCurrResult = kronGemmResults[0];
+  cudaError_t status;
   
-  // for (uint io = 0; io < NumKronMats; io += batchedKronMuls) {
-  //   T* innerResults[2] = {(T*)handle.outOfCoreTemp1_[g], (T*)handle.outOfCoreTemp2_[g]};
-  //   T* innerPrevResult = innerResults[0];
-  //   T* innerCurrResult = innerResults[1];
+  //Temporaries are swaped after every slicedMatmul
+  //TODO: User supplied result should be used as a temp and the final results are written in it
+  T* innerResults[2] = {(T*)handle.gpuTemp1_[g], (T*)handle.gpuTemp2_[g]};
+  // std::cout << "handle.gpuM_ " << handle.gpuM_ << " handle.gpuK_ " <<handle.gpuK_ << " gpusInCols " << gpusInCols << " gpusInRows " << gpusInRows << " K " << K << std::endl;
+  std::cout <<"g " << g<< " innerResults = " << "{" << innerResults[0] << ", " << innerResults[1] << "}" << std::endl;
+  T* innerPrevResult;
+  T* innerCurrResult;
+  
+  for (uint startGpuM = handle.gpuM_ * gr; startGpuM  < M; 
+       startGpuM += handle.gpuM_ * gpusInRows) {
+  const uint gpuM = min(handle.gpuM_, M - startGpuM);
+  //For first slicedMatmul, x is the input
+  innerPrevResult = x;
+  innerCurrResult = innerResults[0];
 
-  //   if (uvaColsX == K) {
-  //     innerResults[0] = &kronGemmResults[0][startOutofCoreRows * K];
-  //     innerResults[1] = &kronGemmResults[1][startOutofCoreRows * K];
-  //     innerPrevResult = &x[startOutofCoreRows * K];
-  //     innerCurrResult = innerResults[0];
-  //   }
+  for (uint io = 0; io < NumKronMats; io += handle.perGPUKronBatch_) {
+    // if (io == 0) {
+    // } else {
+    //   innerPrevResult = innerResults[0];
+    //   innerCurrResult = innerResults[1];
+    // }
 
-  //   uint KronMulBatchSize = min(batchedKronMuls, NumKronMats - io);
-  //   uint MaxI = io + KronMulBatchSize;
+    // TODO:
+    // if (uvaColsX == K) {
+    //   innerResults[0] = &kronGemmResults[0][startOutofCoreRows * K];
+    //   innerResults[1] = &kronGemmResults[1][startOutofCoreRows * K];
+    //   innerPrevResult = &x[startOutofCoreRows * K];
+    //   innerCurrResult = innerResults[0];
+    // }
 
-  //   for (uint uvaPart = gc * uvaColsX; uvaPart < K; uvaPart += uvaColsX * gpusInCols) {
-  //     //Copy outerPrevResult to innerPrevResult
-  //     if (uvaColsX < K) {
-  //       // CUDA_CHECK(cudaDeviceSynchronize());
-  //       // printf("copyXtoUVAX\n");
-  //       dim3 grid = {outOfCoreRows, 1,1};
-  //       dim3 block = {256, 1, 1};
-  //       copyXtoUVAX<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[io], KronMatCols[io], innerPrevResult, outOfCoreRows, uvaColsX,
-  //                                                                 &outerPrevResult[startOutofCoreRows * K], uvaPart/uvaColsX);
-  //       // CUDA_CHECK(cudaDeviceSynchronize());
-  //       // printf("Done\n");
-  //     }
+    uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
+    uint MaxI = io + KronMulBatchSize;
+    for (uint gpuColPart = gc * handle.gpuK_; gpuColPart < K; gpuColPart += handle.gpuK_ * gpusInCols) {
+      //Copy outerPrevResult to innerPrevResult
+      // if (uvaColsX < K) {
+      //   // CUDA_CHECK(cudaDeviceSynchronize());
+      //   // printf("copyXtoUVAX\n");
+      //   dim3 grid = {outOfCoreRows, 1,1};
+      //   dim3 block = {256, 1, 1};
+      //   copyXtoUVAX<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[io], KronMatCols[io], innerPrevResult, outOfCoreRows, uvaColsX,
+      //                                                             &outerPrevResult[startOutofCoreRows * K], uvaPart/uvaColsX);
+      //   // CUDA_CHECK(cudaDeviceSynchronize());
+      //   // printf("Done\n");
+      // }
+      TunedKernelsSeries kernelSeries;
+      kernelSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
+                                        KronMatCols, KronMatRows);
+      for (auto kernel : kernelSeries) {
+        //TODO: probably will need to change for fused kernels
+        uint kronMat = kernel.end + (NumKronMats - io - KronMulBatchSize);
+        printf("g %d, kronMat %d\n", g, kronMat);
+        T* krons[] = {kronMats[g * NumKronMats + kronMat]}; 
+        uint kronCols[1] = {KronMatCols[kronMat]};
+        uint kronRows[1] = {KronMatRows[kronMat]};
+        cudaError_t status = generalSlicedMatmul<T, 1>(kernel.kernel, kronMat, innerPrevResult, 
+            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+            kronCols, kronRows, stream[g]);
 
-  //     for (uint i = io; i < MaxI; i++) {
-  //       const uint kronMat = NumKronMats - i - 1;
-  //       // printf("g %d, kronMat %d %p\n", g, kronMat, kronMats[g * NumKronMats + kronMat]);
-  //       printf("TODO:");
-  //       // cudaError_t status = generalSlicedMatmul<T, VecT>(i, innerPrevResult, 
-  //       //     kronMats[g * NumKronMats + kronMat], innerCurrResult, outOfCoreRows, uvaColsX, uvaColsX, 
-  //       //     KronMatCols[kronMat], KronMatRows[kronMat], stream[g]);
+        // printf("innerCurrResult %p innerPrevResult %p\n", innerCurrResult, innerPrevResult);
+        if (status != cudaSuccess) goto end;
 
-  //       // printf("innerCurrResult %p innerPrevResult %p\n", innerCurrResult, innerPrevResult);
-  //       if (status != cudaSuccess) goto end;
+        //Double/ring/circular buffer previous result and new result
+        innerPrevResult = innerCurrResult;
+        if (innerPrevResult == innerResults[0]) {        
+          innerCurrResult = innerResults[1];
+        } else if (innerPrevResult == innerResults[1]) {
+          innerCurrResult = innerResults[0];
+        }
+      }
 
-  //       //Double/ring/circular buffer previous result and new result
-  //       if (i < MaxI - 1) {
-  //         innerPrevResult = innerCurrResult;
-  //         if (innerPrevResult == innerResults[0]) {        
-  //           innerCurrResult = innerResults[1];
-  //         } else if (innerPrevResult == innerResults[1]) {
-  //           innerCurrResult = innerResults[0];
-  //         }
-  //       }
-  //     }
+      //Copy uvaCurrResult to kronGemmResult
+      // if (uvaColsX < K) {
+      //   // CUDA_CHECK(cudaDeviceSynchronize());
+      //   // printf("copyUVATempToY\n");
+      //   dim3 grid = {outOfCoreRows, 1,1};
+      //   dim3 block = {256, 1, 1};
+      //   copyUVATempToY<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[io], KronMatRows[io], innerCurrResult, outOfCoreRows, uvaColsX,
+      //                                                               &outerCurrResult[startOutofCoreRows * K], uvaPart/uvaColsX, KronMulBatchSize, io);
+      //   // CUDA_CHECK(cudaDeviceSynchronize());
+      //   // printf("Done\n");
+      // } else {
+      //   if (innerPrevResult == innerResults[0]) {
+      //     outerPrevResult = kronGemmResults[0];
+      //     outerCurrResult = kronGemmResults[1];
+      //   }
+      //   else {
+      //     outerPrevResult = kronGemmResults[1];
+      //     outerCurrResult = kronGemmResults[0];
+      //   }
 
-  //     //Copy uvaCurrResult to kronGemmResult
-  //     if (uvaColsX < K) {
-  //       // CUDA_CHECK(cudaDeviceSynchronize());
-  //       // printf("copyUVATempToY\n");
-  //       dim3 grid = {outOfCoreRows, 1,1};
-  //       dim3 block = {256, 1, 1};
-  //       copyUVATempToY<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[io], KronMatRows[io], innerCurrResult, outOfCoreRows, uvaColsX,
-  //                                                                   &outerCurrResult[startOutofCoreRows * K], uvaPart/uvaColsX, KronMulBatchSize, io);
-  //       // CUDA_CHECK(cudaDeviceSynchronize());
-  //       // printf("Done\n");
-  //     } else {
-  //       if (innerPrevResult == innerResults[0]) {
-  //         outerPrevResult = kronGemmResults[0];
-  //         outerCurrResult = kronGemmResults[1];
-  //       }
-  //       else {
-  //         outerPrevResult = kronGemmResults[1];
-  //         outerCurrResult = kronGemmResults[0];
-  //       }
+      //   // printf("outerPrevResult %p outerCurrResult %p\n", outerPrevResult, outerCurrResult);
+      // }
+    }
 
-  //       // printf("outerPrevResult %p outerCurrResult %p\n", outerPrevResult, outerCurrResult);
-  //     }
-  //   }
+    CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+    int s = pthread_barrier_wait(thArgs.barrier);
+    assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
 
-  //   CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-  //   int s = pthread_barrier_wait(thArgs.barrier);
-  //   assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
+    //Double/ring/circular buffer previous result and new result
+    // if (io < NumKronMats - batchedKronMuls) {
+    //   outerPrevResult = outerCurrResult;
+    //   if (outerPrevResult == kronGemmResults[0]) {        
+    //     outerCurrResult = kronGemmResults[1];
+    //   } else if (outerPrevResult == kronGemmResults[1]) {
+    //     outerCurrResult = kronGemmResults[0];
+    //   }
+    // }
+  }
+  }
 
-  //   //Double/ring/circular buffer previous result and new result
-  //   if (io < NumKronMats - batchedKronMuls) {
-  //     outerPrevResult = outerCurrResult;
-  //     if (outerPrevResult == kronGemmResults[0]) {        
-  //       outerCurrResult = kronGemmResults[1];
-  //     } else if (outerPrevResult == kronGemmResults[1]) {
-  //       outerCurrResult = kronGemmResults[0];
-  //     }
-  //   }
-  // }
-  // }
-
-  // end:
-  // thArgs.threadResult = {status, (void*)outerCurrResult};
+  end:
+  thArgs.threadResult = {status, (void*)innerPrevResult};
 }
 
 template<typename T, typename VecT>
@@ -766,8 +772,8 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   // printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
   double timeStart = getCurrTime();
-  const uint gpusInCols = 2;
-  const uint gpusInRows = 2;
+  const uint gpusInCols = 1;
+  const uint gpusInRows = handle.numGPUs_;
   
   std::thread* threads = new std::thread[handle.numGPUs_];
 
@@ -795,7 +801,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
     );
 
     threadArgs[thread] = args;
-    threads[thread] = std::thread(singleGPUOutOfCoreThreadFunc<T, VecT>, std::ref(threadArgs[thread]));
+    threads[thread] = std::thread(perGPUKronMatmul<T, VecT>, std::ref(threadArgs[thread]));
   }
 
   cudaError_t status;
@@ -808,7 +814,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   printf("531: time %lf microseconds\n", timeEnd - timeStart);
   // 
-  // printf("*result %p\n", *result);
+  printf("result[0] %p result[1] %p\n", result[0], result[1]);
   return status;
 }
 
@@ -950,21 +956,21 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     }
     NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
     std::cout << "Initialized NCCL"<<std::endl;
-    assert (gpus == 4);
-    handle.gpuM_ = handle.M_/ilog2(gpus);
-    handle.gpuK_ = handle.K_/ilog2(gpus);
-    handle.perGPUKronBatch_ = 1;
+    // assert (gpus == 4);
+    handle.gpuM_ = handle.M_/gpus; //log2(gpus);
+    handle.gpuK_ = handle.K_;///ilog2(gpus);
+    handle.perGPUKronBatch_ = handle.NumKronMats_;
     handle.gpuTemp1_ = new void*[gpus];
     handle.gpuTemp2_ = new void*[gpus];
-    uint gpusInRows = 2;
-    uint gpusInCols = 2;
+    uint gpusInRows = gpus;
+    uint gpusInCols = 1;
   
     //All gpus with same row shares the same barrier
     //TODO: free
     handle.barriers_ = new pthread_barrier_t[gpusInRows];
 
     for (int i = 0; i < gpusInRows; i++) {
-      int s = pthread_barrier_init(&handle.barriers_[i], NULL, gpusInRows);
+      int s = pthread_barrier_init(&handle.barriers_[i], NULL, gpusInCols);
       //TODO: Create PTHREAD_CHECK?
       assert (s == 0);
     }

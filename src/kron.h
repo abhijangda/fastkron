@@ -179,7 +179,7 @@ cudaError_t kronIGEMM(FastKronHandle& handle, const uint NumKronMats, int* x, in
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
 
 cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], double** result,
-  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
+                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
 
 cudaError_t kronSGEMMOutofCore(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
