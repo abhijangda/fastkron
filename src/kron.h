@@ -142,9 +142,13 @@ struct FastKronHandle {
   uint numGPUs_;
   uint gpuM_;
   uint gpuK_;
+  uint gpusInM_;
+  uint gpusInK_;
   uint perGPUKronBatch_;
   void **gpuTemp1_;
   void **gpuTemp2_;
+  void **sendTemps_;
+  void **recvTemps_;
   bool isDistributed_;
   pthread_barrier_t* barriers_;
 

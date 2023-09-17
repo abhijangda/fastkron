@@ -29,7 +29,7 @@ double getCurrTime() {
 
 int ilog2(uint x)
 {
-    return sizeof(uint32_t) * 1 - __builtin_clz(x) - 1;
+  return sizeof(uint32_t) * CHAR_BIT - __builtin_clz(x) - 1;
 }
 
 bool isPowerOf2(uint x)

@@ -253,6 +253,38 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
   }
 }
 
+template<typename ElemT, 
+        const uint TileCol, const uint TileRow, const uint NumThreads>
+__global__ void matrixSliceKernel(const uint Rows, const uint Cols, const ElemT* matrix, 
+                            const uint startRow, const uint startCol, 
+                            const uint SliceRows, const uint SliceCols,
+                            ElemT* output) {
+  uint blockCol = blockIdx.x * TileCol;
+  uint blockRow = blockIdx.y * TileRow;
+  if (startCol + blockCol >= Cols || startRow + blockRow >= Rows) return;
+  for (uint row = 0; row < SliceRows; row++) {
+    const uint matrixRow = startRow + blockRow + row;
+    for (uint col = threadIdx.x; col < SliceCols; col += NumThreads) {
+      const uint matrixCol = startCol + blockCol + col;
+      output[row * SliceRows + col] = matrix[matrixRow*Cols + matrixCol];
+    }
+  }
+}
+
+template<typename ElemT>
+void matrixSlice(const uint Rows, const uint Cols, const ElemT* matrix, 
+                 const uint startRow, const uint startCol, 
+                 const uint SliceRows, const uint SliceCols,
+                 ElemT* output, cudaStream_t stream) {
+  dim3 block = {256, 1, 1};
+  dim3 grid = {SliceRows, SliceCols/256, 1};
+  matrixSliceKernel<ElemT, 1, 1, 256><<<grid, block, 0, stream>>>
+                                            (Rows, Cols, matrix,
+                                             startRow, startCol, SliceRows, SliceCols,
+                                             output);
+  CUDA_CHECK(cudaStreamSynchronize(stream));
+}
+
 template<typename ElemT, typename VecT, bool K_EQUALS_VAR, uint VecTNumElems>
 __device__ __forceinline__ 
 void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA, 
