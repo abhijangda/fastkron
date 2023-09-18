@@ -294,17 +294,17 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
       //   printf("rowA %d perGPUK %d numGPUs %d elem %d ColsA %d gpuCol %d id %d e %f\n", rowA, perGPUK, numGPUs, elem, ColsA, gpuCol, id, e);
       gpuOutput[rowA * perGPUK + gpuCol] = e;
     } else {
-      /*
       uint KronRowsPower = power(KronRows, batchedKronMuls);
-      
-      uint UVAColsRatioKronRowsSquare = (uvaCols/KronRowsPower);
-      uint withinP5 = uvaPart * UVAColsRatioKronRowsSquare + 
-                      ((uvaElem%(uvaCols/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(uvaCols/UVAColsRatioKronRowsSquare)) + 
-                      uvaElem % UVAColsRatioKronRowsSquare;
-      uint p5Index = (uvaElem/(uvaCols/KronRows))*(ColsA/KronRows);
+      uint srcElem = rank * (perGPUK/numGPUs) + elem;
+      uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
+      uint withinP5 = srcRank * UVAColsRatioKronRowsSquare + 
+                      ((srcElem%(perGPUK/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
+                      srcElem % UVAColsRatioKronRowsSquare;
+      uint p5Index = (srcElem/(perGPUK/KronRows))*(ColsA/KronRows);
       uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
-      glC[rowA * ColsA + cCol] = uvaTemp[rowA * uvaCols + uvaElem];
-      */
+      int gpuCol = cCol - rank * perGPUK;
+
+      gpuOutput[rowA * perGPUK + gpuCol] = slicedGPUOutput[rowA * (perGPUK/numGPUs) + elem];
     }
   }
 }

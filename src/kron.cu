@@ -728,7 +728,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
         dim3 block = {256, 1, 1};
         storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], gc, handle.gpusInK_, 
                                                                   (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
-                                                                  innerCurrResult, gc, 1, io, (io == 0 and g == 1));
+                                                                  innerCurrResult, gc, KronMulBatchSize, io, (io == 0 and g == 1));
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
       }
       int s = pthread_barrier_wait(thArgs.barrier);
@@ -740,7 +740,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
         const size_t sendRecvSize = SliceRows * SliceCols;
         if (dst == gc) {
           for (int src = 0; src < handle.gpusInK_; src++) {
-            printf("g %d dst %d src %d\n", g, dst, src);
+            // printf("g %d dst %d src %d\n", g, dst, src);
             if (src == dst) {
               // const uint startRow = 0;
               // const uint startCol = dst * SliceCols;
@@ -764,7 +764,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
             dim3 block = {256, 1, 1};
             storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], dst, handle.gpusInK_, 
                                                                       (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
-                                                                      innerCurrResult, src, 1, io, (io == 0 and g == 1));
+                                                                      innerCurrResult, src, KronMulBatchSize, io, (io == 0 and g == 1));
             CUDA_CHECK(cudaStreamSynchronize(stream[g]));
             // if (io == 0 and g == 1) printGPUArray<float>(80, 2048, ((io == 0) ? 16.0 :256.0f), (const float*)innerCurrResult, stream[g]);
             // }
@@ -1060,7 +1060,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     handle.gpusInK_ = 2;//ilog2(gpus);
     handle.gpuM_ = handle.M_/handle.gpusInM_;
     handle.gpuK_ = handle.K_/handle.gpusInK_;
-    handle.perGPUKronBatch_ = 1; //handle.NumKronMats_;
+    handle.perGPUKronBatch_ = 2; //handle.NumKronMats_;
     handle.gpuTemp1_ = new void*[gpus];
     handle.gpuTemp2_ = new void*[gpus];
     handle.sendTemps_ = new void*[gpus];
