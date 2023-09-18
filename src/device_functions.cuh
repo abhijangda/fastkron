@@ -261,7 +261,7 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
                              ElemT * __restrict__ slicedGPUOutput,
                              const uint perGPUM, const uint perGPUK,
                              ElemT * __restrict__ gpuOutput,
-                             const uint srcRank, const uint batchedKronMuls, const uint startKronIdx) {
+                             const uint srcRank, const uint batchedKronMuls, const uint startKronIdx, bool canPrint) {
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
   const uint wid          = tid/WarpSize;
@@ -288,10 +288,11 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
       // if (gpuCol < 0) printf("gpuCol %d globalCCol %d rank %d\n", gpuCol, globalCCol, rank); 
       const uint id = rowA * (perGPUK/numGPUs) + elem;
       auto e = slicedGPUOutput[id];
+      // if (canPrint and rowA == 1) printf("rowA %d gpuCol %d e %f id %d ColsA %d\n", rowA, gpuCol, e, id, ColsA);
       // if (rowA == 0 && rank == 0 && srcRank == 0) printf("gpuCol %d globalCCol %d\n", gpuCol, globalCCol);
       // if (rowA == 0)
       //   printf("rowA %d perGPUK %d numGPUs %d elem %d ColsA %d gpuCol %d id %d e %f\n", rowA, perGPUK, numGPUs, elem, ColsA, gpuCol, id, e);
-      gpuOutput[rowA * ColsA + gpuCol] = e;
+      gpuOutput[rowA * perGPUK + gpuCol] = e;
     } else {
       /*
       uint KronRowsPower = power(KronRows, batchedKronMuls);
@@ -315,8 +316,8 @@ __global__ void printArrayKernel(const uint Rows, const uint Cols, const ElemT v
   uint col = threadIdx.x;
   for (; col < Cols; col += blockDim.x) {
     const uint id = row * Cols + col;
-    if (row == 0 and col <= min(4096, Cols) and array[id] != val)
-      printf("array[%d] %f\n", id, array[id]);
+    if (row == 1 and col <= min(4096, Cols) and array[id] != val)
+      printf("array[%d*%d + %d] %f\n", row, Cols, col, array[id]);
   }
 }
 
@@ -335,13 +336,13 @@ __global__ void matrixSliceKernel(const uint Rows, const uint Cols, const ElemT*
                             const uint startRow, const uint startCol, 
                             const uint SliceRows, const uint SliceCols,
                             ElemT* output) {
-  uint blockCol = blockIdx.x * TileCol;
-  uint blockRow = blockIdx.y * TileRow;
+  // uint blockCol = blockIdx.x * TileCol;
+  uint blockRow = blockIdx.x * TileRow;
   static_assert (TileRow == 1 and TileCol == 1);
-  if (startCol + blockCol >= Cols || startRow + blockRow >= Rows) return;
+  // if (startCol + SliceCols >= Cols || startRow + blockRow >= Rows) return;
   const uint matrixRow = startRow + blockRow;
   for (uint col = threadIdx.x; col < SliceCols; col += NumThreads) {
-    const uint matrixCol = startCol + blockCol + col;
+    const uint matrixCol = startCol + 0 + col;
     output[blockRow * SliceCols + col] = matrix[matrixRow*Cols + matrixCol];
     // if (threadIdx.x == 0)
     // printf("301: row %d SliceCols %d col %d id %d matrixRow %d Cols %d matrixCol %d output %f matrix %f\n", row, SliceCols, col, row * SliceCols + col, matrixRow, Cols, matrixCol, output[row * SliceCols + col], matrix[matrixRow*Cols + matrixCol]);
@@ -354,7 +355,8 @@ void matrixSlice(const uint Rows, const uint Cols, const ElemT* matrix,
                  const uint SliceRows, const uint SliceCols,
                  ElemT* output, cudaStream_t stream, uint g, uint io, bool canPrint = false) {
   dim3 block = {256, 1, 1};
-  dim3 grid = {SliceCols/256, SliceRows, 1};
+  dim3 grid = {SliceRows, 1, 1};
+  //TODO: Make tile in column dimension also
   matrixSliceKernel<ElemT, 1, 1, 256><<<grid, block, 0, stream>>>
                                             (Rows, Cols, matrix,
                                              startRow, startCol, SliceRows, SliceCols,
