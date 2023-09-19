@@ -253,11 +253,13 @@ static void kronDistributedGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, 
 template<typename T>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
                 uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
-                bool useUVA, uint OnGPURows, uint MaxInnerKrons, uint NumMaxInnerKrons,
-                int gpus, bool checkResults, bool useFusion, bool tune, bool verbose) {
+                bool useUVA, int gpuInRows, int gpuInCols, int gpus,
+                uint kronBatch, bool checkResults, bool useFusion, bool tune, bool verbose) {
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
   bool useDistributed = gpus > 1;
+  // if (useDistributed and gpuInRows * gpuInCols != gpus)
+  //   printf("gpuInRows * gpuInCols != gpus: %d != %d\n", gpuInRows * gpuInCols, gpus);
   cudaStream_t stream[gpus];
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
@@ -282,7 +284,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
   if (verbose) printf("allocating\n");
   if (useDistributed) {
-    handle.initDistributed<T>(gpus);
+    handle.initDistributed<T>(gpus, gpuInRows, gpuInCols, kronBatch);
   } else {
     handle.init<T>();
   }

@@ -1037,7 +1037,8 @@ template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY) {
   return FastKronHandle_gatherDistributedY<int>(*this, dY, hY);
 }
 
-template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDistributed, int gpus) {
+template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDistributed, 
+                                              int gpus, int gpusInM, int gpusInK, int gpuKrons) {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   handle.isDistributed_ = isDistributed;
   if (isDistributed) {
@@ -1056,16 +1057,38 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
     std::cout << "Initialized NCCL"<<std::endl;
     // assert (gpus == 4);
-    handle.gpusInM_ = 1;//ilog2(gpus);
-    handle.gpusInK_ = 2;//ilog2(gpus);
+    if (gpusInK >= 1)
+      handle.gpusInK_ = gpusInK;
+    else
+      handle.gpusInK_ = 2;//ilog2(gpus);
+    
+    if (gpusInM >= 1)
+      handle.gpusInM_ = gpusInM;  
+    else
+      handle.gpusInM_ = 1;//ilog2(gpus);
+
+    if (gpuKrons > 0)
+      handle.perGPUKronBatch_ = gpuKrons;
+    else 
+      handle.perGPUKronBatch_ = 1;
+
+    std::cout << "gpusInRows " << handle.gpusInM_ <<
+                 " gpusInCols " << handle.gpusInK_ << 
+                 " gpuKronBatch" << handle.perGPUKronBatch_ <<
+                 std::endl;
+    if (handle.gpusInK_ * handle.gpusInM_ != handle.numGPUs_)  {
+      std::cout << "gpusInCols * gpusInRows != total gpus (" << 
+                   handle.gpusInK_ * handle.gpusInM_ << "!= " << 
+                   handle.numGPUs_<< ")" << std::endl;
+      abort();
+    }
+    //TODO: Check that localKrons <= log (gpuK_)_P
     handle.gpuM_ = handle.M_/handle.gpusInM_;
     handle.gpuK_ = handle.K_/handle.gpusInK_;
-    handle.perGPUKronBatch_ = 2; //handle.NumKronMats_;
     handle.gpuTemp1_ = new void*[gpus];
     handle.gpuTemp2_ = new void*[gpus];
     handle.sendTemps_ = new void*[gpus];
     handle.recvTemps_ = new void*[gpus];
-    
     
     //All gpus with same row shares the same barrier
     //TODO: free
@@ -1136,27 +1159,27 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
 }
 
 template<> void FastKronHandle::init<float>() {
-  FastKronHandle_init<float>(*this, false, 1);
+  FastKronHandle_init<float>(*this, false, 1, 1, 1, 1);
 }
 
 template<> void FastKronHandle::init<int>() {
-  FastKronHandle_init<int>(*this, false, 1);
+  FastKronHandle_init<int>(*this, false, 1, 1, 1, 1);
 }
 
 template<> void FastKronHandle::init<double>() {
-  FastKronHandle_init<double>(*this, false, 1);
+  FastKronHandle_init<double>(*this, false, 1, 1, 1, 1);
 }
 
-template<> void FastKronHandle::initDistributed<float>(int gpus) {
-  FastKronHandle_init<float>(*this, true, gpus);
+template<> void FastKronHandle::initDistributed<float>(int gpus, int gpusInM, int gpusInK, int localKrons) {
+  FastKronHandle_init<float>(*this, true, gpus, gpusInM, gpusInK, localKrons);
 }
 
-template<> void FastKronHandle::initDistributed<int>(int gpus) {
-  FastKronHandle_init<int>(*this, true, gpus);
+template<> void FastKronHandle::initDistributed<int>(int gpus, int gpusInM, int gpusInK, int localKrons) {
+  FastKronHandle_init<int>(*this, true, gpus, gpusInM, gpusInK, localKrons);
 }
 
-template<> void FastKronHandle::initDistributed<double>(int gpus) {
-  FastKronHandle_init<double>(*this, true, gpus);
+template<> void FastKronHandle::initDistributed<double>(int gpus, int gpusInM, int gpusInK, int localKrons) {
+  FastKronHandle_init<double>(*this, true, gpus, gpusInM, gpusInK, localKrons);
 }
 
 void FastKronHandle::free() {

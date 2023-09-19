@@ -37,10 +37,10 @@ int main(int argc, char* argv[]) {
   int runs = 0;
   int warmup = 0;
   bool useUVA = false;
-  int gpurows = 0;
-  int maxkronbatch = 0;
-  int nummaxkronbatch = 0;
+  int gpuLocalKrons = 0;
   int gpus = 1;
+  int gpuInRows = 0;
+  int gpuInCols = 0;
   bool multiGPU = false;
   bool useFusion = true;
   bool tune = false;
@@ -70,10 +70,10 @@ int main(int argc, char* argv[]) {
   
   opt->setFlag("check", 'c');
   opt->setFlag("uva", 'u');
-  opt->setOption("gpurows");
-  opt->setOption("maxkronbatch");
-  opt->setOption("nummaxkronbatch");
+  opt->setOption("gpuLocalKrons");
   opt->setOption("gpus");
+  opt->setOption("GM");
+  opt->setOption("GK");
 
   opt->setFlag("fuse");
   opt->setFlag("tune");
@@ -122,21 +122,22 @@ int main(int argc, char* argv[]) {
     printf("UVA is not supported\n");
     return 0;
   }
-  if (opt->getValue("gpurows") != NULL)
-    gpurows = atoi(opt->getValue("gpurows"));
-  if (opt->getValue("maxkronbatch") != NULL)
-    maxkronbatch = atoi(opt->getValue("maxkronbatch"));
-  if (opt->getValue("nummaxkronbatch") != NULL)
-    nummaxkronbatch = atoi(opt->getValue("nummaxkronbatch"));
+
+  if (opt->getValue("gpuLocalKrons") != NULL)
+    gpuLocalKrons = atoi(opt->getValue("gpuLocalKrons"));
   if (opt->getValue("gpus") != NULL)
     gpus = atoi(opt->getValue("gpus"));
+  if (opt->getValue("GM") != NULL)
+    gpuInRows = atoi(opt->getValue("GM"));
+  if (opt->getValue("GK") != NULL)
+    gpuInCols = atoi(opt->getValue("GK"));
   if (gpus > 1) multiGPU = true;
 
   useFusion = opt->getFlag("fuse");
 
   if (useUVA) {
-    if (gpurows <= 0 || maxkronbatch <= 0 || nummaxkronbatch <= 0) {
-      printf("Invalid gpurows %d , maxkronbatch %d nummaxkronbatch %d\n", gpurows, maxkronbatch, nummaxkronbatch);
+    if (gpuInRows <= 0 || gpuLocalKrons <= 0) {
+      printf("Invalid gpurows %d , gpuLocalKrons %d\n", gpuInRows, gpuLocalKrons);
       return 1;
     }
   }
@@ -144,10 +145,13 @@ int main(int argc, char* argv[]) {
   if (batch <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL || type == NULL || runs <= 0) {
     printf("Invalid value batch: %d, facs %d, fac_rows %s, fac_cols %s, type %p, runs %d\n", batch, facs, fac_rows, fac_cols, type, runs);
   if (multiGPU) {
-    // if (gpurows <= 0 || maxkronbatch <= 0 || nummaxkronbatch <= 0) {
-    //   printf("Invalid gpurows %d , maxkronbatch %d nummaxkronbatch %d\n", gpurows, maxkronbatch, nummaxkronbatch);
-    //   return 1;
-    // }
+    if (gpus < 1 || ((gpuInRows != 0 and gpuInCols != 0) && gpuInRows * gpuInCols != gpus)) {
+      printf("GM * GK != gpus (%d != %d)\n", gpuInRows * gpuInCols, gpus);
+      return 1;
+    }
+    if (gpuLocalKrons > facs) {
+      printf("Invalid Local Krons (%d) > Total Facs (%d)\n", gpuLocalKrons, facs);
+    }
   }
 
   uint KP_MAT_N[facs];
@@ -169,11 +173,12 @@ int main(int argc, char* argv[]) {
   
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, tune, false);
+    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, tune, false);
+    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
+    gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpurows, maxkronbatch, nummaxkronbatch, gpus, checkResults, useFusion, tune, false);
+    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else
     printf("type not supported %s\n", type);
 
