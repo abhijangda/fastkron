@@ -379,8 +379,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (verbose) printf("warmup\n");
     //Warm Up iterations
     for (uint i = 0; i < warmup; i++) {
-      if (useUVA) {
-        // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      if (useDistributed) {
+        kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream);
       } else {
         kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
       }
@@ -397,8 +397,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
     for (uint i = 0; i < numIters; i++) {
       //printf("iter i %d\n", i);
-      if (useUVA) {
-        // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      if (useDistributed) {
+        kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream);
       } else {
         kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
       }

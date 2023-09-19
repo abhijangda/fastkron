@@ -2,7 +2,7 @@
 #include "testBase.h"
 
 #define MULTI_GPU_NCCL_NO_FUSION_TEST(M, Facs, FacSize, GM, GK, KronBatch, Type) \
-  TEST(MultiGpuNCCL, Type##_##M##x##Facs##x##FacSize##x##GM##x##GK##x##KronBatch_) { \
+  TEST(MultiGpuNCCL, Type##_##M##x##Facs##x##FacSize##x##GM##x##GK##x##KronBatch##_) { \
   uint KP_MAT_N[Facs];\
   uint KP_MAT_K[Facs];\
   uint N = 1;\
