@@ -369,39 +369,40 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   cudaEvent_t end[gpus];
   float elapsedTime = 0;
 
-  for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaEventCreate(&start[g]));
-    CUDACHECK(cudaEventCreate(&end[g]));
-    cudaStreamCreate(&stream[g]);
-  }
-
-  if (verbose) printf("warmup\n");
-  //Warm Up iterations
-  for (uint i = 0; i < warmup; i++) {
-    if (useUVA) {
-      // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
-    } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+  if (numIters > 0 || warmup > 0) {
+    for (int g = 0; g < gpus; g++) {
+      CUDACHECK(cudaSetDevice(g));
+      CUDACHECK(cudaEventCreate(&start[g]));
+      CUDACHECK(cudaEventCreate(&end[g]));
+      cudaStreamCreate(&stream[g]);
     }
-  }
-  for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaStreamSynchronize(stream[g]));
-  }
-  //Run
-  if (verbose) printf("run\n");
-  for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaEventRecord(start[g], stream[g]));
-  }
-  for (uint i = 0; i < numIters; i++) {
-    if (useUVA) {
-      // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
-    } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+    if (verbose) printf("warmup\n");
+    //Warm Up iterations
+    for (uint i = 0; i < warmup; i++) {
+      if (useUVA) {
+        // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      } else {
+        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+      }
     }
-  }
+    for (int g = 0; g < gpus; g++) {
+      CUDACHECK(cudaSetDevice(g));
+      CUDACHECK(cudaStreamSynchronize(stream[g]));
+    }
+    //Run
+    if (verbose) printf("run\n");
+    for (int g = 0; g < gpus; g++) {
+      CUDACHECK(cudaSetDevice(g));
+      CUDACHECK(cudaEventRecord(start[g], stream[g]));
+    }
+    for (uint i = 0; i < numIters; i++) {
+      //printf("iter i %d\n", i);
+      if (useUVA) {
+        // kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
+      } else {
+        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+      }
+    }
 
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));

@@ -1183,12 +1183,6 @@ template<> void FastKronHandle::initDistributed<double>(int gpus, int gpusInM, i
 }
 
 void FastKronHandle::free() {
-  CUDA_CHECK(cudaFree(temp_));
-  CUDA_CHECK(cudaFree(result_));
-
-  temp_ = nullptr;
-  result_ = nullptr;
-
   if (isDistributed_) {
     for (uint g = 0; g < numGPUs_; g++) {
       CUDA_CHECK(cudaFree(gpuTemp1_[g]));
@@ -1200,5 +1194,11 @@ void FastKronHandle::free() {
 
     gpuTemp1_ = nullptr;
     gpuTemp2_ = nullptr;
+  } else {
+    CUDA_CHECK(cudaFree(temp_));
+    CUDA_CHECK(cudaFree(result_));
+  
+    temp_ = nullptr;
+    result_ = nullptr;  
   }
 }

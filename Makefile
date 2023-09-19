@@ -8,11 +8,7 @@ ARCH_CODE_FLAGS=-gencode arch=compute_70,code=sm_70
 all: kron
 
 libKron.so: src/kron.cu src/kron.h src/kernel.cuh src/kernel_decl.inc src/kernel_defs.cuh src/device_functions.cuh
-<<<<<<< HEAD
 	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS)
-=======
-	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -o $@ -Xptxas=-v,-O3 -gencode arch=compute_70,code=sm_70 -lnccl
->>>>>>> 623ab51 (API functions for distributed kronmatmul, allocating X and gathering Y)
 
 kron: tests/main.cu libKron.so tests/testBase.h
 	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@
@@ -52,6 +48,13 @@ single-gpu-non-square-tuner-tests: gen-non-square-tuner-test-kernels tests/singl
 
 run-single-gpu-non-square-tuner-tests: single-gpu-non-square-tuner-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-non-square-tuner-tests
+
+#Multi GPU Tests
+multi-gpu-nccl-no-fusion-tests: gen-kernels libKron.so tests/testBase.h tests/multi-gpu-nccl-no-fusion-tests.cu
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-multi-gpu-nccl-no-fusion-tests: multi-gpu-nccl-no-fusion-tests
+	LD_LIBRARY_PATH=./: ./multi-gpu-nccl-no-fusion-tests
 
 #Run all tests
 run-tests: single-gpu-tests single-gpu-no-fusion-tests run-tuner-test
