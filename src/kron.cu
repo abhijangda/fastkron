@@ -717,7 +717,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                 // if (g == 0 and io == 1) printGPUArray<float>(handle.gpuM_, 1024, (float*)handle.recvTemps_[g], stream[g]);
 
               } else {
-
                 NCCLCHECK(ncclRecv(handle.recvTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + src, handle.ncclComms[g], stream[g]));
                 CUDA_CHECK(cudaStreamSynchronize(stream[g]));
               // if (g == 0) {
@@ -797,16 +796,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
     CUDA_CHECK(cudaStreamSynchronize(stream[g]));
     int s = pthread_barrier_wait(thArgs->barrier);
     assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
-
-    //Double/ring/circular buffer previous result and new result
-    // if (io < NumKronMats - batchedKronMuls) {
-    //   outerPrevResult = outerCurrResult;
-    //   if (outerPrevResult == kronGemmResults[0]) {        
-    //     outerCurrResult = kronGemmResults[1];
-    //   } else if (outerPrevResult == kronGemmResults[1]) {
-    //     outerCurrResult = kronGemmResults[0];
-    //   }
-    // }
   }
 
   end:
@@ -873,7 +862,6 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   printf("531: time %lf microseconds\n", timeEnd - timeStart);
   // 
-  printf("result[0] %p result[1] %p\n", result[0], result[1]);
   return status;
 }
 

@@ -19,12 +19,7 @@ public:
     
     task() {}
 
-    task& operator= (const task& x) {
-      f = x.f;
-      args = x.args;
-    }
-
-    task& operator= (const volatile task& x) {
+    volatile task& operator= (const task& x) volatile {
       f = x.f;
       args = x.args;
     }
@@ -50,18 +45,15 @@ private:
   };
 
   static void thread_func(thread_args args) {
-    std::cout << "Thread " << args.thread_id << " running" << std::endl;
     volatile thread_pool* volatile_pool = ((volatile thread_pool*)args.pool);
     while(volatile_pool->is_running()) {
       std::unique_lock<std::mutex> lk(args.pool->wait_mutex);
       args.pool->wait_for_tasks(lk);
       lk.unlock();
-      std::cout << "thread " << args.thread_id << " unlocked" << std::endl;
       
       volatile_pool->run_task(args.thread_id);
       args.pool->thread_done(args.thread_id);
     }
-    std::cout << "Thread " << args.thread_id << " exiting" << std::endl;
   }
 
   bool running;
@@ -124,6 +116,7 @@ public:
   }
 
   ~thread_pool() {
+    //TODO: join
   }
 };
 
