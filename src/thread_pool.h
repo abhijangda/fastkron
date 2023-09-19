@@ -10,46 +10,77 @@
 template<typename task_args>
 class thread_pool {
 public:
-  struct Task {
-    std::function<void(task_args)> f;
+  struct task {
+    void(*f)(task_args);
     task_args args;
+
+    task(void(*f_)(task_args), task_args args_) : 
+      f(f_), args(args_) {}
+    
+    task() {}
+
+    task& operator= (const task& x) {
+      f = x.f;
+      args = x.args;
+    }
+
+    task& operator= (const volatile task& x) {
+      f = x.f;
+      args = x.args;
+    }
+
+    volatile task& operator= (const volatile task& x) volatile {
+      f = x.f;
+      args = x.args;
+    }
   };
 
 private:
-  std::thread* threads;
-  Task* tasks;
-  const uint num_threads;
-  std::mutex mutex;
+  std::vector<std::thread> threads;
+  volatile task* tasks;
+  std::vector<char> done;
+
+  uint num_threads;
+  std::mutex wait_mutex;
   std::condition_variable waiting_var;
-  
+
   struct thread_args {
     uint thread_id;
     thread_pool* pool;
-    std::mutex& mutex;
   };
 
   static void thread_func(thread_args args) {
     std::cout << "Thread " << args.thread_id << " running" << std::endl;
     volatile thread_pool* volatile_pool = ((volatile thread_pool*)args.pool);
     while(volatile_pool->is_running()) {
-      std::unique_lock<std::mutex> lk(args.pool->mutex);
+      std::unique_lock<std::mutex> lk(args.pool->wait_mutex);
       args.pool->wait_for_tasks(lk);
-      std::cout << "thread " << args.thread_id << " unlocked" << std::endl;
       lk.unlock();
+      std::cout << "thread " << args.thread_id << " unlocked" << std::endl;
+      
+      volatile_pool->run_task(args.thread_id);
+      args.pool->thread_done(args.thread_id);
     }
-    std::cout << "Thread " << args.thread_id << " finished" << std::endl;
+    std::cout << "Thread " << args.thread_id << " exiting" << std::endl;
   }
 
   bool running;
 
 public:
-  thread_pool(uint num_threads_) : num_threads(num_threads_), waiting_var() {
-    threads = new std::thread[num_threads];
-    tasks = new Task[num_threads];
-    running = true;
+  thread_pool(): num_threads(0) {}
 
-    for (int t = 0; t < num_threads; t++) {
-      threads[t] = std::thread(thread_pool::thread_func, thread_args{t, this, mutex});
+  thread_pool(uint num_threads_) : num_threads(num_threads_) {
+    init(num_threads_);
+  }
+
+  void init(uint num_threads_) {
+    num_threads = num_threads_;
+    running = true;
+    tasks = new task[num_threads];
+
+    for (uint t = 0; t < num_threads; t++) {
+      threads.push_back(std::thread(thread_pool::thread_func, thread_args{t, this}));
+      done.push_back(false);
     }
   }
 
@@ -57,19 +88,39 @@ public:
 
   void end() {
     running = false;
-    for (int t = 0; t < num_threads; t++) {
+    for (uint t = 0; t < num_threads; t++) {
       threads[t].join();
     }
+  }
+
+  void run_task (uint thread_id) volatile {
+    volatile task* t = &tasks[thread_id];
+    t->f(t->args);
   }
 
   void wait_for_tasks(std::unique_lock<std::mutex>& lock) {
     waiting_var.wait(lock);
   }
 
-  void execute_tasks() {
-    std::unique_lock<std::mutex> lk(mutex);
-    lk.unlock();
+  void execute_tasks(task* tasks_) {
+    std::unique_lock<std::mutex> lk(wait_mutex);
+    for (uint i = 0; i < num_threads; i++) {
+      tasks[i] = tasks_[i];
+    }
     waiting_var.notify_all();
+    lk.unlock();
+  }
+
+  void thread_done(uint thread_id) {
+    done[thread_id] = true;
+  }
+
+  void join_tasks() {
+    for (uint t = 0; t < num_threads; t++) {
+      volatile bool* d = (volatile bool*) &done[t];
+      while (*d != true);
+      *d = false;
+    }
   }
 
   ~thread_pool() {

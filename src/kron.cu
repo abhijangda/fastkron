@@ -583,58 +583,25 @@ cudaError_t kronIGEMMTune(FastKronHandle& handle, const uint NumKronMats, int* x
                        stream);
 }
 
-template<typename T>
-struct ThreadArgs {
-  ThreadArgs() {}
-  ThreadArgs(FastKronHandle* handle, uint NumKronMats, T* x, T** kronMats, T* result, 
-            uint M, uint N, uint K, uint *KronMatCols, uint *KronMatRows, cudaStream_t* stream,
-            uint gpuRow, uint gpuCol, uint gpusInM_, uint gpusInK_, pthread_barrier_t* barrier) : 
-            handle(handle), NumKronMats(NumKronMats), x(x), kronMats(kronMats), result(result),
-            M(M), N(N), K(K), KronMatCols(KronMatCols), KronMatRows(KronMatRows), stream(stream),
-            gpuRow(gpuRow), gpuCol(gpuCol), gpusInM_(gpusInM_), gpusInK_(gpusInK_), barrier(barrier) {}
-
-  FastKronHandle* handle;
-  uint NumKronMats;
-  T* x;
-  T** kronMats;
-  T* result;
-  uint M;
-  uint N;
-  uint K;
-  uint *KronMatCols;
-  uint *KronMatRows;
-  cudaStream_t* stream;
-  uint gpuRow;
-  uint gpuCol;
-  uint gpusInM_;
-  uint gpusInK_;
-  pthread_barrier_t* barrier;
-
-  struct ThreadResult {
-    cudaError_t status;
-    void* result;
-  } threadResult;
-};
-
 template<typename T, typename VecT>
-void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
+void perGPUKronMatmul(ThreadArgs* thArgs) {
   // ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
 
-  FastKronHandle& handle = *thArgs.handle;
-  uint NumKronMats = thArgs.NumKronMats;
-  T* x = thArgs.x;
-  T** kronMats = thArgs.kronMats;
-  T* result = thArgs.result;
-  uint M = thArgs.M;
-  uint N = thArgs.N;
-  uint K = thArgs.K;
-  uint *KronMatCols = thArgs.KronMatCols;
-  uint *KronMatRows = thArgs.KronMatRows;
-  cudaStream_t* stream = thArgs.stream;
-  uint gr = thArgs.gpuRow;
-  uint gc = thArgs.gpuCol;
-  uint gpusInM_ = thArgs.gpusInM_;
-  uint gpusInK_ = thArgs.gpusInK_; 
+  FastKronHandle& handle = *thArgs->handle;
+  uint NumKronMats = thArgs->NumKronMats;
+  T* x = (T*)thArgs->x;
+  T** kronMats = (T**)thArgs->kronMats;
+  T* result = (T*)thArgs->result;
+  uint M = thArgs->M;
+  uint N = thArgs->N;
+  uint K = thArgs->K;
+  uint *KronMatCols = thArgs->KronMatCols;
+  uint *KronMatRows = thArgs->KronMatRows;
+  cudaStream_t* stream = thArgs->stream;
+  uint gr = thArgs->gpuRow;
+  uint gc = thArgs->gpuCol;
+  uint gpusInM_ = thArgs->gpusInM_;
+  uint gpusInK_ = thArgs->gpusInK_; 
 
   uint g = gr * gpusInK_ + gc;
   CUDA_CHECK(cudaSetDevice(g));
@@ -825,7 +792,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
     }
     
     CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-    int s = pthread_barrier_wait(thArgs.barrier);
+    int s = pthread_barrier_wait(thArgs->barrier);
     assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
 
     //Double/ring/circular buffer previous result and new result
@@ -840,7 +807,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
   }
 
   end:
-  thArgs.threadResult = {status, (void*)innerPrevResult};
+  thArgs->threadResult = {status, (void*)innerPrevResult};
 }
 
 template<typename T, typename VecT>
@@ -861,18 +828,17 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   // printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
   double timeStart = getCurrTime();
-  
-  std::thread* threads = new std::thread[handle.numGPUs_];
 
-  //TODO: Make threads only once using a thread pool
-  ThreadArgs<T>* threadArgs = new ThreadArgs<T>[handle.numGPUs_];
+  thread_pool<ThreadArgs*>::task tasks[handle.numGPUs_];
+  ThreadArgs threadArgs[handle.numGPUs_];
+
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
-    ThreadArgs<T> args = ThreadArgs<T>(
+    ThreadArgs args = ThreadArgs(
       &handle,
       NumKronMats,
-      x[thread],
-      kronMats,
-      result[thread],
+      (void*)x[thread],
+      (void**)kronMats,
+      (void*)result[thread],
       M,
       N,
       K,
@@ -887,12 +853,16 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
     );
 
     threadArgs[thread] = args;
-    threads[thread] = std::thread(perGPUKronMatmul<T, VecT>, std::ref(threadArgs[thread]));
+    //TODO: make this ThreadArgs& instead of ThreadArgs*
+    tasks[thread] = thread_pool<ThreadArgs*>::task(perGPUKronMatmul<T, VecT>, &threadArgs[thread]);
+    // threads[thread] = std::thread(perGPUKronMatmul<T, VecT>, std::ref(threadArgs[thread]));
   }
+
+  handle.threads_->execute_tasks(tasks);
+  handle.threads_->join_tasks();
 
   cudaError_t status;
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
-    threads[thread].join();
     status = threadArgs[thread].threadResult.status;
     result[thread] =(T*)threadArgs[thread].threadResult.result;
   }
@@ -1037,7 +1007,6 @@ template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY) {
 
 template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDistributed, 
                                               int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  thread_pool<ThreadArgs<T>> pool(2);
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   handle.isDistributed_ = isDistributed;
   if (isDistributed) {
@@ -1094,6 +1063,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     //All gpus with same row shares the same barrier
     //TODO: free
     handle.barriers_ = new pthread_barrier_t[handle.gpusInM_];
+    handle.threads_ = new thread_pool<ThreadArgs*>(handle.numGPUs_);
 
     for (int i = 0; i < handle.gpusInM_; i++) {
       int s = pthread_barrier_init(&handle.barriers_[i], NULL, handle.gpusInK_);
@@ -1142,8 +1112,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     }
     compiledKernels.at(shape).push_back(info);
   }
-  pool.execute_tasks();
-  pool.end();
   
   //TODO: Add if debug
   if (false) {

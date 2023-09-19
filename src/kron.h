@@ -1,5 +1,6 @@
 #include <vector>
 #include <nccl.h>
+#include "thread_pool.h"
 
 #ifndef __KRON_H__
 #define __KRON_H__
@@ -112,6 +113,7 @@ struct TunedKernelFromStart {
 };
 
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
+struct ThreadArgs;
 
 struct FastKronHandle {
   const uint M_, N_, K_;
@@ -151,6 +153,7 @@ struct FastKronHandle {
   void **recvTemps_;
   bool isDistributed_;
   pthread_barrier_t* barriers_;
+  thread_pool<ThreadArgs*>* threads_;
 
   template<typename T> void init();
   template<typename T> void initDistributed(int gpus, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
@@ -173,6 +176,38 @@ struct FastKronHandle {
     for (int i=0; i<ncclComms.size(); i++)
       ncclCommDestroy(ncclComms[i]);
   }
+};
+
+struct ThreadArgs {
+  ThreadArgs() {}
+  ThreadArgs(FastKronHandle* handle, uint NumKronMats, void* x, void** kronMats, void* result, 
+            uint M, uint N, uint K, uint *KronMatCols, uint *KronMatRows, cudaStream_t* stream,
+            uint gpuRow, uint gpuCol, uint gpusInM_, uint gpusInK_, pthread_barrier_t* barrier) : 
+            handle(handle), NumKronMats(NumKronMats), x(x), kronMats(kronMats), result(result),
+            M(M), N(N), K(K), KronMatCols(KronMatCols), KronMatRows(KronMatRows), stream(stream),
+            gpuRow(gpuRow), gpuCol(gpuCol), gpusInM_(gpusInM_), gpusInK_(gpusInK_), barrier(barrier) {}
+
+  FastKronHandle* handle;
+  uint NumKronMats;
+  void* x;
+  void** kronMats;
+  void* result;
+  uint M;
+  uint N;
+  uint K;
+  uint *KronMatCols;
+  uint *KronMatRows;
+  cudaStream_t* stream;
+  uint gpuRow;
+  uint gpuCol;
+  uint gpusInM_;
+  uint gpusInK_;
+  pthread_barrier_t* barrier;
+
+  struct ThreadResult {
+    cudaError_t status;
+    void* result;
+  } threadResult;
 };
 
 //TODO: modify such that the results are always written to the supplied result pointer 
