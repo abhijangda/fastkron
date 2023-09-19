@@ -14,6 +14,7 @@
 
 #include "utils.h"
 #include "kron.h"
+#include "thread_pool.h"
 
 #define CUDA_CHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
@@ -865,7 +866,6 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   //TODO: Make threads only once using a thread pool
   ThreadArgs<T>* threadArgs = new ThreadArgs<T>[handle.numGPUs_];
-  std::cout << "handle.numGPUs_ " << handle.numGPUs_ << std::endl;
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
     ThreadArgs<T> args = ThreadArgs<T>(
       &handle,
@@ -1037,6 +1037,7 @@ template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY) {
 
 template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDistributed, 
                                               int gpus, int gpusInM, int gpusInK, int gpuKrons) {
+  thread_pool<ThreadArgs<T>> pool(2);
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   handle.isDistributed_ = isDistributed;
   if (isDistributed) {
@@ -1071,7 +1072,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       handle.perGPUKronBatch_ = 1;
 
     //TODO: Check if gpusInK_ == 1 then perGPUKronBatch = NumKrons
-    
+
     std::cout << "gpusInRows " << handle.gpusInM_ <<
                  " gpusInCols " << handle.gpusInK_ << 
                  " gpuKronBatch" << handle.perGPUKronBatch_ <<
@@ -1111,8 +1112,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       //TODO: Figure this size
       CUDA_CHECK(cudaMalloc(&handle.sendTemps_[g], sz));
       CUDA_CHECK(cudaMalloc(&handle.recvTemps_[g], sz));
-      std::cout << "989: handle.sendTemps_[" << g << "] " << handle.sendTemps_[g] << std::endl;
-      std::cout << "990: handle.recvTemps_[ "<< g << "] " << handle.recvTemps_[g] << std::endl;
     }
     std::cout << "Allocated temporaries"<<std::endl;
 
@@ -1143,6 +1142,8 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     }
     compiledKernels.at(shape).push_back(info);
   }
+  pool.execute_tasks();
+  pool.end();
   
   //TODO: Add if debug
   if (false) {
