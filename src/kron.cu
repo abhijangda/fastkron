@@ -642,14 +642,14 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
   
   //Temporaries are swaped after every slicedMatmul
   //TODO: User supplied result should be used as a temp and the final results are written in it
+  //TODO: What if Rows are not multiple of GPUs in Rows
   T* innerResults[2] = {(T*)handle.gpuTemp1_[g], (T*)handle.gpuTemp2_[g]};
   // std::cout << "handle.gpuM_ " << handle.gpuM_ << " handle.gpuK_ " <<handle.gpuK_ << " gpusInCols " << gpusInCols << " gpusInRows " << gpusInRows << " K " << K << std::endl;
   std::cout <<"g " << g<< " innerResults = " << "{" << innerResults[0] << ", " << innerResults[1] << "}" << std::endl;
   T* innerPrevResult;
   T* innerCurrResult;
   
-  for (uint startGpuM = handle.gpuM_ * gr; startGpuM  < M; 
-       startGpuM += handle.gpuM_ * gpusInM_) {
+  uint startGpuM = handle.gpuM_ * gr;
   const uint gpuM = min(handle.gpuM_, M - startGpuM);
   //For first slicedMatmul, x is the input
   innerPrevResult = x;
@@ -673,7 +673,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
 
     uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
     uint MaxI = io + KronMulBatchSize;
-    printf("io %d\n", io);
+    // std::cout << "io " << io << " gr " << gr << " gc " << gc << "g " << g <<  std::endl;
     {//uint gpuColPart = gc * handle.gpuK_; gpuColPart < K; gpuColPart += handle.gpuK_ * gpusInK_) {
       //Copy outerPrevResult to innerPrevResult
       // if (uvaColsX < K) {
@@ -731,8 +731,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
                                                                   innerCurrResult, gc, KronMulBatchSize, io, (io == 0 and g == 1));
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
       }
-      int s = pthread_barrier_wait(thArgs.barrier);
-      assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
+
       //All GPUs with the same gr share their intermediates
       for (int dst = 0; dst < handle.gpusInK_; dst++) {
         const uint SliceRows = handle.gpuM_;
@@ -751,7 +750,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
 
             } else {
 
-              NCCLCHECK(ncclRecv(handle.recvTemps_[g], sendRecvSize, ncclFloat, src, handle.ncclComms[g], stream[g]));
+              NCCLCHECK(ncclRecv(handle.recvTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + src, handle.ncclComms[g], stream[g]));
               CUDA_CHECK(cudaStreamSynchronize(stream[g]));
             // if (g == 0) {
             //   printf("704\n");
@@ -781,7 +780,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
           //    printGPUArray<float>(SliceRows, SliceCols, (float*)handle.sendTemps_[g], stream[g]);
           //    printf("699 dst %d g %d\n", dst, g);
           // }
-          NCCLCHECK(ncclSend(handle.sendTemps_[g], sendRecvSize, ncclFloat, dst, handle.ncclComms[g], stream[g]));
+          NCCLCHECK(ncclSend(handle.sendTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + dst, handle.ncclComms[g], stream[g]));
           CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         }
       }
@@ -823,7 +822,7 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
       //   // printf("outerPrevResult %p outerCurrResult %p\n", outerPrevResult, outerCurrResult);
       // }
     }
-
+    
     CUDA_CHECK(cudaStreamSynchronize(stream[g]));
     int s = pthread_barrier_wait(thArgs.barrier);
     assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
@@ -837,7 +836,6 @@ void perGPUKronMatmul(ThreadArgs<T>& thArgs) {
     //     outerCurrResult = kronGemmResults[0];
     //   }
     // }
-  }
   }
 
   end:
@@ -867,7 +865,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   //TODO: Make threads only once using a thread pool
   ThreadArgs<T>* threadArgs = new ThreadArgs<T>[handle.numGPUs_];
-
+  std::cout << "handle.numGPUs_ " << handle.numGPUs_ << std::endl;
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
     ThreadArgs<T> args = ThreadArgs<T>(
       &handle,
@@ -1066,12 +1064,14 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       handle.gpusInM_ = gpusInM;  
     else
       handle.gpusInM_ = 1;//ilog2(gpus);
-
+    
     if (gpuKrons > 0)
       handle.perGPUKronBatch_ = gpuKrons;
     else 
       handle.perGPUKronBatch_ = 1;
 
+    //TODO: Check if gpusInK_ == 1 then perGPUKronBatch = NumKrons
+    
     std::cout << "gpusInRows " << handle.gpusInM_ <<
                  " gpusInCols " << handle.gpusInK_ << 
                  " gpuKronBatch" << handle.perGPUKronBatch_ <<
