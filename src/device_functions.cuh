@@ -280,12 +280,11 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
     // }
     
     if (batchedKronMuls == 1) {
-      uint srcElem = rank * (perGPUK/numGPUs) + elem; //1024,1025,1026,....2047
-      uint globalCCol = srcRank * (perGPUK/KronRows); //128
-      globalCCol += (srcElem/(perGPUK/KronRows))*(ColsC/KronRows); //(srcElem/(128)) * (256)
-      globalCCol += srcElem%(perGPUK/KronRows); //srcElem%(128); = 128 + (srcElem/(128)) * (256) + srcElem%128; >= 128; <= 7*256+127=1919
+      uint srcElem = rank * (perGPUK/numGPUs) + elem;
+      uint globalCCol = srcRank * (perGPUK/KronRows);
+      globalCCol += (srcElem/(perGPUK/KronRows))*(ColsC/KronRows);
+      globalCCol += srcElem%(perGPUK/KronRows);
       int gpuCol = globalCCol - rank * perGPUK;
-      // if (gpuCol < 0) printf("gpuCol %d globalCCol %d rank %d\n", gpuCol, globalCCol, rank); 
       const uint id = rowA * (perGPUK/numGPUs) + elem;
       auto e = slicedGPUOutput[id];
       // if (canPrint and rowA == 1) printf("rowA %d gpuCol %d e %f id %d ColsA %d\n", rowA, gpuCol, e, id, ColsA);
@@ -301,7 +300,7 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
                       ((srcElem%(perGPUK/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
                       srcElem % UVAColsRatioKronRowsSquare;
       uint p5Index = (srcElem/(perGPUK/KronRows))*(ColsA/KronRows);
-      uint cCol = p5Index + withinP5; //(uvaElem/(uvaCols/KronRows))*(ColsC/KronRows) + uvaElem%(uvaCols/KronRows);
+      uint cCol = p5Index + withinP5;
       int gpuCol = cCol - rank * perGPUK;
 
       gpuOutput[rowA * perGPUK + gpuCol] = slicedGPUOutput[rowA * (perGPUK/numGPUs) + elem];
