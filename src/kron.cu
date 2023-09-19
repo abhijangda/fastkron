@@ -682,74 +682,82 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       
       // if (g == 1) {printf("683\n"); printGPUArray<float>(handle.gpuM_, handle.gpuK_, innerPrevResult, stream[g]);}
       // printf("684\n");
-
-      {
-        const uint SliceRows = handle.gpuM_;
-        const uint SliceCols = handle.gpuK_/handle.gpusInK_;
-        const size_t sendRecvSize = SliceRows * SliceCols;
-        const uint startRow = 0;
-        const uint startCol = gc * SliceCols;
-        matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
-                      startRow, startCol, SliceRows, SliceCols,
-                      (float*)handle.recvTemps_[g], stream[g], g, io, true);
-        dim3 grid = {handle.gpuM_, 1,1};
-        dim3 block = {256, 1, 1};
-        storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], gc, handle.gpusInK_, 
-                                                                  (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
-                                                                  innerCurrResult, gc, KronMulBatchSize, io, (io == 0 and g == 1));
-        CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-      }
-
-      //All GPUs with the same gr share their intermediates
-      for (int dst = 0; dst < handle.gpusInK_; dst++) {
-        const uint SliceRows = handle.gpuM_;
-        const uint SliceCols = handle.gpuK_/handle.gpusInK_;
-        const size_t sendRecvSize = SliceRows * SliceCols;
-        if (dst == gc) {
-          for (int src = 0; src < handle.gpusInK_; src++) {
-            // printf("g %d dst %d src %d\n", g, dst, src);
-            if (src == dst) {
-              // const uint startRow = 0;
-              // const uint startCol = dst * SliceCols;
-              // matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
-              //             startRow, startCol, SliceRows, SliceCols,
-              //             (float*)handle.recvTemps_[g], stream[g], g, io, true);
-              // if (g == 0 and io == 1) printGPUArray<float>(handle.gpuM_, 1024, (float*)handle.recvTemps_[g], stream[g]);
-
-            } else {
-
-              NCCLCHECK(ncclRecv(handle.recvTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + src, handle.ncclComms[g], stream[g]));
-              CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-            // if (g == 0) {
-            //   printf("704\n");
-            //   printGPUArray<float>(handle.gpuM_, handle.gpuK_, (float*)handle.recvTemps_[g], stream[g]);
-            //   printf("699 src %d dst %d g %d\n", src, dst, g);
-            // printf("713\n");
-            // printGPUArray<float>(handle.gpuM_, handle.gpuK_, (float*)handle.recvTemps_[g], stream[g]);
-            // printf("715\n");
-            dim3 grid = {handle.gpuM_, 1,1};
-            dim3 block = {256, 1, 1};
-            storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], dst, handle.gpusInK_, 
-                                                                      (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
-                                                                      innerCurrResult, src, KronMulBatchSize, io, (io == 0 and g == 1));
-            CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-            // if (io == 0 and g == 1) printGPUArray<float>(80, 2048, ((io == 0) ? 16.0 :256.0f), (const float*)innerCurrResult, stream[g]);
-            // }
-            }
-          }
-        } else {
+      if (handle.gpusInK_ > 1) {
+        {
+          const uint SliceRows = handle.gpuM_;
+          const uint SliceCols = handle.gpuK_/handle.gpusInK_;
+          const size_t sendRecvSize = SliceRows * SliceCols;
           const uint startRow = 0;
-          const uint startCol = dst * SliceCols;
+          const uint startCol = gc * SliceCols;
           matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
-                      startRow, startCol, SliceRows, SliceCols,
-                      (float*)handle.sendTemps_[g], stream[g], g, io);
+                        startRow, startCol, SliceRows, SliceCols,
+                        (float*)handle.recvTemps_[g], stream[g], g, io, true);
+          dim3 grid = {handle.gpuM_, 1,1};
+          dim3 block = {256, 1, 1};
+          storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], gc, handle.gpusInK_, 
+                                                                    (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
+                                                                    innerCurrResult, gc, KronMulBatchSize, io, (io == 0 and g == 1));
           CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-          // if (g == 1 && dst == 0) {
-          //    printGPUArray<float>(SliceRows, SliceCols, (float*)handle.sendTemps_[g], stream[g]);
-          //    printf("699 dst %d g %d\n", dst, g);
-          // }
-          NCCLCHECK(ncclSend(handle.sendTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + dst, handle.ncclComms[g], stream[g]));
-          CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+        }
+
+        //All GPUs with the same gr share their intermediates
+        for (int dst = 0; dst < handle.gpusInK_; dst++) {
+          const uint SliceRows = handle.gpuM_;
+          const uint SliceCols = handle.gpuK_/handle.gpusInK_;
+          const size_t sendRecvSize = SliceRows * SliceCols;
+          if (dst == gc) {
+            for (int src = 0; src < handle.gpusInK_; src++) {
+              // printf("g %d dst %d src %d\n", g, dst, src);
+              if (src == dst) {
+                // const uint startRow = 0;
+                // const uint startCol = dst * SliceCols;
+                // matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
+                //             startRow, startCol, SliceRows, SliceCols,
+                //             (float*)handle.recvTemps_[g], stream[g], g, io, true);
+                // if (g == 0 and io == 1) printGPUArray<float>(handle.gpuM_, 1024, (float*)handle.recvTemps_[g], stream[g]);
+
+              } else {
+
+                NCCLCHECK(ncclRecv(handle.recvTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + src, handle.ncclComms[g], stream[g]));
+                CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+              // if (g == 0) {
+              //   printf("704\n");
+              //   printGPUArray<float>(handle.gpuM_, handle.gpuK_, (float*)handle.recvTemps_[g], stream[g]);
+              //   printf("699 src %d dst %d g %d\n", src, dst, g);
+              // printf("713\n");
+              // printGPUArray<float>(handle.gpuM_, handle.gpuK_, (float*)handle.recvTemps_[g], stream[g]);
+              // printf("715\n");
+              dim3 grid = {handle.gpuM_, 1,1};
+              dim3 block = {256, 1, 1};
+              storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], dst, handle.gpusInK_, 
+                                                                        (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
+                                                                        innerCurrResult, src, KronMulBatchSize, io, (io == 0 and g == 1));
+              CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+              // if (io == 0 and g == 1) printGPUArray<float>(80, 2048, ((io == 0) ? 16.0 :256.0f), (const float*)innerCurrResult, stream[g]);
+              // }
+              }
+            }
+          } else {
+            const uint startRow = 0;
+            const uint startCol = dst * SliceCols;
+            matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
+                        startRow, startCol, SliceRows, SliceCols,
+                        (float*)handle.sendTemps_[g], stream[g], g, io);
+            CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+            // if (g == 1 && dst == 0) {
+            //    printGPUArray<float>(SliceRows, SliceCols, (float*)handle.sendTemps_[g], stream[g]);
+            //    printf("699 dst %d g %d\n", dst, g);
+            // }
+            NCCLCHECK(ncclSend(handle.sendTemps_[g], sendRecvSize, ncclFloat, gr * handle.gpusInK_ + dst, handle.ncclComms[g], stream[g]));
+            CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+          }
+        }
+
+        innerPrevResult = innerCurrResult;
+        if (innerPrevResult == innerResults[0]) {        
+          innerCurrResult = innerResults[1];
+        } else if (innerPrevResult == innerResults[1]) {
+          innerCurrResult = innerResults[0];
         }
       }
       // if (io == 0 and g == 1) printGPUArray<float>(80, 2048, ((io == 0) ? 16.0 :256.0f), (const float*)innerCurrResult, stream[g]);
@@ -760,12 +768,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       // printf("737 io %d\n", io);
       
 
-      innerPrevResult = innerCurrResult;
-      if (innerPrevResult == innerResults[0]) {        
-        innerCurrResult = innerResults[1];
-      } else if (innerPrevResult == innerResults[1]) {
-        innerCurrResult = innerResults[0];
-      }
+      
       // return;
       //Copy uvaCurrResult to kronGemmResult
       // if (uvaColsX < K) {
