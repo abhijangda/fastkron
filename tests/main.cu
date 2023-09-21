@@ -1,13 +1,37 @@
 #include "anyoption.h"
 #include "testBase.h"
 
+#include <sstream>
+
+bool parseStringToIntegers(char* str, uint array[], const int numInts) {
+  int parsedInts = 0;
+  
+  std::string stdstr(str);
+  std::cout << stdstr << std::endl;
+  std::stringstream stream(stdstr);
+  uint n;
+  char comma;
+  while(stream >> n){
+    array[parsedInts] = n;
+    stream >> comma;
+    if (comma != ',')
+      break;
+    parsedInts++;
+  }
+
+  if (parsedInts != numInts) return false;
+
+  return true;
+}
+
 /**************************************************
               Main Function
 ***************************************************/
 int main(int argc, char* argv[]) {  
   int batch = 0;
   int facs = 0;
-  int size = 0;
+  char* fac_rows = NULL;
+  char* fac_cols = NULL;
   char* type = NULL;
   bool checkResults = false;
   int runs = 0;
@@ -24,7 +48,8 @@ int main(int argc, char* argv[]) {
   opt->addUsage("usage: ");
   opt->addUsage("batch: Size of Batch");
   opt->addUsage("facs:  Number of Kron Factors");
-  opt->addUsage("size:  Row and cols of each Kron Factor");
+  opt->addUsage("fac_rows: Rows of each Kron Factor separated by space");
+  opt->addUsage("fac_cols: Cols of each Kron Factor separated by space");
   opt->addUsage("type:  Type of matrices (float, int, half, double)");
   opt->addUsage("check: Check results for first run");
   opt->addUsage("runs:  Number of runs");
@@ -36,7 +61,8 @@ int main(int argc, char* argv[]) {
 
   opt->setOption("batch", 'b');
   opt->setOption("facs", 'f');
-  opt->setOption("size", 's');
+  opt->setOption("fac_rows", 'p');
+  opt->setOption("fac_cols", 'q');
   opt->setOption("type", 't');
   opt->setOption("runs", 'r');
   opt->setOption("warmup", 'w');
@@ -67,10 +93,14 @@ int main(int argc, char* argv[]) {
     facs = atoi(opt->getValue('f'));
   }
 
-  if (opt->getValue('s') != NULL) {
-    size = atoi(opt->getValue('s'));
+  if (opt->getValue('p') != NULL) {
+    fac_rows = opt->getValue('p');
   }
-
+  
+  if (opt->getValue('q') != NULL) {
+    fac_cols = opt->getValue('q');
+  }
+  
   if (opt->getValue('t') != NULL) {
     type = opt->getValue('t');
   }
@@ -104,8 +134,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (batch <= 0 || facs <= 0 || size <= 0 || type == NULL || runs <= 0) {
-    printf("Invalid value batch: %d, facs %d, size %d, type %p, runs %d\n", batch, facs, size, type, runs);
+  if (batch <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL || type == NULL || runs <= 0) {
+    printf("Invalid value batch: %d, facs %d, fac_rows %s, fac_cols %s, type %p, runs %d\n", batch, facs, fac_rows, fac_cols, type, runs);
     return 1;
   }
 
@@ -113,10 +143,15 @@ int main(int argc, char* argv[]) {
   uint KP_MAT_K[facs];
   uint N = 1;
   uint K = 1;
+  if (parseStringToIntegers(fac_cols, KP_MAT_N, facs) == false) {
+    printf("Less than expected '%d' columns in '%s'\n", facs, fac_cols);
+  }
+  if (parseStringToIntegers(fac_rows, KP_MAT_K, facs) == false) {
+    printf("Less than expected '%d' columns in '%s'\n", facs, fac_rows);
+  }
   for (uint i = 0; i < (uint)facs; i++) {
-    N *= size;
-    K *= size;
-    KP_MAT_K[i] = KP_MAT_N[i] = size;
+    N *= KP_MAT_N[i];
+    K *= KP_MAT_K[i];
   }
   
   bool status = false;
