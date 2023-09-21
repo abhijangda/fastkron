@@ -341,8 +341,10 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     std::cout << kronMat << std::endl;
     
     // if (kronMat >= 1)
-    printGPUArray<float>(M, currTempN, (kronMat == 2) ? 8.0f : (kronMat == 1 ? 64.0f : 512.0f),
-                         (float*)currKronResult, stream);
+    // printGPUArray<float>(M, currTempN, (kronMat == 2) ? 8.0f : (kronMat == 1 ? 64.0f : 512.0f),
+    //                      (float*)currKronResult, stream);
+    CUDA_CHECK(cudaDeviceSynchronize());
+    
     prevTempN = currTempN;
     std::cout << "prevTempN " << prevTempN << " currTempN " << currTempN << std::endl;
     // if (kronMat == 1) return cudaSuccess;

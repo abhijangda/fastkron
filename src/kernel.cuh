@@ -66,14 +66,15 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   const uint MaxColsC = (MaxColsA/MaxKronRows)*MaxKronCols;
   if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0)
     printf("MaxColsC %d\n", MaxColsC);
-  constexpr uint wSz = ((MaxColsC/MaxKronRows)/CRegRows); //1024/8 = 128
+  constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows); //64
+  // constexpr uint wSz2 = (MaxKronCols/CRegCols); //
 
-  const uint kp_col_start_ = (tid / wSz) * CRegCols; //(0 to 1024)/128 = 0,1,2,..8
-  const uint a_col_start_  = (tid % wSz) * CRegRows; //0 to 127
+  const uint kp_col_start_ = (tid / wSz) * CRegCols; //0 to 16
+  const uint a_col_start_  = (tid % wSz) * CRegRows; //0 to 64
 
-  const uint tileRowA  = blockIdx.y * TileSizeRowsA;
-  const uint outerTileKronCol =  kp_col_start_;
-  const uint tileColA    =  a_col_start_ ;
+  const uint tileRowA         = blockIdx.y * TileSizeRowsA;
+  const uint outerTileKronCol = kp_col_start_;
+  const uint tileColC         = a_col_start_ ;
 
   for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileSizeKronRows) {
     //Loop iterates only once when NumFusedKerns == 1
@@ -100,7 +101,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
       if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
         //Optimized to load full factor matrix
         fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
-                                                      NumThreads, MaxKronRows, kronRows, 
+                                                      NumThreads, MaxKronRows, MaxKronCols, kronRows, 
                                                       kronCols, tid, params.glKronMats[fusedFac], &shKronMats[0][0]);
       } else if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
         tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
@@ -116,7 +117,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
       for (uint regTileACol = 0; regTileACol < TileSizeKronRows; regTileACol += RegTileSizeACols) {
         register ElemT Ar[TileSizeRowsA][CRegRows][RegTileSizeACols];
         register ElemT KPr[RegTileSizeACols][CRegCols];
-
+        const uint tileColA = (tileColC);// * MaxColsA)/MaxColsC;
         uint round_start = (tileColA / CRegRows)%TileSizeKronRows;
 
         #pragma unroll
@@ -127,21 +128,21 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
             uint shACol = tileColA + rowC;
             #pragma unroll
             for (uint colC = 0; colC < RegTileSizeACols; colC++) {
-              ElemT temp = (params.kp_idx == 2) ? 1 : (params.kp_idx == 1 ? 8 : 64); //shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
+              ElemT temp = (params.kp_idx == 2) ? 1 : (params.kp_idx == 1 ? 8 : 64);
+              // ElemT temp = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
               Ar[rowA][rowC][colC] = temp;
-              if (params.kp_idx == 1 && temp != 8 && blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x < 32) {
-                printf("Ar[%d][%d][%d] shA[%d][%d] %f %f\n", 
-                        rowA, rowC, colC,
-                        rowA, shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows,
-                        Ar[rowA][rowC][colC],
-                        temp);
-              }
+              // if (params.kp_idx == 1 && blockIdx.x == 0 && blockIdx.y == 0 && outerTileKronCol == 0 && tileColC == 8) {
+              //   printf("Ar[%d][%d][%d] shACol %d shA[%d][%d] %f\n", 
+              //           rowA, rowC, colC, shACol,
+              //           rowA, shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows,
+              //           temp);
+              // }
             }
         }}}
         
         #pragma unroll
         for (uint colC = 0; colC < CRegCols; colC++) {
-          uint shKronCol = outerTileKronCol + colC;//TODO: Should outerTileKronCol be here?
+          uint shKronCol = outerTileKronCol + colC;
           #pragma unroll
           for (uint elem = 0; elem < RegTileSizeACols; elem++)    
             KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
@@ -156,8 +157,13 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
           #pragma unroll
           for (uint j = 0;    j < CRegCols;         j++)
           #pragma unroll
-          for (uint k = 0;    k < RegTileSizeACols; k++)
+          for (uint k = 0;    k < RegTileSizeACols; k++) {
             regC[rowA][i][j] += Ar[rowA][i][k] * KPr[k][j];
+            // if (Ar[rowA][i][k] == 0.0f) printf("Ar[rowA][%d][%d] %f\n", i,k, Ar[rowA][i][k]);
+            // if (tileColC == 0 and outerTileKronCol == 8) {
+            //   printf("regC %f KPr[k][j] %f\n", regC[rowA][i][j], KPr[k][j]);
+            // }
+          }
         }
       }
 
@@ -169,10 +175,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
         #pragma unroll
         for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
         for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
-          uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
-          uint tileColA = (cCol/TileSizeKronRows)/CRegRows;
+          uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColC + reg_i;
+          uint tileColC = (cCol/TileSizeKronRows)/CRegRows;
           
-          cCol = (cCol/TileSizeKronRows)*TileSizeKronRows + (tileColA + cCol%TileSizeKronRows)%TileSizeKronRows;
+          cCol = (cCol/TileSizeKronRows)*TileSizeKronRows + (tileColC + cCol%TileSizeKronRows)%TileSizeKronRows;
           shA[rowA][cCol] = regC[rowA][reg_i][reg_j];
       }}}}
       __syncthreads();
@@ -195,7 +201,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
-        uint colShC = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColA + reg_i;
+        uint colShC = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColC + reg_i;
         const uint rowC = rowShC + tileRowA;
         //Need below to work well
         //KronRowsPower = 512;
@@ -258,9 +264,9 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
         __syncwarp();
       } else {
         const uint cRow = (rowA + tileRowA);
-        uint cCol = outerTileKronCol*(MaxColsC/MaxKronRows) + //(0 to 8)*128
-                    reg_j*(MaxColsC/MaxKronRows) + //0
-                    tileColA + //0 to 127
+        uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + //(0 to 16)*64
+                    reg_j*(MaxColsA/MaxKronRows) + //0
+                    tileColC + //0 to 64
                     reg_i;
         // if (threadIdx.x == 0 and blockIdx.x == 0) printf("MaxColsC %d\n", MaxColsC);
         if (!K_EQUALS_VAR) {
@@ -295,10 +301,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
             case 1: {
               globalStore1Elems(&params.glC[cIdx], regC[rowA][reg_i][reg_j]);
               // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
-              // if (blockIdx.y == 0) {
-              //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d {%d, %d} %d\n",
-              //          params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, blockIdx.x, blockIdx.y, threadIdx.x);
-              // }
+              if (params.kp_idx == 2 and params.glC[cIdx] != 8.0f) {
+                printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
+                       params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, tileColC, outerTileKronCol, threadIdx.x);
+              }
               break;
             }
           }
