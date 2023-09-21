@@ -171,6 +171,26 @@ __device__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
   *addr = elem1;
 }
 
+template<typename ElemT>
+__global__ void printArrayKernel(const uint Rows, const uint Cols, const ElemT val, const ElemT* array) {
+  const uint row = blockIdx.x;
+  uint col = threadIdx.x;
+  for (; col < Cols; col += blockDim.x) {
+    const uint id = row * Cols + col;
+    if (row == 0 and col <= Cols and array[id] != val)
+      printf("array[%d*%d + %d] %f\n", row, Cols, col, array[id]);
+  }
+}
+
+template<typename ElemT>
+void printGPUArray(const uint Rows, const uint Cols, const ElemT val, const ElemT* array, cudaStream_t stream) {
+  dim3 grid = {Rows, 1, 1};
+  dim3 block = {256, 1, 1};
+
+  printArrayKernel<ElemT><<<grid, block, 0, stream>>>(Rows, Cols, val, array);
+  CUDA_CHECK(cudaStreamSynchronize(stream));
+}
+
 
 template<typename ElemT, typename VecT, uint NumThreads>
 __global__ void copyXtoUVAX(const uint RowsC,    const uint ColsC,   const uint ColsA,
@@ -272,6 +292,8 @@ void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
         uint tileColA = (ash_col/TileSizeKronRows)/CRegRows;
        
         uint final_col = (ash_col/TileSizeKronRows)*TileSizeKronRows + (tileColA + ash_col%TileSizeKronRows)%TileSizeKronRows;
+        if (a_col +i < 8 && blockIdx.x == 0 && blockIdx.y == 0)
+          printf("rowA %d a_col %d final_col %d TileSizeColsA %d elem %f\n", rowA, a_col + i, final_col, TileSizeColsA, elems[i]);
         shA[rowA * TileSizeColsA + final_col] = elems[i];
       }
     }

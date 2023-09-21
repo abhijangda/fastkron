@@ -255,7 +255,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
@@ -318,8 +318,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       CUDACHECK(cudaDeviceSynchronize());
     }
     if (verbose) printf("checking results\n");
-    T* dResultToHost = (T*)malloc(sizeX);
-    CUDACHECK(cudaMemcpy(dResultToHost, dResult, sizeX, cudaMemcpyDeviceToHost));
+    size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
+    T* dResultToHost = (T*)malloc(sizeResult);
+    CUDACHECK(cudaMemcpy(dResultToHost, dResult, sizeResult, cudaMemcpyDeviceToHost));
     
     //Check Results
     if (check(hResult, dResultToHost, M, N)) {

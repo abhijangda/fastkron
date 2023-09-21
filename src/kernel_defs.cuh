@@ -19,7 +19,7 @@
 #define EXTERNAL_KP_K_TILE_ MAX_K
 
 static KernelInfo KronGemmKernels[] = {
-  TYPE_KERNELS(float,  float4, ElementType::Float)
+  TYPE_KERNELS(float,  float, ElementType::Float)
   // TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
 };

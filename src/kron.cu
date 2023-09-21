@@ -138,7 +138,7 @@ uint maxFusedKernels(KronMatmulShape shape) {
 KernelInfo selectKernel(KronMatmulShape shape) {
   //Go through all MaxColsA starting from MAX_K and select the relevant
   KronMatmulShape maxColsAShape = maxCompiledColsA(shape);
-  int kEqVar = (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
+  int kEqVar = 0; (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
     std::cout << "No kernel found" << std::endl;
@@ -185,19 +185,19 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   {
     const uint CRegRows = kernelInfo.CRegRows;
     const uint CRegCols = kernelInfo.CRegCols;
-    const uint MaxColsA = kernelInfo.MaxColsA;
+    const uint MaxColsC = kernelInfo.MaxColsA;
     const uint KronRows = kernelInfo.KronRows;
-    uint c1 = MAX(1, NumThreads/((kernelInfo.MaxColsA/kernelInfo.KronRows)/CRegRows));
+    uint c1 = MAX(1, NumThreads/((MaxColsC/kernelInfo.KronRows)/CRegRows));
     
     if (kernelInfo.TileKronCols != c1 * CRegCols) {
-      printf("Invalid configuration: TileKronCols %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsA %d\n", 
-              kernelInfo.TileKronCols, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsA);
+      printf("Invalid configuration: TileKronCols %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsC %d\n", 
+              kernelInfo.TileKronCols, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsC);
       abort();
     }
-    if (MaxColsA/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
-      printf("MaxColsA/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsA/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
-      printf("Invalid configuration: MaxColsA %d KronRows %d NumThreads %d CRegRows %d CRegCols %d\n",
-              MaxColsA, KronRows, NumThreads, CRegRows, CRegCols);
+    if (MaxColsC/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
+      printf("MaxColsC/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsC/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
+      printf("Invalid configuration: MaxColsC %d KronRows %d NumThreads %d CRegRows %d CRegCols %d\n",
+              MaxColsC, KronRows, NumThreads, CRegRows, CRegCols);
       abort();
     }
   }
@@ -224,7 +224,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   //Create kernel args;
   // void *args[] = {(void*)&params};
   ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params);
-  // CUDA_CHECK(cudaDeviceSynchronize());
+  CUDA_CHECK(cudaDeviceSynchronize());
   status = cudaGetLastError();
   // status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
   // if (status != cudaSuccess)
@@ -279,51 +279,56 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   }
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
+  std::cout << "M " << M << " N " << N << " K " << K << std::endl;
+  uint prevTempN = K;
+  uint currTempN;
   for (auto kernel : kernelSeries) {
     const uint kronMat = kernel.end;
     const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
     T* krons[NumFusedKerns];
     uint FusedKronMatCols[NumFusedKerns];
     uint FusedKronMatRows[NumFusedKerns];
+    currTempN = prevTempN;
     for (int k = 0; k < NumFusedKerns; k++) {
       krons[k] = kronMats[kronMat - k];
       FusedKronMatCols[k] = KronMatCols[kronMat - k];
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
+      currTempN = (prevTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
     cudaError_t status;
 
     KernelInfo selectedKernel = kernel.kernel;
 
     std::cout << "kernel selected " << selectedKernel << std::endl;
-    
+    std::cout << "prevTempN " << prevTempN << " currTempN " << currTempN << std::endl;
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,
-                                           krons, currKronResult, M, N, K, 
+                                           krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
                                            stream);
         break;
       case 2:
         status = generalSlicedMatmul<T, 2>(selectedKernel, kronMat, prevKronResult,
-                                           krons, currKronResult, M, N, K, 
+                                           krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
                                            stream);
         break;
       case 3:
         status = generalSlicedMatmul<T, 3>(selectedKernel, kronMat, prevKronResult,
-                                           krons, currKronResult, M, N, K, 
+                                           krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
                                            stream);
         break;
       case 4:
         status = generalSlicedMatmul<T, 4>(selectedKernel, kronMat, prevKronResult,
-                                           krons, currKronResult, M, N, K,
+                                           krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
                                            stream);
         break;
       case 5:
         status = generalSlicedMatmul<T, 5>(selectedKernel, kronMat, prevKronResult,
-                                           krons, currKronResult, M, N, K,
+                                           krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
                                            stream);
         break;
@@ -333,9 +338,16 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     }
 
     if (status != cudaSuccess) return status;
-
-    //Double/ring/circular buffer previous result and new result
+    std::cout << kronMat << std::endl;
     
+    // if (kronMat >= 1)
+    printGPUArray<float>(M, currTempN, (kronMat == 2) ? 8.0f : (kronMat == 1 ? 64.0f : 512.0f),
+                         (float*)currKronResult, stream);
+    prevTempN = currTempN;
+    std::cout << "prevTempN " << prevTempN << " currTempN " << currTempN << std::endl;
+    // if (kronMat == 1) return cudaSuccess;
+    // return cudaSuccess;
+    //Double/ring/circular buffer previous result and new result
     prevKronResult = currKronResult;
     if (prevKronResult == kronGemmResults[0]) {        
       currKronResult = kronGemmResults[1];
@@ -869,7 +881,16 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool useUV
       handle.outOfCoreTemp1_ = handle.outOfCoreTemp2_ = nullptr;
     }
   } else {
-    size_t sz = handle.M_ * handle.N_ * sizeof(T);
+    size_t tempN = handle.K_;
+    size_t maxTempN = tempN;
+    for (int i = 0; i < handle.NumKronMats_; i++) {
+      tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
+      if (maxTempN < tempN)
+        maxTempN = tempN;
+    }
+
+    size_t sz = handle.M_ * maxTempN * sizeof(T);
+    std::cout << "877: " << sz << std::endl;
     CUDA_CHECK(cudaMalloc(&handle.temp_, sz));
     CUDA_CHECK(cudaMalloc(&handle.result_, sz));
     CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));
