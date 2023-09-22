@@ -204,7 +204,6 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   }
 
   //Create the grid and thread block
-  printf("KronMatCols[0] %d kernelInfo.TileKronCols %d\n", KronMatCols[0], kernelInfo.TileKronCols);
   grid = {
             (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
             DIVUP(M, kernelInfo.TileRowsA),

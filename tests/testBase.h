@@ -374,9 +374,15 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaEventSynchronize(end[g]));
     CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
     double perCallTime = elapsedTime/numIters;
-    size_t operations = 2 * ((long)NUM_KP_MATS) * ((long)M) * ((long)K) * KP_MAT_N[0];
+    size_t operations = 1;
+    long tmpK = K;
+    for (uint i = 0; i < NUM_KP_MATS; i++) {
+      operations += tmpK * KP_MAT_K[i];
+      tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
+    }
+    operations = 2 * ((long)M) * operations;
     double flops = operations/perCallTime;
-    double gFLOPS = flops/1e9;
+    double gFLOPS = flops/1e9*1e3;
     printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
   }
 
