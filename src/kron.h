@@ -76,7 +76,11 @@ struct KernelInfo {
   }
 
   bool canCompute(KronMatmulShape shape, uint NumFusedKerns) {
-    return KEqVar == (shape.ColsA == MaxColsA) && RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) && this->NumFusedKerns == NumFusedKerns;
+    return KEqVar == (shape.ColsA == MaxColsA) && 
+           RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) &&
+           this->NumFusedKerns == NumFusedKerns &&
+           MaxColsA <= shape.ColsA;
+
   }
 };
 

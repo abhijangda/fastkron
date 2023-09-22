@@ -533,7 +533,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         CUDA_CHECK(cudaEventRecord(end, stream));
         CUDA_CHECK(cudaEventSynchronize(end));
         if (status != cudaSuccess)
-          std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
+          std::cout << "Error: " << cudaGetErrorString(status) << " for " << kernel << " tempN " << tempN << std::endl;
         float kernelTime;
         CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
         std::cout << std::fixed << std::setprecision(2) << 
