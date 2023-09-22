@@ -204,6 +204,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
   }
 
   //Create the grid and thread block
+  printf("KronMatCols[0] %d kernelInfo.TileKronCols %d\n", KronMatCols[0], kernelInfo.TileKronCols);
   grid = {
             (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
             DIVUP(M, kernelInfo.TileRowsA),
@@ -346,10 +347,10 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     std::cout << kronMat << std::endl;
     
     // if (kronMat >= 1)
-    // printGPUArray<float>(M, currTempN, (kronMat == 2) ? 8.0f : (kronMat == 1 ? 64.0f : 512.0f),
+    // printGPUArray<float>(M, currTempN, (kronMat == 3) ? 8.0f : (kronMat == 2 ? 64.0f : 512.0f),
     //                      (float*)currKronResult, stream);
     CUDA_CHECK(cudaDeviceSynchronize());
-    
+    // if (kronMat == 3) return cudaSuccess;
     prevTempN = currTempN;
     std::cout << "prevTempN " << prevTempN << " currTempN " << currTempN << std::endl;
     // if (kronMat == 1) return cudaSuccess;

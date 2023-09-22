@@ -307,7 +307,9 @@ void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
 
 template<typename ElemT, typename VecT, uint VecTNumElems>
 __device__ __forceinline__ 
-void tiledDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCols, const uint NumThreads, const uint external_tile_kp_n, const uint external_tile_kp_k, const uint tileKronRow, const uint kronRows, const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols, 
+                         const uint TileSizeKronRows, const uint TileSizeKronCols,
+                         const uint NumThreads, const uint external_tile_kp_n, const uint external_tile_kp_k, const uint tileKronRow, const uint kronRows, const uint kronCols, const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
   const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
   //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
   for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
@@ -318,7 +320,7 @@ void tiledDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCol
     const uint row = swid;
     // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
-    globalLoadVec(&Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronRows + col], vec);
+    globalLoadVec(&Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col], vec);
     loadVecToRegs(vec, elems);
 
     #pragma unroll
@@ -331,8 +333,10 @@ void tiledDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCol
 
 template<typename ElemT, typename VecT, uint VecTNumElems>
 __device__ __forceinline__ 
-void fullDirectFglToFsh(const uint TileSizeKronRows, const uint TileSizeKronCols, const uint NumThreads, const uint MaxKronRows, 
-                        const uint MaxKronCols, const uint kronRows, const uint kronCols, const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+void fullDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols, 
+                        const uint TileSizeKronRows, const uint TileSizeKronCols, 
+                        const uint NumThreads, const uint kronRows, const uint kronCols, 
+                        const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
   const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
 
   for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {

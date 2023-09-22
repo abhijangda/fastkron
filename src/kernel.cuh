@@ -64,11 +64,11 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   const uint external_tile_kp_k = blockIdx.z;
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
   const uint MaxColsC = (MaxColsA/MaxKronRows)*MaxKronCols;
-  constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows); //64
+  constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows); //1024/8 = 128
   // constexpr uint wSz2 = (MaxKronCols/CRegCols); //
 
-  const uint kp_col_start_ = (tid / wSz) * CRegCols; //0 to 16
-  const uint a_col_start_  = (tid % wSz) * CRegRows; //0 to 64
+  const uint kp_col_start_ = (tid / wSz) * CRegCols; //0 to 8
+  const uint a_col_start_  = (tid % wSz) * CRegRows; //0 to 128
 
   const uint tileRowA         = blockIdx.y * TileSizeRowsA;
   const uint outerTileKronCol = kp_col_start_;
@@ -98,15 +98,17 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
       }
       if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
         //Optimized to load full factor matrix
-        fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
-                                                      NumThreads, MaxKronRows, MaxKronCols, kronRows, 
+        fullDirectFglToFsh<ElemT, VecT, VecTNumElems>(MaxKronRows, MaxKronCols,
+                                                      TileSizeKronRows, TileSizeKronCols, 
+                                                      NumThreads, kronRows, 
                                                       kronCols, tid, params.glKronMats[fusedFac], &shKronMats[0][0]);
       } else if (!(TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows)) {
-        tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(TileSizeKronRows, TileSizeKronCols, 
-                                                      NumThreads, external_tile_kp_n,
-                                                      external_tile_kp_k, tileKronRow, 
-                                                      kronRows, tid, params.glKronMats[fusedFac],
-                                                      &shKronMats[0][0]);
+        tiledDirectFglToFsh<ElemT, VecT, VecTNumElems>(MaxKronRows, MaxKronCols,
+                                                       TileSizeKronRows, TileSizeKronCols, 
+                                                       NumThreads, external_tile_kp_n,
+                                                       external_tile_kp_k, tileKronRow, 
+                                                       kronRows, kronCols, tid, params.glKronMats[fusedFac],
+                                                       &shKronMats[0][0]);
       } else {
       }
       __syncthreads();
@@ -276,7 +278,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
         }
         if (TileSizeKronCols != MaxKronCols) {
           uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
-          cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
+          cCol += external_tile_kp_n*(colsC/(MaxKronCols/TileSizeKronCols)); 
         }
         const uint cIdx = cRow * colsC + cCol;
         // assert(tid == cCol);
@@ -299,7 +301,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
             case 1: {
               globalStore1Elems(&params.glC[cIdx], regC[rowA][reg_i][reg_j]);
               // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
-              // if (params.kp_idx == 2 and params.glC[cIdx] != 0.0f) {
+              // if (params.kp_idx == 3 and blockIdx.y == 0 and cCol >= 4096) { //params.glC[cIdx] != 8.0f
               //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
               //          params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, tileColC, outerTileKronCol, threadIdx.x);
               // }
