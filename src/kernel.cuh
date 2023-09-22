@@ -128,8 +128,8 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
             uint shACol = tileColA + rowC;
             #pragma unroll
             for (uint colC = 0; colC < RegTileSizeACols; colC++) {
-              ElemT temp = (params.kp_idx == 2) ? 1 : (params.kp_idx == 1 ? 8 : 64);
-              // ElemT temp = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
+              // ElemT temp = (params.kp_idx == 2) ? 1 : (params.kp_idx == 1 ? 8 : 64);
+              ElemT temp = shA[rowA][shACol * TileSizeKronRows + (regTileACol + colC + round_start)%TileSizeKronRows];
               Ar[rowA][rowC][colC] = temp;
               // if (params.kp_idx == 1 && blockIdx.x == 0 && blockIdx.y == 0 && outerTileKronCol == 0 && tileColC == 8) {
               //   printf("Ar[%d][%d][%d] shACol %d shA[%d][%d] %f\n", 
@@ -301,10 +301,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
             case 1: {
               globalStore1Elems(&params.glC[cIdx], regC[rowA][reg_i][reg_j]);
               // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
-              if (params.kp_idx == 2 and params.glC[cIdx] != 8.0f) {
-                printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
-                       params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, tileColC, outerTileKronCol, threadIdx.x);
-              }
+              // if (params.kp_idx == 2 and params.glC[cIdx] != 0.0f) {
+              //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
+              //          params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, tileColC, outerTileKronCol, threadIdx.x);
+              // }
               break;
             }
           }
