@@ -64,8 +64,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
   const uint external_tile_kp_k = blockIdx.z;
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
   const uint MaxColsC = (MaxColsA/MaxKronRows)*MaxKronCols;
-  if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0)
-    printf("MaxColsC %d\n", MaxColsC);
   constexpr uint wSz = ((MaxColsA/MaxKronRows)/CRegRows); //64
   // constexpr uint wSz2 = (MaxKronCols/CRegCols); //
 
@@ -226,13 +224,13 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     //Three least significant bits of CRegRows can be either 4, 2, or 1
-    constexpr uint vecTyNumElems = 1; //CRegRows & (8 - 1);
+    constexpr uint vecTyNumElems = CRegRows & (8 - 1);
 #ifndef EVAL
     if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
       printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
 #endif
     for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-      if (false && vecTyNumElems > 1) {
+      if (vecTyNumElems > 1) {
         shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
         shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
         if (vecTyNumElems > 2) {
@@ -247,9 +245,9 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
 
           if (!K_EQUALS_VAR) {
             uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
-            cCol = tile_k * (MaxColsA/kronCols) + 
-                (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
-                cCol%(MaxColsA/kronCols);
+            cCol = tile_k * (MaxColsC/kronCols) + 
+                (cCol/(MaxColsC/kronCols)) * (colsC/kronCols) +
+                cCol%(MaxColsC/kronCols);
           }
           if (TileSizeKronCols != MaxKronCols) {
             uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
@@ -257,16 +255,16 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
           }
 
           const uint cIdx = cRow * colsC + cCol;
-          if (cCol < colsA) {
+          if (cCol < colsC) {
             params.glC[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
           }
         }
         __syncwarp();
       } else {
         const uint cRow = (rowA + tileRowA);
-        uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + //(0 to 16)*64
-                    reg_j*(MaxColsA/MaxKronRows) + //0
-                    tileColC + //0 to 64
+        uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) +
+                    reg_j*(MaxColsA/MaxKronRows) +
+                    tileColC +
                     reg_i;
         // if (threadIdx.x == 0 and blockIdx.x == 0) printf("MaxColsC %d\n", MaxColsC);
         if (!K_EQUALS_VAR) {

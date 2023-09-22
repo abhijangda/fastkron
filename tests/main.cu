@@ -145,9 +145,11 @@ int main(int argc, char* argv[]) {
   uint K = 1;
   if (parseStringToIntegers(fac_cols, KP_MAT_N, facs) == false) {
     printf("Less than expected '%d' columns in '%s'\n", facs, fac_cols);
+    return 1;
   }
   if (parseStringToIntegers(fac_rows, KP_MAT_K, facs) == false) {
     printf("Less than expected '%d' columns in '%s'\n", facs, fac_rows);
+    return 1;
   }
   for (uint i = 0; i < (uint)facs; i++) {
     N *= KP_MAT_N[i];

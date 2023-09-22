@@ -138,7 +138,7 @@ uint maxFusedKernels(KronMatmulShape shape) {
 KernelInfo selectKernel(KronMatmulShape shape) {
   //Go through all MaxColsA starting from MAX_K and select the relevant
   KronMatmulShape maxColsAShape = maxCompiledColsA(shape);
-  int kEqVar = 0; (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
+  int kEqVar = (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
     std::cout << "No kernel found" << std::endl;
@@ -238,20 +238,24 @@ TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKron
   uint MaxFusedKerns = handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
   MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
   TunedKernelsSeries tunedSeries;
+  uint prevTempN = K;
   for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
     const uint kronMat = NumKronMats - i - 1;
     const uint NumFusedKerns = min(MaxFusedKerns, NumKronMats - i);
+    uint currTempN = prevTempN;
     // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
     uint FusedKronMatCols[NumFusedKerns];
     uint FusedKronMatRows[NumFusedKerns];
     for (int k = 0; k < NumFusedKerns; k++) {
       FusedKronMatCols[k] = KronMatCols[kronMat - k];
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
+      currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
 
     auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                       K, M, NumFusedKerns});
+                                       prevTempN, M, NumFusedKerns});
     tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, 0.0f});
+    prevTempN = currTempN;
   }
 
   return tunedSeries;
