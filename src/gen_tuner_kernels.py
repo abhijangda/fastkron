@@ -50,7 +50,7 @@ class KernelConfig:
     self.shared_mem_usage = (self.tileM * self.shape.k + self.tileP * self.tileQ)*element_size(elemType)
 
   def __repr__(self):
-    return f"({self.num_threads}, {self.kron_rows}, {self.kron_cols}, {self.tileQ}, {self.tileP}, {self.tileM}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType})"
+    return f"({self.shape.k}, {self.num_threads}, {self.kron_rows}, {self.kron_cols}, {self.tileQ}, {self.tileP}, {self.tileM}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar})"
 
   def __eq__(self, other):
     return repr(self) == repr(other)
@@ -88,9 +88,8 @@ def generate_kernel_decls(cases):
   configs = []
 
   for (m, k, n, ps, qs) in cases:
-    allPSame = functools.reduce(lambda p1, p2: p1==p2, ps)
-    allQSame = functools.reduce(lambda q1, q2: q1==q2, qs)
-
+    allSameShapes = len(set(ps + qs)) == 1
+  
     for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
@@ -108,7 +107,7 @@ def generate_kernel_decls(cases):
                 for tP in TilePs:
                   for rowModTileIsZero in [0, 1]:
                     for kEqVar in [0]:
-                      fusedCases = range(1, int(math.log(tK, tP))+1) if (allPSame and allQSame) else [1]
+                      fusedCases = range(1, int(math.log(tK, tP))+1) if (allSameShapes) else [1]
                       for numFusedKerns in fusedCases:
                         configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
                                                                  p, q, tQ, tP, tM, 
