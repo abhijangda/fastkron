@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <limits>
+#include <iomanip>
 
 #include "utils.h"
 #include "kron.h"
@@ -254,7 +255,7 @@ TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKron
 
     auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
                                        prevTempN, M, NumFusedKerns});
-    tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, 0.0f});
+    tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
     prevTempN = currTempN;
   }
 
@@ -378,7 +379,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
 //   }
 // }
 
-float minExecTimeOfSeries(uint M, uint N, uint K, const uint NumKronMats, 
+float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats, 
                           uint KronMatCols[], uint KronMatRows[],
                           uint startKron,
                           TunedKernelsSeries& tunedKernels,
@@ -399,24 +400,35 @@ float minExecTimeOfSeries(uint M, uint N, uint K, const uint NumKronMats,
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
     }
 
+    //TODO: Change tempN to tempK everywhere else
+    uint tempK = K;
+    for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
+      tempK = (tempK/KronMatRows[reverseKron])*KronMatCols[reverseKron];
+    }
+
     KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                            K, M, NumFusedKerns};
+                                            tempK, M, NumFusedKerns};
+    std::cout << "411: startKron " << startKron << " endKron " << endKron << 
+                 " tempK " << tempK << " found? " << 
+                 (bestKernels.find(shape) != bestKernels.end()) << std::endl;
     if (bestKernels.find(shape) == bestKernels.end()) continue;
     auto iter = bestKernels.find(shape);
     TunedKernelsSeries epilogueKernels;
     float kernelTime = iter->second.second;
-    float epilogueTime = minExecTimeOfSeries(M, N, K, NumKronMats, KronMatCols, KronMatRows, 
-                                             endKron + 1, epilogueKernels, bestKernels);
+    float epilogueTime = minExecTimeOfSeries(M, K, NumKronMats, KronMatCols,
+                                             KronMatRows, endKron + 1, epilogueKernels, 
+                                             bestKernels);
     if (minTime > kernelTime + epilogueTime) {
       minTime = kernelTime + epilogueTime;
       minEpilogueKernels = epilogueKernels;
-      minPrologueKernel = TunedKernelFromStart(iter->second.first, startKron, endKron, kernelTime);
+      minPrologueKernel = TunedKernelFromStart(iter->second.first, 
+                                               startKron, endKron, tempK, kernelTime);
     }
   }
 
   tunedKernels = minEpilogueKernels;
   tunedKernels.push_back(minPrologueKernel);
-
+  std::cout << "startKron " << startKron << " K " << K << " minTime " << minTime << std::endl;
   assert(minTime < std::numeric_limits<float>::max());
   return minTime;
 }
@@ -430,8 +442,9 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
   T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
-  T* prevKronResult = x;
-  T* currKronResult = kronGemmResults[0];
+  //For performance eval we do not need these to contain any value
+  T* prevKronResult = kronGemmResults[0];
+  T* currKronResult = kronGemmResults[1];
   std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
   //TODO: Assumes all factors are of same size and square shape
   // const uint MaxFusedKerns = handle.getUseFusion() ? 
@@ -457,9 +470,15 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       FusedKronMatCols[k] = KronMatCols[kronMat - k];
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
     }
+    uint tempN = K;
+    for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
+      tempN = (tempN/KronMatRows[reverseKron])*KronMatCols[reverseKron];
+    }
+    uint outTempN = (tempN/KronMatRows[endKron])*KronMatCols[endKron];
+    // std::cout << "endKron " << endKron << " startKron " << startKron << " tempN " << tempN << std::endl;
     cudaError_t status;
     KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                            K, M, NumFusedKerns};
+                                            tempN, M, NumFusedKerns};
     if (bestKernels.find(shape) != bestKernels.end()) {
       continue;
     }
@@ -477,31 +496,31 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
           switch(NumFusedKerns) {
             case 1:
               status = generalSlicedMatmul<T, 1>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, N, K, 
+                                                krons, currKronResult, M, outTempN, tempN, 
                                                 FusedKronMatCols, FusedKronMatRows,
                                                 stream);
               break;
             case 2:
               status = generalSlicedMatmul<T, 2>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, N, K, 
+                                                krons, currKronResult, M, outTempN, tempN, 
                                                 FusedKronMatCols, FusedKronMatRows,
                                                 stream);
               break;
             case 3:
               status = generalSlicedMatmul<T, 3>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, N, K, 
+                                                krons, currKronResult, M, outTempN, tempN,
                                                 FusedKronMatCols, FusedKronMatRows,
                                                 stream);
               break;
             case 4:
               status = generalSlicedMatmul<T, 4>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, N, K,
+                                                krons, currKronResult, M, outTempN, tempN,
                                                 FusedKronMatCols, FusedKronMatRows,
                                                 stream);
               break;
             case 5:
               status = generalSlicedMatmul<T, 5>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, N, K,
+                                                krons, currKronResult, M, outTempN, tempN,
                                                 FusedKronMatCols, FusedKronMatRows,
                                                 stream);
               break;
@@ -517,7 +536,8 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
           std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
         float kernelTime;
         CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
-        std::cout << kernel << " runs in " << kernelTime << std::endl;
+        std::cout << std::fixed << std::setprecision(2) << 
+                     kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
         if (kernelTime < minTime) {
           bestKernel = kernel;
           minTime = kernelTime;
@@ -527,13 +547,14 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     }
 
     if (minTime < std::numeric_limits<float>::max()) {
-      std::cout << "Best kernel for " << shape << ": " << bestKernel << "runs in " << (minTime/runs) << " ms" << std::endl;
+      std::cout << std::fixed << std::setprecision(2) <<
+                   "Best kernel for " << shape << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
       bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
     }
   }}
   std::cout << "Finding min execution time of the series" << std::endl;
   TunedKernelsSeries tunedKernels;
-  float minTime = minExecTimeOfSeries(M, N, K, NumKronMats,
+  float minTime = minExecTimeOfSeries(M, K, NumKronMats,
                                       KronMatCols, KronMatRows, 0,
                                       tunedKernels, bestKernels);
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;

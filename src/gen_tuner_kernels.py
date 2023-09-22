@@ -30,6 +30,8 @@ class KernelConfig:
                FusedKernel : int, elemType : str):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
+    if self.num_threads == 32 and shape.k == 256:
+      print(self.num_threads, shape.k, shape.p, cRegRows, tileQ, cRegCols)
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ

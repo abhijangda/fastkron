@@ -84,13 +84,14 @@ struct KernelInfo {
 struct TunedKernelFromStart {
   KernelInfo kernel;
   uint start, end;
+  uint K;
   float time;
 
-  TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, float time_):
-    kernel(kernel_), start(start_), end(end_), time(time_) {}
+  TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, uint K_, float time_):
+    kernel(kernel_), start(start_), end(end_), K(K_), time(time_) {}
   TunedKernelFromStart() {}
   friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
-    out << "[" << k.start << ", " << k.end << "]" << k.kernel << " runs for " << k.time << " ms";
+    out << "[" << k.start << ", " << k.end << "] = " << k.K << " " << k.kernel << " runs for " << k.time << " ms";
     return out;
   }
 };
