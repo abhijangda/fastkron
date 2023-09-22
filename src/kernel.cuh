@@ -274,7 +274,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
               cCol%(MaxColsC/kronCols);
         }
         if (TileSizeKronCols != MaxKronCols) {
-          assert(false);
           uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
           cCol += external_tile_kp_n*(colsA/(MaxKronCols/TileSizeKronCols)); 
         }

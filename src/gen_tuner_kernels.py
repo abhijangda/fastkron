@@ -2,6 +2,8 @@ import argparse
 import math 
 import sys
 import os
+import functools
+
 print(os.getcwd())
 assert 'src' in os.listdir('.')
 kernel_filename = "src/kernel_decl.inc"
@@ -50,10 +52,13 @@ class KernelConfig:
   def __repr__(self):
     return f"({self.num_threads}, {self.kron_rows}, {self.kron_cols}, {self.tileQ}, {self.tileP}, {self.tileM}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType})"
 
+  def __eq__(self, other):
+    return repr(self) == repr(other)
+
   def code(self):
     return "KernelInfo{"+\
-            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}>,"+\
-            f"{self.num_threads}, {self.shape.p}, {self.shape.q}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, {self.rowModTileIsZero}, {self.kEqVar}"+ "}"
+            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}>,"+\
+            f"{self.num_threads}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, {self.rowModTileIsZero}, {self.kEqVar}"+ "}"
 
   def isValid(self):
     return self.wsz > 0 and \
@@ -66,33 +71,49 @@ class KernelConfig:
            self.kEqVar in [0, 1]
 
   def __hash__(self):
-    return hash(repr(self))
+    return hash(self.__repr__())
 
-def generate_kernel_decls(ms, ks, ns, ps, qs):
+def all_sliced_mults(m, k, n, ps, qs):
+  sliced_mults = []
+  prevTmpK = k
+  for i in range(n):
+    f = n - i - 1
+    sliced_mult = (m, prevTmpK, ps[f], qs[f])
+    prevTmpK = (prevTmpK//ps[f])*qs[f]
+    sliced_mults += [sliced_mult]
+  sliced_mults = set(sliced_mults)
+  return list(sliced_mults)
+
+def generate_kernel_decls(cases):
   configs = []
 
-  for m, k, n, p, q in zip(ms, ks, ns, ps, qs): 
-    TilePs = [min(p, 32)]
-    TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
-    TileKs = [2**i for i in range(2, max(2, int(math.log2(k)))+1)]
-    TileMs = [1, 2]
-    CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
-    CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
+  for (m, k, n, ps, qs) in cases:
+    allPSame = functools.reduce(lambda p1, p2: p1==p2, ps)
+    allQSame = functools.reduce(lambda q1, q2: q1==q2, qs)
 
-    shape = KronMatMulShape(m, k, n, p, q)
-    for tM in TileMs:
-      for tQ in TileQs:
-        for tK in TileKs:
-          for regRows in CRows:
-            for regCols in CCols:
-              for tP in TilePs:
-                for rowModTileIsZero in [0, 1]:
-                  for kEqVar in [0]:
-                    for numFusedKerns in range(1, int(math.log(tK, tP))+1):
-                      configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                               p, q, tQ, tP, tM, 
-                                  rowModTileIsZero, regRows, regCols, kEqVar,
-                                  numFusedKerns, "Float")]
+    for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
+      TilePs = [min(p, 32)]
+      TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
+      TileKs = [2**i for i in range(2, max(2, int(math.log2(k)))+1)]
+      TileMs = [1, 2]
+      CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
+      CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
+
+      shape = KronMatMulShape(m, k, n, p, q)
+      for tM in TileMs:
+        for tQ in TileQs:
+          for tK in TileKs:
+            for regRows in CRows:
+              for regCols in CCols:
+                for tP in TilePs:
+                  for rowModTileIsZero in [0, 1]:
+                    for kEqVar in [0]:
+                      fusedCases = range(1, int(math.log(tK, tP))+1) if (allPSame and allQSame) else [1]
+                      for numFusedKerns in fusedCases:
+                        configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
+                                                                p, q, tQ, tP, tM, 
+                                    rowModTileIsZero, regRows, regCols, kEqVar,
+                                    numFusedKerns, "Float")]
 
   print("Generated ", len(configs), " configs")
   
@@ -123,30 +144,43 @@ def generate_kernel_decls(ms, ks, ns, ps, qs):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-m', required=True, nargs="+", type=int)
-  parser.add_argument('-k', required=True, nargs="+", type=int)
-  parser.add_argument('-n', required=True, nargs="+", type=int)
-  parser.add_argument('-p', required=True, nargs="+", type=int)
-  parser.add_argument('-q', required=True, nargs="+", type=int)
+  parser.add_argument('-mknpq', required=True, nargs="+", action='append', type=int)
   
   args = parser.parse_args()
-  ms = len(args.m)
-  try:
-    assert ms == len(args.k)
-    assert ms == len(args.n)
-    assert ms == len(args.p)
-    assert ms == len(args.q)
-  except:
-    print(f"Invalid no. of ms: {ms}, ns: {len(args.n)}, ps: {len(args.p)}, qs: {len(args.q)}")
-    sys.exit(0)
-
-  for (m, k, n, p, q) in zip(args.m, args.k, args.n, args.p, args.q):
+  parsed_cases = []
+  for case in args.mknpq:
     try:
-      assert m >= 1 and k >= 1 and p >= 1 and n >= 1 and q >= 1
-      assert k == p**n
-      assert q > 1
-    except:
-      print(f"Invalid parameter m: {m}, k: {k}, n: {n}, p: {p}, q: {q}")
+      m = int(case[0])
+      k = int(case[1])
+      n = int(case[2])
+      ps = [int(p) for p in case[3:n+3]]
+      qs = [int(q) for q in case[n+3: ]]
+      assert m >= 1
+      assert k >= 1
+      assert n >= 1
+      assert len(ps) == n 
+      assert len(qs) == n
+    except Exception as e:
+      print(f"Invalid case: {case}")
+      print(e)
+      sys.exit(0)
+    
+    try:
+      tmpk = 1
+      for p in ps:
+        assert p >= 1
+        tmpk *= p
+      print(tmpk, k)
+      assert k == tmpk
+      
+      for q in qs:
+        assert q >= 1
+  
+    except Exception as e:
+      print(f"Invalid case: {case}")
+      print(e)
       sys.exit(0)
 
-  generate_kernel_decls(args.m, args.k, args.n, args.p, args.q)
+    parsed_cases += [(m, k, n, ps, qs)]
+
+  generate_kernel_decls(parsed_cases)
