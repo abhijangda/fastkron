@@ -30,8 +30,6 @@ class KernelConfig:
                FusedKernel : int, elemType : str):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
-    if self.num_threads == 32 and shape.k == 256:
-      print(self.num_threads, shape.k, shape.p, cRegRows, tileQ, cRegCols)
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
@@ -113,7 +111,7 @@ def generate_kernel_decls(cases):
                       fusedCases = range(1, int(math.log(tK, tP))+1) if (allPSame and allQSame) else [1]
                       for numFusedKerns in fusedCases:
                         configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                                p, q, tQ, tP, tM, 
+                                                                 p, q, tQ, tP, tM, 
                                     rowModTileIsZero, regRows, regCols, kEqVar,
                                     numFusedKerns, "Float")]
 
@@ -144,45 +142,67 @@ def generate_kernel_decls(cases):
     #Remove last comma and backslash
     f.write(contents)
 
+def parse_distinct_factors(case):
+  m = 2
+  n = int(case[0])
+  ps = [int(p) for p in case[1:n+1]]
+  qs = [int(q) for q in case[n+1: ]]
+  assert len(ps) == n
+  assert len(qs) == n
+  k = 1
+  for p in ps:
+    assert p >= 1
+    k = p * k
+  for q in qs:
+    assert q >= 1
+
+  return (m, k, n, ps, qs)
+
+def parse_same_factors(case):
+  m = 2
+  n = int(case[0])
+  ps = [int(case[1]) for i in range(n)]
+  qs = [int(case[2]) for i in range(n)]
+  assert len(ps) == n
+  assert len(qs) == n
+  k = 1
+  for p in ps:
+    assert p >= 1
+    k = p * k
+  for q in qs:
+    assert q >= 1
+
+  return (m, k, n, ps, qs)
+
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-mknpq', required=True, nargs="+", action='append', type=int)
-  
+  parser.add_argument('-distinct-factors', required=False, nargs="+", action='append', type=int)
+  parser.add_argument('-same-factors', required=False, nargs="+", action='append', type=int)
+
+  #TODO: args should be like below:
+  # distinct-shapes: No need of m and k. specify size of factor.
+  # same-shapes: All factor of same shape 
   args = parser.parse_args()
   parsed_cases = []
-  for case in args.mknpq:
-    try:
-      m = int(case[0])
-      k = int(case[1])
-      n = int(case[2])
-      ps = [int(p) for p in case[3:n+3]]
-      qs = [int(q) for q in case[n+3: ]]
-      assert m >= 1
-      assert k >= 1
-      assert n >= 1
-      assert len(ps) == n 
-      assert len(qs) == n
-    except Exception as e:
-      print(f"Invalid case: {case}")
-      print(e)
-      sys.exit(0)
-    
-    try:
-      tmpk = 1
-      for p in ps:
-        assert p >= 1
-        tmpk *= p
-      print(tmpk, k)
-      assert k == tmpk
-      
-      for q in qs:
-        assert q >= 1
-  
-    except Exception as e:
-      print(f"Invalid case: {case}")
-      print(e)
-      sys.exit(0)
+  if args.distinct_factors is not None:
+    for case in args.distinct_factors:
+      try:
+        parsed_cases += [parse_distinct_factors(case)]
+      except Exception as e:
+        print(f"Invalid case: {case}")
+        print(e)
+        sys.exit(0)
 
-    parsed_cases += [(m, k, n, ps, qs)]
+  if args.same_factors is not None:  
+    for case in args.same_factors:
+      try:
+        parsed_cases += [parse_same_factors(case)]
+      except Exception as e:
+        print(f"Invalid case: {case}")
+        print(e)
+        sys.exit(0)
+  
+  print("Generating kernels for ")
+  print(parsed_cases)
 
   generate_kernel_decls(parsed_cases)
