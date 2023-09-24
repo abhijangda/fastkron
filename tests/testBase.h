@@ -247,6 +247,7 @@ static void kronDistributedGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, 
   return;
 }
 
+
 /**************************************************
               Test Driver
 ***************************************************/
@@ -317,7 +318,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (verbose) printf("memcpy\n");
   if (tune) {
     assert (useDistributed == false);
-    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_K, KP_MAT_N,
+    kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
                   stream[0]);
   }
   if (checkResults) {
@@ -348,8 +349,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
-    T* dResultToHost = (T*)malloc(sizeResult);
-    
     T* dResultToHost = (T*)malloc(sizeResult);
     if (useDistributed) {
       CUDACHECK(handle.gatherDistributedY(dResult, dResultToHost));
@@ -404,23 +403,24 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       }
     }
 
-  for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaEventRecord(end[g], stream[g]));
-    CUDACHECK(cudaEventSynchronize(end[g]));
-    CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
+    for (int g = 0; g < gpus; g++) {
+      CUDACHECK(cudaSetDevice(g));
+      CUDACHECK(cudaEventRecord(end[g], stream[g]));
+      CUDACHECK(cudaEventSynchronize(end[g]));
+      CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
 
-    double perCallTime = elapsedTime/numIters;
-    size_t operations = 0;
-    long tmpK = K;
-    for (int i = NUM_KP_MATS - 1; i >= 0; i--) {
-      tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
-      operations += tmpK * KP_MAT_K[i];
+      double perCallTime = elapsedTime/numIters;
+      size_t operations = 0;
+      long tmpK = K;
+      for (int i = NUM_KP_MATS - 1; i >= 0; i--) {
+        tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
+        operations += tmpK * KP_MAT_K[i];
+      }
+      operations = 2 * ((long)M) * operations;
+      double flops = operations/perCallTime;
+      double gFLOPS = flops/1e9*1e3;
+      printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
     }
-    operations = 2 * ((long)M) * operations;
-    double flops = operations/perCallTime;
-    double gFLOPS = flops/1e9*1e3;
-    printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
   }
 
   //Free GPU Memory

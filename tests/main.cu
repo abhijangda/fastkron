@@ -142,7 +142,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (batch <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL || type == NULL || runs <= 0) {
+  if (batch <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL || type == NULL || runs <= 0)
     printf("Invalid value batch: %d, facs %d, fac_rows %s, fac_cols %s, type %p, runs %d\n", batch, facs, fac_rows, fac_cols, type, runs);
   if (multiGPU) {
     if (gpus < 1 || ((gpuInRows != 0 and gpuInCols != 0) && gpuInRows * gpuInCols != gpus)) {
@@ -176,7 +176,7 @@ int main(int argc, char* argv[]) {
     status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else if (strcmp(type, "int") == 0)
     status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
-    gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+                      gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else if (strcmp(type, "double") == 0)
     status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else

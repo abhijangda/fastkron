@@ -308,27 +308,6 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
   }
 }
 
-
-template<typename ElemT>
-__global__ void printArrayKernel(const uint Rows, const uint Cols, const ElemT val, const ElemT* array) {
-  const uint row = blockIdx.x;
-  uint col = threadIdx.x;
-  for (; col < Cols; col += blockDim.x) {
-    const uint id = row * Cols + col;
-    if (row == 1 and col <= min(4096, Cols) and array[id] != val)
-      printf("array[%d*%d + %d] %f\n", row, Cols, col, array[id]);
-  }
-}
-
-template<typename ElemT>
-void printGPUArray(const uint Rows, const uint Cols, const ElemT val, const ElemT* array, cudaStream_t stream) {
-  dim3 grid = {Rows, 1, 1};
-  dim3 block = {256, 1, 1};
-
-  printArrayKernel<ElemT><<<grid, block, 0, stream>>>(Rows, Cols, val, array);
-  CUDA_CHECK(cudaStreamSynchronize(stream));
-}
-
 template<typename ElemT, 
         const uint TileCol, const uint TileRow, const uint NumThreads>
 __global__ void matrixSliceKernel(const uint Rows, const uint Cols, const ElemT* matrix, 

@@ -432,6 +432,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
+  std::cout << "N " << N << " K " << K << " KronMatCols[0] " << KronMatCols[0] << " KronMatRows[0] " << KronMatRows[0] << std::endl;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
   T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
@@ -1086,7 +1087,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     }
 
     size_t sz = handle.M_ * maxTempN * sizeof(T);
-    std::cout << "877: " << sz << std::endl;
     CUDA_CHECK(cudaMalloc(&handle.temp_, sz));
     CUDA_CHECK(cudaMalloc(&handle.result_, sz));
     CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));

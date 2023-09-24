@@ -84,7 +84,7 @@ def all_sliced_mults(m, k, n, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
-def generate_kernel_decls(cases):
+def generate_kernel_decls(cases, useFusion):
   configs = []
 
   for (m, k, n, ps, qs) in cases:
@@ -107,7 +107,7 @@ def generate_kernel_decls(cases):
                 for tP in TilePs:
                   for rowModTileIsZero in [0, 1]:
                     for kEqVar in [0]:
-                      fusedCases = range(1, int(math.log(tK, tP))+1) if (allSameShapes) else [1]
+                      fusedCases = range(1, int(math.log(tK, tP))+1) if allSameShapes and useFusion else [1]
                       for numFusedKerns in fusedCases:
                         configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
                                                                  p, q, tQ, tP, tM, 
@@ -177,6 +177,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('-distinct-factors', required=False, nargs="+", action='append', type=int)
   parser.add_argument('-same-factors', required=False, nargs="+", action='append', type=int)
+  parser.add_argument('-no-fuse', required=False, action='store_true')
 
   #TODO: args should be like below:
   # distinct-shapes: No need of m and k. specify size of factor.
@@ -203,5 +204,4 @@ if __name__ == "__main__":
   
   print("Generating kernels for ")
   print(parsed_cases)
-
-  generate_kernel_decls(parsed_cases)
+  generate_kernel_decls(parsed_cases, not args.no_fuse)
