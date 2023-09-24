@@ -407,20 +407,21 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       CUDACHECK(cudaSetDevice(g));
       CUDACHECK(cudaEventRecord(end[g], stream[g]));
       CUDACHECK(cudaEventSynchronize(end[g]));
-      CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
-
-      double perCallTime = elapsedTime/numIters;
-      size_t operations = 0;
-      long tmpK = K;
-      for (int i = NUM_KP_MATS - 1; i >= 0; i--) {
-        tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
-        operations += tmpK * KP_MAT_K[i];
-      }
-      operations = 2 * ((long)M) * operations;
-      double flops = operations/perCallTime;
-      double gFLOPS = flops/1e9*1e3;
-      printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
+      if (g == 0)
+        CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
     }
+    
+    double perCallTime = elapsedTime/numIters;
+    size_t operations = 0;
+    long tmpK = K;
+    for (int i = NUM_KP_MATS - 1; i >= 0; i--) {
+      tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
+      operations += tmpK * KP_MAT_K[i];
+    }
+    operations = 2 * ((long)M) * operations;
+    double flops = operations/perCallTime;
+    double gFLOPS = flops/1e9*1e3;
+    printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
   }
 
   //Free GPU Memory
