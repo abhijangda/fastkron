@@ -340,6 +340,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaEventCreate(&end[g]));
     cudaStreamCreate(&stream[g]);
   }
+
   if (verbose) printf("warmup\n");
   //Warm Up iterations
   for (uint i = 0; i < warmup; i++) {
@@ -360,7 +361,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaEventRecord(start[g], stream[g]));
   }
   for (uint i = 0; i < numIters; i++) {
-    //printf("iter i %d\n", i);
     if (useUVA) {
       kronGEMMOutOfCore<T>(handle, NUM_KP_MATS, dX, dKpMats, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
@@ -373,12 +373,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaEventRecord(end[g], stream[g]));
     CUDACHECK(cudaEventSynchronize(end[g]));
     CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
+
     double perCallTime = elapsedTime/numIters;
-    size_t operations = 1;
+    size_t operations = 0;
     long tmpK = K;
-    for (uint i = 0; i < NUM_KP_MATS; i++) {
-      operations += tmpK * KP_MAT_K[i];
+    for (int i = NUM_KP_MATS - 1; i >= 0; i--) {
       tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
+      operations += tmpK * KP_MAT_K[i];
     }
     operations = 2 * ((long)M) * operations;
     double flops = operations/perCallTime;

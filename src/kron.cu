@@ -202,7 +202,6 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
       abort();
     }
   }
-
   //Create the grid and thread block
   grid = {
             (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
@@ -337,7 +336,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
           std::cout << "Invalid number of fused kernels" << std::endl;
         status = cudaErrorInvalidValue;
     }
-
+    
     if (status != cudaSuccess) return status;
     
     // if (kronMat >= 1)
@@ -519,10 +518,11 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                 std::cout << "Invalid number of fused kernels" << std::endl;
               status = cudaErrorInvalidValue;
           }
-          if (status != cudaSuccess) break;
+          // if (status != cudaSuccess) break;
         }
         CUDA_CHECK(cudaEventRecord(end, stream));
         CUDA_CHECK(cudaEventSynchronize(end));
+        
         if (status != cudaSuccess)
           std::cout << "Error: " << cudaGetErrorString(status) << " for " << kernel << " tempN " << tempN << std::endl;
         float kernelTime;
