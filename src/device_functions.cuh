@@ -175,10 +175,12 @@ template<typename ElemT>
 __global__ void printArrayKernel(const uint Rows, const uint Cols, const ElemT val, const ElemT* array) {
   const uint row = blockIdx.x;
   uint col = threadIdx.x;
-  for (; col < Cols; col += blockDim.x) {
-    const uint id = row * Cols + col;
-    if (row == 0 and col <= Cols and array[id] != val)
-      printf("array[%d*%d + %d] %f\n", row, Cols, col, array[id]);
+  if (threadIdx.x == 0) {
+    for (; col < Cols; col++) {
+      const uint id = row * Cols + col;
+      if (row == 0 and col <= Cols and array[id] != val)
+        printf("array[%d*%d + %d] %f\n", row, Cols, col, array[id]);
+    }
   }
 }
 
@@ -468,7 +470,7 @@ struct KernelParams {
 };
 
 const uint MaxGPUs = 8;
-template<typename ElemT, uint LocalKrons>
+template<typename ElemT>
 struct DistributedParams {
   ElemT* __restrict__ gpuResults[MaxGPUs];
   const uint gr, gc;
@@ -476,10 +478,12 @@ struct DistributedParams {
   const uint ColsA;
   const uint ColsC;
   const bool storeToDistMems;
+  const uint LocalKrons;
 
   DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint numGPUs_,   
-                    const uint ColsA_, const uint ColsC_, bool storeToDistMems) :
-    storeToDistMems(true), gr(gr_), gc(gc_), numGPUs(numGPUs_), ColsA(ColsA_), ColsC(ColsC_) {
+                    const uint ColsA_, const uint ColsC_, const uint LocalKrons_, bool storeToDistMems_) :
+    storeToDistMems(storeToDistMems_), gr(gr_), gc(gc_), numGPUs(numGPUs_), ColsA(ColsA_), ColsC(ColsC_),
+    LocalKrons(LocalKrons_) {
     assert (numGPUs_ < MaxGPUs);
     for (int g = 0; g < numGPUs_; g++) {
       gpuResults[g] = gpuResults_[g];

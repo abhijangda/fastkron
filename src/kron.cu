@@ -171,7 +171,7 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
                                 T* kronGemmResult,
                                 const uint M, const uint N, const uint K, 
                                 const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
-                                const uint gr, const uint gc, bool storeToDistMems, cudaStream_t stream) {
+                                const uint gr, const uint gc, const uint LocalKrons, bool storeToDistMems, cudaStream_t stream) {
   cudaError_t status;
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
   dim3 grid;
@@ -223,9 +223,11 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
                                          kronMat, 
                                          kronGemmResult, 
                                          kronIndex);
-  DistributedParams<T, 3> distParams((T**)handle.gpuTemp1_, gr, gc, handle.numGPUs_, handle.K_, handle.N_, storeToDistMems);
+  printf("226: storeToDistMems %d\n", storeToDistMems);
+  auto ttt = (LocalKrons == 3) ? (T**)handle.gpuTemp1_ : (T**)handle.gpuTemp2_;
+  DistributedParams<T> distParams(ttt, gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, storeToDistMems);
 
-  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T, 3>);
+  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
   //Create kernel args;
   // void *args[] = {(void*)&params};
   ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params, distParams);
@@ -617,7 +619,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   //TODO: What if Rows are not multiple of GPUs in Rows
   T* innerResults[2] = {(T*)handle.gpuTemp1_[g], (T*)handle.gpuTemp2_[g]};
   // std::cout << "handle.gpuM_ " << handle.gpuM_ << " handle.gpuK_ " <<handle.gpuK_ << " gpusInCols " << gpusInCols << " gpusInRows " << gpusInRows << " K " << K << std::endl;
-  std::cout <<"g " << g<< " innerResults = " << "{" << innerResults[0] << ", " << innerResults[1] << "}" << std::endl;
+  if (gc == 0) std::cout <<"g " << g<< " innerResults = " << "{" << innerResults[0] << ", " << innerResults[1] << "}" << std::endl;
   T* innerPrevResult;
   T* innerCurrResult;
   
@@ -668,11 +670,13 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         T* krons[] = {kronMats[g * NumKronMats + kronMat]}; 
         uint kronCols[1] = {KronMatCols[kronMat]};
         uint kronRows[1] = {KronMatRows[kronMat]};
+        // if (gc == 0) std::cout << "671: " << (slicedMuls == KronMulBatchSize - 1 and KronMulBatchSize > 1) << std::endl;
         cudaError_t status = generalSlicedMatmul<T, 1>(handle, kernel.kernel, kronMat, innerPrevResult, 
             krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, gr, gc, (slicedMuls == KronMulBatchSize - 1) ? true : false, stream[g]);
-
-        // printf("innerCurrResult %p innerPrevResult %p\n", innerCurrResult, innerPrevResult);
+            kronCols, kronRows, gr, gc, KronMulBatchSize, (slicedMuls == KronMulBatchSize - 1) ? true : false, stream[g]);
+        
+        CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+        // if (gc == 0) printf("slicedMuls %d innerCurrResult %p innerPrevResult %p\n", slicedMuls, innerCurrResult, innerPrevResult);
         if (status != cudaSuccess) goto end;
 
         //Double/ring/circular buffer previous result and new result
@@ -684,11 +688,17 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         }
         slicedMuls++;
       }
+    
       CUDA_CHECK(cudaStreamSynchronize(stream[g]));
       
-      // if (g == 1) {printf("683\n"); printGPUArray<float>(handle.gpuM_, handle.gpuK_, innerPrevResult, stream[g]);}
+      // if (g == 0 && MaxI == 3) {
+      //   printf("683\n");
+      //   printGPUArray<float>(handle.gpuM_, handle.gpuK_, 64*64*64, innerPrevResult, stream[g]);
+      // }
       // printf("684\n");
-      if (handle.gpusInK_ > 1) {
+
+      if (false && handle.gpusInK_ > 1) {
+        //Call we want to use NCCL Send/Recv
         {
           const uint SliceRows = handle.gpuM_;
           const uint SliceCols = handle.gpuK_/handle.gpusInK_;
@@ -802,6 +812,11 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
     CUDA_CHECK(cudaStreamSynchronize(stream[g]));
     int s = pthread_barrier_wait(thArgs->barrier);
     assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
+
+    // if (g == 0 && io == 3) {
+    //   printf("683\n");
+    //   printGPUArray<float>(handle.gpuM_, handle.gpuK_, 64*64*64, innerPrevResult, stream[g]);
+    // }
   }
 
   end:
@@ -1009,19 +1024,26 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   if (isDistributed) {
     handle.numGPUs_ = gpus;
     int devs[gpus];
-    ncclUniqueId ncclId;
-    ncclGetUniqueId(&ncclId);
-    std::cout << "Initializing NCCL"<<std::endl;
-    for (int i = 0; i < gpus; i++) {
-      CUDA_CHECK(cudaSetDevice(i));
-      handle.ncclComms.push_back(nullptr);
-      devs[i] = i;
-      //TODO: clear ncclComms
-      // NCCLCHECK(ncclCommInitRank(&handle.ncclComms[i], gpus, ncclId, i));
-    }
-    NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
-    std::cout << "Initialized NCCL"<<std::endl;
+    // ncclUniqueId ncclId;
+    // ncclGetUniqueId(&ncclId);
+    // std::cout << "Initializing NCCL"<<std::endl;
+    // for (int i = 0; i < gpus; i++) {
+    //   CUDA_CHECK(cudaSetDevice(i));
+    //   handle.ncclComms.push_back(nullptr);
+    //   devs[i] = i;
+    //   //TODO: clear ncclComms
+    //   // NCCLCHECK(ncclCommInitRank(&handle.ncclComms[i], gpus, ncclId, i));
+    // }
+    // NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
+    // std::cout << "Initialized NCCL"<<std::endl;
     // assert (gpus == 4);
+    for (int g1 = 0; g1 < gpus; g1++) {
+      for (int g2 = 0; g2 < gpus; g2++) {
+        if (g1 == g2) continue;
+        CUDA_CHECK(cudaSetDevice(g1));
+        CUDA_CHECK(cudaDeviceEnablePeerAccess(g2, 0));
+      }
+    }
     if (gpusInK >= 1)
       handle.gpusInK_ = gpusInK;
     else

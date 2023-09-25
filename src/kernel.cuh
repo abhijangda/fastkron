@@ -6,7 +6,7 @@ template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowPar
          uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params, 
-                               DistributedParams<ElemT, 3> distParams) {
+                               DistributedParams<ElemT> distParams) {
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
@@ -286,14 +286,37 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         ElemT* __restrict__ outputArray;
 
         if (distParams.storeToDistMems) {
-          if (threadIdx.x == 0 && blockIdx.x == 0 & blockIdx.y == 0) {
-            uint nextGc = (distParams.gc == 0) ? 1 : 0;
-            printf("Writing from %d to %d at %p\n", distParams.gc, nextGc, &distParams.gpuResults[nextGc]);
-            distParams.gpuResults[nextGc] = 0;
-          }
+          uint perGPUK = colsA;
+          uint numGPUs = distParams.numGPUs;
+
+          uint nextGc = cCol/((perGPUK/numGPUs));
+          uint batchedKronMuls = distParams.LocalKrons;
+
+          uint KronRowsPower = power(kronRows, batchedKronMuls);
+          uint srcElem = cCol;
+          uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
+          uint withinP5 = distParams.gc * UVAColsRatioKronRowsSquare + 
+                          ((srcElem%(perGPUK/kronRows))/UVAColsRatioKronRowsSquare)*(distParams.ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
+                           srcElem % UVAColsRatioKronRowsSquare;
+          uint p5Index = (srcElem/(perGPUK/kronRows))*(distParams.ColsA/kronRows);
+          int newcCol = p5Index + withinP5;
+          int gpuCol = newcCol - nextGc * perGPUK;
+          cIdx = rowA * perGPUK + gpuCol;
+          outputArray = distParams.gpuResults[nextGc];
+          // if (threadIdx.x == 0) //(gpuCol >= perGPUK or gpuCol < 0)) 
+          // printf("gpuCol %d nextGc %d perGPUK %d newcCol %d gc %d ColsA %d cIdx %d outputArray %p\n",
+          //         gpuCol, nextGc, perGPUK, newcCol, distParams.gc, distParams.ColsA, cIdx, outputArray);
+          // outputArray = distParams.gpuResults[nextGc];
+
+          // if (threadIdx.x == 0 && blockIdx.x == 0 & blockIdx.y == 0) {
+          //   uint nextGc = (distParams.gc == 0) ? 1 : 0;
+          //   printf("Writing from %d to %d at %p\n", distParams.gc, nextGc, &distParams.gpuResults[nextGc]);
+          //   distParams.gpuResults[nextGc][0] = 0;
+          // }
         } else {
          cIdx = cRow * colsC + cCol;
          outputArray = params.glC;
+        //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
         }
         // assert(tid == cCol);
         // if (kp_idx == 0&& cRow == 0 && cCol < 64)
@@ -303,19 +326,19 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         {
           switch (vecTyNumElems) {
             case 4:
-              globalStore4Elems(&params.glC[cIdx], 
+              globalStore4Elems(&outputArray[cIdx], 
                                 regC[rowA][reg_i][reg_j], 
                                 regC[rowA][reg_i+1][reg_j],
                                 regC[rowA][reg_i+2][reg_j], 
                                 regC[rowA][reg_i+3][reg_j]);
               break;
             case 2:
-              globalStore2Elems(&params.glC[cIdx],
+              globalStore2Elems(&outputArray[cIdx],
                                 regC[rowA][reg_i][reg_j],
                                 regC[rowA][reg_i+1][reg_j]);
               break;
             case 1: {
-              globalStore1Elems(&params.glC[cIdx], regC[rowA][reg_i][reg_j]);
+              globalStore1Elems(&outputArray[cIdx], regC[rowA][reg_i][reg_j]);
               // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
               // if (params.kp_idx == 3 and blockIdx.y == 0 and cCol >= 4096) { //params.glC[cIdx] != 8.0f
               //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
