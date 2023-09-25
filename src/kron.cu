@@ -224,7 +224,7 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
                                          kronGemmResult, 
                                          kronIndex);
   auto ttt = (LocalKrons == 3) ? (T**)handle.gpuTemp1_ : (T**)handle.gpuTemp2_;
-  DistributedParams<T> distParams(ttt, gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, storeToDistMems);
+  DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, storeToDistMems);
 
   typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
   //Create kernel args;

@@ -286,23 +286,26 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         ElemT* __restrict__ outputArray;
 
         if (distParams.storeToDistMems) {
-          uint perGPUK = colsA;
-          uint numGPUs = distParams.numGPUs;
+          const uint perGPUK = (64*64*64*64)/2; //colsA;
+          const uint numGPUs = 2; //distParams.numGPUs;
 
-          uint nextGc = cCol/((perGPUK/numGPUs));
+          const uint nextGc = cCol/ ((perGPUK/numGPUs));
           uint batchedKronMuls = distParams.LocalKrons;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
           uint KronRowsPower = (batchedKronMuls == 3) ? 64*64*64: 64; //power(kronRows, batchedKronMuls);
+          kronRows = 64;
+          kronCols = 64;
           uint srcElem = cCol;
           uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
           uint withinP5 = distParams.gc * UVAColsRatioKronRowsSquare + 
-                          ((srcElem%(perGPUK/kronRows))/UVAColsRatioKronRowsSquare)*(distParams.ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
-                           srcElem % UVAColsRatioKronRowsSquare;
+                           ((srcElem%(perGPUK/kronRows))/UVAColsRatioKronRowsSquare)*(distParams.ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
+                            srcElem % UVAColsRatioKronRowsSquare;
           uint p5Index = (srcElem/(perGPUK/kronRows))*(distParams.ColsA/kronRows);
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUK;
           cIdx = rowA * perGPUK + gpuCol;
-          outputArray = distParams.gpuResults[nextGc];
+          outputArray = (nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
+          // printf("outputArray %p\n", outputArray);
           // if (batchedKronMuls == 3 and regC[rowA][reg_i][reg_j] != )
           // if (threadIdx.x == 0) //((gpuCol >= perGPUK or gpuCol < 0)) 
           // printf("gpuCol %d nextGc %d perGPUK %d newcCol %d gc %d ColsA %d cIdx %d outputArray %p\n",
