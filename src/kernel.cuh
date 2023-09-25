@@ -227,13 +227,13 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     //Three least significant bits of CRegRows can be either 4, 2, or 1
-    constexpr uint vecTyNumElems = 1; //CRegRows & (8 - 1);
+    constexpr uint vecTyNumElems = CRegRows & (8 - 1);
 #ifndef EVAL
     if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
       printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
 #endif
     for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-      if (vecTyNumElems > 1 && MaxColsA == MaxColsC) {
+      if (vecTyNumElems > 1 && MaxColsA == MaxColsC && false) {
         //TODO: Cannot shA here if MaxColA < MaxColsC
         shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
         shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
@@ -286,15 +286,16 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         ElemT* __restrict__ outputArray;
 
         if (distParams.storeToDistMems) {
-          const uint perGPUK = (64*64*64*64)/2; //colsA;
+          kronRows = 64;
+          kronCols = 64;
+          const uint perGPUK = (kronRows*kronRows*kronRows*kronRows)/2; //colsA;
           const uint numGPUs = 2; //distParams.numGPUs;
 
           const uint nextGc = cCol/ ((perGPUK/numGPUs));
           uint batchedKronMuls = distParams.LocalKrons;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
-          uint KronRowsPower = (batchedKronMuls == 3) ? 64*64*64: 64; //power(kronRows, batchedKronMuls);
-          kronRows = 64;
-          kronCols = 64;
+          uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows: kronRows; //power(kronRows, batchedKronMuls);
+
           uint srcElem = cCol;
           uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
           uint withinP5 = distParams.gc * UVAColsRatioKronRowsSquare + 
@@ -303,8 +304,9 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           uint p5Index = (srcElem/(perGPUK/kronRows))*(distParams.ColsA/kronRows);
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUK;
-          cIdx = rowA * perGPUK + gpuCol;
+          cIdx = cRow * perGPUK + gpuCol;
           outputArray = (nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
+         
           // printf("outputArray %p\n", outputArray);
           // if (batchedKronMuls == 3 and regC[rowA][reg_i][reg_j] != )
           // if (threadIdx.x == 0) //((gpuCol >= perGPUK or gpuCol < 0)) 
