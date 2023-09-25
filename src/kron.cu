@@ -712,7 +712,10 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       std::cout << "g " << g << " innerPrevResult "<< innerPrevResult << std::endl;
       auto ttt = (KronMulBatchSize == 3) ? (T**)handle.gpuTemp2_ : (T**)handle.gpuTemp2_;
-      copyToGPUsInK<T, VecT, 2U, 64U*64U*64U*64U/2U, 128U><<<{gpuM,1,1},{128,1,1},0,stream[g]>>>
+      const uint PerGPUK = 64U*64U*64U*64U/2U;
+      dim3 grid = {handle.gpuK_/16384, gpuM, 1};
+      dim3 block = {256, 1, 1};
+      copyToGPUsInK<T, VecT, 2U, PerGPUK, 16384, 256><<<grid,block,0,stream[g]>>>
                                                        (gpuM, handle.N_, handle.K_, innerPrevResult, 
                                                         ttt[0], ttt[1], gr, gc, KronMulBatchSize);
     

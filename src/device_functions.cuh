@@ -255,7 +255,8 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
   }
 }
 
-template<typename ElemT, typename VecT, uint NumGPUs, uint PerGPUK, uint NumThreads>
+template<typename ElemT, typename VecT, uint NumGPUs, uint PerGPUK, uint TileK, uint NumThreads>
+__launch_bounds__(NumThreads)
 __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uint ColsA,
                                ElemT* __restrict__ gpuPrevResult,
                                ElemT* __restrict__ gpuResult1, ElemT* __restrict__ gpuResult2,
@@ -266,11 +267,14 @@ __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uin
   const uint wid          = tid/WarpSize;
   const uint lane         = tid%WarpSize;
   const uint blockWarps   = blockDim.x/WarpSize;
-  const uint rowA = blockIdx.x;
+  const uint rowA = blockIdx.y;
+  const uint tileK = blockIdx.x * TileK;
   const uint KronRows = 64;
   const uint KronCols = 64;
+  const uint ldElems = sizeof(VecT)/sizeof(ElemT);
 
-  for (uint elem = tid; elem < PerGPUK; elem += NumThreads) {
+  for (uint e = tid * ldElems; e < TileK; e += NumThreads * ldElems) {
+    uint elem = tileK + e; 
     const uint nextGc = elem/((PerGPUK/NumGPUs));
     uint batchedKronMuls = (KronMulBatchSize == 3) ? 3 : 1;
     // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
@@ -285,7 +289,9 @@ __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uin
     int newcCol = p5Index + withinP5;
     int gpuCol = newcCol - nextGc * PerGPUK;
     auto outputArray = (nextGc == 0) ? gpuResult1 : gpuResult2;
-    outputArray[rowA * PerGPUK + gpuCol] = gpuPrevResult[rowA*PerGPUK + elem];
+
+    VecT r = *((VecT*)&gpuPrevResult[rowA*PerGPUK + elem]);
+    *((VecT*)&outputArray[rowA * PerGPUK + gpuCol]) = r;
   }
 }
 
