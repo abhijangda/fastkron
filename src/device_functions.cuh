@@ -446,7 +446,7 @@ void fullDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
 template<typename ElemT, uint NumFusedKerns>
 struct KernelParams {
   const uint RowsC;
-  const uint ColsC;
+  const uint ColsC; //TODO: Change to LocalColsC
   const uint ColsA;
   uint KronRows[NumFusedKerns];
   uint KronCols[NumFusedKerns];
@@ -465,4 +465,34 @@ struct KernelParams {
       this->glKronMats[i] = glKronMats[i];
     }
   }
+};
+
+const uint MaxGPUs = 8;
+template<typename ElemT, uint LocalKrons>
+struct DistributedParams {
+  ElemT* __restrict__ gpuResults[MaxGPUs];
+  const uint gr, gc;
+  const uint numGPUs;
+  const uint ColsA;
+  const uint ColsC;
+  const bool storeToDistMems;
+
+  DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint numGPUs_,   
+                    const uint ColsA_, const uint ColsC_, bool storeToDistMems) :
+    storeToDistMems(true), gr(gr_), gc(gc_), numGPUs(numGPUs_), ColsA(ColsA_), ColsC(ColsC_) {
+    assert (numGPUs_ < MaxGPUs);
+    for (int g = 0; g < numGPUs_; g++) {
+      gpuResults[g] = gpuResults_[g];
+    }
+    for (int g = numGPUs_; g < MaxGPUs; g++) {
+      gpuResults[g] = nullptr;
+    }
+  }
+
+  // DistributedParams(const DistributedParams<ElemT, LocalKrons>& x): numGPUs(x.numGPUs),
+  //   ColsA(x.ColsA), ColsC(ColsC), storeToDistMems(storeToDistMems) {}
+
+  //   DistributedParams<ElemT, LocalKrons>& operator=(const DistributedParams<ElemT, LocalKrons>& x) {
+
+  //   }
 };

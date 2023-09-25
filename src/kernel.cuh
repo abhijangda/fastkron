@@ -5,7 +5,8 @@ template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowPar
          uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
          uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns>
 __launch_bounds__(NumThreads)
-__global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
+__global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params, 
+                               DistributedParams<ElemT, 3> distParams) {
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
@@ -226,7 +227,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     //Three least significant bits of CRegRows can be either 4, 2, or 1
-    constexpr uint vecTyNumElems = CRegRows & (8 - 1);
+    constexpr uint vecTyNumElems = 1; //CRegRows & (8 - 1);
 #ifndef EVAL
     if (vecTyNumElems != 4 && vecTyNumElems != 2 && vecTyNumElems != 1)
       printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
@@ -280,11 +281,26 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params) {
           uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
           cCol += external_tile_kp_n*(colsC/(MaxKronCols/TileSizeKronCols)); 
         }
-        const uint cIdx = cRow * colsC + cCol;
+        
+        uint cIdx;
+        ElemT* __restrict__ outputArray;
+
+        if (distParams.storeToDistMems) {
+          if (threadIdx.x == 0 && blockIdx.x == 0 & blockIdx.y == 0) {
+            uint nextGc = (distParams.gc == 0) ? 1 : 0;
+            printf("Writing from %d to %d at %p\n", distParams.gc, nextGc, &distParams.gpuResults[nextGc]);
+            distParams.gpuResults[nextGc] = 0;
+          }
+        } else {
+         cIdx = cRow * colsC + cCol;
+         outputArray = params.glC;
+        }
         // assert(tid == cCol);
         // if (kp_idx == 0&& cRow == 0 && cCol < 64)
         //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
-        if (cCol < colsC) {
+        //if (cCol < colsC) 
+        
+        {
           switch (vecTyNumElems) {
             case 4:
               globalStore4Elems(&params.glC[cIdx], 

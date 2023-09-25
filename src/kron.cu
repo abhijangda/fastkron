@@ -167,11 +167,11 @@ KernelInfo selectKernel(KronMatmulShape shape) {
 
 //Launch cuda kernels
 template<typename T, uint NumFusedKerns>
-cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T* x, T* kronMat[NumFusedKerns], 
+cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, const uint kronIndex, T* x, T* kronMat[NumFusedKerns], 
                                 T* kronGemmResult,
                                 const uint M, const uint N, const uint K, 
                                 const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
-                                cudaStream_t stream) {
+                                const uint gr, const uint gc, bool storeToDistMems, cudaStream_t stream) {
   cudaError_t status;
   RowParallelismTy rowParallelism = RowParallelismTy::Low;
   dim3 grid;
@@ -223,10 +223,12 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, T*
                                          kronMat, 
                                          kronGemmResult, 
                                          kronIndex);
-  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>);
+  DistributedParams<T, 3> distParams((T**)handle.gpuTemp1_, gr, gc, handle.numGPUs_, handle.K_, handle.N_, storeToDistMems);
+
+  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T, 3>);
   //Create kernel args;
   // void *args[] = {(void*)&params};
-  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params);
+  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params, distParams);
   status = cudaGetLastError();
   // status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
   // if (status != cudaSuccess)
@@ -303,7 +305,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     cudaError_t status;
 
     KernelInfo selectedKernel = kernel.kernel;
-
+/*
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,
@@ -339,7 +341,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
           std::cout << "Invalid number of fused kernels" << std::endl;
         status = cudaErrorInvalidValue;
     }
-    
+    */
     if (status != cudaSuccess) return status;
     
     // if (kronMat >= 1)
@@ -487,6 +489,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
+          /*
           switch(NumFusedKerns) {
             case 1:
               status = generalSlicedMatmul<T, 1>(kernel, endKron, prevKronResult,
@@ -521,7 +524,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
             default:
                 std::cout << "Invalid number of fused kernels" << std::endl;
               status = cudaErrorInvalidValue;
-          }
+          }*/
           // if (status != cudaSuccess) break;
         }
         CUDA_CHECK(cudaEventRecord(end, stream));
@@ -658,15 +661,16 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       TunedKernelsSeries kernelSeries;
       kernelSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
                                         KronMatCols, KronMatRows);
+      uint slicedMuls = 0;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
         uint kronMat = kernel.end + (NumKronMats - io - KronMulBatchSize);
         T* krons[] = {kronMats[g * NumKronMats + kronMat]}; 
         uint kronCols[1] = {KronMatCols[kronMat]};
         uint kronRows[1] = {KronMatRows[kronMat]};
-        cudaError_t status = generalSlicedMatmul<T, 1>(kernel.kernel, kronMat, innerPrevResult, 
+        cudaError_t status = generalSlicedMatmul<T, 1>(handle, kernel.kernel, kronMat, innerPrevResult, 
             krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, stream[g]);
+            kronCols, kronRows, gr, gc, (slicedMuls == KronMulBatchSize - 1) ? true : false, stream[g]);
 
         // printf("innerCurrResult %p innerPrevResult %p\n", innerCurrResult, innerPrevResult);
         if (status != cudaSuccess) goto end;
@@ -678,6 +682,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         } else if (innerPrevResult == innerResults[1]) {
           innerCurrResult = innerResults[0];
         }
+        slicedMuls++;
       }
       CUDA_CHECK(cudaStreamSynchronize(stream[g]));
       

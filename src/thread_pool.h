@@ -22,11 +22,13 @@ public:
     volatile task& operator= (const task& x) volatile {
       f = x.f;
       args = x.args;
+      return *this;
     }
 
     volatile task& operator= (const volatile task& x) volatile {
       f = x.f;
       args = x.args;
+      return *this;
     }
   };
 
