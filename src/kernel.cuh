@@ -233,7 +233,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
       printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
 #endif
     for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-      if (vecTyNumElems > 1 && MaxColsA == MaxColsC && false) {
+      if (vecTyNumElems > 1 && MaxColsA == MaxColsC) {
         //TODO: Cannot shA here if MaxColA < MaxColsC
         shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
         shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
@@ -268,7 +268,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         const uint cRow = (rowA + tileRowA);
         uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) +
                     reg_j*(MaxColsA/MaxKronRows) +
-                    tileColC +
+                    tileColC + 
                     reg_i;
         // if (threadIdx.x == 0 and blockIdx.x == 0) printf("MaxColsC %d\n", MaxColsC);
         if (!K_EQUALS_VAR) {
@@ -285,7 +285,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         uint cIdx;
         ElemT* __restrict__ outputArray;
 
-        if (distParams.storeToDistMems) {
+        if (distParams.storeToDistMems && false) {
           kronRows = 64;
           kronCols = 64;
           const uint perGPUK = (kronRows*kronRows*kronRows*kronRows)/2; //colsA;

@@ -255,6 +255,39 @@ __global__ void copyUVATempToY(const uint RowsC,    const uint ColsC,   const ui
   }
 }
 
+template<typename ElemT, typename VecT, uint NumGPUs, uint PerGPUK, uint NumThreads>
+__global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uint ColsA,
+                               ElemT* __restrict__ gpuPrevResult,
+                               ElemT* __restrict__ gpuResult1, ElemT* __restrict__ gpuResult2,
+                               uint gr, uint gc,
+                               uint KronMulBatchSize) {
+  const uint WarpSize     = 32;
+  const uint tid          = threadIdx.x;
+  const uint wid          = tid/WarpSize;
+  const uint lane         = tid%WarpSize;
+  const uint blockWarps   = blockDim.x/WarpSize;
+  const uint rowA = blockIdx.x;
+  const uint KronRows = 64;
+  const uint KronCols = 64;
+
+  for (uint elem = tid; elem < PerGPUK; elem += NumThreads) {
+    const uint nextGc = elem/((PerGPUK/NumGPUs));
+    uint batchedKronMuls = (KronMulBatchSize == 3) ? 3 : 1;
+    // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
+    uint KronRowsPower = (batchedKronMuls == 3) ? KronRows*KronRows*KronRows: KronRows; //power(kronRows, batchedKronMuls);
+
+    uint srcElem = elem;
+    uint UVAColsRatioKronRowsSquare = (PerGPUK/KronRowsPower);
+    uint withinP5 = gc * UVAColsRatioKronRowsSquare + 
+                    ((srcElem%(PerGPUK/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(PerGPUK/UVAColsRatioKronRowsSquare)) + 
+                    srcElem % UVAColsRatioKronRowsSquare;
+    uint p5Index = (srcElem/(PerGPUK/KronRows))*(ColsA/KronRows);
+    int newcCol = p5Index + withinP5;
+    int gpuCol = newcCol - nextGc * PerGPUK;
+    auto outputArray = (nextGc == 0) ? gpuResult1 : gpuResult2;
+    outputArray[rowA * PerGPUK + gpuCol] = gpuPrevResult[rowA*PerGPUK + elem];
+  }
+}
 
 template<typename ElemT, typename VecT, uint NumThreads>
 __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint ColsA,
