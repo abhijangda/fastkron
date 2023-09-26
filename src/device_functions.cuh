@@ -268,12 +268,13 @@ __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uin
   const uint lane         = tid%WarpSize;
   const uint blockWarps   = blockDim.x/WarpSize;
   const uint rowA = blockIdx.y;
-  const uint tileK = blockIdx.x * TileK;
+  const uint tileK = (gc == 0) ? blockIdx.x * TileK : ((gridDim.x-blockIdx.x)*TileK);
   const uint KronRows = 64;
   const uint KronCols = 64;
   const uint ldElems = sizeof(VecT)/sizeof(ElemT);
+  const uint ElemBatch = ldElems;
 
-  for (uint e = tid * ldElems; e < TileK; e += NumThreads * ldElems) {
+  for (uint e = tid * ElemBatch; e < TileK; e += NumThreads * ElemBatch) {
     uint elem = tileK + e; 
     const uint nextGc = elem/((PerGPUK/NumGPUs));
     uint batchedKronMuls = (KronMulBatchSize == 3) ? 3 : 1;
@@ -290,8 +291,10 @@ __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uin
     int gpuCol = newcCol - nextGc * PerGPUK;
     auto outputArray = (nextGc == 0) ? gpuResult1 : gpuResult2;
 
-    VecT r = *((VecT*)&gpuPrevResult[rowA*PerGPUK + elem]);
-    *((VecT*)&outputArray[rowA * PerGPUK + gpuCol]) = r;
+    for (uint batchElem = 0; batchElem < ElemBatch; batchElem += ldElems) {
+      VecT r = *((VecT*)&gpuPrevResult[rowA*PerGPUK + elem + batchElem]);
+      *((VecT*)&outputArray[rowA * PerGPUK + gpuCol + batchElem]) = r;      
+    }
   }
 }
 
