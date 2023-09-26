@@ -670,16 +670,16 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         uint kronCols[1] = {KronMatCols[kronMat]};
         uint kronRows[1] = {KronMatRows[kronMat]};
         // if (gc == 0) std::cout << "671: " << (slicedMuls == KronMulBatchSize - 1 and KronMulBatchSize > 1) << std::endl;
-        // if (slicedMuls == KronMulBatchSize - 1) {
-        //   {
-        //     int s = pthread_barrier_wait(thArgs->barrier);
-        //     assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
-        //   }
-        // }
+        if (slicedMuls == KronMulBatchSize - 1) {
+          {
+            int s = pthread_barrier_wait(thArgs->barrier);
+            assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
+          }
+        }
         cudaError_t status = generalSlicedMatmul<T, 1>(handle, kernel.kernel, kronMat, innerPrevResult, 
             krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
             kronCols, kronRows, gr, gc, KronMulBatchSize, 
-            (slicedMuls == KronMulBatchSize - 1) ? false : false, stream[g]);
+            (slicedMuls == KronMulBatchSize - 1) ? true : false, stream[g]);
         
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         // if (gc == 0) printf("slicedMuls %d innerCurrResult %p innerPrevResult %p\n", slicedMuls, innerCurrResult, innerPrevResult);
@@ -710,16 +710,25 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       //   CUDA_CHECK(cudaSetDevice(g));
       // }
 
-      std::cout << "g " << g << " innerPrevResult "<< innerPrevResult << std::endl;
-      auto ttt = (KronMulBatchSize == 3) ? (T**)handle.gpuTemp2_ : (T**)handle.gpuTemp2_;
-      const uint PerGPUK = 64U*64U*64U*64U/2U;
-      dim3 grid = {handle.gpuK_/8192, gpuM, 1};
-      dim3 block = {256, 1, 1};
-      copyToGPUsInK<T, float2, 2U, PerGPUK, 8192, 256><<<grid,block,0,stream[g]>>>
-                                                       (gpuM, handle.N_, handle.K_, innerPrevResult, 
-                                                        ttt[0], ttt[1], gr, gc, KronMulBatchSize);
-    
-      CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+      if (false) {
+        std::cout << "g " << g << " innerPrevResult "<< innerPrevResult << std::endl;
+        auto ttt = (KronMulBatchSize == 3) ? (T**)handle.gpuTemp2_ : (T**)handle.gpuTemp2_;
+        const uint PerGPUK = 64U*64U*64U*64U/2U;
+        dim3 grid = {handle.gpuK_/8192, gpuM, 1};
+        dim3 block = {256, 1, 1};
+        copyToGPUsInK<T, float2, 2U, PerGPUK, 8192, 256><<<grid,block,0,stream[g]>>>
+                                                        (gpuM, handle.N_, handle.K_, innerPrevResult, 
+                                                          ttt[0], ttt[1], gr, gc, KronMulBatchSize);
+      
+        CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+        if (gc == 0) {
+          innerCurrResult = innerPrevResult;
+          innerPrevResult = ttt[0];
+        } else {
+          innerCurrResult = innerPrevResult;
+          innerPrevResult = ttt[1];
+        }
+      }
       // {
       //   int s = pthread_barrier_wait(thArgs->barrier);
       //   assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
@@ -733,13 +742,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       //   CUDA_CHECK(cudaSetDevice(g));
       // }
 
-      if (gc == 0) {
-        innerCurrResult = innerPrevResult;
-        innerPrevResult = ttt[0];
-      } else {
-        innerCurrResult = innerPrevResult;
-        innerPrevResult = ttt[1];
-      }
       // if (innerPrevResult == innerResults[0]) {        
       //   innerCurrResult = innerResults[1];
       // } else if (innerPrevResult == innerResults[1]) {
