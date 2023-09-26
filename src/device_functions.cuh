@@ -530,11 +530,17 @@ struct DistributedParams {
   const bool storeToDistMems;
   const uint LocalKrons;
   const uint UVAColsRatioKronRowsSquare;
+  const uint perGPUKByNumGPUs;
+  const uint perGPUKByKronRows;
+  const uint ColsAByKronRows;
+  const uint gcMulUVAColsRatioKronRowsSquare;
 
   DistributedParams(ElemT* gpuResults0_, ElemT* gpuResults1_, const uint gr_, const uint gc_, const uint numGPUs_,   
-                    const uint ColsA_, const uint ColsC_, const uint LocalKrons_, const uint UVAColsRatioKronRowsSquare_, bool storeToDistMems_) :
+                    const uint ColsA_, const uint ColsC_, const uint PerGPUK, const uint kronRows, const uint LocalKrons_, const uint UVAColsRatioKronRowsSquare_, bool storeToDistMems_) :
     storeToDistMems(storeToDistMems_), gr(gr_), gc(gc_), numGPUs(numGPUs_), ColsA(ColsA_), ColsC(ColsC_),
-    LocalKrons(LocalKrons_), UVAColsRatioKronRowsSquare(UVAColsRatioKronRowsSquare_) {
+    LocalKrons(LocalKrons_), UVAColsRatioKronRowsSquare(UVAColsRatioKronRowsSquare_), perGPUKByNumGPUs(PerGPUK/numGPUs),
+    perGPUKByKronRows(PerGPUK/kronRows), ColsAByKronRows(ColsA_/kronRows), gcMulUVAColsRatioKronRowsSquare(gc*UVAColsRatioKronRowsSquare) {
+      
       gpuResults0 = gpuResults0_;
       gpuResults1 = gpuResults1_;
     // assert (numGPUs_ < MaxGPUs);

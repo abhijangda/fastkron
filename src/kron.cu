@@ -209,10 +209,10 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
   }
   //Create the grid and thread block
   grid = {
-            (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
-            DIVUP(M, kernelInfo.TileRowsA),
-            1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
-          };
+          (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
+          DIVUP(M, kernelInfo.TileRowsA),
+          1// DIVUP(KronMatRows[kronMat], EXTERNAL_KP_K_TILE_)
+         };
   block = {
             NumThreads, 
             1, 
@@ -229,7 +229,8 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
   printf("gc %d\n", gc);
   uint KronRowsPower = (LocalKrons == 3) ? KronRows*KronRows*KronRows: KronRows;
   const uint UVAColsRatioKronRowsSquare = handle.gpuK_/KronRowsPower;
-  DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, 
+  DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, 
+                                  handle.gpuK_, KronRows, LocalKrons, 
                                   UVAColsRatioKronRowsSquare, storeToDistMems);
 
   typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
