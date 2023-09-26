@@ -291,15 +291,15 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           const uint perGPUK = (kronRows*kronRows*kronRows*kronRows)/2; //
           const uint numGPUs = 2; //distParams.numGPUs;
 
-          const uint nextGc = cCol/ ((perGPUK/numGPUs));
+          const uint nextGc = cCol/(perGPUK/numGPUs);
           uint batchedKronMuls = distParams.LocalKrons;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
           uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows: kronRows;//power(kronRows, batchedKronMuls);
 
           uint srcElem = cCol;
-          uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
+          uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;// (perGPUK/KronRowsPower);
           uint withinP5 = distParams.gc * UVAColsRatioKronRowsSquare + 
-                           ((srcElem%(perGPUK/kronRows))/UVAColsRatioKronRowsSquare)*(distParams.ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
+                           ((srcElem%(perGPUK/kronRows))/UVAColsRatioKronRowsSquare)*(distParams.ColsC/KronRowsPower) + //(perGPUK/UVAColsRatioKronRowsSquare)
                             srcElem % UVAColsRatioKronRowsSquare;
           uint p5Index = (srcElem/(perGPUK/kronRows))*(distParams.ColsA/kronRows);
           int newcCol = p5Index + withinP5;

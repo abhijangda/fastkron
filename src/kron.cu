@@ -188,11 +188,11 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
   uint typeKernelIdx = typeKernelIndex((T)0);
 
   const uint NumThreads = kernelInfo.NumThreads;
+  const uint KronRows = kernelInfo.KronRows;
   {
     const uint CRegRows = kernelInfo.CRegRows;
     const uint CRegCols = kernelInfo.CRegCols;
     const uint MaxColsC = kernelInfo.MaxColsA;
-    const uint KronRows = kernelInfo.KronRows;
     uint c1 = MAX(1, NumThreads/((MaxColsC/kernelInfo.KronRows)/CRegRows));
     
     if (kernelInfo.TileKronCols != c1 * CRegCols) {
@@ -227,8 +227,10 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
                                          kronIndex);
   auto ttt = (LocalKrons == 3) ? (T**)handle.gpuTemp1_ : (T**)handle.gpuTemp2_;
   printf("gc %d\n", gc);
-  
-  DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, storeToDistMems);
+  uint KronRowsPower = (LocalKrons == 3) ? KronRows*KronRows*KronRows: KronRows;
+  const uint UVAColsRatioKronRowsSquare = handle.gpuK_/KronRowsPower;
+  DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, 
+                                  UVAColsRatioKronRowsSquare, storeToDistMems);
 
   typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
   //Create kernel args;
