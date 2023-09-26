@@ -511,11 +511,18 @@ struct KernelParams {
   }
 };
 
-const uint MaxGPUs = 8;
+const uint MaxGPUs = 2;
 template<typename ElemT>
 struct DistributedParams {
-  ElemT* gpuResults1;
-  ElemT* gpuResults2; //[MaxGPUs];
+  ElemT* gpuResults0;
+  ElemT* gpuResults1; 
+  ElemT* gpuResults2;
+  ElemT* gpuResults3;
+  ElemT* gpuResults4;
+  ElemT* gpuResults5; 
+  ElemT* gpuResults6;
+  ElemT* gpuResults7;
+ 
   const uint gr, gc;
   const uint numGPUs;
   const uint ColsA;
@@ -523,12 +530,12 @@ struct DistributedParams {
   const bool storeToDistMems;
   const uint LocalKrons;
 
-  DistributedParams(ElemT* gpuResults1_, ElemT* gpuResults2_, const uint gr_, const uint gc_, const uint numGPUs_,   
+  DistributedParams(ElemT* gpuResults0_, ElemT* gpuResults1_, const uint gr_, const uint gc_, const uint numGPUs_,   
                     const uint ColsA_, const uint ColsC_, const uint LocalKrons_, bool storeToDistMems_) :
     storeToDistMems(storeToDistMems_), gr(gr_), gc(gc_), numGPUs(numGPUs_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
+      gpuResults0 = gpuResults0_;
       gpuResults1 = gpuResults1_;
-      gpuResults2 = gpuResults2_;
     // assert (numGPUs_ < MaxGPUs);
     // for (int g = 0; g < numGPUs_; g++) {
     //   gpuResults[g] = gpuResults_[g];
@@ -538,6 +545,20 @@ struct DistributedParams {
     // }
   }
 
+  __device__ __forceinline__ ElemT* getLocalGPUResult(uint gc) {
+    switch(gc) {
+      case 0: return gpuResults0;
+      case 1: return gpuResults1;
+      case 2: return gpuResults2;
+      case 3: return gpuResults3;
+      case 4: return gpuResults4;
+      case 5: return gpuResults5;
+      case 6: return gpuResults6;
+      case 7: return gpuResults7;
+      default: return nullptr;
+      //TODO: for all 16 GPUs
+    }
+  }
   // DistributedParams(const DistributedParams<ElemT, LocalKrons>& x): numGPUs(x.numGPUs),
   //   ColsA(x.ColsA), ColsC(ColsC), storeToDistMems(storeToDistMems) {}
 

@@ -45,6 +45,8 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
+__constant__ void* localGpuResults[16];
+
 enum RowParallelismTy {
   Low = 0,
   Medium,
@@ -224,6 +226,8 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
                                          kronGemmResult, 
                                          kronIndex);
   auto ttt = (LocalKrons == 3) ? (T**)handle.gpuTemp1_ : (T**)handle.gpuTemp2_;
+  printf("gc %d\n", gc);
+  
   DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, LocalKrons, storeToDistMems);
 
   typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
@@ -588,6 +592,11 @@ cudaError_t kronIGEMMTune(FastKronHandle& handle, const uint NumKronMats, int* x
                        stream);
 }
 
+void thread_barrier_wait(pthread_barrier_t* barrier) {
+  int s = pthread_barrier_wait(barrier);
+  assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
+}
+
 template<typename T, typename VecT>
 void perGPUKronMatmul(ThreadArgs* thArgs) {
   // ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
@@ -671,11 +680,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         uint kronRows[1] = {KronMatRows[kronMat]};
         // if (gc == 0) std::cout << "671: " << (slicedMuls == KronMulBatchSize - 1 and KronMulBatchSize > 1) << std::endl;
         if (slicedMuls == KronMulBatchSize - 1) {
-          {
-            int s = pthread_barrier_wait(thArgs->barrier);
-            assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
-          }
+          thread_barrier_wait(thArgs->barrier);
         }
+
         cudaError_t status = generalSlicedMatmul<T, 1>(handle, kernel.kernel, kronMat, innerPrevResult, 
             krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
             kronCols, kronRows, gr, gc, KronMulBatchSize, 
@@ -697,18 +704,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       CUDA_CHECK(cudaStreamSynchronize(stream[g]));
       
-      {
-        int s = pthread_barrier_wait(thArgs->barrier);
-        assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
-      }
-
-      // {
-      //   CUDA_CHECK(cudaSetDevice(0));
-      //   CUDA_CHECK(cudaDeviceSynchronize());
-      //   CUDA_CHECK(cudaSetDevice(1));
-      //   CUDA_CHECK(cudaDeviceSynchronize());
-      //   CUDA_CHECK(cudaSetDevice(g));
-      // }
+      thread_barrier_wait(thArgs->barrier);
 
       if (false) {
         std::cout << "g " << g << " innerPrevResult "<< innerPrevResult << std::endl;
@@ -729,36 +725,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           innerPrevResult = ttt[1];
         }
       }
-      // {
-      //   int s = pthread_barrier_wait(thArgs->barrier);
-      //   assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
-      // }
-      
-      // {
-      //   CUDA_CHECK(cudaSetDevice(0));
-      //   CUDA_CHECK(cudaDeviceSynchronize());
-      //   CUDA_CHECK(cudaSetDevice(1));
-      //   CUDA_CHECK(cudaDeviceSynchronize());
-      //   CUDA_CHECK(cudaSetDevice(g));
-      // }
-
-      // if (innerPrevResult == innerResults[0]) {        
-      //   innerCurrResult = innerResults[1];
-      // } else if (innerPrevResult == innerResults[1]) {
-      //   innerCurrResult = innerResults[0];
-      // }
-
-      // CUDA_CHECK(cudaSetDevice(0));
-      // CUDA_CHECK(cudaDeviceSynchronize());
-      // CUDA_CHECK(cudaSetDevice(1));
-      // CUDA_CHECK(cudaDeviceSynchronize());
-      // CUDA_CHECK(cudaSetDevice(g));
-
-      // if (g == 0 && MaxI == 3) {
-      //   printf("683\n");
-      //   printGPUArray<float>(handle.gpuM_, handle.gpuK_, 64*64*64, innerPrevResult, stream[g]);
-      // }
-      // printf("684\n");
 
       if (false && handle.gpusInK_ > 1) {
         //Call we want to use NCCL Send/Recv
@@ -874,15 +840,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
     CUDA_CHECK(cudaStreamSynchronize(stream[g]));
     printf("820: g %d io %d\n", g, io);
-    // for (int gg = 0; gg < 2; gg++) {
-    //   CUDA_CHECK(cudaSetDevice(gg));
-    //   CUDA_CHECK(cudaDeviceSynchronize());
-    // }
-    // CUDA_CHECK(cudaSetDevice(g));
-    {
-      int s = pthread_barrier_wait(thArgs->barrier);
-      assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
-    }
+    thread_barrier_wait(thArgs->barrier);
     printf("823: g %d thArgs->barrier %p io %d\n", g, thArgs->barrier, io);
     // if (io == 0) {
     //   // printf("683 io %d\n", io);

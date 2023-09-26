@@ -286,15 +286,15 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         ElemT* __restrict__ outputArray;
 
         if (distParams.storeToDistMems) {
-          kronRows = 64;
-          kronCols = 64;
-          const uint perGPUK = (kronRows*kronRows*kronRows*kronRows)/2; //colsA;
+          // kronRows = 64;
+          // kronCols = 64;
+          const uint perGPUK = (kronRows*kronRows*kronRows*kronRows)/2; //
           const uint numGPUs = 2; //distParams.numGPUs;
 
           const uint nextGc = cCol/ ((perGPUK/numGPUs));
           uint batchedKronMuls = distParams.LocalKrons;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
-          uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows: kronRows; //power(kronRows, batchedKronMuls);
+          uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows: kronRows;//power(kronRows, batchedKronMuls);
 
           uint srcElem = cCol;
           uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
@@ -305,7 +305,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUK;
           cIdx = cRow * perGPUK + gpuCol;
-          outputArray = (nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
+          outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
          
           // printf("outputArray %p\n", outputArray);
           // if (batchedKronMuls == 3 and regC[rowA][reg_i][reg_j] != )
