@@ -236,7 +236,7 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
   typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
   //Create kernel args;
   // void *args[] = {(void*)&params};
-  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block,0,stream>>>(params, distParams);
+  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block, 0, stream>>>(params, distParams);
   status = cudaGetLastError();
   // status = cudaLaunchKernel((const void*)cuda_gemm_func, grid, block, &args[0], 0, stream);
   // if (status != cudaSuccess)
@@ -265,7 +265,35 @@ TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKron
     }
 
     auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                       prevTempN, M, NumFusedKerns});
+                                       prevTempN, M, NumFusedKerns, 0});
+    tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
+    prevTempN = currTempN;
+  }
+
+  return tunedSeries;
+}
+
+TunedKernelsSeries selectDistributedKernelSeries(FastKronHandle& handle, const uint NumKronMats,
+                                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[]) {
+  uint MaxFusedKerns = 1; //handle.getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
+  MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
+  TunedKernelsSeries tunedSeries;
+  uint prevTempN = K;
+  for (uint i = 0; i < NumKronMats; i += MaxFusedKerns) {
+    const uint kronMat = NumKronMats - i - 1;
+    const uint NumFusedKerns = min(MaxFusedKerns, NumKronMats - i);
+    uint currTempN = prevTempN;
+    // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
+    uint FusedKronMatCols[NumFusedKerns];
+    uint FusedKronMatRows[NumFusedKerns];
+    for (int k = 0; k < NumFusedKerns; k++) {
+      FusedKronMatCols[k] = KronMatCols[kronMat - k];
+      FusedKronMatRows[k] = KronMatRows[kronMat - k];
+      currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
+    }
+    bool DistributeToGPUs = (i == NumKronMats - 1);
+    auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+                                       prevTempN, M, NumFusedKerns, DistributeToGPUs});
     tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
     prevTempN = currTempN;
   }
@@ -493,7 +521,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       if (!shapeAndKernels.first.sameKronSize(shape))
         continue;
       for (auto kernel : shapeAndKernels.second) {
-        if (!kernel.canCompute(shape, NumFusedKerns)) continue;
+        if (!kernel.canCompute(shape, NumFusedKerns, 0)) continue;
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
@@ -672,8 +700,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       //   // printf("Done\n");
       // }
       TunedKernelsSeries kernelSeries;
-      kernelSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
-                                        KronMatCols, KronMatRows);
+      kernelSeries = selectDistributedKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
+                                                   KronMatCols, KronMatRows);
       uint slicedMuls = 0;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
@@ -1156,7 +1184,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
 
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
-    KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns};
+    KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
     auto iter = compiledKernels.find(shape);
     if (iter == compiledKernels.end()) {
       compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
@@ -1165,7 +1193,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   }
   
   //TODO: Add if debug
-  if (false) {
+  if (true) {
     uint numKernels = 0;
     std::cout << "Loading compiled kernels" << std::endl;
     for (auto iter : compiledKernels) {

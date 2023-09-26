@@ -32,11 +32,13 @@ struct KronMatmulShape {
   uint ColsA;
   uint RowsA;
   uint NumFusedKerns;
+  bool DistributeToGPUs;
 
   bool operator==(const KronMatmulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows &&
     ColsA == other.ColsA && 
-    (other.NumFusedKerns <= 0 || NumFusedKerns == other.NumFusedKerns);
+    (other.NumFusedKerns <= 0 || NumFusedKerns == other.NumFusedKerns) &&
+    DistributeToGPUs == other.DistributeToGPUs;
   }
 
   bool sameKronSize(const KronMatmulShape& other) const {
@@ -47,7 +49,7 @@ struct KronMatmulShape {
   // }
 
   friend std::ostream& operator<<(std::ostream &out, const KronMatmulShape &shape) {
-    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA << "**" << shape.NumFusedKerns;
+    out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA << "**" << shape.NumFusedKerns << "_" << shape.DistributeToGPUs;
     return out;
   }
 };
@@ -66,31 +68,33 @@ struct KernelInfo {
   ElementType elemType;
   bool RowModTileIsZero;
   bool KEqVar;
+  bool DistributeToGPUs;
 
   //TODO: Add SharedTileKronRows??
   KernelInfo() : kernel(nullptr) {}
   KernelInfo(void* kernel_, uint NumThreads_,  uint KronCols_, uint KronRows_, uint TileKronCols_,
              uint TileRowsA_, uint MaxColsA_, uint CRegRows_, uint CRegCols_, uint NumFusedKerns_,
-             ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_) :
+             ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_, bool DistributeToGPUs_) :
              kernel(kernel_), NumThreads(NumThreads_), KronCols(KronCols_), KronRows(KronRows_),
              TileKronCols(TileKronCols_), TileRowsA(TileRowsA_), MaxColsA(MaxColsA_), CRegRows(CRegRows_),
              CRegCols(CRegCols_), NumFusedKerns(NumFusedKerns_), elemType(elemType_), 
-             RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_) {}
+             RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_), DistributeToGPUs(DistributeToGPUs_) {}
 
   bool isValid() {return kernel != nullptr;}
   friend std::ostream& operator<<(std::ostream &out, const KernelInfo &shape) {
     out << shape.TileRowsA << "x" << shape.MaxColsA << "_" 
        << shape.KronRows << "x" << shape.KronCols << "_" << shape.TileKronCols << "_"
        << shape.CRegRows << "x" << shape.CRegCols << "_"
-       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.KEqVar << "_" << shape.RowModTileIsZero;
+       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.KEqVar << "_" << shape.RowModTileIsZero << "_" << shape.DistributeToGPUs;
       
     return out;
   }
 
-  bool canCompute(KronMatmulShape shape, uint NumFusedKerns) {
+  bool canCompute(KronMatmulShape shape, uint NumFusedKerns, bool DistributeToGPUs) {
     return KEqVar == (shape.ColsA == MaxColsA) && 
            RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) &&
            this->NumFusedKerns == NumFusedKerns &&
+           this->DistributeToGPUs == DistributeToGPUs &&
            MaxColsA <= shape.ColsA;
 
   }

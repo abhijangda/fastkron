@@ -3,7 +3,7 @@
 template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, 
          uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, 
          uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
-         uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns>
+         uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns, bool DistributeToGPUs>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params, 
                                DistributedParams<ElemT> distParams) {
@@ -233,7 +233,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
       printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
 #endif
     for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-      if (vecTyNumElems > 1 && MaxColsA == MaxColsC && false) { // && !distParams.storeToDistMems
+      if (vecTyNumElems > 1 && MaxColsA == MaxColsC && !DistributeToGPUs) { // && !distParams.storeToDistMems
         //TODO: Cannot shA here if MaxColA < MaxColsC
         shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
         shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
@@ -285,13 +285,13 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         uint cIdx;
         ElemT* __restrict__ outputArray;
 
-        if (distParams.storeToDistMems) {
+        if (DistributeToGPUs) {
           // kronRows = 64;
           // kronCols = 64;
           const uint perGPUK = (kronRows*kronRows*kronRows*kronRows)/2; //
           const uint numGPUs = 2; //distParams.numGPUs;
 
-          const uint perGPUKByNumGPUs = distParams.perGPUKByNumGPUs;
+          const uint perGPUKByNumGPUs = perGPUK/numGPUs; //distParams.perGPUKByNumGPUs;
           const uint perGPUKByKronRows = distParams.perGPUKByKronRows;
           const uint ColsAByKronRows = distParams.ColsAByKronRows;
           const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
