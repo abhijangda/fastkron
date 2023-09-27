@@ -1176,7 +1176,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
 
     std::cout << "gpusInRows " << handle.gpusInM_ <<
                  " gpusInCols " << handle.gpusInK_ << 
-                 " gpuKronBatch" << handle.perGPUKronBatch_ <<
+                 " gpuKronBatch " << handle.perGPUKronBatch_ <<
                  std::endl;
     if (handle.gpusInK_ * handle.gpusInM_ != handle.numGPUs_)  {
       std::cout << "gpusInCols * gpusInRows != total gpus (" << 
