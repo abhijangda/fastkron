@@ -5,7 +5,9 @@
 #define KERNEL_DECL(T, VecT, ElemType) \
 KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, 1, 2048, 64, 32, 32, 0, 1, 4, 4, 32, 1, 0>,128, 64, 32, 32, 1, 2048, 4, 4, 1, ElemType, 1, 0, 0},\
 KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 2, 1, 4096, 64, 64, 64, 0, 1, 2, 16, 32, 1, 0>,128, 64, 64, 64, 2, 4096, 2, 16, 1, ElemType, 1, 0, 0},\
-KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 2, 1, 4096, 64, 64, 64, 0, 1, 2, 16, 32, 1, 1>,128, 64, 64, 64, 2, 4096, 2, 16, 1, ElemType, 1, 0, 1}
+KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 2, 1, 4096, 64, 64, 64, 0, 1, 2, 16, 32, 1, 1>,128, 64, 64, 64, 2, 4096, 2, 16, 1, ElemType, 1, 0, 1},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, 1, 8192, 128, 128, 128, 0, 1, 2, 32, 32, 1, 1>,128, 128, 128, 128, 1, 8192, 2, 32, 1, ElemType, 1, 0, 1},\
+KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 1, 1, 8192, 128, 128, 128, 0, 1, 2, 32, 32, 1, 0>,128, 128, 128, 128, 1, 8192, 2, 32, 1, ElemType, 1, 0, 0}
 
 /*
 KernelInfo{(void*)kronGemmKernel<T, VecT, 128, RowParallelismTy::Low, 2, 0, 1024, 64, 32, 8, 0, 1, 2, 1, 32, 1>,128, 64, 32, 8, 2, 1024, 2, 1, 1, ElemType, 0, 0},\
