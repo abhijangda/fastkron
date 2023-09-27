@@ -1104,6 +1104,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   handle.isDistributed_ = isDistributed;
   if (isDistributed) {
     //TODO: Setting DistComm in another function
+    handle.setUseFusion(false);
     handle.numGPUs_ = gpus;
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {
