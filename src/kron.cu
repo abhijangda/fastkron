@@ -45,6 +45,19 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
+namespace env {
+  static char DIST_COMM[] = "DIST_COMM";
+
+  DistComm getDistComm() {
+    char* val = getenv(DIST_COMM);
+    if (val == nullptr) return DistComm::DistCommNone;
+    if (strcmp(val, "P2P") == 0) return DistComm::P2P;
+    if (strcmp(val, "NCCL") == 0) return DistComm::NCCL;
+    std::cout << "Invalid value for DIST_COMM=" << val << std::endl;
+    return DistComm::DistCommNone;
+  }
+}
+
 enum RowParallelismTy {
   Low = 0,
   Medium,
@@ -282,7 +295,7 @@ TunedKernelsSeries selectDistributedKernelSeries(FastKronHandle& handle, const u
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
       currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
-    bool DistributeToGPUs = handle.gpusInK_ > 1 && (i == NumKronMats - 1);
+    bool DistributeToGPUs = handle.distComm_ == DistComm::P2P && handle.gpusInK_ > 1 && (i == NumKronMats - 1);
     auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
                                        prevTempN, M, NumFusedKerns, DistributeToGPUs});
     tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
@@ -716,7 +729,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
-        
+
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
                                         handle.gpuK_, kronRows[0], KronMulBatchSize);
         //Create another function (like generalSlicedMatmulWithDist?) that takes distParams
@@ -762,7 +775,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         }
       }
 
-      if (false && handle.gpusInK_ > 1) {
+      if (handle.distComm_ == DistComm::NCCL && handle.gpusInK_ > 1) {
         //Call we want to use NCCL Send/Recv
         {
           const uint SliceRows = handle.gpuM_;
@@ -1088,28 +1101,62 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   handle.isDistributed_ = isDistributed;
   if (isDistributed) {
+    //TODO: Setting DistComm in another function
     handle.numGPUs_ = gpus;
-    int devs[gpus];
-    // ncclUniqueId ncclId;
-    // ncclGetUniqueId(&ncclId);
-    // std::cout << "Initializing NCCL"<<std::endl;
-    // for (int i = 0; i < gpus; i++) {
-    //   CUDA_CHECK(cudaSetDevice(i));
-    //   handle.ncclComms.push_back(nullptr);
-    //   devs[i] = i;
-    //   //TODO: clear ncclComms
-    //   // NCCLCHECK(ncclCommInitRank(&handle.ncclComms[i], gpus, ncclId, i));
-    // }
-    // NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
-    // std::cout << "Initialized NCCL"<<std::endl;
-    // assert (gpus == 4);
+    bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {
       for (int g2 = 0; g2 < gpus; g2++) {
         if (g1 == g2) continue;
+        int p2pAccess = -1;
+        CUDA_CHECK(cudaDeviceCanAccessPeer(&p2pAccess, g1, g2));
+        if (p2pAccess == 0) {allP2PAccess = false; break;}
         CUDA_CHECK(cudaSetDevice(g1));
         CUDA_CHECK(cudaDeviceEnablePeerAccess(g2, 0));
       }
+      if (!allP2PAccess) break;
     }
+
+    handle.distComm_ = env::getDistComm();
+
+    if (handle.distComm_ == DistComm::P2P) {
+      if (!allP2PAccess) {
+        std::cout << "P2P Access among GPUs not available using NCCL" << std::endl;
+        handle.distComm_ == DistComm::DistCommNone;
+      }
+    } else if (handle.distComm_ == DistComm::NCCL) {
+      int devs[gpus];
+      handle.distComm_ = DistComm::NCCL;
+      ncclUniqueId ncclId;
+      ncclGetUniqueId(&ncclId);
+      std::cout << "Initializing NCCL"<<std::endl;
+      for (int i = 0; i < gpus; i++) {
+        CUDA_CHECK(cudaSetDevice(i));
+        handle.ncclComms.push_back(nullptr);
+        devs[i] = i;
+      }
+      NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
+    }
+
+    if (handle.distComm_ == DistComm::DistCommNone) {
+      if (allP2PAccess) {
+        handle.distComm_ = DistComm::P2P;
+      } else {
+        int devs[gpus];
+        handle.distComm_ = DistComm::NCCL;
+        ncclUniqueId ncclId;
+        ncclGetUniqueId(&ncclId);
+        std::cout << "Initializing NCCL"<<std::endl;
+        for (int i = 0; i < gpus; i++) {
+          CUDA_CHECK(cudaSetDevice(i));
+          handle.ncclComms.push_back(nullptr);
+          devs[i] = i;
+        }
+        NCCLCHECK(ncclCommInitAll(&handle.ncclComms[0], gpus, devs));
+      }
+    }
+
+    std::cout << "Using " << handle.distComm_ << " for distributed comm" << std::endl;
+
     if (gpusInK >= 1)
       handle.gpusInK_ = gpusInK;
     else

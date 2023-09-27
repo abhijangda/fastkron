@@ -118,6 +118,18 @@ struct TunedKernelFromStart {
 
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
 struct ThreadArgs;
+enum DistComm {
+  DistCommNone = 0,
+  P2P,
+  NCCL,
+};
+
+enum ProcType {
+  ProcNone = 0,
+  SingleThread,
+  MultipleThread,
+  MultipleProcess
+};
 
 struct FastKronHandle {
   const uint M_, N_, K_;
@@ -156,6 +168,8 @@ struct FastKronHandle {
   void **sendTemps_;
   void **recvTemps_;
   bool isDistributed_;
+  DistComm distComm_;
+
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
 
