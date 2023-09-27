@@ -98,6 +98,13 @@ struct KernelInfo {
            MaxColsA <= shape.ColsA;
 
   }
+
+  bool isDistributedLike(KernelInfo& other) {
+    return KEqVar == other.KEqVar && 
+           RowModTileIsZero == other.RowModTileIsZero &&
+           NumFusedKerns == other.NumFusedKerns &&
+           MaxColsA == other.MaxColsA && DistributeToGPUs == true;
+  }
 };
 
 

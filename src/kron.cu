@@ -483,18 +483,16 @@ float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
 
 //TODO: Create another autotuning object?
 template<typename T>
-cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
-                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream) {
+cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
+                              uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                              T* temp1, T* temp2,
+                              std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
+                              cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
-  std::cout << "N " << N << " K " << K << " KronMatCols[0] " << KronMatCols[0] << " KronMatRows[0] " << KronMatRows[0] << std::endl;
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-    return cudaErrorInvalidValue;
-  T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
+  T* kronGemmResults[2] = {(T*)temp1, (T*)temp2};
   //For performance eval we do not need these to contain any value
   T* prevKronResult = kronGemmResults[0];
   T* currKronResult = kronGemmResults[1];
-  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
   //TODO: Assumes all factors are of same size and square shape
   // const uint MaxFusedKerns = handle.getUseFusion() ? 
   //                            maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}) : 1;
@@ -509,7 +507,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   for (uint startKron = 0; startKron < NumKronMats; startKron++) {
   for (uint endKron = startKron; endKron < NumKronMats; endKron++)   {
     const uint kronMat = endKron;
-    //Include KronMats [startKron, ..., endKron]
+    //KronMats[startKron, ..., endKron] including endKron
     const uint NumFusedKerns = endKron - startKron + 1;
     T* krons[NumFusedKerns];
     uint FusedKronMatCols[NumFusedKerns];
@@ -603,16 +601,83 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
     }
   }}
-  std::cout << "Finding min execution time of the series" << std::endl;
-  TunedKernelsSeries tunedKernels;
-  float minTime = minExecTimeOfSeries(M, K, NumKronMats,
-                                      KronMatCols, KronMatRows, 0,
-                                      tunedKernels, bestKernels);
+
+  return cudaSuccess;
+}
+
+template<typename T>
+cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
+                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                     cudaStream_t stream) {
+  //Only row major layout of all matrics is supported.
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return cudaErrorInvalidValue;
+  
+  std::cout << "N " << N << " K " << K << " KronMatCols[0] " << KronMatCols[0] << " KronMatRows[0] " << KronMatRows[0] << std::endl;
+  float minTime = 0;
+  if (!handle.isDistributed_) {
+    std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
+    singleGPUAutotune(NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, (T*)handle.temp_, (T*)handle.result_,
+                      bestKernels, stream);
+    std::cout << "Finding min execution time of the series" << std::endl;
+    TunedKernelsSeries tunedKernels;
+    minTime = minExecTimeOfSeries(M, K, NumKronMats,
+                                  KronMatCols, KronMatRows, 0,
+                                  tunedKernels, bestKernels);
+    handle.tunedKernelSeries = tunedKernels;
+  } else {
+    //In distributed case run every LocalKron series on a single GPU
+    CUDA_CHECK(cudaSetDevice(0));
+    uint prevTempN = K;
+
+    //TODO: This loop is really common and should be a macro?
+    for (uint i = 0; i < NumKronMats; i += handle.perGPUKronBatch_) {
+      const uint kronMat = NumKronMats - i - 1;
+      const uint LocalKrons = min(handle.perGPUKronBatch_, NumKronMats - i);
+      uint currTempN = prevTempN;
+      // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
+      uint LocalKronMatCols[LocalKrons];
+      uint LocalKronMatRows[LocalKrons];
+      for (int k = 0; k < LocalKrons; k++) {
+        LocalKronMatCols[k] = KronMatCols[kronMat - k];
+        LocalKronMatRows[k] = KronMatRows[kronMat - k];
+        currTempN = (currTempN/LocalKronMatRows[k])*LocalKronMatCols[k];
+      }
+      
+      std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
+      singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, handle.gpuK_, handle.gpuK_, 
+                        LocalKronMatCols, LocalKronMatRows, (T*)handle.gpuTemp1_[0], (T*)handle.gpuTemp2_[0],
+                        bestKernels, stream);
+      TunedKernelsSeries tunedKernels;
+      minTime += minExecTimeOfSeries(handle.gpuM_, handle.gpuK_, LocalKrons,
+                                     LocalKronMatCols, LocalKronMatRows, 0,
+                                     tunedKernels, bestKernels);
+      if (handle.distComm_ == DistComm::P2P and handle.gpusInK_ > 1) {
+        auto firstInfo = tunedKernels[0].kernel;
+        KronMatmulShape shape {firstInfo.KronCols, firstInfo.KronRows, firstInfo.MaxColsA, 0, 
+                               firstInfo.NumFusedKerns, 1};
+        auto iter = compiledKernels.find(shape);
+        assert (iter != compiledKernels.end());
+        for (auto kernel : iter->second) {
+          if (kernel.isDistributedLike(firstInfo)) {
+            tunedKernels[0].kernel = kernel;
+            break;
+          }
+        }
+
+        assert(tunedKernels[0].kernel.DistributeToGPUs == true);
+      }
+
+      for (auto tunedKernel : tunedKernels) {
+        handle.tunedKernelSeries.push_back(tunedKernel);
+      }
+    }
+  }
+
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
-  for (auto iter = tunedKernels.rbegin(); iter != tunedKernels.rend(); iter++) {
+  for (auto iter = handle.tunedKernelSeries.rbegin(); iter != handle.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
   }
-  handle.tunedKernelSeries = tunedKernels;
   return cudaSuccess;
 }
 
