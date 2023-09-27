@@ -45,6 +45,9 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
+/*TODOs:
+ 1. Using fusion or not should be an environemnt flag
+ 2. Debug message environment flag*/
 namespace env {
   static char DIST_COMM[] = "DIST_COMM";
 
@@ -672,7 +675,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   //TODO: What if Rows are not multiple of GPUs in Rows
   T* innerResults[2] = {(T*)handle.gpuTemp1_[g], (T*)handle.gpuTemp2_[g]};
   // std::cout << "handle.gpuM_ " << handle.gpuM_ << " handle.gpuK_ " <<handle.gpuK_ << " gpusInCols " << gpusInCols << " gpusInRows " << gpusInRows << " K " << K << std::endl;
-  if (gc == 0) std::cout <<"g " << g<< " innerResults = " << "{" << innerResults[0] << ", " << innerResults[1] << "}" << std::endl;
   T* innerPrevResult;
   T* innerCurrResult;
   
@@ -898,9 +900,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
     }
 
     CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-    printf("820: g %d io %d\n", g, io);
     thread_barrier_wait(thArgs->barrier);
-    printf("823: g %d thArgs->barrier %p io %d\n", g, thArgs->barrier, io);
     // if (io == 0) {
     //   // printf("683 io %d\n", io);
     //   printGPUArray<float>(handle.gpuM_, handle.gpuK_, 64*64*64, innerPrevResult, stream[g]);
@@ -925,11 +925,8 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   
   std::cout << "Running distributed KronMatmul" << std::endl;
   const uint gpuM = handle.gpuM_;
-  const uint gpuK = handle.gpuK_; //handle.OutofCoreKronBatch_ * power(KronMatRows[0], handle.OutofCoreKrons_); //KronMatCols[0] * KronMatCols[0]* KronMatCols[0]* KronMatCols[0] * KronMatCols[0] * KronMatCols[0];
+  const uint gpuK = handle.gpuK_;
   const uint batchedKronMuls = handle.perGPUKronBatch_;
-
-  // printf("MaxInnerKrons %d uvaColsX %d K %d handle.outOfCoreTemp1_ %p\n", handle.OutofCoreKrons_, uvaColsX, K, handle.outOfCoreTemp1_);
-  double timeStart = getCurrTime();
 
   thread_pool<ThreadArgs*>::task tasks[handle.numGPUs_];
   ThreadArgs threadArgs[handle.numGPUs_];
@@ -955,9 +952,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
     );
 
     threadArgs[thread] = args;
-    //TODO: make this ThreadArgs& instead of ThreadArgs*
     tasks[thread] = thread_pool<ThreadArgs*>::task(perGPUKronMatmul<T, VecT>, &threadArgs[thread]);
-    // threads[thread] = std::thread(perGPUKronMatmul<T, VecT>, std::ref(threadArgs[thread]));
   }
 
   handle.threads_->execute_tasks(tasks);
@@ -968,10 +963,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
     status = threadArgs[thread].threadResult.status;
     result[thread] =(T*)threadArgs[thread].threadResult.result;
   }
-  double timeEnd = getCurrTime();
 
-  printf("531: time %lf microseconds\n", timeEnd - timeStart);
-  // 
   return status;
 }
 
@@ -1214,7 +1206,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     }
     std::cout << "Allocating temporaries"<<std::endl;
     size_t sz = handle.gpuM_ * handle.gpuK_ * sizeof(T);
-    std::cout << "sz " << sz << std::endl;
     for (int g = 0; g < gpus; g++) {
       CUDA_CHECK(cudaSetDevice(g));
       CUDA_CHECK(cudaMalloc(&handle.gpuTemp1_[g], sz));
