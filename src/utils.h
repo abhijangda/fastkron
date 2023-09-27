@@ -36,4 +36,12 @@ bool isPowerOf2(uint x)
 {
     return (x & (x - 1)) == 0;
 }
+
+__host__ __device__ constexpr uint power(const uint x, const uint y) {
+  uint result = 1;
+  for (uint i = 0; i < y; i++) {
+    result = result * x;
+  }
+  return result;
+}
 #endif

@@ -45,8 +45,6 @@
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
-__constant__ void* localGpuResults[16];
-
 enum RowParallelismTy {
   Low = 0,
   Medium,
@@ -227,11 +225,9 @@ cudaError_t generalSlicedMatmul(FastKronHandle& handle, KernelInfo& kernelInfo, 
                                          kronIndex);
   auto ttt = (LocalKrons == 3) ? (T**)handle.gpuTemp1_ : (T**)handle.gpuTemp2_;
   printf("gc %d\n", gc);
-  uint KronRowsPower = (LocalKrons == 3) ? KronRows*KronRows*KronRows: KronRows;
-  const uint UVAColsRatioKronRowsSquare = handle.gpuK_/KronRowsPower;
-  DistributedParams<T> distParams(ttt[0], ttt[1], gr, gc, handle.numGPUs_, handle.K_, handle.N_, 
-                                  handle.gpuK_, KronRows, LocalKrons, 
-                                  UVAColsRatioKronRowsSquare, storeToDistMems);
+  
+  DistributedParams<T> distParams(ttt, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
+                                  handle.gpuK_, KronRows, LocalKrons);
 
   typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
   //Create kernel args;

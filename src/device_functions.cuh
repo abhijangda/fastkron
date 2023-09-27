@@ -32,14 +32,6 @@ __device__ constexpr uint sqrt(uint x) {
 }
 
 //Compute x**y
-__device__ __host__ constexpr uint power(const uint x, const uint y) {
-  uint result = 1;
-  for (uint i = 0; i < y; i++) {
-    result = result * x;
-  }
-  return result;
-}
-
 template<uint x, uint y>
 __device__ __host__ constexpr uint iconstpower() {
   uint result = 1;
@@ -511,7 +503,7 @@ struct KernelParams {
   }
 };
 
-const uint MaxGPUs = 2;
+const uint MaxGPUs = 8;
 template<typename ElemT>
 struct DistributedParams {
   ElemT* gpuResults0;
@@ -524,32 +516,47 @@ struct DistributedParams {
   ElemT* gpuResults7;
  
   const uint gr, gc;
-  const uint numGPUs;
+  const uint gpusInK;
   const uint ColsA;
   const uint ColsC;
-  const bool storeToDistMems;
   const uint LocalKrons;
-  const uint UVAColsRatioKronRowsSquare;
-  const uint perGPUKByNumGPUs;
-  const uint perGPUKByKronRows;
-  const uint ColsAByKronRows;
-  const uint gcMulUVAColsRatioKronRowsSquare;
 
-  DistributedParams(ElemT* gpuResults0_, ElemT* gpuResults1_, const uint gr_, const uint gc_, const uint numGPUs_,   
-                    const uint ColsA_, const uint ColsC_, const uint PerGPUK, const uint kronRows, const uint LocalKrons_, const uint UVAColsRatioKronRowsSquare_, bool storeToDistMems_) :
-    storeToDistMems(storeToDistMems_), gr(gr_), gc(gc_), numGPUs(numGPUs_), ColsA(ColsA_), ColsC(ColsC_),
-    LocalKrons(LocalKrons_), UVAColsRatioKronRowsSquare(UVAColsRatioKronRowsSquare_), perGPUKByNumGPUs(PerGPUK/numGPUs),
-    perGPUKByKronRows(PerGPUK/kronRows), ColsAByKronRows(ColsA_/kronRows), gcMulUVAColsRatioKronRowsSquare(gc*UVAColsRatioKronRowsSquare) {
-      
-      gpuResults0 = gpuResults0_;
-      gpuResults1 = gpuResults1_;
-    // assert (numGPUs_ < MaxGPUs);
-    // for (int g = 0; g < numGPUs_; g++) {
-    //   gpuResults[g] = gpuResults_[g];
-    // }
-    // for (int g = numGPUs_; g < MaxGPUs; g++) {
-    //   gpuResults[g] = nullptr;
-    // }
+  uint UVAColsRatioKronRowsSquare;
+  uint perGPUKByNumGPUs;
+  uint perGPUKByKronRows;
+  uint ColsAByKronRows;
+  uint gcMulUVAColsRatioKronRowsSquare;
+
+  DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint gpusInK_,   
+                    const uint ColsA_, const uint ColsC_, 
+                    const uint PerGPUK_, const uint KronRows_, const uint LocalKrons_) :
+    gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
+    LocalKrons(LocalKrons_) {
+    
+    const uint KronRowsPower = power(KronRows_, LocalKrons_);
+    UVAColsRatioKronRowsSquare = PerGPUK_/KronRowsPower;
+    perGPUKByNumGPUs = PerGPUK_/gpusInK_;
+    perGPUKByKronRows = PerGPUK_/KronRows_;
+    ColsAByKronRows = ColsA_/KronRows_;
+    gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
+    
+    setGPUResults(0, gpuResults0, gpuResults_);
+    setGPUResults(1, gpuResults1, gpuResults_);
+    setGPUResults(2, gpuResults2, gpuResults_);
+    setGPUResults(3, gpuResults3, gpuResults_);
+    setGPUResults(4, gpuResults4, gpuResults_);
+    setGPUResults(5, gpuResults5, gpuResults_);
+    setGPUResults(6, gpuResults6, gpuResults_);
+    setGPUResults(7, gpuResults7, gpuResults_);
+
+
+  }
+
+  void setGPUResults(int idx, ElemT*& thisResults, ElemT** gpuResults) {
+    if (idx < gpusInK)
+      thisResults = gpuResults[idx];
+    else
+      thisResults = nullptr;
   }
 
   __device__ __forceinline__ ElemT* getLocalGPUResult(uint gc) {
