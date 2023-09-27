@@ -242,7 +242,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           shA[0][tid * vecTyNumElems+3] = regC[rowA][reg_i+3][reg_j];
         }
         
-        __syncwarp();
+        __syncthreads();
         for (uint shVecI = tid%wSz; shVecI < vecTyNumElems*wSz; shVecI += wSz) {
           const uint cRow = rowA + tileRowA;
           uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
