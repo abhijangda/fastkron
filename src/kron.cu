@@ -282,7 +282,7 @@ TunedKernelsSeries selectDistributedKernelSeries(FastKronHandle& handle, const u
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
       currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
-    bool DistributeToGPUs = (i == NumKronMats - 1);
+    bool DistributeToGPUs = handle.gpusInK_ > 1 && (i == NumKronMats - 1);
     auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
                                        prevTempN, M, NumFusedKerns, DistributeToGPUs});
     tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
@@ -705,13 +705,18 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           thread_barrier_wait(thArgs->barrier);
         }
         
-        T** gpuResults;
+        T** gpuTempResults;
         if (innerCurrResult == innerResults[0]) {
-          gpuResults = (T**)handle.gpuTemp1_;
+          gpuTempResults = (T**)handle.gpuTemp1_;
         } else {
-          gpuResults = (T**)handle.gpuTemp2_;
+          gpuTempResults = (T**)handle.gpuTemp2_;
         }
-  
+        
+        T* gpuResults[handle.gpusInK_];
+        for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
+          gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
+        }
+        
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
                                         handle.gpuK_, kronRows[0], KronMulBatchSize);
         //Create another function (like generalSlicedMatmulWithDist?) that takes distParams
@@ -725,7 +730,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //Double/ring/circular buffer previous result and new result
         innerPrevResult = innerCurrResult;
-        if (innerPrevResult == innerResults[0]) {        
+        if (innerPrevResult == innerResults[0]) {
           innerCurrResult = innerResults[1];
         } else if (innerPrevResult == innerResults[1]) {
           innerCurrResult = innerResults[0];

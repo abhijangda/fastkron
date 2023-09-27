@@ -503,9 +503,9 @@ struct KernelParams {
   }
 };
 
-const uint MaxGPUs = 8;
 template<typename ElemT>
 struct DistributedParams {
+  //TODO: Set gpuResults for 16 GPUs
   ElemT* gpuResults0;
   ElemT* gpuResults1; 
   ElemT* gpuResults2;
