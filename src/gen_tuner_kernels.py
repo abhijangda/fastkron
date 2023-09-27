@@ -84,12 +84,12 @@ def all_sliced_mults(m, k, n, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
-def generate_kernel_decls(cases, useFusion):
-  configs = []
+def generate_kernel_decls(cases, useFusion, numKernels):
+  configs = {}
 
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1
-  
+    __configs = []  
     for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
@@ -109,31 +109,41 @@ def generate_kernel_decls(cases, useFusion):
                     for kEqVar in [0]:
                       fusedCases = range(1, int(math.log(tK, tP))+1) if allSameShapes and useFusion else [1]
                       for numFusedKerns in fusedCases:
-                        configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                                 p, q, tQ, tP, tM, 
+                        __configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
+                                                                p, q, tQ, tP, tM, 
                                     rowModTileIsZero, regRows, regCols, kEqVar,
                                     numFusedKerns, "Float")]
+    configs[str([m, k, n, ps, qs])] = __configs
 
-  print("Generated ", len(configs), " configs")
+  print("Generated configs: ", ";".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
   
   #Filter only valid configs
-  validConfigs = []
-  for config in configs:
-    if config.isValid():
-      validConfigs += [config]
+  validConfigs = {}
+  for k in configs:
+    validConfigs[k] = []
+    for config in configs[k]:
+      if config.isValid():
+        validConfigs[k] += [config]
   
-  print("Valid configs", len(validConfigs))
+  print("Valid configs", sum([len(validConfigs[k]) for k in validConfigs]))
 
-  uniqueConfigs = list(set(validConfigs))
+  uniqueConfigs = {k : list(set(validConfigs[k])) for k in validConfigs}
 
-  print("Unique configs", len(uniqueConfigs))
+  print("Unique configs", sum([len(uniqueConfigs[k]) for k in uniqueConfigs]))
 
   contents = f"#define MAX_K {shape.k}\n"
   contents += f"#define MIN_K {shape.k}\n"
   contents += f"#define MIN_KP_K {shape.p}\n"
   contents += f"#define MAX_KP_K {shape.p}\n"
   contents += "#define KERNEL_DECL(T, VecT, ElemType) \\\n"
-  for config in uniqueConfigs:
+  combinedConfigs = []
+  for k in uniqueConfigs:
+    configs = uniqueConfigs[k]
+    configs = configs[:min(len(configs), numKernels)]
+    combinedConfigs += configs
+  
+  combinedConfigs = list(set(combinedConfigs))
+  for config in combinedConfigs:
     contents += config.code() + ",\\\n"
   contents = contents[:contents.rfind(",")]
   contents += "\n"
@@ -178,6 +188,7 @@ if __name__ == "__main__":
   parser.add_argument('-distinct-factors', required=False, nargs="+", action='append', type=int)
   parser.add_argument('-same-factors', required=False, nargs="+", action='append', type=int)
   parser.add_argument('-no-fuse', required=False, action='store_true')
+  parser.add_argument('-num-kernels', required=False, type=int, default=10000)
 
   #TODO: args should be like below:
   # distinct-shapes: No need of m and k. specify size of factor.
@@ -204,4 +215,4 @@ if __name__ == "__main__":
   
   print("Generating kernels for ")
   print(parsed_cases)
-  generate_kernel_decls(parsed_cases, not args.no_fuse)
+  generate_kernel_decls(parsed_cases, not args.no_fuse, args.num_kernels)
