@@ -526,6 +526,7 @@ struct DistributedParams {
   uint perGPUKByKronRows;
   uint ColsAByKronRows;
   uint gcMulUVAColsRatioKronRowsSquare;
+  uint ColsCByKronRowsPower;
 
   DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
@@ -539,7 +540,8 @@ struct DistributedParams {
     perGPUKByKronRows = PerGPUK_/KronRows_;
     ColsAByKronRows = ColsA_/KronRows_;
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
-    
+    ColsCByKronRowsPower = ColsC_/KronRowsPower;
+
     setGPUResults(0, gpuResults0, gpuResults_);
     setGPUResults(1, gpuResults1, gpuResults_);
     setGPUResults(2, gpuResults2, gpuResults_);
