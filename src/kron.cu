@@ -18,7 +18,7 @@
 
 #define CUDA_CHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
-  if( e != cudaSuccess ) {                          \
+  if( e != cudaSuccess and e != cudaErrorPeerAccessAlreadyEnabled) {                          \
     printf("Failed: Cuda error %s:%d '%s'\n",             \
         __FILE__,__LINE__,cudaGetErrorString(e));   \
     exit(EXIT_FAILURE);                             \
@@ -1284,6 +1284,7 @@ template<> void FastKronHandle::initDistributed<double>(int gpus, int gpusInM, i
 
 void FastKronHandle::free() {
   if (isDistributed_) {
+    //TODO: Clear everything
     for (uint g = 0; g < numGPUs_; g++) {
       CUDA_CHECK(cudaFree(gpuTemp1_[g]));
       CUDA_CHECK(cudaFree(gpuTemp2_[g]));

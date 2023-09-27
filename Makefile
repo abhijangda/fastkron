@@ -53,11 +53,15 @@ run-single-gpu-non-square-tuner-tests: single-gpu-non-square-tuner-tests
 copy-multi-gpu-tests-kernel: tests/multi-gpu-tests-kernel_decl.inc
 	cp tests/multi-gpu-tests-kernel_decl.inc src/kernel_decl.inc
 
-multi-gpu-nccl-no-fusion-tests: copy-multi-gpu-tests-kernel libKron.so tests/testBase.h tests/multi-gpu-nccl-no-fusion-tests.cu
+multi-gpu-no-fusion-tests: copy-multi-gpu-tests-kernel libKron.so tests/testBase.h tests/multi-gpu-nccl-no-fusion-tests.cu
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
-run-multi-gpu-nccl-no-fusion-tests: multi-gpu-nccl-no-fusion-tests
-	LD_LIBRARY_PATH=./: ./multi-gpu-nccl-no-fusion-tests
+run-multi-gpu-nccl-no-fusion-tests: multi-gpu-no-fusion-tests
+	LD_LIBRARY_PATH=./: DIST_COMM=NCCL ./multi-gpu-no-fusion-tests
+
+run-multi-gpu-p2p-no-fusion-tests: multi-gpu-no-fusion-tests
+	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-no-fusion-tests
+
 
 #Run all tests
 run-tests: single-gpu-tests single-gpu-no-fusion-tests run-tuner-test
