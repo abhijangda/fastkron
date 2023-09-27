@@ -31,7 +31,7 @@ run-single-gpu-fusion-tests: single-gpu-fusion-tests
 
 #Tests for the autotuner
 gen-tuner-kernels: src/gen_tuner_kernels.py
-	python3 src/gen_tuner_kernels.py -same-factors 4 16 16 -same-factors 3 32 32 -same-factors 2 128 128
+	python3 src/gen_tuner_kernels.py -same-factors 4 16 16 -same-factors 3 64 64 64
 
 single-gpu-tuner-tests: gen-tuner-kernels tests/single-gpu-tuner-tests.cu libKron.so tests/testBase.h
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
@@ -64,7 +64,9 @@ run-multi-gpu-p2p-no-fusion-tests: multi-gpu-no-fusion-tests
 
 
 #Run all tests
-run-tests: single-gpu-tests single-gpu-no-fusion-tests run-tuner-test
+run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
+
+run-all-multi-gpu-tests: run-multi-gpu-p2p-no-fusion-tests run-multi-gpu-nccl-no-fusion-tests
 
 clean:
 	rm -rf kron libKron.so

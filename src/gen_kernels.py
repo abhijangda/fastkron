@@ -148,10 +148,11 @@ with open(kernel_filename, "w") as f:
                         continue
                     for RowModTileIsZero in [0, 1]:
                         for kEqVar in [0, 1]:
-                            contents += "KernelInfo{"+ \
-                                f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, {RowModTileIsZero}, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, {kEqVar}, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}>,"+\
-                                f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, {RowModTileIsZero}, {kEqVar}"+ "}"
-                            contents += ",\\\n"
+                            for dist in [0]:
+                                contents += "KernelInfo{"+ \
+                                    f"(void*)kronGemmKernel<T, VecT, {numThreads}, RowParallelismTy::Low, {rowsTileA}, {RowModTileIsZero}, {colsA}, {kronRows}, {kronRows}, {tileKronCols}, {kEqVar}, 1, {regRows}, {regCols}, {sharedTileKronRows}, {numFusedKerns}, {dist}>,"+\
+                                    f"{numThreads}, {kronRows}, {kronRows}, {tileKronCols}, {rowsTileA}, {colsA}, {regRows}, {regCols}, {numFusedKerns}, ElemType, {RowModTileIsZero}, {kEqVar}, {dist}"+ "}"
+                                contents += ",\\\n"
             except:
                 pass
     #Remove last comma and backslash

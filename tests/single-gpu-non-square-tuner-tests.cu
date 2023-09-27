@@ -13,7 +13,7 @@
     KP_MAT_K[i] = P;\
     KP_MAT_N[i] = Q;\
   }\
-  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 0, 0, 0, 1, true, false, true, false);\
+  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, false, true, false);\
   EXPECT_TRUE(b);\
 }
 

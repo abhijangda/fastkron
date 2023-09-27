@@ -528,6 +528,8 @@ struct DistributedParams {
   uint gcMulUVAColsRatioKronRowsSquare;
   uint ColsCByKronRowsPower;
 
+  DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {} 
+  
   DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
                     const uint PerGPUK_, const uint KronRows_, const uint LocalKrons_) :
