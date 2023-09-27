@@ -653,23 +653,26 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                                      LocalKronMatCols, LocalKronMatRows, 0,
                                      tunedKernels, bestKernels);
       if (handle.distComm_ == DistComm::P2P and handle.gpusInK_ > 1) {
-        auto firstInfo = tunedKernels[0].kernel;
-        KronMatmulShape shape {firstInfo.KronCols, firstInfo.KronRows, firstInfo.MaxColsA, 0, 
-                               firstInfo.NumFusedKerns, 1};
+        auto& firstInfo = tunedKernels[tunedKernels.size() - 1];
+        KronMatmulShape shape {firstInfo.kernel.KronCols, firstInfo.kernel.KronRows, 
+                               firstInfo.kernel.MaxColsA, 0, 
+                               firstInfo.kernel.NumFusedKerns, 1};
         auto iter = compiledKernels.find(shape);
         assert (iter != compiledKernels.end());
         for (auto kernel : iter->second) {
-          if (kernel.isDistributedLike(firstInfo)) {
-            tunedKernels[0].kernel = kernel;
+          if (kernel.isDistributedLike(firstInfo.kernel)) {
+            firstInfo.kernel = kernel;
             break;
           }
         }
 
-        assert(tunedKernels[0].kernel.DistributeToGPUs == true);
+        assert(tunedKernels[tunedKernels.size() - 1].kernel.DistributeToGPUs == true);
       }
 
       for (auto tunedKernel : tunedKernels) {
-        handle.tunedKernelSeries.push_back(tunedKernel);
+        tunedKernel.start += kronMat + 1 - LocalKrons;
+        tunedKernel.end   += kronMat + 1 - LocalKrons;
+        handle.tunedKernelSeries.insert(handle.tunedKernelSeries.begin(), tunedKernel);
       }
     }
   }
@@ -781,12 +784,24 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       //   // printf("Done\n");
       // }
       TunedKernelsSeries kernelSeries;
-      kernelSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
-                                                   KronMatCols, KronMatRows, true);
+      const uint endKron = NumKronMats - io - KronMulBatchSize;
+      if (handle.tunedKernelSeries.size() > 0) {
+        for (auto tunedKernel : handle.tunedKernelSeries) {
+          if (tunedKernel.start >= endKron  and tunedKernel.end < endKron + KronMulBatchSize) {
+            kernelSeries.insert(kernelSeries.begin(), tunedKernel);
+          }
+        }
+      } else {
+        auto localSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
+                                              KronMatCols, KronMatRows, true);
+        for (auto kernel : localSeries) {
+          kernel.end += endKron;
+        }
+      }
       uint slicedMuls = 0;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
-        uint kronMat = kernel.end + (NumKronMats - io - KronMulBatchSize);
+        uint kronMat = kernel.end;
         T* krons[] = {kronMats[g * NumKronMats + kronMat]}; 
         uint kronCols[1] = {KronMatCols[kronMat]};
         uint kronRows[1] = {KronMatRows[kronMat]};
@@ -988,7 +1003,6 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
   
-  std::cout << "Running distributed KronMatmul" << std::endl;
   const uint gpuM = handle.gpuM_;
   const uint gpuK = handle.gpuK_;
   const uint batchedKronMuls = handle.perGPUKronBatch_;
