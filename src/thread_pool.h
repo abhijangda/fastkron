@@ -38,8 +38,9 @@ private:
   std::vector<char> done;
 
   uint num_threads;
-  std::mutex wait_mutex;
-  std::condition_variable waiting_var;
+  std::vector<std::mutex> wait_mutexes;
+  std::vector<std::mutex> tasks_mutexes;
+  std::vector<std::condition_variable> waiting_vars;
 
   struct thread_args {
     uint thread_id;
@@ -49,11 +50,8 @@ private:
   static void thread_func(thread_args args) {
     volatile thread_pool* volatile_pool = ((volatile thread_pool*)args.pool);
     while(volatile_pool->is_running()) {
-      std::unique_lock<std::mutex> lk(args.pool->wait_mutex);
-      args.pool->wait_for_tasks(lk);
-      lk.unlock();
-      
-      volatile_pool->run_task(args.thread_id);
+      args.pool->wait_for_task(args.thread_id);
+      args.pool->run_task(args.thread_id);
       args.pool->thread_done(args.thread_id);
     }
   }
@@ -71,7 +69,9 @@ public:
     num_threads = num_threads_;
     running = true;
     tasks = new task[num_threads];
-
+    wait_mutexes = std::vector<std::mutex>(num_threads);
+    tasks_mutexes = std::vector<std::mutex>(num_threads);
+    waiting_vars = std::vector<std::condition_variable>(num_threads);
     for (uint t = 0; t < num_threads; t++) {
       threads.push_back(std::thread(thread_pool::thread_func, thread_args{t, this}));
       done.push_back(false);
@@ -87,22 +87,30 @@ public:
     }
   }
 
-  void run_task (uint thread_id) volatile {
-    volatile task* t = &tasks[thread_id];
+  void run_task(uint id) {
+    std::unique_lock<std::mutex> tlk(tasks_mutexes[id]);
+    volatile task* t = &tasks[id];
     t->f(t->args);
+    tlk.unlock();
   }
 
-  void wait_for_tasks(std::unique_lock<std::mutex>& lock) {
-    waiting_var.wait(lock);
+  void wait_for_task(int id) {
+    std::unique_lock<std::mutex> lk(wait_mutexes[id]);
+    waiting_vars[id].wait(lk);
+    lk.unlock();
   }
 
   void execute_tasks(task* tasks_) {
-    std::unique_lock<std::mutex> lk(wait_mutex);
     for (uint i = 0; i < num_threads; i++) {
+      std::unique_lock<std::mutex> tlk(tasks_mutexes[i]);
       tasks[i] = tasks_[i];
+      tlk.unlock();
     }
-    waiting_var.notify_all();
-    lk.unlock();
+    for (uint i = 0; i < num_threads; i++) {
+      std::unique_lock<std::mutex> lk(wait_mutexes[i]);
+      waiting_vars[i].notify_all();
+      lk.unlock();
+    }
   }
 
   void thread_done(uint thread_id) {
