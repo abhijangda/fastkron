@@ -267,7 +267,7 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
   typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, DistributedParams<T>(), grid, block);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, distParams, grid, block);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -1114,8 +1114,9 @@ template<typename T> cudaError_t FastKronHandle_allocDistributedX(FastKronHandle
   //TODO: Make FastKronError type
   if (!handle.isDistributed_) return cudaErrorInvalidValue;
   //TODO: Check that hX is on host memory
-  T* gpuHostX = new T[handle.gpuM_ * handle.gpuK_];
-  std::cout << "Distributing X to all GPUs"<<std::endl;
+  T* gpuHostX = new T[((size_t)handle.gpuM_) * ((size_t)handle.gpuK_)];
+  std::cout << "Distributing X to all GPUs "<<std::endl;
+  // std::cout << handle.gpuM_ << "  " << handle.gpuK_ << "  " << sizeof(T) << std::endl;
   for (int g = 0; g < handle.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaMalloc(&dX[g], sizeof(T) * handle.gpuM_ * handle.gpuK_));
@@ -1124,6 +1125,7 @@ template<typename T> cudaError_t FastKronHandle_allocDistributedX(FastKronHandle
   for(int gr = 0; gr < handle.gpusInM_; gr++) {
     for (uint gc = 0; gc < handle.gpusInK_; gc++) {
       const uint g = gr * handle.gpusInK_ + gc;
+      // std::cout << "g " << g << " gr " <<gr << " gc " << gc << std::endl;
       CUDA_CHECK(cudaSetDevice(g));
       uint startGpuM = handle.gpuM_ * gr;
       uint startGpuK = handle.gpuK_ * gc;
