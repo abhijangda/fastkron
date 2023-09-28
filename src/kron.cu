@@ -845,6 +845,21 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
             krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
             kronCols, kronRows, distParams, stream[g]);
             break;
+          case 3:
+            status = generalDistributedSlicedMatmul<T, 3>(kernel.kernel, kernel.end, innerPrevResult, 
+            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+            kronCols, kronRows, distParams, stream[g]);
+            break;
+          case 4:
+            status = generalDistributedSlicedMatmul<T, 4>(kernel.kernel, kernel.end, innerPrevResult, 
+            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+            kronCols, kronRows, distParams, stream[g]);
+            break;
+          case 5:
+            status = generalDistributedSlicedMatmul<T, 5>(kernel.kernel, kernel.end, innerPrevResult, 
+            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+            kronCols, kronRows, distParams, stream[g]);
+            break;
         }
         
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));

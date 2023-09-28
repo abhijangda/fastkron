@@ -374,7 +374,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       CUDACHECK(cudaEventCreate(&end[g]));
       cudaStreamCreate(&stream[g]);
     }
-    if (verbose) printf("warmup\n");
+    printf("warmup\n");
     //Warm Up iterations
     for (uint i = 0; i < warmup; i++) {
       if (useDistributed) {
@@ -387,6 +387,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       CUDACHECK(cudaSetDevice(g));
       CUDACHECK(cudaStreamSynchronize(stream[g]));
     }
+    printf("390\n");
     //Run
     if (verbose) printf("run\n");
     for (int g = 0; g < gpus; g++) {
@@ -401,7 +402,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
       }
     }
-
+    printf("405\n");
     for (int g = 0; g < gpus; g++) {
       CUDACHECK(cudaSetDevice(g));
       CUDACHECK(cudaEventRecord(end[g], stream[g]));
