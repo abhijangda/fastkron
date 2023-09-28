@@ -54,8 +54,8 @@ run-single-gpu-non-square-tuner-tests: single-gpu-non-square-tuner-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-non-square-tuner-tests
 
 #Multi GPU Tests
-copy-multi-gpu-tests-kernel: tests/multi-gpu-tests-kernel_decl.inc
-	cp tests/multi-gpu-tests-kernel_decl.inc src/kernel_decl.inc
+gen-multi-gpu-tests-kernel: src/gen_tuner_kernels.py
+	python src/gen_tuner_kernels.py -same-factors 4 64 64 4 128 128 -dist-kernels -match-config 128,64,64,64,2,4096,2,16,1 128,128,128,128,1,8192,2,32,1
 
 multi-gpu-no-fusion-tests: copy-multi-gpu-tests-kernel libKron.so tests/testBase.h tests/multi-gpu-no-fusion-tests.cu
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
@@ -67,7 +67,7 @@ run-multi-gpu-p2p-no-fusion-tests: multi-gpu-no-fusion-tests
 	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-no-fusion-tests
 
 gen-multi-gpu-tuner-kernels: src/gen_tuner_kernels.py
-	python src/gen_tuner_kernels.py -same-factors 5 16 16 -dist-kernels
+	python src/gen_tuner_kernels.py -same-factors 5 16 16 -dist-kernels 
 
 multi-gpu-tuner-tests: gen-multi-gpu-tuner-kernels libKron.so tests/testBase.h tests/multi-gpu-tuner-tests.cu
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@

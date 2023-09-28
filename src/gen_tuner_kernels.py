@@ -100,7 +100,7 @@ class KernelConfig:
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1)) and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.kEqVar in [0, 1] and self.dist in [0, 1] 
-          #  and self.shape.k == 8192 and self.num_threads == 128 and self.tileQ == 64 and self.cRegRows == 2 and self.cRegCols == 32
+          #  and "128, 64, 64, 64, 2, 4096, 2, 16, 1, float, 1, 0" in repr(self)
 
   def __hash__(self):
     return hash(self.__repr__())
@@ -116,7 +116,7 @@ def all_sliced_mults(m, k, n, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
-def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels):
+def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
   empty_dir(kernel_dir)
   configs = {}
 
@@ -170,9 +170,21 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels):
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
     configs = configs[:min(len(configs), numKernels)]
+    if onlySpecificConfigs != []:
+        __configs = []
+        for config in configs:
+          for specificConfig in onlySpecificConfigs:
+            if specificConfig.replace(' ', '') in repr(config).replace(' ', ''):
+              __configs += [config]
+              break
+        configs = __configs
     combinedConfigs += configs
   
   combinedConfigs = list(set(combinedConfigs))
+  print("Generating", len(combinedConfigs), "configs")
+  if len(combinedConfigs) == 0:
+    return
+
   for config in combinedConfigs:
     #Write host function for each config
     kernel_filename = os.path.join(kernel_dir, config.filename())
@@ -247,11 +259,14 @@ if __name__ == "__main__":
   parser.add_argument('-no-fuse', required=False, action='store_true')
   parser.add_argument('-num-kernels', required=False, type=int, default=10000)
   parser.add_argument('-dist-kernels', required=False, action='store_true', default=False)
+  parser.add_argument('-match-configs', nargs="+", action='append', type=str)
+  
   #TODO: args should be like below:
   # distinct-shapes: No need of m and k. specify size of factor.
   # same-shapes: All factor of same shape 
   args = parser.parse_args()
   parsed_cases = []
+  
   if args.distinct_factors is not None:
     for case in args.distinct_factors:
       try:
@@ -272,4 +287,4 @@ if __name__ == "__main__":
   
   print("Generating kernels for ")
   print(parsed_cases)
-  generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels)
+  generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, args.match_configs[0])
