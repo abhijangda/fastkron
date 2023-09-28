@@ -62,6 +62,14 @@ run-multi-gpu-nccl-no-fusion-tests: multi-gpu-no-fusion-tests
 run-multi-gpu-p2p-no-fusion-tests: multi-gpu-no-fusion-tests
 	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-no-fusion-tests
 
+gen-multi-gpu-tuner-kernels: src/gen_tuner_kernels.py
+	python src/gen_tuner_kernels.py -same-factors 5 16 16 -dist-kernels
+
+multi-gpu-tuner-tests: gen-multi-gpu-tuner-kernels libKron.so tests/testBase.h tests/multi-gpu-tuner-tests.cu
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-multi-gpu-tuner-tests: multi-gpu-tuner-tests
+	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-tuner-tests
 
 #Run all tests
 run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
