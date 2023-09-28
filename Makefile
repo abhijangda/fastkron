@@ -12,7 +12,7 @@ kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron
 	$(NVCC) -Xcompiler=-fPIC,-fopenmp,-O3 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS)
 
 libKron.so: device_kernels.o kron.o
-	$(NVCC) -shared -lnccl -o $@ $?
+	$(NVCC) -shared -lnccl -o $@ device_kernels.o kron.o
 
 kron: tests/main.cu libKron.so tests/testBase.h
 	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@

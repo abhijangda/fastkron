@@ -99,7 +99,8 @@ class KernelConfig:
            self.cRegRows in [1, 2, 4] and \
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1)) and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
-           self.kEqVar in [0, 1] and self.dist in [0, 1]
+           self.kEqVar in [0, 1] and self.dist in [0, 1] 
+          #  and self.shape.k == 8192 and self.num_threads == 128 and self.tileQ == 64 and self.cRegRows == 2 and self.cRegCols == 32
 
   def __hash__(self):
     return hash(self.__repr__())
