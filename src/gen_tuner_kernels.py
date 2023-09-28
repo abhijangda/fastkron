@@ -2,14 +2,26 @@ import argparse
 import math 
 import sys
 import os
+import shutil
 import functools
 
 print(os.getcwd())
 assert 'src' in os.listdir('.')
-kernel_filename = "src/kernel_decl.inc"
+kernel_dir = "src/device/kernels/"
 
 #Device limits
 MAX_SHARED_MEM = 48 * 1024
+
+def empty_dir(dir):
+  for filename in os.listdir(dir):
+    file_path = os.path.join(dir, filename)
+    try:
+        if os.path.isfile(file_path) or os.path.islink(file_path):
+            os.unlink(file_path)
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+    except Exception as e:
+        print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 def element_size(elem_type : str) -> int:
   if elem_type.lower() == "float":
@@ -41,7 +53,7 @@ class KernelConfig:
     self.kEqVar = kEqVar
     self.fused_kernels = FusedKernel
     self.dist = dist
-    self.elemType = elemType
+    self.elemType = "float"
 
     """Compute several constants of kernel
        Corresponds to line numbers in kernel.cuh
@@ -51,15 +63,33 @@ class KernelConfig:
     self.shared_mem_usage = (self.tileM * self.shape.k + self.tileP * self.tileQ)*element_size(elemType)
 
   def __repr__(self):
-    return f"{self.num_threads}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, ElemType, {self.rowModTileIsZero}, {self.kEqVar}, {self.dist}"
+    return f"{self.num_threads}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar}, {self.dist}"
+
+  def kernelname(self):
+    return repr(self).replace(", ", "_")
+
+  def filename(self):
+    return f"kernel_{self.kernelname()}.cu"
+
+  def hostFuncName(self):
+    return f"host_{self.kernelname()}"
+
+  def hostFuncDecl(self):
+    return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, DistributedParams<float> distParams, dim3 grid, dim3 block)"
+
+  def templateDecl(self):
+    return f"float, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
+  
+  def kernelDecl(self):
+    return f"kronGemmKernel<{self.templateDecl()}>"
 
   def __eq__(self, other):
     return repr(self) == repr(other)
 
-  def code(self):
+  def kernelInfo(self):
     return "KernelInfo{"+\
-            f"(void*)kronGemmKernel<T, VecT, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}>,"+\
-            repr(self)+ "}"
+            f"(void*){self.hostFuncName()},"+\
+            repr(self).replace("float", "ElementType::Float") + "}"
 
   def isValid(self):
     return self.wsz > 0 and \
@@ -86,6 +116,7 @@ def all_sliced_mults(m, k, n, ps, qs):
   return list(sliced_mults)
 
 def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels):
+  empty_dir(kernel_dir)
   configs = {}
 
   for (m, k, n, ps, qs) in cases:
@@ -134,11 +165,6 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels):
 
   print("Unique configs", sum([len(uniqueConfigs[k]) for k in uniqueConfigs]))
 
-  contents = f"#define MAX_K {shape.k}\n"
-  contents += f"#define MIN_K {shape.k}\n"
-  contents += f"#define MIN_KP_K {shape.p}\n"
-  contents += f"#define MAX_KP_K {shape.p}\n"
-  contents += "#define KERNEL_DECL(T, VecT, ElemType) \\\n"
   combinedConfigs = []
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
@@ -147,12 +173,39 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels):
   
   combinedConfigs = list(set(combinedConfigs))
   for config in combinedConfigs:
-    contents += config.code() + ",\\\n"
-  contents = contents[:contents.rfind(",")]
-  contents += "\n"
-  with open(kernel_filename, "w") as f:
+    #Write host function for each config
+    kernel_filename = os.path.join(kernel_dir, config.filename())
+    with open(kernel_filename, "w") as f:
+      kernel_file_template = "\n".join(['#include "../kernel.cuh"',
+                                        "",
+                                        config.hostFuncDecl()+"{",
+                                        f"  {config.kernelDecl()}<<<grid, block>>>(params, distParams);",
+                                        "}"]);
+      f.write(kernel_file_template)
+
+  #declare KernelInfo for each config
+  host_decls = '#include "../device_functions.cuh"\n'
+  for config in combinedConfigs:
+    host_decls += config.hostFuncDecl() + ";\n"
+  host_decls += "\n"
+  
+  kernel_infos = "#define ALL_KERNELS \\\n"
+  for config in combinedConfigs:
+    kernel_infos += config.kernelInfo() + ",\\\n"
+  
+  kernel_infos = kernel_infos[:kernel_infos.rfind(",")]
+  kernel_infos += "\n"
+  with open(os.path.join(kernel_dir, "kernel_decl.inc"), "w") as f:
     #Remove last comma and backslash
-    f.write(contents)
+    f.write(host_decls)
+    f.write(kernel_infos)
+  
+  make_device_kernels = "DEVICE_KERNELS="
+  for config in combinedConfigs:
+    make_device_kernels += os.path.join(kernel_dir, config.filename().replace(".cu",".o")) + " "
+
+  with open(os.path.join(kernel_dir, "make_device_kernels"), "w") as f:
+    f.write(make_device_kernels)
 
 def parse_distinct_factors(case):
   m = 2

@@ -2,13 +2,17 @@ ANYOPTION=-IAnyOption/ AnyOption/anyoption.cpp
 TEST_INCLUDE_DIRS = -Igoogletest/googletest/include/  -Lgoogletest/build/lib/ -Isrc/ -Isrc/apps/ -Isrc/tests
 GOOGLE_TEST_MAIN = googletest/googletest/src/gtest_main.cc
 TEST_LFLAGS = -lgtest -lpthread
-NVCC=/usr/local/cuda/bin/nvcc
-ARCH_CODE_FLAGS=-gencode arch=compute_70,code=sm_70
+GXX=g++
+
+include src/device/Makefile
 
 all: kron
 
-libKron.so: src/kron.cu src/kron.h src/kernel.cuh src/kernel_decl.inc src/kernel_defs.cuh src/device_functions.cuh src/thread_pool.h
-	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -lnccl
+kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/thread_pool.h
+	$(NVCC) -Xcompiler=-fPIC,-fopenmp,-O3 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS)
+
+libKron.so: device_kernels.o kron.o
+	$(NVCC) -shared -lnccl -o $@ $?
 
 kron: tests/main.cu libKron.so tests/testBase.h
 	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@

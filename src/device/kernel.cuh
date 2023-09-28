@@ -1,4 +1,11 @@
-#include<device_functions.cuh>
+#include "device_functions.cuh"
+
+enum RowParallelismTy {
+  Low = 0,
+  Medium,
+  High,
+  Num = 3,
+};
 
 template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowParallelism, 
          uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, 
@@ -26,16 +33,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
   register   ElemT regC[TileSizeRowsA][CRegRows][CRegCols] = {0};
   __shared__ ElemT shA[TileSizeRowsA][TileSizeColsA];
   __shared__ ElemT shKronMats[TileSizeKronRows][TileSizeKronCols];
-
-#ifndef EVAL
-  __syncthreads();
-  if (kp_idx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
-    printf("CRegRows %d CRegCols %d\n", CRegRows, CRegCols);
-    // for (int i = 0; i < kronRows; i++) 
-    //   for (int j = 0; j < kronCols; j++)
-    //     printf("%lf \n", (double)shKronMats[i][j]);
-  }
-#endif
 
   // const uint NUM_INTERNAL_KP_N_TILES = MaxTileSizeKronRows/TileSizeKronRows;
   // assert(Creg_SIZE == CRegCols * CRegRows * NUM_INTERNAL_KP_N_TILES);

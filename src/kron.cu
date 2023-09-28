@@ -15,15 +15,8 @@
 #include "utils.h"
 #include "kron.h"
 #include "thread_pool.h"
+#include "device/otherkernels.cuh"
 
-#define CUDA_CHECK(cmd) do {                         \
-  cudaError_t e = cmd;                              \
-  if( e != cudaSuccess and e != cudaErrorPeerAccessAlreadyEnabled) {                          \
-    printf("Failed: Cuda error %s:%d '%s'\n",             \
-        __FILE__,__LINE__,cudaGetErrorString(e));   \
-    exit(EXIT_FAILURE);                             \
-  }                                                 \
-} while(0)
 
 #define CUDA_LAST_ERROR do {                        \
   cudaError_t e = cudaGetLastError();               \
@@ -60,13 +53,6 @@ namespace env {
     return DistComm::DistCommNone;
   }
 }
-
-enum RowParallelismTy {
-  Low = 0,
-  Medium,
-  High,
-  Num = 3,
-};
 
 template<>
 struct std::hash<KronMatmulShape> {
@@ -212,7 +198,6 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                 const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
                                 cudaStream_t stream) {
   cudaError_t status;
-  RowParallelismTy rowParallelism = RowParallelismTy::Low;
   
   if (!isValidKernel(kernelInfo)) abort();
 
@@ -239,8 +224,8 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                          kronIndex);
   
   //Call kernel
-  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
-  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block, 0, stream>>>(params, DistributedParams<T>());
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, DistributedParams<T>(), grid, block);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -254,7 +239,6 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
                                            const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
                                            DistributedParams<T> distParams, cudaStream_t stream) {
   cudaError_t status;
-  RowParallelismTy rowParallelism = RowParallelismTy::Low;
   
   if (!isValidKernel(kernelInfo)) abort();
 
@@ -281,8 +265,9 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
                                          kronIndex);
 
   //Call kernel
-  typedef void (*KronMatmulKernel)(KernelParams<T, NumFusedKerns>, DistributedParams<T>);
-  ((KronMatmulKernel)kernelInfo.kernel)<<<grid, block, 0, stream>>>(params, distParams);
+  //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, DistributedParams<T>(), grid, block);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -684,9 +669,9 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   return cudaSuccess;
 }
 
-cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
-                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                          cudaStream_t stream) {
+extern cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
+                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                                cudaStream_t stream) {
   return autotune<float>(handle, NumKronMats, x, kronMats,
                          M, N, K, KronMatCols, KronMatRows,
                          stream);
