@@ -275,7 +275,8 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
       printf("Invalid vecTyNumElems %d\n", vecTyNumElems);
 #endif
     for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-      if (vecTyNumElems > 1 && MaxColsA == MaxColsC && !DistributeToGPUs) { // && !distParams.storeToDistMems
+      if (vecTyNumElems > 1 && MaxColsA == MaxColsC && false && !DistributeToGPUs) { // && !distParams.storeToDistMems
+        //TODO: disabling this part because it is buggy and does not help much in performance
         //TODO: Cannot shA here if MaxColA < MaxColsC
         shA[0][tid * vecTyNumElems] = regC[rowA][reg_i][reg_j];
         shA[0][tid * vecTyNumElems+1] = regC[rowA][reg_i+1][reg_j];
