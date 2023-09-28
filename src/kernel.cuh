@@ -218,7 +218,52 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         
         uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsC/kronRows);
         uint cCol = p5Index + withinP5;
-        params.glC[rowC * colsC + cCol] = regC[rowShC][reg_i][reg_j];
+        
+        uint cIdx;
+        ElemT* __restrict__ outputArray;
+
+        if (DistributeToGPUs) {
+          // uint batchedKronMuls = distParams.LocalKrons;
+          // uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows : kronRows;//power(kronRows, batchedKronMuls);
+          uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
+          const uint perGPUKByNumGPUs = distParams.perGPUKByNumGPUs; //perGPUK/numGPUs;
+          const uint perGPUKByKronRows = distParams.perGPUKByKronRows;
+          const uint ColsAByKronRows = distParams.ColsAByKronRows;
+          const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
+          const uint ColsCByKronRowsPower = distParams.ColsCByKronRowsPower;
+
+          const uint nextGc = cCol/perGPUKByNumGPUs;
+          // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
+          
+          const uint perGPUK = colsC;
+          uint srcElem = cCol;
+          uint withinP5 = gcMulUVAColsRatioKronRowsSquare +
+                           ((srcElem%perGPUKByKronRows)/UVAColsRatioKronRowsSquare)*ColsCByKronRowsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
+                            srcElem % UVAColsRatioKronRowsSquare;
+          uint p5Index = (srcElem/perGPUKByKronRows)*ColsAByKronRows;
+          int newcCol = p5Index + withinP5;
+          int gpuCol = newcCol - nextGc * perGPUK;
+          cIdx = rowC * perGPUK + gpuCol;
+          outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
+         
+          // printf("outputArray %p\n", outputArray);
+          // if (batchedKronMuls == 3 and regC[rowA][reg_i][reg_j] != )
+          // if (threadIdx.x == 0) //((gpuCol >= perGPUK or gpuCol < 0)) 
+          // printf("gpuCol %d nextGc %d perGPUK %d newcCol %d gc %d ColsA %d cIdx %d outputArray %p\n",
+          //         gpuCol, nextGc, perGPUK, newcCol, distParams.gc, distParams.ColsA, cIdx, outputArray);
+          // outputArray = distParams.gpuResults[nextGc];
+
+          // if (threadIdx.x == 0 && blockIdx.x == 0 & blockIdx.y == 0) {
+          //   uint nextGc = (distParams.gc == 0) ? 1 : 0;
+          //   printf("Writing from %d to %d at %p\n", distParams.gc, nextGc, &distParams.gpuResults[nextGc]);
+          //   distParams.gpuResults[nextGc][0] = 0;
+          // }
+        } else {
+          cIdx = rowC * colsC + cCol;
+          outputArray = params.glC;
+        }
+
+        outputArray[cIdx] = regC[rowShC][reg_i][reg_j];
     }}}
   }} else {
   #pragma unroll

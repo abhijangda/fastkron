@@ -801,10 +801,17 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       uint slicedMuls = 0;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
-        uint kronMat = kernel.end;
-        T* krons[] = {kronMats[g * NumKronMats + kronMat]}; 
-        uint kronCols[1] = {KronMatCols[kronMat]};
-        uint kronRows[1] = {KronMatRows[kronMat]};
+        const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
+
+        T* krons[NumFusedKerns];
+        uint kronCols[NumFusedKerns];
+        uint kronRows[NumFusedKerns];
+        for (int kk = 0; kk < NumFusedKerns; kk++) {
+          krons[kk] = kronMats[g * NumKronMats + kernel.end - kk];
+          kronRows[kk] = KronMatRows[kernel.end - kk];
+          kronCols[kk] = KronMatCols[kernel.end - kk];
+        }
+
         // if (gc == 0) std::cout << "671: " << (slicedMuls == KronMulBatchSize - 1 and KronMulBatchSize > 1) << std::endl;
         if (slicedMuls == KronMulBatchSize - 1) {
           thread_barrier_wait(thArgs->barrier);
@@ -824,10 +831,21 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
                                         handle.gpuK_, kronRows[0], KronMulBatchSize);
-        //Create another function (like generalSlicedMatmulWithDist?) that takes distParams
-        cudaError_t status = generalDistributedSlicedMatmul<T, 1>(kernel.kernel, kronMat, innerPrevResult, 
+        //TODO: a single switch case for FusedKernels?
+        cudaError_t status;
+        
+        switch (NumFusedKerns) {
+          case 1:
+            status = generalDistributedSlicedMatmul<T, 1>(kernel.kernel, kernel.end, innerPrevResult, 
             krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
             kronCols, kronRows, distParams, stream[g]);
+            break;
+          case 2:
+            status = generalDistributedSlicedMatmul<T, 2>(kernel.kernel, kernel.end, innerPrevResult, 
+            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+            kronCols, kronRows, distParams, stream[g]);
+            break;
+        }
         
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         // if (gc == 0) printf("slicedMuls %d innerCurrResult %p innerPrevResult %p\n", slicedMuls, innerCurrResult, innerPrevResult);
