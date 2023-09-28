@@ -7,7 +7,7 @@ import functools
 
 print(os.getcwd())
 assert 'src' in os.listdir('.')
-kernel_dir = "src/device/kernels/"
+kernel_dir = "src/device/kron-kernels/"
 
 #Device limits
 MAX_SHARED_MEM = 48 * 1024

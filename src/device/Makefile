@@ -1,11 +1,12 @@
 NVCC=/usr/local/cuda/bin/nvcc
 ARCH_CODE_FLAGS=-gencode arch=compute_70,code=sm_70
-KRON_KERNELS=src/device/kron-kernels/
+DEVICE=src/device
+KRON_KERNELS=$(DEVICE)/kron-kernels
 
-include $(KRON_KERNELS)make_device_kernels
+include $(KRON_KERNELS)/make_device_kernels
+
+$(KRON_KERNELS)/%.o: $(KRON_KERNELS)/%.cu $(DEVICE)/device_functions.cuh $(DEVICE)/kernel.cuh
+	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS)
 
 device_kernels.o: $(DEVICE_KERNELS)
-	ld -relocatable $< -o $@
-
-$(KRON_KERNELS)/%.o: $(KRON_KERNELS)/%.cu #src/device_functions.cuh src/kernel.cuh
-	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -lnccl
+	ld -relocatable $? -o $@

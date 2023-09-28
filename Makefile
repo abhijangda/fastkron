@@ -4,9 +4,9 @@ GOOGLE_TEST_MAIN = googletest/googletest/src/gtest_main.cc
 TEST_LFLAGS = -lgtest -lpthread
 GXX=g++
 
-include src/device/Makefile
+all: libKron.so
 
-all: kron
+include src/device/Makefile
 
 kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/thread_pool.h
 	$(NVCC) -Xcompiler=-fPIC,-fopenmp,-O3 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS)
