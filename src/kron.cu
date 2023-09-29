@@ -845,8 +845,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
                                         handle.gpuK_, kronRows[0], KronMulBatchSize);
         //TODO: a single switch case for FusedKernels?
-
-        if (g == 0) std::cout << kernel.end <<"  "  << kernel.kernel << std::endl;
         cudaError_t status;
         switch (NumFusedKerns) {
           case 1:
