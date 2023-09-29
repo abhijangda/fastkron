@@ -420,11 +420,11 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
 
 float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats, 
                           uint KronMatCols[], uint KronMatRows[],
-                          uint startKron,
+                          uint startKron, bool isDistributed,
                           TunedKernelsSeries& tunedKernels,
                           std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels) {
   if (startKron >= NumKronMats) return 0;
-
+  bool distP2PStore = isDistributed;
   float minTime = std::numeric_limits<float>::max();
   TunedKernelsSeries minEpilogueKernels;
   TunedKernelFromStart minPrologueKernel;
@@ -446,15 +446,16 @@ float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
     }
 
     KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                            tempK, M, NumFusedKerns};
+                                            tempK, M, NumFusedKerns, 
+                                            distP2PStore && startKron == 0};
 
     if (bestKernels.find(shape) == bestKernels.end()) continue;
     auto iter = bestKernels.find(shape);
     TunedKernelsSeries epilogueKernels;
     float kernelTime = iter->second.second;
     float epilogueTime = minExecTimeOfSeries(M, K, NumKronMats, KronMatCols,
-                                             KronMatRows, endKron + 1, epilogueKernels, 
-                                             bestKernels);
+                                             KronMatRows, endKron + 1, isDistributed, 
+                                             epilogueKernels, bestKernels);
     if (minTime > kernelTime + epilogueTime) {
       minTime = kernelTime + epilogueTime;
       minEpilogueKernels = epilogueKernels;
@@ -475,6 +476,7 @@ template<typename T>
 cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
                               uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                               T* temp1, T* temp2,
+                              bool isDistributed, DistributedParams<T> distParams,
                               std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
                               cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
@@ -512,9 +514,10 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
     }
     uint outTempN = (tempN/KronMatRows[endKron])*KronMatCols[endKron];
     // std::cout << "endKron " << endKron << " startKron " << startKron << " tempN " << tempN << std::endl;
+    bool distP2PStore = isDistributed && startKron == 0;
     cudaError_t status;
     KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                            tempN, M, NumFusedKerns};
+                                            tempN, M, NumFusedKerns, distP2PStore};
     if (bestKernels.find(shape) != bestKernels.end()) {
       continue;
     }
@@ -522,48 +525,80 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
     float minTime = std::numeric_limits<float>::max();
     const uint runs = 10;
     for (auto shapeAndKernels : compiledKernels) {
-      if (!shapeAndKernels.first.sameKronSize(shape))
-        continue;
+      if (!shapeAndKernels.first.sameKronSize(shape)) continue;
       for (auto kernel : shapeAndKernels.second) {
-        if (!kernel.canCompute(shape, NumFusedKerns, 0)) continue;
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
-        
-          switch(NumFusedKerns) {
-            case 1:
-              status = generalSlicedMatmul<T, 1>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, outTempN, tempN, 
-                                                FusedKronMatCols, FusedKronMatRows,
-                                                stream);
-              break;
-            case 2:
-              status = generalSlicedMatmul<T, 2>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, outTempN, tempN, 
-                                                FusedKronMatCols, FusedKronMatRows,
-                                                stream);
-              break;
-            case 3:
-              status = generalSlicedMatmul<T, 3>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, outTempN, tempN,
-                                                FusedKronMatCols, FusedKronMatRows,
-                                                stream);
-              break;
-            case 4:
-              status = generalSlicedMatmul<T, 4>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, outTempN, tempN,
-                                                FusedKronMatCols, FusedKronMatRows,
-                                                stream);
-              break;
-            case 5:
-              status = generalSlicedMatmul<T, 5>(kernel, endKron, prevKronResult,
-                                                krons, currKronResult, M, outTempN, tempN,
-                                                FusedKronMatCols, FusedKronMatRows,
-                                                stream);
-              break;
-            default:
-                std::cout << "Invalid number of fused kernels" << std::endl;
-              status = cudaErrorInvalidValue;
+          if (distP2PStore) {
+            switch (NumFusedKerns) {
+              case 1:
+                status = generalDistributedSlicedMatmul<T, 1>(kernel, endKron, prevKronResult, 
+                                                              krons, currKronResult, M, outTempN, tempN, 
+                                                              FusedKronMatCols, FusedKronMatRows, 
+                                                              distParams, stream);
+                break;
+              case 2:
+                status = generalDistributedSlicedMatmul<T, 2>(kernel, endKron, prevKronResult, 
+                                                              krons, currKronResult, M, outTempN, tempN,
+                                                              FusedKronMatCols, FusedKronMatRows, 
+                                                              distParams, stream);
+                break;
+              case 3:
+                status = generalDistributedSlicedMatmul<T, 3>(kernel, endKron, prevKronResult, 
+                                                              krons, currKronResult, M, outTempN, tempN,
+                                                              FusedKronMatCols, FusedKronMatRows, 
+                                                              distParams, stream);
+                break;
+              case 4:
+                status = generalDistributedSlicedMatmul<T, 4>(kernel, endKron, prevKronResult, 
+                                                              krons, currKronResult, M, outTempN, tempN,
+                                                              FusedKronMatCols, FusedKronMatRows, 
+                                                              distParams, stream);
+                break;
+              case 5:
+                status = generalDistributedSlicedMatmul<T, 5>(kernel, endKron, prevKronResult, 
+                                                              krons, currKronResult, M, outTempN, tempN, 
+                                                              FusedKronMatCols, FusedKronMatRows, 
+                                                              distParams, stream);
+                break;
+            }
+          } else {
+            switch(NumFusedKerns) {
+              case 1:
+                status = generalSlicedMatmul<T, 1>(kernel, endKron, prevKronResult,
+                                                  krons, currKronResult, M, outTempN, tempN, 
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 2:
+                status = generalSlicedMatmul<T, 2>(kernel, endKron, prevKronResult,
+                                                  krons, currKronResult, M, outTempN, tempN, 
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 3:
+                status = generalSlicedMatmul<T, 3>(kernel, endKron, prevKronResult,
+                                                  krons, currKronResult, M, outTempN, tempN,
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 4:
+                status = generalSlicedMatmul<T, 4>(kernel, endKron, prevKronResult,
+                                                  krons, currKronResult, M, outTempN, tempN,
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              case 5:
+                status = generalSlicedMatmul<T, 5>(kernel, endKron, prevKronResult,
+                                                  krons, currKronResult, M, outTempN, tempN,
+                                                  FusedKronMatCols, FusedKronMatRows,
+                                                  stream);
+                break;
+              default:
+                  std::cout << "Invalid number of fused kernels" << std::endl;
+                status = cudaErrorInvalidValue;
+            }
           }
           // if (status != cudaSuccess) break;
         }
@@ -607,11 +642,11 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   if (!handle.isDistributed_) {
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
     singleGPUAutotune(NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, (T*)handle.temp_, (T*)handle.result_,
-                      bestKernels, stream);
+                      false, DistributedParams<T>(), bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(M, K, NumKronMats,
-                                  KronMatCols, KronMatRows, 0,
+                                  KronMatCols, KronMatRows, 0, false,
                                   tunedKernels, bestKernels);
     handle.tunedKernelSeries = tunedKernels;
   } else {
@@ -634,29 +669,18 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       }
       
       std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
+      T** gpuResults = (T**)handle.gpuTemp2_;
+      DistributedParams<T> distParams(gpuResults, 0, 0, handle.gpusInK_, handle.K_, handle.N_, 
+                                      handle.gpuK_, LocalKronMatRows[0], LocalKrons);
       singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, handle.gpuK_, handle.gpuK_, 
                         LocalKronMatCols, LocalKronMatRows, (T*)handle.gpuTemp1_[0], (T*)handle.gpuTemp2_[0],
-                        bestKernels, stream);
+                        handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
+                        distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
       minTime += minExecTimeOfSeries(handle.gpuM_, handle.gpuK_, LocalKrons,
                                      LocalKronMatCols, LocalKronMatRows, 0,
+                                     handle.isDistributed_ && handle.distComm_ == DistComm::P2P,
                                      tunedKernels, bestKernels);
-      if (handle.distComm_ == DistComm::P2P and handle.gpusInK_ > 1) {
-        auto& firstInfo = tunedKernels[tunedKernels.size() - 1];
-        KronMatmulShape shape {firstInfo.kernel.KronCols, firstInfo.kernel.KronRows, 
-                               firstInfo.kernel.MaxColsA, 0, 
-                               firstInfo.kernel.NumFusedKerns, 1};
-        auto iter = compiledKernels.find(shape);
-        assert (iter != compiledKernels.end());
-        for (auto kernel : iter->second) {
-          if (kernel.isDistributedLike(firstInfo.kernel)) {
-            firstInfo.kernel = kernel;
-            break;
-          }
-        }
-
-        assert(tunedKernels[tunedKernels.size() - 1].kernel.DistributeToGPUs == true);
-      }
 
       for (auto tunedKernel : tunedKernels) {
         tunedKernel.start += kronMat + 1 - LocalKrons;
@@ -821,6 +845,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
                                         handle.gpuK_, kronRows[0], KronMulBatchSize);
         //TODO: a single switch case for FusedKernels?
+
+        if (g == 0) std::cout << kernel.end <<"  "  << kernel.kernel << std::endl;
         cudaError_t status;
         switch (NumFusedKerns) {
           case 1:

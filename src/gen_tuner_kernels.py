@@ -146,7 +146,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
               for regCols in CCols:
                 for tP in TilePs:
                   for rowModTileIsZero in [0, 1]:
-                    for kEqVar in [0, 1]:
+                    for kEqVar in [0]:
                       fusedCases = range(1, int(math.log(tK, tP))+1) if allSameShapes and useFusion else [1]
                       for numFusedKerns in fusedCases:
                         distKernels = [0, 1] if useDistKernels else [0]
