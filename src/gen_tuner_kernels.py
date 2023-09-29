@@ -12,6 +12,10 @@ kernel_dir = "src/device/kron-kernels/"
 #Device limits
 MAX_SHARED_MEM = 48 * 1024
 
+def slurp(file):
+  with open(file, "r") as f:
+    return f.read()
+
 def empty_dir(dir):
   for filename in os.listdir(dir):
     file_path = os.path.join(dir, filename)
@@ -117,6 +121,9 @@ def all_sliced_mults(m, k, n, ps, qs):
   return list(sliced_mults)
 
 def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
+  if not os.path.exists(kernel_dir):
+    os.mkdir(kernel_dir)
+
   empty_dir(kernel_dir)
   configs = {}
 
@@ -125,8 +132,8 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
     __configs = []  
     for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
-      TileQs = [2**i for i in range(2, max(2, int(math.log2(q)))+1)]
-      TileKs = [2**i for i in range(2, max(2, int(math.log2(k)))+1)]
+      TileQs = [2**i for i in range(1, max(2, int(math.log2(q)))+1)]
+      TileKs = [2**i for i in range(1, max(2, int(math.log2(k)))+1)]
       TileMs = [1, 2]
       CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
       CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
@@ -139,7 +146,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
               for regCols in CCols:
                 for tP in TilePs:
                   for rowModTileIsZero in [0, 1]:
-                    for kEqVar in [0]:
+                    for kEqVar in [0, 1]:
                       fusedCases = range(1, int(math.log(tK, tP))+1) if allSameShapes and useFusion else [1]
                       for numFusedKerns in fusedCases:
                         distKernels = [0, 1] if useDistKernels else [0]
@@ -260,7 +267,8 @@ if __name__ == "__main__":
   parser.add_argument('-num-kernels', required=False, type=int, default=10000)
   parser.add_argument('-dist-kernels', required=False, action='store_true', default=False)
   parser.add_argument('-match-configs', nargs="+", action='append', type=str)
-  
+  parser.add_argument('-match-configs-file', required=False, type=str)
+
   #TODO: args should be like below:
   # distinct-shapes: No need of m and k. specify size of factor.
   # same-shapes: All factor of same shape 
@@ -287,4 +295,12 @@ if __name__ == "__main__":
   
   print("Generating kernels for ")
   print(parsed_cases)
-  generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, args.match_configs[0])
+  assert (args.match_configs == None and args.match_configs_file == "") or \
+         (args.match_configs != None and args.match_configs_file == "") or \
+         (args.match_configs == None and args.match_configs_file != "")
+
+  match_configs = args.match_configs[0] if args.match_configs != None else []
+  if args.match_configs_file != "":
+    contents = slurp(args.match_configs_file)
+    match_configs = contents.split('\n')
+  generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, match_configs)

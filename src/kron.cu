@@ -143,6 +143,8 @@ uint maxFusedKernels(KronMatmulShape shape) {
 KernelInfo selectKernel(KronMatmulShape shape) {
   //Go through all MaxColsA starting from MAX_K and select the relevant
   KronMatmulShape maxColsAShape = maxCompiledColsA(shape);
+  //TODO: Remove kEqVar. it provides only a little improvement in perf
+  //but makes writing code hard
   int kEqVar = (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
