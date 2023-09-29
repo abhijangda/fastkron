@@ -149,6 +149,7 @@ KernelInfo selectKernel(KronMatmulShape shape) {
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
     std::cout << "No kernel found" << std::endl;
+    abort();
     return KernelInfo{};
   }
   auto kernelInfos = iter->second;
@@ -166,6 +167,7 @@ KernelInfo selectKernel(KronMatmulShape shape) {
   }
 
   std::cout<<"No kernel selected" << std::endl;
+  abort();
   return KernelInfo();
 }
 
@@ -226,8 +228,8 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                          kronIndex);
   
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, DistributedParams<T>(), grid, block);
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, DistributedParams<T>(), grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -268,8 +270,8 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
 
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, distParams, grid, block);
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, distParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -757,7 +759,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
     // }
     uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
     uint MaxI = io + KronMulBatchSize;
-    // std::cout << "io " << io << " gr " << gr << " gc " << gc << "g " << g <<  std::endl;
     {//uint gpuColPart = gc * handle.gpuK_; gpuColPart < K; gpuColPart += handle.gpuK_ * gpusInK_) {
       //Copy outerPrevResult to innerPrevResult
       // if (uvaColsX < K) {
@@ -781,9 +782,10 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       } else {
         auto localSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
                                               KronMatCols, KronMatRows, true);
-        for (auto kernel : localSeries) {
+        for (auto& kernel : localSeries) {
           kernel.end += endKron;
         }
+        kernelSeries = localSeries;
       }
       uint slicedMuls = 0;
       for (auto kernel : kernelSeries) {
@@ -799,8 +801,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           kronCols[kk] = KronMatCols[kernel.end - kk];
         }
 
-        // if (gc == 0) std::cout << "671: " << (slicedMuls == KronMulBatchSize - 1 and KronMulBatchSize > 1) << std::endl;
         if (slicedMuls == KronMulBatchSize - 1) {
+          CUDA_CHECK(cudaStreamSynchronize(stream[g]));
           thread_barrier_wait(thArgs->barrier);
         }
         
@@ -815,43 +817,46 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
-
+        
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
                                         handle.gpuK_, kronRows[0], KronMulBatchSize);
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
-        
         switch (NumFusedKerns) {
           case 1:
             status = generalDistributedSlicedMatmul<T, 1>(kernel.kernel, kernel.end, innerPrevResult, 
-            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, distParams, stream[g]);
+                                                          krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+                                                          kronCols, kronRows, distParams, stream[g]);
             break;
           case 2:
             status = generalDistributedSlicedMatmul<T, 2>(kernel.kernel, kernel.end, innerPrevResult, 
-            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, distParams, stream[g]);
+                                                          krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+                                                          kronCols, kronRows, distParams, stream[g]);
             break;
           case 3:
             status = generalDistributedSlicedMatmul<T, 3>(kernel.kernel, kernel.end, innerPrevResult, 
-            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, distParams, stream[g]);
+                                                          krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+                                                          kronCols, kronRows, distParams, stream[g]);
             break;
           case 4:
             status = generalDistributedSlicedMatmul<T, 4>(kernel.kernel, kernel.end, innerPrevResult, 
-            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, distParams, stream[g]);
+                                                          krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+                                                          kronCols, kronRows, distParams, stream[g]);
             break;
           case 5:
             status = generalDistributedSlicedMatmul<T, 5>(kernel.kernel, kernel.end, innerPrevResult, 
-            krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-            kronCols, kronRows, distParams, stream[g]);
+                                                          krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
+                                                          kronCols, kronRows, distParams, stream[g]);
             break;
         }
-        
+        assert(status == cudaSuccess);        
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
+        
+        // if (gc == 0 and kernel.end == 1) {
+        //   printGPUArray(handle.gpuM_, handle.gpuK_, 128.0f*128.0f, innerCurrResult, stream[g]);
+        // }
         // if (gc == 0) printf("slicedMuls %d innerCurrResult %p innerPrevResult %p\n", slicedMuls, innerCurrResult, innerPrevResult);
-        if (status != cudaSuccess) goto end;
+        // if (status != cudaSuccess) goto end;
 
         //Double/ring/circular buffer previous result and new result
         innerPrevResult = innerCurrResult;
@@ -1348,7 +1353,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   }
   
   //TODO: Add if debug
-  if (false) {
+  if (true) {
     uint numKernels = 0;
     std::cout << "Loading compiled kernels" << std::endl;
     for (auto iter : compiledKernels) {

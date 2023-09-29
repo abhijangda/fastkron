@@ -85,7 +85,7 @@ struct KernelInfo {
     out << shape.TileRowsA << "x" << shape.MaxColsA << "_" 
        << shape.KronRows << "x" << shape.KronCols << "_" << shape.TileKronCols << "_"
        << shape.CRegRows << "x" << shape.CRegCols << "_"
-       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.KEqVar << "_" << shape.RowModTileIsZero << "_" << shape.DistributeToGPUs;
+       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.RowModTileIsZero << "_" << shape.KEqVar << "_" << shape.DistributeToGPUs;
       
     return out;
   }

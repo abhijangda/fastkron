@@ -17,7 +17,7 @@
 }
 
 MULTI_GPU_NO_FUSION_TEST(4, 4, 64, 2, 1, 4, float);
-MULTI_GPU_NO_FUSION_TEST(8, 4, 64, 4, 2, 3, float);
+MULTI_GPU_NO_FUSION_TEST(8, 4, 64, 1, 2, 3, float);
 MULTI_GPU_NO_FUSION_TEST(8, 4, 64, 2, 2, 2, float);
 
 MULTI_GPU_NO_FUSION_TEST(2, 3, 128, 1, 4, 2, float);

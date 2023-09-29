@@ -55,9 +55,9 @@ run-single-gpu-non-square-tuner-tests: single-gpu-non-square-tuner-tests
 
 #Multi GPU Tests
 gen-multi-gpu-tests-kernel: src/gen_tuner_kernels.py
-	python src/gen_tuner_kernels.py -same-factors 4 64 64 4 128 128 -dist-kernels -match-config 128,64,64,64,2,4096,2,16,1 128,128,128,128,1,8192,2,32,1
+	python src/gen_tuner_kernels.py -same-factors 4 64 64 -same-factors 4 128 128 -dist-kernels -match-configs 128,64,64,64,2,4096,2,16,1 128,128,128,128,1,8192,2,32,1
 
-multi-gpu-no-fusion-tests: copy-multi-gpu-tests-kernel libKron.so tests/testBase.h tests/multi-gpu-no-fusion-tests.cu
+multi-gpu-no-fusion-tests: libKron.so tests/testBase.h tests/multi-gpu-no-fusion-tests.cu
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
 run-multi-gpu-nccl-no-fusion-tests: multi-gpu-no-fusion-tests
@@ -69,16 +69,16 @@ run-multi-gpu-p2p-no-fusion-tests: multi-gpu-no-fusion-tests
 gen-multi-gpu-tuner-kernels: src/gen_tuner_kernels.py
 	python src/gen_tuner_kernels.py -same-factors 5 16 16 -dist-kernels 
 
-multi-gpu-tuner-tests: gen-multi-gpu-tuner-kernels libKron.so tests/testBase.h tests/multi-gpu-tuner-tests.cu
+multi-gpu-tuner-tests: libKron.so tests/testBase.h tests/multi-gpu-tuner-tests.cu
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
 run-multi-gpu-tuner-tests: multi-gpu-tuner-tests
 	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-tuner-tests
 
 #Run all tests
-run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
+#run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
 
-run-all-multi-gpu-tests: run-multi-gpu-p2p-no-fusion-tests run-multi-gpu-nccl-no-fusion-tests
+#run-all-multi-gpu-tests: run-multi-gpu-p2p-no-fusion-tests run-multi-gpu-nccl-no-fusion-tests
 
 clean:
 	rm -rf kron libKron.so

@@ -79,7 +79,7 @@ class KernelConfig:
     return f"host_{self.kernelname()}"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, DistributedParams<float> distParams, dim3 grid, dim3 block)"
+    return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, DistributedParams<float> distParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
     return f"float, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
@@ -199,7 +199,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       kernel_file_template = "\n".join(['#include "../kernel.cuh"',
                                         "",
                                         config.hostFuncDecl()+"{",
-                                        f"  {config.kernelDecl()}<<<grid, block>>>(params, distParams);",
+                                        f"  {config.kernelDecl()}<<<grid, block, 0, stream>>>(params, distParams);",
                                         "}"]);
       f.write(kernel_file_template)
 
@@ -269,9 +269,6 @@ if __name__ == "__main__":
   parser.add_argument('-match-configs', nargs="+", action='append', type=str)
   parser.add_argument('-match-configs-file', required=False, type=str)
 
-  #TODO: args should be like below:
-  # distinct-shapes: No need of m and k. specify size of factor.
-  # same-shapes: All factor of same shape 
   args = parser.parse_args()
   parsed_cases = []
   
@@ -295,9 +292,9 @@ if __name__ == "__main__":
   
   print("Generating kernels for ")
   print(parsed_cases)
-  assert (args.match_configs == None and args.match_configs_file == "") or \
-         (args.match_configs != None and args.match_configs_file == "") or \
-         (args.match_configs == None and args.match_configs_file != "")
+  assert (args.match_configs == None and args.match_configs_file == None) or \
+         (args.match_configs != None and args.match_configs_file == None) or \
+         (args.match_configs == None and args.match_configs_file != None)
 
   match_configs = args.match_configs[0] if args.match_configs != None else []
   if args.match_configs_file != None:
