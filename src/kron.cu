@@ -1353,7 +1353,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   }
   
   //TODO: Add if debug
-  if (true) {
+  if (false) {
     uint numKernels = 0;
     std::cout << "Loading compiled kernels" << std::endl;
     for (auto iter : compiledKernels) {
