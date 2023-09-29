@@ -300,7 +300,7 @@ if __name__ == "__main__":
          (args.match_configs == None and args.match_configs_file != "")
 
   match_configs = args.match_configs[0] if args.match_configs != None else []
-  if args.match_configs_file != "":
+  if args.match_configs_file != None:
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
   generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, match_configs)
