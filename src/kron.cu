@@ -145,7 +145,7 @@ KernelInfo selectKernel(KronMatmulShape shape) {
   KronMatmulShape maxColsAShape = maxCompiledColsA(shape);
   //TODO: Remove kEqVar. it provides only a little improvement in perf
   //but makes writing code hard
-  int kEqVar = (maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
+  int kEqVar = 0; //(maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
     std::cout << "No kernel found" << std::endl;
@@ -527,6 +527,7 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
     for (auto shapeAndKernels : compiledKernels) {
       if (!shapeAndKernels.first.sameKronSize(shape)) continue;
       for (auto kernel : shapeAndKernels.second) {
+        if (!kernel.canCompute(shape)) continue;
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
@@ -699,7 +700,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
 
 extern cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                                cudaStream_t stream) {
+                                 cudaStream_t stream) {
   return autotune<float>(handle, NumKronMats, x, kronMats,
                          M, N, K, KronMatCols, KronMatRows,
                          stream);

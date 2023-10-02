@@ -37,7 +37,7 @@ struct KronMatmulShape {
   bool operator==(const KronMatmulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows &&
     ColsA == other.ColsA && 
-    (other.NumFusedKerns <= 0 || NumFusedKerns == other.NumFusedKerns) &&
+    NumFusedKerns == other.NumFusedKerns &&
     DistributeToGPUs == other.DistributeToGPUs;
   }
 
@@ -82,21 +82,22 @@ struct KernelInfo {
 
   bool isValid() {return kernel != nullptr;}
   friend std::ostream& operator<<(std::ostream &out, const KernelInfo &shape) {
-    out << shape.TileRowsA << "x" << shape.MaxColsA << "_" 
-       << shape.KronRows << "x" << shape.KronCols << "_" << shape.TileKronCols << "_"
-       << shape.CRegRows << "x" << shape.CRegCols << "_"
-       << shape.NumFusedKerns << "_" << shape.NumThreads << "_" << shape.RowModTileIsZero << "_" << shape.KEqVar << "_" << shape.DistributeToGPUs;
+    out << shape.NumThreads << "_" << shape.KronCols << "x" << shape.KronRows <<
+           "_" << shape.TileKronCols << "_" << 
+           shape.TileRowsA << "x" << shape.MaxColsA << "_" <<
+           shape.CRegRows << "x" << shape.CRegCols << "_" <<
+           shape.NumFusedKerns << "_" << shape.RowModTileIsZero << "_" << 
+           shape.KEqVar << "_" << shape.DistributeToGPUs;
       
     return out;
   }
 
-  bool canCompute(KronMatmulShape shape, uint NumFusedKerns, bool DistributeToGPUs) {
-    return KEqVar == (shape.ColsA == MaxColsA) && 
-           RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) &&
-           this->NumFusedKerns == NumFusedKerns &&
-           this->DistributeToGPUs == DistributeToGPUs &&
+  bool canCompute(KronMatmulShape shape) {
+    return RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) &&
+           this->NumFusedKerns == shape.NumFusedKerns &&
+           this->DistributeToGPUs == shape.DistributeToGPUs &&
            MaxColsA <= shape.ColsA;
-
+  //KEqVar == (shape.ColsA == MaxColsA) && 
   }
 
   bool isDistributedLike(KernelInfo& other) {

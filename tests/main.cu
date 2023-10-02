@@ -7,16 +7,20 @@ bool parseStringToIntegers(char* str, uint array[], const int numInts) {
   int parsedInts = 0;
   
   std::string stdstr(str);
-  std::cout << stdstr << std::endl;
   std::stringstream stream(stdstr);
   uint n;
   char comma;
   while(stream >> n){
     array[parsedInts] = n;
     stream >> comma;
+    parsedInts++;
     if (comma != ',')
       break;
-    parsedInts++;
+  }
+  if (parsedInts == 1) {
+    for (; parsedInts < numInts; parsedInts++) {
+      array[parsedInts] = array[0];
+    }
   }
 
   if (parsedInts != numInts) return false;
@@ -28,7 +32,7 @@ bool parseStringToIntegers(char* str, uint array[], const int numInts) {
               Main Function
 ***************************************************/
 int main(int argc, char* argv[]) {  
-  int batch = 0;
+  int rows = 0;
   int facs = 0;
   char* fac_rows = NULL;
   char* fac_cols = NULL;
@@ -46,22 +50,22 @@ int main(int argc, char* argv[]) {
   bool tune = false;
   AnyOption *opt = new AnyOption();
 
-  opt->addUsage("usage: ");
-  opt->addUsage("batch: Size of Batch");
+  opt->addUsage("Performs KronMatmul of matrix X[M, K] with Kronecker Product of N matrices of shape F[Pi, Qi]");
+  opt->addUsage("rows: Number of Rows of X");
   opt->addUsage("facs:  Number of Kron Factors");
-  opt->addUsage("fac_rows: Rows of each Kron Factor separated by space");
-  opt->addUsage("fac_cols: Cols of each Kron Factor separated by space");
-  opt->addUsage("type:  Type of matrices (float, int, half, double)");
+  opt->addUsage("fac_rows: Rows of each Kron Factor separated by comma");
+  opt->addUsage("fac_cols: Cols of each Kron Factor separated by comma");
+  opt->addUsage("type:  Type of matrices (float, double, int, long)");
   opt->addUsage("check: Check results for first run");
   opt->addUsage("runs:  Number of runs");
   opt->addUsage("warmup:  Number of warmup runs");
   opt->addUsage("uva: Allocate and run using NVIDIA UVA");
   opt->addUsage("gpurows: Rows for temp on GPU. valid only with uva");
-  opt->addUsage("maxkronbatch: Factors batch per inner iteration. valid only with uva");
+  opt->addUsage("maxkronbatch: Factors rows per inner iteration. valid only with uva");
   opt->addUsage("nummaxkronbatch");
 
-  opt->setOption("batch", 'b');
-  opt->setOption("facs", 'f');
+  opt->setOption("rows", 'm');
+  opt->setOption("facs", 'n');
   opt->setOption("fac_rows", 'p');
   opt->setOption("fac_cols", 'q');
   opt->setOption("type", 't');
@@ -86,12 +90,12 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  if (opt->getValue('b') != NULL) {
-    batch = atoi(opt->getValue('b'));
+  if (opt->getValue('m') != NULL) {
+    rows = atoi(opt->getValue('m'));
   }
 
-  if (opt->getValue('f') != NULL) {
-    facs = atoi(opt->getValue('f'));
+  if (opt->getValue('n') != NULL) {
+    facs = atoi(opt->getValue('n'));
   }
 
   if (opt->getValue('p') != NULL) {
@@ -142,8 +146,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (batch <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL || type == NULL || runs <= 0)
-    printf("Invalid value batch: %d, facs %d, fac_rows %s, fac_cols %s, type %p, runs %d\n", batch, facs, fac_rows, fac_cols, type, runs);
+  if (rows <= 0 || type == NULL || runs <= 0 || facs <= 0 || fac_rows == NULL || fac_cols == NULL) {
+    printf("Invalid value rows: %d, facs %d, fac_rows %s, fac_cols %s, type %p, runs %d\n", rows, facs, fac_rows, fac_cols, type, runs);
+    return 1;
+  }
+
   if (multiGPU) {
     if (gpus < 1 || ((gpuInRows != 0 and gpuInCols != 0) && gpuInRows * gpuInCols != gpus)) {
       printf("GM * GK != gpus (%d != %d)\n", gpuInRows * gpuInCols, gpus);
@@ -171,14 +178,21 @@ int main(int argc, char* argv[]) {
     K *= KP_MAT_K[i];
   }
   
+  printf("Doing KronMatmul of X[%d, %d] with ", rows, K);
+
+  for (uint i = 0; i < (uint)facs; i++) {
+    printf("F_%d [%d, %d] x ", i, KP_MAT_K[i], KP_MAT_N[i]);
+  }
+  printf("to produce Y[%d, %d]\n", rows, N);
+
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
+    status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
                       gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(batch, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+    status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else
     printf("type not supported %s\n", type);
 
