@@ -1179,7 +1179,7 @@ template<typename T> cudaError_t FastKronHandle_gatherDistributedY(FastKronHandl
   if (!handle.isDistributed_) return cudaErrorInvalidValue;
   //TODO: Check that hY is on host memory
 
-  T* gpuHostY = new T[handle.gpuM_ * handle.gpuK_];
+  T* gpuHostY = new T[handle.gpuM_ * handle.gpuN_];
   std::cout << "Gather Y from all GPUs"<<std::endl;
 
   for(int gr = 0; gr < handle.gpusInM_; gr++) {
@@ -1188,13 +1188,13 @@ template<typename T> cudaError_t FastKronHandle_gatherDistributedY(FastKronHandl
       CUDA_CHECK(cudaSetDevice(g));
       //TODO: check that dX[g] is on GPU g
       CUDA_CHECK(cudaMemcpy(gpuHostY, dY[g], 
-                            sizeof(T) * handle.gpuM_ * handle.gpuK_, 
+                            sizeof(T) * handle.gpuM_ * handle.gpuN_,
                             cudaMemcpyDeviceToHost));
       const uint startGpuM = handle.gpuM_ * gr;
-      const uint startGpuK = handle.gpuK_ * gc;
+      const uint startGpuN = handle.gpuN_ * gc;
       for (int m = 0; m < handle.gpuM_; m++) {
-        std::memcpy(&hY[(startGpuM+m)*handle.K_ + startGpuK],
-                    &gpuHostY[m * handle.gpuK_], sizeof(T)*handle.gpuK_);
+        std::memcpy(&hY[(startGpuM+m)*handle.N_ + startGpuN],
+                    &gpuHostY[m * handle.gpuN_], sizeof(T)*handle.gpuN_);
       }
     }
   }
@@ -1322,6 +1322,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     //TODO: Check that localKrons <= log (gpuK_)_P
     handle.gpuM_ = handle.M_/handle.gpusInM_;
     handle.gpuK_ = handle.K_/handle.gpusInK_;
+    handle.gpuN_ = handle.N_/handle.gpusInK_;
     handle.gpuTemp1_ = new void*[gpus];
     handle.gpuTemp2_ = new void*[gpus];
     handle.sendTemps_ = new void*[gpus];
@@ -1338,13 +1339,23 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       assert (s == 0);
     }
     std::cout << "Allocating temporaries"<<std::endl;
-    size_t sz = handle.gpuM_ * handle.gpuK_ * sizeof(T);
+    
+    size_t tempN = handle.gpuK_;
+    size_t maxTempN = tempN;
+    for (int i = 0; i < handle.NumKronMats_; i++) {
+      tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
+      if (maxTempN < tempN)
+        maxTempN = tempN;
+    }
+
+    size_t sz = handle.gpuM_ * maxTempN * sizeof(T);
     for (int g = 0; g < gpus; g++) {
       CUDA_CHECK(cudaSetDevice(g));
       CUDA_CHECK(cudaMalloc(&handle.gpuTemp1_[g], sz));
       CUDA_CHECK(cudaMalloc(&handle.gpuTemp2_[g], sz));
       CUDA_CHECK(cudaMemset(handle.gpuTemp1_[g], 0, sz));
       CUDA_CHECK(cudaMemset(handle.gpuTemp2_[g], 0, sz));
+      
       //TODO: Figure this size
       CUDA_CHECK(cudaMalloc(&handle.sendTemps_[g], sz));
       CUDA_CHECK(cudaMalloc(&handle.recvTemps_[g], sz));

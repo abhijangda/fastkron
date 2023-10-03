@@ -152,6 +152,7 @@ struct FastKronHandle {
   {
     gpuM_ = 0;
     gpuK_ = 0;
+    gpuN_ = 0;
     temp_ = NULL;
     gpuTemp1_ = NULL;
     gpuTemp2_ = NULL;
@@ -168,6 +169,7 @@ struct FastKronHandle {
   uint numGPUs_;
   uint gpuM_;
   uint gpuK_;
+  uint gpuN_;
   uint gpusInM_;
   uint gpusInK_;
   uint perGPUKronBatch_;
