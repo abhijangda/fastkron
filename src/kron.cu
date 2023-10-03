@@ -528,6 +528,7 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
       if (!shapeAndKernels.first.sameKronSize(shape)) continue;
       for (auto kernel : shapeAndKernels.second) {
         if (!kernel.canCompute(shape)) continue;
+        std::cout << shape << " " << kernel << std::endl;
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <type_traits>
 
 #include "common.h"
 
@@ -59,6 +60,40 @@ __device__ __host__ __forceinline__ constexpr uint iconstpower() {
     result = result * x;
   }
   return result;
+}
+
+template<typename ElemT, typename Vec2T, typename Vec4T>
+__device__ __forceinline__
+void globalLoadVec2(const ElemT* addr, ElemT regs[], const uint vecSize) {
+  switch(vecSize) {
+    case 1: {
+      regs[0] = *addr;
+      break;
+    }
+    case 2: {
+      Vec2T vec = *(Vec2T*)addr;
+      regs[0] = vec.x; regs[1] = vec.y;
+      break;
+    }
+    case 4: {
+      Vec4T vec = *(Vec4T*)addr;
+      regs[0] = vec.x; regs[1] = vec.y;
+      regs[2] = vec.z; regs[3] = vec.w;
+      break;
+    }
+  }
+}
+
+template<typename ElemT>
+__device__ __forceinline__
+void globalLoadVec_(const ElemT* __restrict__ addr, ElemT regs[], const uint vecSize) {
+  // if (std::is_same<ElemT, float>::value) {
+    globalLoadVec2<float, float2, float4>((float*)addr, regs, vecSize);
+  // } else if (std::is_same<ElemT, int>::value) {
+  //   // globalLoadVec2<int, int2, int4>((int*)addr, regs, vecSize);
+  // } else {
+  //   static_assert(std::is_same<ElemT, float>::value);
+  // }
 }
 
 template<typename VecT, typename ElemT>
@@ -239,7 +274,9 @@ template<typename ElemT, typename VecT, uint VecTNumElems>
 __device__ __forceinline__ 
 void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols, 
                          const uint TileSizeKronRows, const uint TileSizeKronCols,
-                         const uint NumThreads, const uint external_tile_kp_n, const uint external_tile_kp_k, const uint tileKronRow, const uint kronRows, const uint kronCols, const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+                         const uint NumThreads, const uint external_tile_kp_n, const uint external_tile_kp_k, 
+                         const uint tileKronRow, const uint kronRows, const uint kronCols, const uint tid, 
+                         const ElemT* __restrict__ Fgl, ElemT* Fsh) {
   const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
   //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
   for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
@@ -250,9 +287,9 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
     const uint row = swid;
     // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
-    globalLoadVec(&Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col], vec);
-    loadVecToRegs(vec, elems);
-
+    const ElemT* addr = &Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col];
+    globalLoadVec_(addr, elems, loadInstr);
+    
     #pragma unroll
     for (uint e = 0; e < loadInstr; e++) {
       uint linearIdx = (tid%(TileSizeKronCols/loadInstr))*loadInstr + e;
