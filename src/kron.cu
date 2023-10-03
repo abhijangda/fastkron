@@ -208,7 +208,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   //Create the grid and thread block
   dim3 grid;
   dim3 block;
-  
+
   grid = {
           (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
           DIVUP(M, kernelInfo.TileRowsA),
@@ -672,8 +672,9 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       
       std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
       T** gpuResults = (T**)handle.gpuTemp2_;
+      assert(false);
       DistributedParams<T> distParams(gpuResults, 0, 0, handle.gpusInK_, handle.K_, handle.N_, 
-                                      handle.gpuK_, LocalKronMatRows[0], LocalKrons);
+                                      handle.gpuK_, handle.gpuN_, LocalKronMatCols[0], LocalKronMatRows[0], LocalKrons);
       singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, handle.gpuK_, handle.gpuK_, 
                         LocalKronMatCols, LocalKronMatRows, (T*)handle.gpuTemp1_[0], (T*)handle.gpuTemp2_[0],
                         handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
@@ -747,7 +748,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   uint gc = thArgs->gpuCol;
   uint gpusInM_ = thArgs->gpusInM_;
   uint gpusInK_ = thArgs->gpusInK_; 
-
+  uint prevTempN = handle.gpuK_;
+  uint currTempN;
   uint g = gr * gpusInK_ + gc;
   CUDA_CHECK(cudaSetDevice(g));
 
@@ -813,6 +815,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         }
         kernelSeries = localSeries;
       }
+      
       uint slicedMuls = 0;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
@@ -821,10 +824,14 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         T* krons[NumFusedKerns];
         uint kronCols[NumFusedKerns];
         uint kronRows[NumFusedKerns];
+
+        currTempN = prevTempN;
+
         for (int kk = 0; kk < NumFusedKerns; kk++) {
           krons[kk] = kronMats[g * NumKronMats + kernel.end - kk];
           kronRows[kk] = KronMatRows[kernel.end - kk];
           kronCols[kk] = KronMatCols[kernel.end - kk];
+          currTempN = (prevTempN/kronRows[kk])*kronCols[kk];
         }
 
         if (slicedMuls == KronMulBatchSize - 1) {
@@ -843,18 +850,21 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
-        
-        DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, handle.K_, handle.N_, 
-                                        handle.gpuK_, kronRows[0], KronMulBatchSize);
+        if (g == 0) std::cout << 853 << " " << kronRows[0] << "  " << handle.gpuN_ << "  " << currTempN << std::endl;
+        DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, 
+                                        prevTempN * handle.gpusInK_, currTempN * handle.gpusInK_,
+                                        prevTempN,currTempN, kronCols[0], kronRows[0], KronMulBatchSize);
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
         switch (NumFusedKerns) {
           case 1:
             status = generalDistributedSlicedMatmul<T, 1>(kernel.kernel, kernel.end, innerPrevResult, 
-                                                          krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
-                                                          kronCols, kronRows, distParams, stream[g]);
+                                                          krons, innerCurrResult, gpuM, currTempN, 
+                                                          prevTempN, kronCols, kronRows, distParams, 
+                                                          stream[g]);
             break;
           case 2:
+          //TODO: for all other cases
             status = generalDistributedSlicedMatmul<T, 2>(kernel.kernel, kernel.end, innerPrevResult, 
                                                           krons, innerCurrResult, gpuM, handle.gpuK_, handle.gpuK_, 
                                                           kronCols, kronRows, distParams, stream[g]);
@@ -883,6 +893,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         // }
         // if (gc == 0) printf("slicedMuls %d innerCurrResult %p innerPrevResult %p\n", slicedMuls, innerCurrResult, innerPrevResult);
         // if (status != cudaSuccess) goto end;
+
+        prevTempN = currTempN;
 
         //Double/ring/circular buffer previous result and new result
         innerPrevResult = innerCurrResult;

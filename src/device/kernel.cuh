@@ -333,23 +333,29 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           // uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows : kronRows;//power(kronRows, batchedKronMuls);
           uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
           const uint perGPUKByNumGPUs = distParams.perGPUKByNumGPUs; //perGPUK/numGPUs;
+          const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
           const uint perGPUKByKronRows = distParams.perGPUKByKronRows;
+          const uint perGPUNByKronCols = distParams.perGPUNByKronCols;
           const uint ColsAByKronRows = distParams.ColsAByKronRows;
+          const uint ColsCByKronCols = distParams.ColsCByKronCols;
           const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
           const uint ColsCByKronRowsPower = distParams.ColsCByKronRowsPower;
 
-          const uint nextGc = cCol/perGPUKByNumGPUs;
+          const uint nextGc = cCol/perGPUNByNumGPUs;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
           
-          const uint perGPUK = colsC;
+          const uint perGPUN = colsC;
           uint srcElem = cCol;
           uint withinP5 = gcMulUVAColsRatioKronRowsSquare +
-                           ((srcElem%perGPUKByKronRows)/UVAColsRatioKronRowsSquare)*ColsCByKronRowsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
-                            srcElem % UVAColsRatioKronRowsSquare;
-          uint p5Index = (srcElem/perGPUKByKronRows)*ColsAByKronRows;
+                          ((srcElem%perGPUKByKronRows)/UVAColsRatioKronRowsSquare)*ColsCByKronRowsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
+                          srcElem % UVAColsRatioKronRowsSquare;
+          uint p5Index = (srcElem/perGPUKByKronRows)*ColsCByKronCols;
           int newcCol = p5Index + withinP5;
-          int gpuCol = newcCol - nextGc * perGPUK;
-          cIdx = cRow * perGPUK + gpuCol;
+          int gpuCol = newcCol - nextGc * perGPUN;
+          cIdx = cRow * perGPUN + gpuCol;
+          if (gpuCol > perGPUN || gpuCol < 0)
+            printf("gpuCol %d perGPUN %d nextGc %d newcCol %d p5Index %d withinP5 %d cCol %d\n",
+            gpuCol, perGPUN, nextGc, newcCol, p5Index, withinP5, cCol);
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
          
           // printf("outputArray %p\n", outputArray);

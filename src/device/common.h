@@ -1,3 +1,5 @@
+#include <iostream>
+
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
@@ -63,7 +65,11 @@ struct DistributedParams {
   uint UVAColsRatioKronRowsSquare;
   uint perGPUKByNumGPUs;
   uint perGPUKByKronRows;
+  uint perGPUNByNumGPUs;
+  uint perGPUNByKronRows;
+  uint perGPUNByKronCols;
   uint ColsAByKronRows;
+  uint ColsCByKronCols;
   uint gcMulUVAColsRatioKronRowsSquare;
   uint ColsCByKronRowsPower;
 
@@ -71,18 +77,32 @@ struct DistributedParams {
   
   DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
-                    const uint PerGPUK_, const uint KronRows_, const uint LocalKrons_) :
+                    const uint PerGPUK_, const uint PerGPUN_, const uint KronCols_, const uint KronRows_, const uint LocalKrons_) :
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
     
-    const uint KronRowsPower = power(KronRows_, LocalKrons_);
-    UVAColsRatioKronRowsSquare = PerGPUK_/KronRowsPower;
-    perGPUKByNumGPUs = PerGPUK_/gpusInK_;
-    perGPUKByKronRows = PerGPUK_/KronRows_;
+    const uint KronRowsPower = power(KronRows_, LocalKrons_); //32
+    UVAColsRatioKronRowsSquare = PerGPUK_/KronRowsPower; //((32**4)/2)/32 = (32**3)/2
+    perGPUKByNumGPUs = PerGPUK_/gpusInK_; //((32**4)/2)/2
+    perGPUKByKronRows = PerGPUK_/KronRows_; //
+    perGPUNByNumGPUs = PerGPUN_/gpusInK_;
+    perGPUNByKronRows = PerGPUN_/KronRows_;
     ColsAByKronRows = ColsA_/KronRows_;
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
-
+    ColsCByKronCols = ColsC_/KronCols_;
+    if (gc == 0) {
+      std::cout << "KronCols_ " << KronCols_ << " ColsC_ " << ColsC_ << std::endl
+              << "KronRowsPower " << KronRowsPower << std::endl
+              << " UVAColsRatioKronRowsSquare " << UVAColsRatioKronRowsSquare << std::endl
+              << " perGPUKByNumGPUs " << perGPUKByNumGPUs << std::endl
+              << " perGPUKByKronRows " << perGPUKByKronRows << std::endl
+              << " perGPUNByNumGPUs " << perGPUNByNumGPUs << std::endl
+              << " perGPUNByKronRows " << perGPUNByKronRows << std::endl
+              << " ColsAByKronRows " << ColsAByKronRows << std::endl
+              << " ColsCByKronRowsPower " << ColsCByKronRowsPower << std::endl
+              << " ColsCByKronCols " << ColsCByKronCols << std::endl;
+    }
     setGPUResults(0, gpuResults0, gpuResults_);
     setGPUResults(1, gpuResults1, gpuResults_);
     setGPUResults(2, gpuResults2, gpuResults_);
