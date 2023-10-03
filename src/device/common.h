@@ -97,18 +97,18 @@ struct DistributedParams {
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
     ColsCByKronCols = ColsC_/KronCols_;
     ColsCByKronColsPower = ColsC_/KronColsPower;
-    if (gc == 0) {
-      std::cout << "KronCols_ " << KronCols_ << " ColsC_ " << ColsC_ << std::endl
-              << "KronRowsPower " << KronRowsPower << std::endl
-              << " UVAColsRatioKronRowsSquare " << UVAColsRatioKronRowsSquare << std::endl
-              << " perGPUKByNumGPUs " << perGPUKByNumGPUs << std::endl
-              << " perGPUKByKronRows " << perGPUKByKronRows << std::endl
-              << " perGPUNByNumGPUs " << perGPUNByNumGPUs << std::endl
-              << " perGPUNByKronRows " << perGPUNByKronRows << std::endl
-              << " ColsAByKronRows " << ColsAByKronRows << std::endl
-              << " ColsCByKronRowsPower " << ColsCByKronRowsPower << std::endl
-              << " ColsCByKronCols " << ColsCByKronCols << std::endl;
-    }
+    // if (gc == 0) {
+    //   std::cout << "KronCols_ " << KronCols_ << " ColsC_ " << ColsC_ << std::endl
+    //           << "KronRowsPower " << KronRowsPower << std::endl
+    //           << " UVAColsRatioKronRowsSquare " << UVAColsRatioKronRowsSquare << std::endl
+    //           << " perGPUKByNumGPUs " << perGPUKByNumGPUs << std::endl
+    //           << " perGPUKByKronRows " << perGPUKByKronRows << std::endl
+    //           << " perGPUNByNumGPUs " << perGPUNByNumGPUs << std::endl
+    //           << " perGPUNByKronRows " << perGPUNByKronRows << std::endl
+    //           << " ColsAByKronRows " << ColsAByKronRows << std::endl
+    //           << " ColsCByKronRowsPower " << ColsCByKronRowsPower << std::endl
+    //           << " ColsCByKronCols " << ColsCByKronCols << std::endl;
+    // }
     setGPUResults(0, gpuResults0, gpuResults_);
     setGPUResults(1, gpuResults1, gpuResults_);
     setGPUResults(2, gpuResults2, gpuResults_);

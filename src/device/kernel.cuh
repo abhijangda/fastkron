@@ -331,15 +331,12 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         if (DistributeToGPUs) {
           // uint batchedKronMuls = distParams.LocalKrons;
           // uint KronRowsPower = (batchedKronMuls == 3) ? kronRows*kronRows*kronRows : kronRows;//power(kronRows, batchedKronMuls);
+          //TODO: Remove distParams. members that are not accessed here?
           uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
-          const uint perGPUKByNumGPUs = distParams.perGPUKByNumGPUs; //perGPUK/numGPUs;
           const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
-          const uint perGPUKByKronRows = distParams.perGPUKByKronRows;
           const uint perGPUNByKronCols = distParams.perGPUNByKronCols;
-          const uint ColsAByKronRows = distParams.ColsAByKronRows;
           const uint ColsCByKronCols = distParams.ColsCByKronCols;
           const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
-          const uint ColsCByKronRowsPower = distParams.ColsCByKronRowsPower;
           const uint ColsCByKronColsPower = distParams.ColsCByKronColsPower;
           
           const uint nextGc = cCol/perGPUNByNumGPUs;
@@ -354,9 +351,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUN;
           cIdx = cRow * perGPUN + gpuCol;
-          if (gpuCol > perGPUN || gpuCol < 0)
-            printf("gpuCol %d perGPUN %d nextGc %d newcCol %d p5Index %d withinP5 %d cCol %d\n",
-            gpuCol, perGPUN, nextGc, newcCol, p5Index, withinP5, cCol);
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
          
           // printf("outputArray %p\n", outputArray);

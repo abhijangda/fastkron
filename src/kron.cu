@@ -448,7 +448,6 @@ float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
     KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
                                             tempK, M, NumFusedKerns, 
                                             distP2PStore && startKron == 0};
-
     if (bestKernels.find(shape) == bestKernels.end()) continue;
     auto iter = bestKernels.find(shape);
     TunedKernelsSeries epilogueKernels;
@@ -463,7 +462,6 @@ float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
                                                startKron, endKron, tempK, kernelTime);
     }
   }
-
   tunedKernels = minEpilogueKernels;
   tunedKernels.push_back(minPrologueKernel);
 
@@ -528,7 +526,6 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
       if (!shapeAndKernels.first.sameKronSize(shape)) continue;
       for (auto kernel : shapeAndKernels.second) {
         if (!kernel.canCompute(shape)) continue;
-        std::cout << shape << " " << kernel << std::endl;
         CUDA_CHECK(cudaStreamSynchronize(stream));
         for (int r = 0; r < 5 + runs; r++) {
           if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
@@ -654,14 +651,13 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   } else {
     //In distributed case run every LocalKron series on a single GPU
     CUDA_CHECK(cudaSetDevice(0));
-    uint prevTempN = K;
+    uint prevTempN = handle.gpuK_;
 
     //TODO: This loop is really common and should be a macro?
     for (uint i = 0; i < NumKronMats; i += handle.perGPUKronBatch_) {
       const uint kronMat = NumKronMats - i - 1;
       const uint LocalKrons = min(handle.perGPUKronBatch_, NumKronMats - i);
       uint currTempN = prevTempN;
-      // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
       uint LocalKronMatCols[LocalKrons];
       uint LocalKronMatRows[LocalKrons];
       for (int k = 0; k < LocalKrons; k++) {
@@ -672,15 +668,16 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       
       std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
       T** gpuResults = (T**)handle.gpuTemp2_;
-      assert(false);
-      DistributedParams<T> distParams(gpuResults, 0, 0, handle.gpusInK_, handle.K_, handle.N_, 
-                                      handle.gpuK_, handle.gpuN_, LocalKronMatCols[0], LocalKronMatRows[0], LocalKrons);
-      singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, handle.gpuK_, handle.gpuK_, 
+      int prevFullK = prevTempN * handle.gpusInK_;
+      int currFullN = currTempN * handle.gpusInK_;
+      DistributedParams<T> distParams(gpuResults, 0, 0, handle.gpusInK_, prevFullK, currFullN, 
+                                      prevFullK, currFullN, LocalKronMatCols[0], LocalKronMatRows[0], LocalKrons);
+      singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, currTempN, prevTempN, 
                         LocalKronMatCols, LocalKronMatRows, (T*)handle.gpuTemp1_[0], (T*)handle.gpuTemp2_[0],
                         handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
                         distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
-      minTime += minExecTimeOfSeries(handle.gpuM_, handle.gpuK_, LocalKrons,
+      minTime += minExecTimeOfSeries(handle.gpuM_, prevTempN, LocalKrons,
                                      LocalKronMatCols, LocalKronMatRows, 0,
                                      handle.isDistributed_ && handle.distComm_ == DistComm::P2P,
                                      tunedKernels, bestKernels);
@@ -850,10 +847,12 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
-        if (g == 0) std::cout << 853 << " kernel.end " << kernel.end << " " << kernel.kernel << " " << kronRows[0] << "  " << handle.gpuN_ << "  " << currTempN << std::endl;
+        // if (g == 0) std::cout << 853 << " kernel.end " << kernel.end << " " << kernel.kernel << " " << kronRows[0] << "  " << handle.gpuN_ << "  " << currTempN << std::endl;
+        int prevFullK = prevTempN * handle.gpusInK_;
+        int currFullN = currTempN * handle.gpusInK_;
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, 
-                                        prevTempN * handle.gpusInK_, currTempN * handle.gpusInK_,
-                                        prevTempN,currTempN, kronCols[0], kronRows[0], KronMulBatchSize);
+                                        prevFullK, currFullN,
+                                        prevTempN, currTempN, kronCols[0], kronRows[0], KronMulBatchSize);
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
         switch (NumFusedKerns) {
