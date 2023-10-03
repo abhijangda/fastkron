@@ -340,16 +340,17 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           const uint ColsCByKronCols = distParams.ColsCByKronCols;
           const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
           const uint ColsCByKronRowsPower = distParams.ColsCByKronRowsPower;
-
+          const uint ColsCByKronColsPower = distParams.ColsCByKronColsPower;
+          
           const uint nextGc = cCol/perGPUNByNumGPUs;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
           
           const uint perGPUN = colsC;
           uint srcElem = cCol;
           uint withinP5 = gcMulUVAColsRatioKronRowsSquare +
-                          ((srcElem%perGPUKByKronRows)/UVAColsRatioKronRowsSquare)*ColsCByKronRowsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
+                          ((srcElem%perGPUNByKronCols)/UVAColsRatioKronRowsSquare)*ColsCByKronColsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
                           srcElem % UVAColsRatioKronRowsSquare;
-          uint p5Index = (srcElem/perGPUKByKronRows)*ColsCByKronCols;
+          uint p5Index = (srcElem/perGPUNByKronCols)*ColsCByKronCols;
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUN;
           cIdx = cRow * perGPUN + gpuCol;

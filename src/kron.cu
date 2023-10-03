@@ -831,7 +831,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           krons[kk] = kronMats[g * NumKronMats + kernel.end - kk];
           kronRows[kk] = KronMatRows[kernel.end - kk];
           kronCols[kk] = KronMatCols[kernel.end - kk];
-          currTempN = (prevTempN/kronRows[kk])*kronCols[kk];
+          currTempN = (currTempN/kronRows[kk])*kronCols[kk];
         }
 
         if (slicedMuls == KronMulBatchSize - 1) {
@@ -850,7 +850,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
-        if (g == 0) std::cout << 853 << " " << kronRows[0] << "  " << handle.gpuN_ << "  " << currTempN << std::endl;
+        if (g == 0) std::cout << 853 << " kernel.end " << kernel.end << " " << kernel.kernel << " " << kronRows[0] << "  " << handle.gpuN_ << "  " << currTempN << std::endl;
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, 
                                         prevTempN * handle.gpusInK_, currTempN * handle.gpusInK_,
                                         prevTempN,currTempN, kronCols[0], kronRows[0], KronMulBatchSize);

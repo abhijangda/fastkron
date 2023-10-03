@@ -1,5 +1,7 @@
 #include <iostream>
 
+//TODO: Make this params.h?
+
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
@@ -72,6 +74,7 @@ struct DistributedParams {
   uint ColsCByKronCols;
   uint gcMulUVAColsRatioKronRowsSquare;
   uint ColsCByKronRowsPower;
+  uint ColsCByKronColsPower;
 
   DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {} 
   
@@ -81,16 +84,19 @@ struct DistributedParams {
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
     
-    const uint KronRowsPower = power(KronRows_, LocalKrons_); //32
-    UVAColsRatioKronRowsSquare = PerGPUK_/KronRowsPower; //((32**4)/2)/32 = (32**3)/2
-    perGPUKByNumGPUs = PerGPUK_/gpusInK_; //((32**4)/2)/2
+    const uint KronRowsPower = power(KronRows_, LocalKrons_); //
+    const uint KronColsPower = power(KronCols_, LocalKrons_); //
+    UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower; //
+    perGPUKByNumGPUs = PerGPUK_/gpusInK_; //
     perGPUKByKronRows = PerGPUK_/KronRows_; //
     perGPUNByNumGPUs = PerGPUN_/gpusInK_;
     perGPUNByKronRows = PerGPUN_/KronRows_;
+    perGPUNByKronCols = PerGPUN_/KronCols_;
     ColsAByKronRows = ColsA_/KronRows_;
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
     ColsCByKronCols = ColsC_/KronCols_;
+    ColsCByKronColsPower = ColsC_/KronColsPower;
     if (gc == 0) {
       std::cout << "KronCols_ " << KronCols_ << " ColsC_ " << ColsC_ << std::endl
               << "KronRowsPower " << KronRowsPower << std::endl
