@@ -224,7 +224,7 @@ void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
                   const uint TileSizeColsA, const uint MaxKronRows,
                   const uint TileSizeKronRows, const uint MaxColsA,
                   const uint NumThreads, const uint CRegRows,
-                  const uint RowsC, const uint kronCols, const uint colsA,
+                  const uint RowsC, const uint kronRows, const uint colsA,
                   const uint tid, const uint tileKronRow, const uint tileRowA,
                   const uint tile_k, const uint external_tile_kp_k,
                   const ElemT* __restrict__ glA, ElemT* __restrict__ shA) {
@@ -244,7 +244,7 @@ void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
         // }
       } else {
         addrA = &glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
-                     (a_col/TileSizeKronRows)*kronCols + external_tile_kp_k * TileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
+                     (a_col/TileSizeKronRows)*kronRows + external_tile_kp_k * TileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
         // *(VecT*)&shA[rowA][a_col] = a;
       }
 

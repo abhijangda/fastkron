@@ -45,7 +45,7 @@ run-single-gpu-tuner-tests: single-gpu-tuner-tests
 
 #Test for Non Square factors
 gen-non-square-tuner-test-kernels: src/gen_tuner_kernels.py
-	python3 src/gen_tuner_kernels.py -same-factors 4 8 16 -same-factors 5 8 16 -same-factors 3 32 16 -same-factors 3 32 64
+	python3 src/gen_tuner_kernels.py -same-factors 4 8 16 -same-factors 3 32 16 -same-factors 3 128 32
 
 single-gpu-non-square-tuner-tests: libKron.so tests/single-gpu-non-square-tuner-tests.cu tests/testBase.h
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@

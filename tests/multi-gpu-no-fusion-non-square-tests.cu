@@ -2,7 +2,7 @@
 #include "testBase.h"
 
 #define MULTI_GPU_NON_SQUARE_TEST(M, Facs, P, Q, GM, GK, KronBatch, Type) \
-  TEST(MultiGpuNonSquare, Type##_##M##x##Facs##x##P##x##Q##_##_GM##x##GK##x##KronBatch##_) { \
+  TEST(MultiGpuNonSquare, Type##_##M##x##Facs##x##P##x##Q##_##GM##x##GK##x##KronBatch##_) { \
   uint KP_MAT_N[Facs];\
   uint KP_MAT_K[Facs];\
   uint N = 1;\
@@ -17,10 +17,10 @@
   EXPECT_TRUE(b);\
 }
 
-MULTI_GPU_NON_SQUARE_TEST(4, 5, 8, 32, 2, 1, 5, float);
+MULTI_GPU_NON_SQUARE_TEST(8, 5, 8, 32, 2, 1, 5, float);
 MULTI_GPU_NON_SQUARE_TEST(4, 5, 8, 32, 1, 2, 3, float);
-MULTI_GPU_NON_SQUARE_TEST(4, 5, 8, 32, 4, 4, 3, float);
+MULTI_GPU_NON_SQUARE_TEST(8, 5, 8, 32, 4, 4, 3, float);
 
-MULTI_GPU_NON_SQUARE_TEST(4, 4, 64, 16, 2, 1, 4, float);
+MULTI_GPU_NON_SQUARE_TEST(8, 4, 64, 16, 2, 1, 4, float);
 MULTI_GPU_NON_SQUARE_TEST(4, 4, 64, 16, 1, 2, 3, float);
-MULTI_GPU_NON_SQUARE_TEST(4, 4, 64, 16, 4, 4, 3, float);
+MULTI_GPU_NON_SQUARE_TEST(8, 4, 64, 16, 4, 4, 3, float);

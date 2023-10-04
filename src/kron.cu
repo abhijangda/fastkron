@@ -208,7 +208,6 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   //Create the grid and thread block
   dim3 grid;
   dim3 block;
-
   grid = {
           (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
           DIVUP(M, kernelInfo.TileRowsA),
@@ -343,7 +342,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       krons[k] = kronMats[kronMat - k];
       FusedKronMatCols[k] = KronMatCols[kronMat - k];
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
-      currTempN = (prevTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
+      currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
     cudaError_t status;
 
@@ -1312,7 +1311,8 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       handle.gpusInM_ = gpusInM;  
     else
       handle.gpusInM_ = 1;//ilog2(gpus);
-    
+      
+    //TODO: Check that gpuKrons batch is valid, i.e., P1*P2..PBatch <= gpusInK
     if (gpuKrons > 0)
       handle.perGPUKronBatch_ = gpuKrons;
     else 
@@ -1381,7 +1381,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       if (maxTempN < tempN)
         maxTempN = tempN;
     }
-
     size_t sz = handle.M_ * maxTempN * sizeof(T);
     CUDA_CHECK(cudaMalloc(&handle.temp_, sz));
     CUDA_CHECK(cudaMalloc(&handle.result_, sz));
@@ -1400,6 +1399,8 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     compiledKernels.at(shape).push_back(info);
   }
   
+  //TODO: Check that if distP2PStore is needed then there is a kernel that can 
+  //do it
   //TODO: Add if debug
   if (false) {
     uint numKernels = 0;
