@@ -1,5 +1,7 @@
 #include "common.h"
 
+#include "device_functions.cuh"
+
 template<typename ElemT, typename VecT, uint NumGPUs, uint PerGPUK, uint TileK, uint NumThreads>
 __launch_bounds__(NumThreads)
 __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uint ColsA,
@@ -58,7 +60,9 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
   const uint lane         = tid%WarpSize;
   const uint blockWarps   = blockDim.x/WarpSize;
   const uint rowA = blockIdx.x;
-
+  // if (srcRank == 0 && rank == 0 && startKronIdx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
+  //   printf("perGPUK %d ColsC %d\n", perGPUK, ColsC);
+  // }
   for (uint elem = tid; elem < perGPUK/numGPUs; elem += NumThreads) {
     // uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
     // //(0,0,0,0,0,16,16,16)*128 + (0,1,2,3,..16)*128
@@ -71,25 +75,24 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
     
     if (batchedKronMuls == 1) {
       uint srcElem = rank * (perGPUK/numGPUs) + elem;
-      uint globalCCol = srcRank * (perGPUK/KronRows);
-      globalCCol += (srcElem/(perGPUK/KronRows))*(ColsC/KronRows);
-      globalCCol += srcElem%(perGPUK/KronRows);
+      uint globalCCol = srcRank * (perGPUK/KronCols);
+      globalCCol += (srcElem/(perGPUK/KronCols))*(ColsC/KronCols);
+      globalCCol += srcElem%(perGPUK/KronCols);
       int gpuCol = globalCCol - rank * perGPUK;
       const uint id = rowA * (perGPUK/numGPUs) + elem;
       auto e = slicedGPUOutput[id];
-      // if (canPrint and rowA == 1) printf("rowA %d gpuCol %d e %f id %d ColsA %d\n", rowA, gpuCol, e, id, ColsA);
-      // if (rowA == 0 && rank == 0 && srcRank == 0) printf("gpuCol %d globalCCol %d\n", gpuCol, globalCCol);
-      // if (rowA == 0)
-      //   printf("rowA %d perGPUK %d numGPUs %d elem %d ColsA %d gpuCol %d id %d e %f\n", rowA, perGPUK, numGPUs, elem, ColsA, gpuCol, id, e);
+      // if (canPrint and rowA == 0 && threadIdx.x == 0)
+      //   printf("rowA %d gpuCol %d e %f id %d ColsC %d\n",
+      //          rowA, gpuCol, e, id, ColsC);
       gpuOutput[rowA * perGPUK + gpuCol] = e;
     } else {
-      uint KronRowsPower = power(KronRows, batchedKronMuls);
+      uint KronColsPower = power(KronCols, batchedKronMuls);
       uint srcElem = rank * (perGPUK/numGPUs) + elem;
-      uint UVAColsRatioKronRowsSquare = (perGPUK/KronRowsPower);
+      uint UVAColsRatioKronRowsSquare = (perGPUK/KronColsPower);
       uint withinP5 = srcRank * UVAColsRatioKronRowsSquare + 
-                      ((srcElem%(perGPUK/KronRows))/UVAColsRatioKronRowsSquare)*(ColsC/(perGPUK/UVAColsRatioKronRowsSquare)) + 
+                      ((srcElem%(perGPUK/KronCols))/UVAColsRatioKronRowsSquare)*(ColsC/KronColsPower) +
                       srcElem % UVAColsRatioKronRowsSquare;
-      uint p5Index = (srcElem/(perGPUK/KronRows))*(ColsA/KronRows);
+      uint p5Index = (srcElem/(perGPUK/KronCols))*(ColsC/KronCols);
       uint cCol = p5Index + withinP5;
       int gpuCol = cCol - rank * perGPUK;
 

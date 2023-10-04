@@ -85,6 +85,9 @@ multi-gpu-no-fusion-non-square-tests: libKron.so tests/testBase.h tests/multi-gp
 run-p2p-multi-gpu-no-fusion-non-square-tests: multi-gpu-no-fusion-non-square-tests
 	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./$<
 
+run-nccl-multi-gpu-no-fusion-non-square-tests: multi-gpu-no-fusion-non-square-tests
+	LD_LIBRARY_PATH=./: DIST_COMM=NCCL ./$<
+
 #Run all tests
 #run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
 

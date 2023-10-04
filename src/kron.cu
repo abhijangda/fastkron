@@ -816,7 +816,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
         const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
-
+        
         T* krons[NumFusedKerns];
         uint kronCols[NumFusedKerns];
         uint kronRows[NumFusedKerns];
@@ -932,25 +932,37 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         //Call we want to use NCCL Send/Recv
         {
           const uint SliceRows = handle.gpuM_;
-          const uint SliceCols = handle.gpuK_/handle.gpusInK_;
+          const uint SliceCols = currTempN/handle.gpusInK_;
           const size_t sendRecvSize = SliceRows * SliceCols;
           const uint startRow = 0;
           const uint startCol = gc * SliceCols;
-          matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
-                        startRow, startCol, SliceRows, SliceCols,
-                        (float*)handle.recvTemps_[g], stream[g], g, io, true);
+          matrixSlice(handle.gpuM_, currTempN, innerPrevResult, 
+                      startRow, startCol, SliceRows, SliceCols,
+                      (float*)handle.recvTemps_[g], stream[g], g, io, true);
           dim3 grid = {handle.gpuM_, 1,1};
           dim3 block = {256, 1, 1};
-          storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], gc, handle.gpusInK_, 
-                                                                    (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
-                                                                    innerCurrResult, gc, KronMulBatchSize, io, (io == 0 and g == 1));
+          storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
+                                                                    KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
+                                                                    (float*)handle.recvTemps_[g], handle.gpuM_, currTempN,
+                                                                    innerCurrResult, gc, KronMulBatchSize, io, false);
+          // if (g == 0) {
+          //   std::cout << "io " << io << " SliceCols " << SliceCols << std::endl;
+          //   float val;
+          //   if (io == 0) val = 64.0f;
+          //   else if (io == 1) val = 64.0f * 64.0f;
+          //   else if (io == 2) val = 64.0f * 64.0f * 64.0f;
+          //   else if (io == 3) val = 64.0f * 64.0f * 64.0f * 64.0f;
+          //   if (io <= 0)
+          //   printGPUArray<float>(handle.gpuM_, SliceCols, val,
+          //     (float*)innerCurrResult, stream[g]);
+          // }
           CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         }
 
         //All GPUs with the same gr share their intermediates
         for (int dst = 0; dst < handle.gpusInK_; dst++) {
           const uint SliceRows = handle.gpuM_;
-          const uint SliceCols = handle.gpuK_/handle.gpusInK_;
+          const uint SliceCols = currTempN/handle.gpusInK_;
           const size_t sendRecvSize = SliceRows * SliceCols;
           if (dst == gc) {
             for (int src = 0; src < handle.gpusInK_; src++) {
@@ -975,9 +987,10 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
               // printf("715\n");
               dim3 grid = {handle.gpuM_, 1,1};
               dim3 block = {256, 1, 1};
-              storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[0], KronMatRows[0], dst, handle.gpusInK_, 
-                                                                        (float*)handle.recvTemps_[g], handle.gpuM_, handle.gpuK_,
-                                                                        innerCurrResult, src, KronMulBatchSize, io, (io == 0 and g == 1));
+              storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
+                                                                        KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
+                                                                        (float*)handle.recvTemps_[g], handle.gpuM_, currTempN,
+                                                                        innerCurrResult, src, KronMulBatchSize, io, false);
               CUDA_CHECK(cudaStreamSynchronize(stream[g]));
               // if (io == 0 and g == 1) printGPUArray<float>(80, 2048, ((io == 0) ? 16.0 :256.0f), (const float*)innerCurrResult, stream[g]);
               // }
@@ -986,7 +999,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           } else {
             const uint startRow = 0;
             const uint startCol = dst * SliceCols;
-            matrixSlice(handle.gpuM_, handle.gpuK_, innerPrevResult, 
+            matrixSlice(handle.gpuM_, currTempN, innerPrevResult, 
                         startRow, startCol, SliceRows, SliceCols,
                         (float*)handle.sendTemps_[g], stream[g], g, io);
             CUDA_CHECK(cudaStreamSynchronize(stream[g]));
@@ -1009,7 +1022,17 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       // if (io == 0 and g == 1) printGPUArray<float>(80, 2048, ((io == 0) ? 16.0 :256.0f), (const float*)innerCurrResult, stream[g]);
 
       //  printf("737 io %d\n", io);
-      //  if (g == 0) printGPUArray<float>(handle.gpuM_, handle.gpuK_, (float*)innerCurrResult, stream[g]);
+      // if (g == 0) {
+      // std::cout << "io " << io << std::endl;
+      // float val;
+      // if (io == 0) val = 64.0f;
+      // else if (io == 1) val = 64.0f * 64.0f;
+      // else if (io == 2) val = 64.0f * 64.0f * 64.0f;
+      // else if (io == 3) val = 64.0f * 64.0f * 64.0f * 64.0f;
+      // if (io <= 0)
+      // printGPUArray<float>(handle.gpuM_, currTempN, val,
+      //   (float*)innerPrevResult, stream[g]);
+      // }
             
       // printf("737 io %d\n", io);
       
