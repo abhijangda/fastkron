@@ -1,4 +1,4 @@
-#include "common.h"
+#include "params.h"
 
 #include "device_functions.cuh"
 

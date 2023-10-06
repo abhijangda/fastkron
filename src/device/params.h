@@ -1,7 +1,5 @@
 #include <iostream>
 
-//TODO: Make this params.h?
-
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
@@ -34,8 +32,8 @@ struct KernelParams {
   ElemT       * __restrict__ glC;
   const uint kp_idx;
 
-  KernelParams(const uint RowsC, const uint ColsC, const uint ColsA, const uint KronRows[NumFusedKerns],
-               const uint KronCols[NumFusedKerns], const ElemT* glA,
+  KernelParams(const uint RowsC, const uint ColsC, const uint ColsA,
+               const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns], const ElemT* glA,
                ElemT* glKronMats[NumFusedKerns], ElemT* glC, uint kp_idx) :
                RowsC(RowsC), ColsC(ColsC), ColsA(ColsA), glA(glA), glC(glC), kp_idx(kp_idx) {
     for (int i = 0; i < NumFusedKerns; i++) {
@@ -43,6 +41,21 @@ struct KernelParams {
       this->KronCols[i] = KronCols[i];
       this->glKronMats[i] = glKronMats[i];
     }
+  }
+};
+
+
+template<typename ElemT, uint NumFusedKerns>
+struct FusedParams {
+  uint KronRowsPower;
+  uint UVAColsRatioKronRowsSquare;
+  uint ColsCByKronRowsPower;
+  
+  FusedParams(const uint RowsC, const uint ColsC, const uint ColsA, const uint TileSizeColsA,
+              const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns]) {
+    KronRowsPower = power(KronRows[0], NumFusedKerns);
+    UVAColsRatioKronRowsSquare = TileSizeColsA/KronRowsPower;
+    ColsCByKronRowsPower = ColsC/KronRowsPower;
   }
 };
 

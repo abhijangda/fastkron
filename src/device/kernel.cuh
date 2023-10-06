@@ -12,7 +12,8 @@ template<typename ElemT, typename VecT, uint NumThreads, RowParallelismTy RowPar
          uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
          uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns, bool DistributeToGPUs>
 __launch_bounds__(NumThreads)
-__global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params, 
+__global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
+                               FusedParams<ElemT, NumFusedKerns> fusedParams,
                                DistributedParams<ElemT> distParams) {
   
   const uint WarpSize     = 32;
@@ -189,13 +190,14 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
     if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowShC < params.RowsC - tileRowA)) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
-      #ifdef KPK_EQUALS_VAR
-      const uint KronRowsPower = iconstpower<kronRows, NumFusedKerns>();
-      #else
-      const uint KronRowsPower = power(kronRows, NumFusedKerns);
-      #endif
-      uint UVAColsRatioKronRowsSquare = (TileSizeColsA/KronRowsPower);
-      const uint ratio = colsC/KronRowsPower; //(colsC/(TileSizeColsA/UVAColsRatioKronRowsSquare));
+      // #ifdef KPK_EQUALS_VAR
+      // const uint KronRowsPower = iconstpower<kronRows, NumFusedKerns>();
+      // #else
+      // const uint KronRowsPower = power(kronRows, NumFusedKerns);
+      // #endif
+      uint UVAColsRatioKronRowsSquare = fusedParams.UVAColsRatioKronRowsSquare; //(TileSizeColsA/KronRowsPower);
+      const uint ColsCByKronRowsPower = fusedParams.ColsCByKronRowsPower; //colsC/KronRowsPower;//(colsC/(TileSizeColsA/UVAColsRatioKronRowsSquare));
+      const uint TileSizeColsAByKronRows = TileSizeColsA/kronRows; //params.TileSizeColsAByKronRows;
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
@@ -203,17 +205,17 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         const uint rowC = rowShC + tileRowA;
         //Need below to work well
         //KronRowsPower = 512;
-        
+        //python3 src/gen_tuner_kernels.py -same-factors 4 16 16 -match-configs 256,16,16,16,1,4096,1,16,2 128,16,16,16,1,2048,1,16,1
         //colsA = 8*8*8*8*8*8;
         uint tile_k = 0;
         if (!K_EQUALS_VAR) {
           tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
         }
         uint withinP5 = tile_k * UVAColsRatioKronRowsSquare +
-                        ((colShC%(TileSizeColsA/kronRows))/UVAColsRatioKronRowsSquare)*ratio + 
+                        ((colShC%TileSizeColsAByKronRows)/UVAColsRatioKronRowsSquare)*ColsCByKronRowsPower + 
                         colShC%UVAColsRatioKronRowsSquare;
         
-        uint p5Index = (colShC/(TileSizeColsA/kronRows))*(colsC/kronRows);
+        uint p5Index = (colShC/TileSizeColsAByKronRows)*(colsC/kronRows);
         uint cCol = p5Index + withinP5;
         
         uint cIdx;

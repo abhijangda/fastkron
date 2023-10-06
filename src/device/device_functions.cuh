@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <type_traits>
 
-#include "common.h"
+#include "params.h"
 
 #ifndef __DEVICE_FUNCTIONS__
 #define __DEVICE_FUNCTIONS__

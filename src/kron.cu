@@ -219,16 +219,17 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
             1
           };
 
-  KernelParams<T, NumFusedKerns> params (M, N, K, 
+  KernelParams<T, NumFusedKerns> params (M, N, K,
                                          KronMatRows, 
                                          KronMatCols, x, 
                                          kronMat, 
                                          kronGemmResult, 
                                          kronIndex);
-  
+  FusedParams<T, NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
+
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, DistributedParams<T>(), grid, block, stream);
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -260,17 +261,18 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
             1
           };
 
-  KernelParams<T, NumFusedKerns> params (M, N, K, 
-                                         KronMatRows, 
-                                         KronMatCols, x, 
-                                         kronMat, 
-                                         kronGemmResult, 
-                                         kronIndex);
+  KernelParams<T, NumFusedKerns> params(M, N, K,
+                                        KronMatRows, 
+                                        KronMatCols, x, 
+                                        kronMat, 
+                                        kronGemmResult, 
+                                        kronIndex);
+  FusedParams<T, NumFusedKerns> fusedParams(M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
 
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, distParams, grid, block, stream);
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
