@@ -47,15 +47,15 @@ struct KernelParams {
 
 template<typename ElemT, uint NumFusedKerns>
 struct FusedParams {
-  uint KronRowsPower;
-  uint UVAColsRatioKronRowsSquare;
-  uint ColsCByKronRowsPower;
+  uint KronColsPower;
+  uint UVAColsRatioKronColsSquare;
+  uint ColsCByKronColsPower;
   
   FusedParams(const uint RowsC, const uint ColsC, const uint ColsA, const uint TileSizeColsA,
               const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns]) {
-    KronRowsPower = power(KronRows[0], NumFusedKerns);
-    UVAColsRatioKronRowsSquare = TileSizeColsA/KronRowsPower;
-    ColsCByKronRowsPower = ColsC/KronRowsPower;
+    KronColsPower = power(KronCols[0], NumFusedKerns);
+    UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
+    ColsCByKronColsPower = ColsC/KronColsPower;
   }
 };
 

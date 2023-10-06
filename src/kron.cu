@@ -523,6 +523,7 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
     KernelInfo bestKernel;
     float minTime = std::numeric_limits<float>::max();
     const uint runs = 10;
+    std::cout << "Tuning for shape "  << shape << std::endl;
     for (auto shapeAndKernels : compiledKernels) {
       if (!shapeAndKernels.first.sameKronSize(shape)) continue;
       for (auto kernel : shapeAndKernels.second) {
