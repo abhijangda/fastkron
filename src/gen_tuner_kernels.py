@@ -181,7 +181,6 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
         __configs = []
         for config in configs:
           for specificConfig in onlySpecificConfigs:
-            print(specificConfig.replace(' ', ''), repr(config).replace(' ', ''))
             if specificConfig.replace(' ', '') in repr(config).replace(' ', ''):
               __configs += [config]
               break

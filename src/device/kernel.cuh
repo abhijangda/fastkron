@@ -242,7 +242,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           uint p5Index = (srcElem/perGPUNByKronCols)*ColsCByKronCols;
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUN;
-          cIdx = cRow * perGPUN + gpuCol;
+          cIdx = rowC * perGPUN + gpuCol;
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));
         } else {
           cIdx = rowC * colsC + cCol;
