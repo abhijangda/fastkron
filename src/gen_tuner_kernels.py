@@ -301,4 +301,5 @@ if __name__ == "__main__":
   if args.match_configs_file != None:
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
+    print(match_configs)
   generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, match_configs)

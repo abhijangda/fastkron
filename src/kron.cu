@@ -226,7 +226,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                          kronGemmResult, 
                                          kronIndex);
   FusedParams<T, NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
-
+  // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), grid, block, stream);

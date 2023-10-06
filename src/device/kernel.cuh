@@ -205,7 +205,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         const uint rowC = rowShC + tileRowA;
         //Need below to work well
         //KronRowsPower = 512;
-        //python3 src/gen_tuner_kernels.py -same-factors 4 16 16 -match-configs 256,16,16,16,1,4096,1,16,2 128,16,16,16,1,2048,1,16,1
         //colsA = 8*8*8*8*8*8;
         uint tile_k = 0;
         if (!K_EQUALS_VAR) {
