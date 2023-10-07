@@ -9,7 +9,7 @@ all: libKron.so
 include src/device/Makefile
 
 kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/thread_pool.h
-	$(NVCC) -Xcompiler=-fPIC,-fopenmp,-O3 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g
+	$(NVCC) -Xcompiler=-fPIC,-fopenmp,-O3 -std=c++17 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g
 
 libKron.so: device_kernels.o kron.o
 	$(NVCC) -shared -lnccl -o $@ device_kernels.o kron.o
@@ -97,6 +97,10 @@ run-p2p-multi-gpu-no-fusion-non-square-tests: multi-gpu-no-fusion-non-square-tes
 
 run-nccl-multi-gpu-no-fusion-non-square-tests: multi-gpu-no-fusion-non-square-tests
 	LD_LIBRARY_PATH=./: DIST_COMM=NCCL ./$<
+
+#Multi GPU different shapes
+gen-multi-gpu-distinct-shapes.cu: src/gen_tuner_kernels.py
+	python3 src/gen_tuner_kernels.py -distinct-factors 2 8 32 16 8 -match-configs 64,16,8,16,1,256,1,8,1 32,8,32,8,1,256,1,2,1 -dist-kernels
 
 #Run all tests
 #run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
