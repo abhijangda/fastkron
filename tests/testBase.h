@@ -270,13 +270,14 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate host data
   T* hX;
   T* hKpMats[NUM_KP_MATS];
+  T* hKpMatmulResult[NUM_KP_MATS];
   hX = new T[((uint64_t)M) * ((uint64_t)K)];
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
@@ -330,7 +331,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     T* hResult;
     {
       //CPU implementation of algorithm
-      T* hKpMatmulResult[NUM_KP_MATS];
       size_t tempN = K;
       size_t maxTempN = tempN;
       for (int i = 0; i < handle.NumKronMats_; i++) {
@@ -343,9 +343,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       }
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
-      for (uint i = 0; i < NUM_KP_MATS; i++) {
-        delete hKpMatmulResult[i];
-      }
     }
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
@@ -450,6 +447,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   delete[] hX;
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     delete[] hKpMats[i];
+    delete[] hKpMatmulResult[i];
   }
 
   return true;

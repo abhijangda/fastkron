@@ -15,7 +15,7 @@ libKron.so: device_kernels.o kron.o
 	$(NVCC) -shared -lnccl -o $@ device_kernels.o kron.o
 
 kron: tests/main.cu libKron.so tests/testBase.h
-	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@
+	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@ -g
 
 #Make tests
 gen-single-gpu-kernels: src/gen_tuner_kernels.py tests/single-gpu-kernel-decls.in
@@ -52,6 +52,16 @@ single-gpu-non-square-tuner-tests: libKron.so tests/single-gpu-non-square-tuner-
 
 run-single-gpu-non-square-tuner-tests: single-gpu-non-square-tuner-tests
 	LD_LIBRARY_PATH=./: ./single-gpu-non-square-tuner-tests
+
+#Test for Distinct Shapes Single GPU
+gen-single-gpu-distinct-shapes: src/gen_tuner_kernels.py
+	python3 src/gen_tuner_kernels.py -distinct-factors 3 8 16 8 16 8 32
+
+single-gpu-distinct-shapes: libKron.so tests/single-gpu-distinct-shapes.cu tests/testBase.h
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-single-gpu-distinct-shapes: single-gpu-distinct-shapes
+	LD_LIBRARY_PATH=./: ./single-gpu-distinct-shapes
 
 #Multi GPU Tests Square Factors 
 gen-multi-gpu-tests-kernel: src/gen_tuner_kernels.py
