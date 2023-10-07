@@ -347,7 +347,9 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
     cudaError_t status;
+    
     KernelInfo selectedKernel = kernel.kernel;
+    // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,

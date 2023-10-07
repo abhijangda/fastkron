@@ -26,7 +26,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
-int randMod(int i, int j) {return rand()%2 + 1;}
+int randMod(int i, int j) {return rand()%3 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
@@ -270,16 +270,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate host data
   T* hX;
   T* hKpMats[NUM_KP_MATS];
-  T* hKpMatmulResult[NUM_KP_MATS];
-  
   hX = new T[((uint64_t)M) * ((uint64_t)K)];
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
-    hKpMatmulResult[i] = new T[(uint64_t)M*std::max((uint64_t)N,(uint64_t)K)];
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
@@ -331,10 +328,25 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T* dResult[gpus];
   if (checkResults) {
     T* hResult;
-
-    //CPU implementation of algorithm
-    slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
-    hResult = hKpMatmulResult[NUM_KP_MATS-1];
+    {
+      //CPU implementation of algorithm
+      T* hKpMatmulResult[NUM_KP_MATS];
+      size_t tempN = K;
+      size_t maxTempN = tempN;
+      for (int i = 0; i < handle.NumKronMats_; i++) {
+        tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
+        if (maxTempN < tempN)
+          maxTempN = tempN;
+      }
+      for (uint i = 0; i < NUM_KP_MATS; i++) {
+        hKpMatmulResult[i] = new T[(uint64_t)M*(uint64_t)maxTempN];
+      }
+      slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+      hResult = hKpMatmulResult[NUM_KP_MATS-1];
+      for (uint i = 0; i < NUM_KP_MATS; i++) {
+        delete hKpMatmulResult[i];
+      }
+    }
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
     if (useDistributed) {
@@ -438,7 +450,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   delete[] hX;
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     delete[] hKpMats[i];
-    delete[] hKpMatmulResult[i];
   }
 
   return true;
