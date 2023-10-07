@@ -108,9 +108,6 @@ struct DistributedParams {
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
     ColsCByKronCols = ColsC_/KronCols_[LocalKrons_-1];
     ColsCByKronColsPower = ColsC_/KronColsPower;
-    printf("KronColsPower %d ColsC_ %d PerGPUN_ %d KronCols_[LocalKrons-1] %d\n",
-            KronColsPower, ColsC_, PerGPUN_, KronCols_[LocalKrons-1]);
-
     perGPUNByKronRows = PerGPUN_/KronRows_[LocalKrons_-1];
     perGPUKByKronRows = PerGPUK_/KronRows_[LocalKrons_-1];
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
