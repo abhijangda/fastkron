@@ -99,8 +99,14 @@ run-nccl-multi-gpu-no-fusion-non-square-tests: multi-gpu-no-fusion-non-square-te
 	LD_LIBRARY_PATH=./: DIST_COMM=NCCL ./$<
 
 #Multi GPU different shapes
-gen-multi-gpu-distinct-shapes.cu: src/gen_tuner_kernels.py
-	python3 src/gen_tuner_kernels.py -distinct-factors 2 8 32 16 8 -match-configs 64,16,8,16,1,256,1,8,1 32,8,32,8,1,256,1,2,1 -dist-kernels
+gen-multi-gpu-distinct-shapes: src/gen_tuner_kernels.py
+	python3 src/gen_tuner_kernels.py -distinct-factors 3 8 32 16 16 8 8 -match-configs 64,16,8,16,1,256,1,8,1 32,8,32,8,1,256,1,2,1 128,16,8,8,1,128,1,1,1 -dist-kernels
+
+multi-gpu-distinct-shapes: libKron.so tests/testBase.h tests/multi-gpu-distinct-shapes.cu
+		$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-p2p-multi-gpu-distinct-shapes: multi-gpu-distinct-shapes
+	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-distinct-shapes
 
 #Run all tests
 #run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests

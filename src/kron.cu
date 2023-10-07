@@ -804,8 +804,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       uint LocalKronCols[KronMulBatchSize];
       uint LocalKronRows[KronMulBatchSize];
       for (int i = 0; i < KronMulBatchSize; i++) {
-        LocalKronCols[i] = KronMatCols[NumKronMats - io - 1 - i];
-        LocalKronRows[i] = KronMatRows[NumKronMats - io - 1 - i];
+        LocalKronCols[i] = KronMatCols[NumKronMats - MaxI + i];
+        LocalKronRows[i] = KronMatRows[NumKronMats - MaxI + i];
       }
       
       if (handle.tunedKernelSeries.size() > 0) {
