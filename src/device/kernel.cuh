@@ -328,7 +328,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
           const uint ColsCByKronColsPower = distParams.ColsCByKronColsPower;
           
-          const uint nextGc = cCol/perGPUNByNumGPUs;
+          uint nextGc = cCol/perGPUNByNumGPUs;
           // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
           
           const uint perGPUN = colsC;
@@ -341,7 +341,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           int gpuCol = newcCol - nextGc * perGPUN;
           cIdx = cRow * perGPUN + gpuCol;
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
-         
+          // if (params.kp_idx == 0 && blockIdx.y == 0) {//(gpuCol >= perGPUN || gpuCol < 0) {
+          //   printf("344 outputArray %p nextGc %d cIdx %d perGPUN %d\n", outputArray, nextGc, cIdx, perGPUN);
+          // }
+          
           // printf("outputArray %p\n", outputArray);
           // if (batchedKronMuls == 3 and regC[rowA][reg_i][reg_j] != )
           // if (threadIdx.x == 0) //((gpuCol >= perGPUK or gpuCol < 0)) 
@@ -356,6 +359,8 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           // }
         } else {
          cIdx = cRow * colsC + cCol;
+        //  if (threadIdx.x == 0)
+        //   printf("363 cCol %d\n", cCol);
          outputArray = params.glC;
         //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
         }

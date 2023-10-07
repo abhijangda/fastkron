@@ -674,7 +674,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
       DistributedParams<T> distParams(gpuResults, 0, 0, handle.gpusInK_, prevFullK, currFullN, 
-                                      prevFullK, currFullN, LocalKronMatCols[0], LocalKronMatRows[0], LocalKrons);
+                                      prevFullK, currFullN, LocalKronMatCols, LocalKronMatRows, LocalKrons);
       singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, currTempN, prevTempN, 
                         LocalKronMatCols, LocalKronMatRows, (T*)handle.gpuTemp1_[0], (T*)handle.gpuTemp2_[0],
                         handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
@@ -799,8 +799,15 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       //   // CUDA_CHECK(cudaDeviceSynchronize());
       //   // printf("Done\n");
       // }
-      TunedKernelsSeries kernelSeries;
       const uint endKron = NumKronMats - io - KronMulBatchSize;
+      TunedKernelsSeries kernelSeries;
+      uint LocalKronCols[KronMulBatchSize];
+      uint LocalKronRows[KronMulBatchSize];
+      for (int i = 0; i < KronMulBatchSize; i++) {
+        LocalKronCols[i] = KronMatCols[NumKronMats - io - 1 - i];
+        LocalKronRows[i] = KronMatRows[NumKronMats - io - 1 - i];
+      }
+      
       if (handle.tunedKernelSeries.size() > 0) {
         for (auto tunedKernel : handle.tunedKernelSeries) {
           if (tunedKernel.start >= endKron  and tunedKernel.end < endKron + KronMulBatchSize) {
@@ -809,7 +816,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         }
       } else {
         auto localSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, handle.gpuK_, handle.gpuK_, 
-                                              KronMatCols, KronMatRows, true);
+                                              LocalKronCols, LocalKronRows, true);
         for (auto& kernel : localSeries) {
           kernel.end += endKron;
         }
@@ -850,12 +857,13 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
+
         // if (g == 0) std::cout << 853 << " kernel.end " << kernel.end << " " << kernel.kernel << " " << kronRows[0] << "  " << handle.gpuN_ << "  " << currTempN << std::endl;
         int prevFullK = prevTempN * handle.gpusInK_;
         int currFullN = currTempN * handle.gpusInK_;
         DistributedParams<T> distParams(gpuResults, gr, gc, handle.gpusInK_, 
                                         prevFullK, currFullN,
-                                        prevTempN, currTempN, kronCols[0], kronRows[0], KronMulBatchSize);
+                                        prevTempN, currTempN, LocalKronCols, LocalKronRows, KronMulBatchSize);
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
         switch (NumFusedKerns) {
@@ -1376,7 +1384,6 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       //TODO: Create PTHREAD_CHECK?
       assert (s == 0);
     }
-    std::cout << "Allocating temporaries"<<std::endl;
     
     size_t tempN = handle.gpuK_;
     size_t maxTempN = tempN;
@@ -1387,6 +1394,7 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
     }
 
     size_t sz = handle.gpuM_ * maxTempN * sizeof(T);
+    std::cout << "Allocating temporaries of size "<< sz << std::endl;
     for (int g = 0; g < gpus; g++) {
       CUDA_CHECK(cudaSetDevice(g));
       CUDA_CHECK(cudaMalloc(&handle.gpuTemp1_[g], sz));

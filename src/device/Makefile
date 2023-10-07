@@ -6,7 +6,7 @@ KRON_KERNELS=$(DEVICE)/kron-kernels
 include $(KRON_KERNELS)/make_device_kernels
 
 $(KRON_KERNELS)/%.o: $(KRON_KERNELS)/%.cu $(DEVICE)/device_functions.cuh $(DEVICE)/kernel.cuh src/kron.h
-	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 $< -Isrc/ -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) 
+	$(NVCC) -Xcompiler=-fPIC,-shared,-fopenmp,-O3 -std=c++17 $< -Isrc/ -c -o $@ -Xptxas=-v $(ARCH_CODE_FLAGS) -G
 
 device_kernels.o: $(DEVICE_KERNELS)
 	ld -relocatable $? -o $@

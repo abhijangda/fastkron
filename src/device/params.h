@@ -1,4 +1,5 @@
 #include <iostream>
+#include <numeric>
 
 #ifndef __COMMON_H__
 #define __COMMON_H__
@@ -93,23 +94,27 @@ struct DistributedParams {
   
   DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
-                    const uint PerGPUK_, const uint PerGPUN_, const uint KronCols_, const uint KronRows_, const uint LocalKrons_) :
+                    const uint PerGPUK_, const uint PerGPUN_, 
+                    const uint KronCols_[], const uint KronRows_[], const uint LocalKrons_) :
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
     
-    const uint KronRowsPower = power(KronRows_, LocalKrons_); //
-    const uint KronColsPower = power(KronCols_, LocalKrons_); //
+    const uint KronRowsPower = std::reduce(KronRows_, KronRows_ + LocalKrons_, 1, std::multiplies<uint>());
+    const uint KronColsPower = std::reduce(KronCols_, KronCols_ + LocalKrons_, 1, std::multiplies<uint>());
     UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower; //
     perGPUKByNumGPUs = PerGPUK_/gpusInK_; //
-    perGPUKByKronRows = PerGPUK_/KronRows_; //
     perGPUNByNumGPUs = PerGPUN_/gpusInK_;
-    perGPUNByKronRows = PerGPUN_/KronRows_;
-    perGPUNByKronCols = PerGPUN_/KronCols_;
-    ColsAByKronRows = ColsA_/KronRows_;
+    perGPUNByKronCols = PerGPUN_/KronCols_[LocalKrons_-1];
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
-    ColsCByKronRowsPower = ColsC_/KronRowsPower;
-    ColsCByKronCols = ColsC_/KronCols_;
+    ColsCByKronCols = ColsC_/KronCols_[LocalKrons_-1];
     ColsCByKronColsPower = ColsC_/KronColsPower;
+    printf("KronColsPower %d ColsC_ %d PerGPUN_ %d KronCols_[LocalKrons-1] %d\n",
+            KronColsPower, ColsC_, PerGPUN_, KronCols_[LocalKrons-1]);
+
+    perGPUNByKronRows = PerGPUN_/KronRows_[LocalKrons_-1];
+    perGPUKByKronRows = PerGPUK_/KronRows_[LocalKrons_-1];
+    ColsCByKronRowsPower = ColsC_/KronRowsPower;
+    ColsAByKronRows = ColsA_/KronRows_[LocalKrons_-1];
     // if (gc == 0) {
     //   std::cout << "KronCols_ " << KronCols_ << " ColsC_ " << ColsC_ << std::endl
     //           << "KronRowsPower " << KronRowsPower << std::endl
