@@ -347,7 +347,6 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
     cudaError_t status;
-
     KernelInfo selectedKernel = kernel.kernel;
     switch(NumFusedKerns) {
       case 1:

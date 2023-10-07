@@ -129,7 +129,6 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
 
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1
-    __configs = []  
     for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = [2**i for i in range(1, max(2, int(math.log2(q)))+1)]
@@ -139,6 +138,9 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
 
       shape = KronMatMulShape(m, k, n, p, q)
+      if shape not in configs:
+        configs[shape] = []
+      __configs = []  
       for tM in TileMs:
         for tQ in TileQs:
           for tK in TileKs:
@@ -155,7 +157,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
                                                                   p, q, tQ, tP, tM, 
                                         rowModTileIsZero, regRows, regCols, kEqVar,
                                         numFusedKerns, dist, "Float")]
-    configs[str([m, k, n, ps, qs])] = __configs
+      configs[shape] += __configs
 
   print("Generated configs: ", ";".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
   
@@ -177,6 +179,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
     configs = configs[:min(len(configs), numKernels)]
+    
     if onlySpecificConfigs != []:
         __configs = []
         for config in configs:
