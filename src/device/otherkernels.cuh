@@ -64,7 +64,7 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
   // if (srcRank == 0 && rank == 0 && startKronIdx == 0 && isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
   //   printf("perGPUK %d ColsC %d\n", perGPUK, ColsC);
   // }
-  for (uint elem = tid; elem < perGPUK/numGPUs; elem += NumThreads) {
+  for (uint elem = tid; elem < distParams.perGPUNByNumGPUs; elem += NumThreads) {
     // uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + shVecI;
     // //(0,0,0,0,0,16,16,16)*128 + (0,1,2,3,..16)*128
     // if (!K_EQUALS_VAR) {
@@ -73,32 +73,16 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
     //       (cCol/(MaxColsA/kronCols)) * (colsA/kronCols) +
     //       cCol%(MaxColsA/kronCols);
     // }
-    
-    if (batchedKronMuls == 1) {
-      uint srcElem = rank * (perGPUK/numGPUs) + elem;
-      uint globalCCol = srcRank * (perGPUK/KronCols);
-      globalCCol += (srcElem/(perGPUK/KronCols))*(ColsC/KronCols);
-      globalCCol += srcElem%(perGPUK/KronCols);
-      int gpuCol = globalCCol - rank * perGPUK;
-      const uint id = rowA * (perGPUK/numGPUs) + elem;
-      auto e = slicedGPUOutput[id];
-      // if (canPrint and rowA == 0 && threadIdx.x == 0)
-      //   printf("rowA %d gpuCol %d e %f id %d ColsC %d\n",
-      //          rowA, gpuCol, e, id, ColsC);
-      gpuOutput[rowA * perGPUK + gpuCol] = e;
-    } else {
-      uint KronColsPower = power(KronCols, batchedKronMuls);
-      uint srcElem = rank * (perGPUK/numGPUs) + elem;
-      uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;// (perGPUK/KronColsPower);
-      uint withinP5 = srcRank * UVAColsRatioKronRowsSquare + 
-                      ((srcElem%distParams.perGPUNByKronCols)/UVAColsRatioKronRowsSquare)*(distParams.ColsCByKronColsPower) +
-                      srcElem % UVAColsRatioKronRowsSquare;
-      uint p5Index = (srcElem/distParams.perGPUNByKronCols)*distParams.ColsCByKronCols;
-      uint cCol = p5Index + withinP5;
-      int gpuCol = cCol - rank * perGPUK;
+    uint srcElem = rank * distParams.perGPUNByNumGPUs + elem;
+    uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;// (perGPUK/KronColsPower);
+    uint withinP5 = srcRank * UVAColsRatioKronRowsSquare + 
+                    ((srcElem%distParams.perGPUNByKronCols)/UVAColsRatioKronRowsSquare)*(distParams.ColsCByKronColsPower) +
+                    srcElem % UVAColsRatioKronRowsSquare;
+    uint p5Index = (srcElem/distParams.perGPUNByKronCols)*distParams.ColsCByKronCols;
+    uint cCol = p5Index + withinP5;
+    int gpuCol = cCol - rank * perGPUK;
 
-      gpuOutput[rowA * perGPUK + gpuCol] = slicedGPUOutput[rowA * (perGPUK/numGPUs) + elem];
-    }
+    gpuOutput[rowA * perGPUK + gpuCol] = slicedGPUOutput[rowA * distParams.perGPUNByNumGPUs + elem];
   }
 }
 
