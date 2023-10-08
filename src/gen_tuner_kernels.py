@@ -230,42 +230,43 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   with open(os.path.join(kernel_dir, "make_device_kernels"), "w") as f:
     f.write(make_device_kernels)
 
+def compute_k(ps, qs):
+  k = 1
+  for p in ps:
+    k = k * p
+
+  return k
+
 def parse_distinct_factors(case):
   m = 2
   n = int(case[0])
-  ps = [int(p) for p in case[1:n+1]]
-  qs = [int(q) for q in case[n+1: ]]
-  assert len(ps) == n
-  assert len(qs) == n
-  k = 1
-  for p in ps:
-    assert p >= 1
-    k = p * k
-  for q in qs:
-    assert q >= 1
-
+  assert len(case[1:]) == n
+  ps = []
+  qs = []
+  
+  for pq in case[1:]:
+    split = pq.split(',')
+    ps += [int(split[0])]
+    qs += [int(split[1])]
+  
+  k = compute_k(ps, qs)
   return (m, k, n, ps, qs)
 
 def parse_same_factors(case):
   m = 2
   n = int(case[0])
-  ps = [int(case[1]) for i in range(n)]
-  qs = [int(case[2]) for i in range(n)]
-  assert len(ps) == n
-  assert len(qs) == n
-  k = 1
-  for p in ps:
-    assert p >= 1
-    k = p * k
-  for q in qs:
-    assert q >= 1
-
+  assert len(case[1:]) == 1
+  split = case[1].split(',')
+  ps = [int(split[0]) for i in range(n)]
+  qs = [int(split[1]) for i in range(n)]
+  
+  k = compute_k(ps, qs)
   return (m, k, n, ps, qs)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-distinct-factors', required=False, nargs="+", action='append', type=int)
-  parser.add_argument('-same-factors', required=False, nargs="+", action='append', type=int)
+  parser.add_argument('-distinct-factors', required=False, nargs="+", action='append', type=str)
+  parser.add_argument('-same-factors', required=False, nargs="+", action='append', type=str)
   parser.add_argument('-no-fuse', required=False, action='store_true')
   parser.add_argument('-num-kernels', required=False, type=int, default=10000)
   parser.add_argument('-dist-kernels', required=False, action='store_true', default=False)
