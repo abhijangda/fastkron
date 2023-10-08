@@ -53,7 +53,8 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
                              ElemT * __restrict__ slicedGPUOutput,
                              const uint perGPUM, const uint perGPUK,
                              ElemT * __restrict__ gpuOutput,
-                             const uint srcRank, const uint batchedKronMuls, const uint startKronIdx, bool canPrint) {
+                             const uint srcRank, const uint batchedKronMuls, const uint startKronIdx, 
+                             DistributedParams<ElemT> distParams, bool canPrint) {
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
   const uint wid          = tid/WarpSize;
@@ -88,11 +89,11 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
     } else {
       uint KronColsPower = power(KronCols, batchedKronMuls);
       uint srcElem = rank * (perGPUK/numGPUs) + elem;
-      uint UVAColsRatioKronRowsSquare = (perGPUK/KronColsPower);
+      uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;// (perGPUK/KronColsPower);
       uint withinP5 = srcRank * UVAColsRatioKronRowsSquare + 
-                      ((srcElem%(perGPUK/KronCols))/UVAColsRatioKronRowsSquare)*(ColsC/KronColsPower) +
+                      ((srcElem%distParams.perGPUNByKronCols)/UVAColsRatioKronRowsSquare)*(distParams.ColsCByKronColsPower) +
                       srcElem % UVAColsRatioKronRowsSquare;
-      uint p5Index = (srcElem/(perGPUK/KronCols))*(ColsC/KronCols);
+      uint p5Index = (srcElem/distParams.perGPUNByKronCols)*distParams.ColsCByKronCols;
       uint cCol = p5Index + withinP5;
       int gpuCol = cCol - rank * perGPUK;
 

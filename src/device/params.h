@@ -92,7 +92,7 @@ struct DistributedParams {
 
   DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {} 
   
-  DistributedParams(ElemT** gpuResults_, const uint gr_, const uint gc_, const uint gpusInK_,   
+  DistributedParams(const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
                     const uint PerGPUK_, const uint PerGPUN_, 
                     const uint KronCols_[], const uint KronRows_[], const uint LocalKrons_) :
@@ -124,6 +124,9 @@ struct DistributedParams {
     //           << " ColsCByKronRowsPower " << ColsCByKronRowsPower << std::endl
     //           << " ColsCByKronCols " << ColsCByKronCols << std::endl;
     // }
+  }
+
+  void updateGPUResults(ElemT** gpuResults_) {
     setGPUResults(0, gpuResults0, gpuResults_);
     setGPUResults(1, gpuResults1, gpuResults_);
     setGPUResults(2, gpuResults2, gpuResults_);
@@ -132,8 +135,6 @@ struct DistributedParams {
     setGPUResults(5, gpuResults5, gpuResults_);
     setGPUResults(6, gpuResults6, gpuResults_);
     setGPUResults(7, gpuResults7, gpuResults_);
-
-
   }
 
   void setGPUResults(int idx, ElemT*& thisResults, ElemT** gpuResults) {
