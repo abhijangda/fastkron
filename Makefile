@@ -108,6 +108,9 @@ multi-gpu-distinct-shapes: libKron.so tests/testBase.h tests/multi-gpu-distinct-
 run-p2p-multi-gpu-distinct-shapes: multi-gpu-distinct-shapes
 	LD_LIBRARY_PATH=./: DIST_COMM=P2P ./multi-gpu-distinct-shapes
 
+run-nccl-multi-gpu-distinct-shapes: multi-gpu-distinct-shapes
+	LD_LIBRARY_PATH=./: DIST_COMM=NCCL ./multi-gpu-distinct-shapes
+
 #Run all tests
 #run-all-single-gpu-tests: run-single-gpu-fusion-tests run-single-gpu-no-fusion-tests run-single-gpu-tuner-tests run-single-gpu-non-square-tuner-tests
 
