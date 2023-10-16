@@ -31,6 +31,10 @@ def element_size(elem_type : str) -> int:
   if elem_type.lower() == "float":
     return 4
 
+def factors(n):    
+    return set(functools.reduce(list.__add__, 
+               ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
+
 class KronMatMulShape:
   def __init__(self, m, k, n, p, q):
     self.m = m
@@ -39,6 +43,8 @@ class KronMatMulShape:
     self.p = p
     self.q = q
 
+WARP_SIZE=32
+
 class KernelConfig:  
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int, 
@@ -46,6 +52,8 @@ class KernelConfig:
                FusedKernel : int, dist: int, elemType : str):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
+    if self.num_threads%WARP_SIZE != 0:
+      self.num_threads = (self.num_threads//WARP_SIZE + 1)*WARP_SIZE
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
@@ -97,7 +105,7 @@ class KernelConfig:
 
   def isValid(self):
     return self.wsz > 0 and \
-           self.shape.k > self.tileP and \
+           self.shape.k % self.shape.p == 0 and \
            self.num_threads >= 32 and self.num_threads <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
@@ -126,18 +134,19 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
 
   empty_dir(kernel_dir)
   configs = {}
-
+  
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1
-    for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
+    for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = [2**i for i in range(1, max(2, int(math.log2(q)))+1)]
-      TileKs = [2**i for i in range(1, max(2, int(math.log2(k)))+1)]
+      k_factors = factors(currK)
+      TileKs = [f for f in k_factors if f % p == 0]
       TileMs = [1, 2]
-      CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
-      CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
-
-      shape = KronMatMulShape(m, k, n, p, q)
+      CRows = factors(p) #[2**i for i in range(0, max(0, int(math.log2(p)))+1)]
+      CCols = factors(q) #[2**i for i in range(0, max(0, int(math.log2(q)))+1)]
+      
+      shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
         configs[shape] = []
       __configs = []  
@@ -294,8 +303,7 @@ if __name__ == "__main__":
         print(e)
         sys.exit(0)
   
-  print("Generating kernels for ")
-  print(parsed_cases)
+  print("Generating kernels for ", parsed_cases)
   assert (args.match_configs == None and args.match_configs_file == None) or \
          (args.match_configs != None and args.match_configs_file == None) or \
          (args.match_configs == None and args.match_configs_file != None)
@@ -304,5 +312,4 @@ if __name__ == "__main__":
   if args.match_configs_file != None:
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
-    print(match_configs)
   generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, match_configs)

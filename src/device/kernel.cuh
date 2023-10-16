@@ -26,7 +26,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
   const uint TileSizeKronRows    = MIN(SharedTileKronRows,  MaxKronRows);
   const uint TileSizeColsA       = MaxColsA/(MaxKronRows/TileSizeKronRows);
   
-  static_assert(TileSizeKronCols <= MaxKronCols, "");
+  static_assert(0 < TileSizeKronCols && TileSizeKronCols <= MaxKronCols, "");
   static_assert(NumFusedKerns == 1 || 
                 (NumFusedKerns > 1 && TileSizeKronRows >= MaxKronRows && TileSizeKronCols >= MaxKronCols),
                 "Invalid tile size params for fusion");
@@ -72,7 +72,9 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
   const uint tileRowA         = blockIdx.y * TileSizeRowsA;
   const uint outerTileKronCol = kp_col_start_;
   const uint tileColC         = a_col_start_ ;
-  
+
+  bool isNotThreadValid = threadIdx.x * CRegCols * CRegRows >= MaxColsA;
+
   for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileSizeKronRows) {
     //Loop iterates only once when NumFusedKerns == 1
     uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
@@ -113,6 +115,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
       __syncthreads();
 
       //Load RegTileSizeACols elements at a time to limit the register usage
+      if (!isNotThreadValid)
       for (uint regTileACol = 0; regTileACol < TileSizeKronRows; regTileACol += RegTileSizeACols) {
         register ElemT Ar[TileSizeRowsA][CRegRows][RegTileSizeACols];
         register ElemT KPr[RegTileSizeACols][CRegCols];
@@ -185,6 +188,9 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
     }
   }
 
+  if (isNotThreadValid) {
+    return;
+  }
   if (NumFusedKerns > 1) {
     for (uint rowShC = 0; rowShC < TileSizeRowsA; rowShC++) {
     if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowShC < params.RowsC - tileRowA)) {
@@ -370,6 +376,8 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         //if (cCol < colsC) 
         
         {
+
+          if (params.kp_idx == 1 && cRow == 0) printf("cIdx %d c %f\n", cIdx, regC[rowA][reg_i][reg_j]);
           switch (vecTyNumElems) {
             case 4:
               globalStore4Elems(&outputArray[cIdx], 

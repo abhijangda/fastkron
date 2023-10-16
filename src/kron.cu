@@ -148,7 +148,7 @@ KernelInfo selectKernel(KronMatmulShape shape) {
   int kEqVar = 0; //(maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
-    std::cout << "No kernel found" << std::endl;
+    std::cout << "No kernel found for " << shape << std::endl;
     abort();
     return KernelInfo{};
   }
@@ -349,7 +349,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     cudaError_t status;
     
     KernelInfo selectedKernel = kernel.kernel;
-    // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
+    std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,
