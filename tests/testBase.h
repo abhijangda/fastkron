@@ -277,7 +277,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
