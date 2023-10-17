@@ -143,9 +143,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
       TileMs = [1, 2]
-      CRows = factors(currK/p) #[2**i for i in range(0, max(0, int(math.log2(p)))+1)]
-      CCols = functools.reduce(list.__add__, [factors(tq) for tq in TileQs]) #[2**i for i in range(0, max(0, int(math.log2(q)))+1)]
-      
+    
       shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
         configs[shape] = []
@@ -153,6 +151,10 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       for tM in TileMs:
         for tQ in TileQs:
           for tK in TileKs:
+            if tQ < p:
+              continue
+            CRows = factors(tQ//p)
+            CCols = factors(tQ)
             for regRows in CRows:
               for regCols in CCols:
                 for tP in TilePs:
