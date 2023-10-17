@@ -63,6 +63,16 @@ single-gpu-distinct-shapes: libKron.so tests/single-gpu-distinct-shapes.cu tests
 run-single-gpu-distinct-shapes: single-gpu-distinct-shapes
 	LD_LIBRARY_PATH=./: ./single-gpu-distinct-shapes
 
+#Tests for Single GPU Odd Shapes
+gen-single-gpu-odd-shapes: src/gen_tuner_kernels.py
+	python3 src/gen_tuner_kernels.py -distinct-factors 4 31,16
+
+single-gpu-odd-shapes: libKron.so tests/single-gpu-odd-shapes.cu tests/testBase.h
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-single-gpu-odd-shapes: single-gpu-odd-shapes
+	LD_LIBRARY_PATH=./: ./single-gpu-odd-shapes
+
 #Multi GPU Tests Square Factors 
 gen-multi-gpu-tests-kernel: src/gen_tuner_kernels.py
 	python src/gen_tuner_kernels.py -same-factors 4 64,64 -same-factors 4 128,128 -dist-kernels -match-configs 128,64,64,64,2,4096,2,16,1 128,128,128,128,1,8192,2,32,1

@@ -187,15 +187,6 @@ bool isValidKernel(KernelInfo& kernelInfo) {
     std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
     return false;
   }
-  // if (kernelInfo.TileKronCols != c1 * CRegCols) {
-  //   printf("Invalid configuration: TileKronCols %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsC %d\n", 
-  //           kernelInfo.TileKronCols, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsC);
-  //   return false;
-  // }
-  // if (MaxColsC/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
-  //   printf("MaxColsC/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsC/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
-  //   return false;
-  // }
 
   return true;
 }
