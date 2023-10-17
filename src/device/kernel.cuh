@@ -63,11 +63,11 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
   const uint external_tile_kp_k = blockIdx.z;
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxKronCols, TileSizeKronCols>();
   const uint MaxColsC = (MaxColsA/MaxKronRows)*MaxKronCols;
-  constexpr uint wSz = (MaxColsA/MaxKronRows)/CRegRows; //wSz = 31
+  constexpr uint wSz = (MaxColsA/MaxKronRows)/CRegRows;
   // constexpr uint wSz2 = (MaxKronCols/CRegCols); //
 
-  const uint kp_col_start_ = (tid / wSz) * CRegCols; //(0 to 1) * 4
-  const uint a_col_start_  = (tid % wSz) * CRegRows; //0,1,2,3,...31,0
+  const uint kp_col_start_ = (tid / wSz) * CRegCols;
+  const uint a_col_start_  = (tid % wSz) * CRegRows;
 
   const uint tileRowA         = blockIdx.y * TileSizeRowsA;
   const uint outerTileKronCol = kp_col_start_;

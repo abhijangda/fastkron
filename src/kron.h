@@ -96,7 +96,7 @@ struct KernelInfo {
     return RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) &&
            this->NumFusedKerns == shape.NumFusedKerns &&
            this->DistributeToGPUs == shape.DistributeToGPUs &&
-           MaxColsA <= shape.ColsA;
+          shape.ColsA % MaxColsA == 0;
   //KEqVar == (shape.ColsA == MaxColsA) && 
   }
 

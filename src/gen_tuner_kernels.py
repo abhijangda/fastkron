@@ -31,9 +31,9 @@ def element_size(elem_type : str) -> int:
   if elem_type.lower() == "float":
     return 4
 
-def factors(n):    
-    return set(functools.reduce(list.__add__, 
-               ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
+def factors(n):
+  return list(set(functools.reduce(list.__add__, 
+              ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0))))
 
 class KronMatMulShape:
   def __init__(self, m, k, n, p, q):
@@ -90,7 +90,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, FusedParams<float, {self.fused_kernels}> fusedParams, DistributedParams<float> distParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
+    return f"float, float, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"
@@ -144,7 +144,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       TileKs = [f for f in k_factors if f % p == 0]
       TileMs = [1, 2]
       CRows = factors(p) #[2**i for i in range(0, max(0, int(math.log2(p)))+1)]
-      CCols = factors(functools.reduce(list.__add__, [factors(tq) for tq in TileQs])) #[2**i for i in range(0, max(0, int(math.log2(q)))+1)]
+      CCols = functools.reduce(list.__add__, [factors(tq) for tq in TileQs]) #[2**i for i in range(0, max(0, int(math.log2(q)))+1)]
       
       shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
