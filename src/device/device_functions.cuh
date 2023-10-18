@@ -260,7 +260,7 @@ void shiftAgToAsh(const uint TileSizeColsA, const uint MaxKronRows,
 }
 
 
-template<typename ElemT, typename VecT, bool K_EQUALS_VAR, uint VecTNumElems>
+template<typename ElemT, typename VecT, bool K_EQUALS_VAR>
 __device__ __forceinline__ 
 void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA, 
                   const uint TileSizeColsA, const uint MaxKronRows,
@@ -271,6 +271,7 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
                   const uint tile_k, const uint external_tile_kp_k,
                   const ElemT* __restrict__ glA, ElemT* __restrict__ shA) {
   // if (threadIdx.x == 0) printf("TileSizeRowsA %d\n", TileSizeRowsA);
+  const int VecTNumElems = sizeof(VecT)/sizeof(ElemT);
   for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
     const ElemT* glRowAddr  = &glA[(rowA + tileRowA) * colsA];
     const size_t firstElems = 0; //nonAlignedElems(glRowAddr, VecTNumElems);
@@ -290,13 +291,14 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
   }
 }
 
-template<typename ElemT, typename VecT, uint VecTNumElems>
+template<typename ElemT, typename VecT>
 __device__ __forceinline__ 
 void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols, 
                          const uint TileSizeKronRows, const uint TileSizeKronCols,
                          const uint NumThreads, const uint external_tile_kp_n, const uint external_tile_kp_k, 
                          const uint tileKronRow, const uint kronRows, const uint kronCols, const uint tid, 
                          const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+  const int VecTNumElems = sizeof(VecT)/sizeof(ElemT);
   const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
   //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
   for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
@@ -318,12 +320,13 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
   }
 }
 
-template<typename ElemT, typename VecT, uint VecTNumElems>
+template<typename ElemT, typename VecT>
 __device__ __forceinline__ 
 void fullDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols, 
                         const uint TileSizeKronRows, const uint TileSizeKronCols, 
                         const uint NumThreads, const uint kronRows, const uint kronCols, 
                         const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+  const int VecTNumElems = sizeof(VecT)/sizeof(ElemT);
   const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
   const size_t sz = kronRows * kronCols;
   const int lastLoads = 0; //sz % loadInstr;
