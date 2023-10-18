@@ -80,7 +80,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
   for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileSizeKronRows) {
     //Loop iterates only once when NumFusedKerns == 1
     uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
-    shiftAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(RowsCModTileIsZero, TileSizeRowsA, TileSizeColsA, 
+    storeAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(RowsCModTileIsZero, TileSizeRowsA, TileSizeColsA, 
                                                           MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, params.RowsC,
                                                           kronRows, colsA, tid, 
                                                           tileKronRow, tileRowA, 
@@ -151,7 +151,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           uint shKronCol = outerTileKronCol + colC;
           #pragma unroll
           for (uint elem = 0; elem < RegTileSizeACols; elem++)
-            if (shKronCol < TileSizeKronCols)
+            if (shKronCol < TileSizeKronCols and regTileACol + elem < TileSizeKronRows)
               KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
         }
 

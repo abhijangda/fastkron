@@ -90,7 +90,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, FusedParams<float, {self.fused_kernels}> fusedParams, DistributedParams<float> distParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
+    return f"float, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"

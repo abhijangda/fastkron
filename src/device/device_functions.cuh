@@ -218,9 +218,51 @@ __device__ __forceinline__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
   *addr = elem1;
 }
 
+template<typename ElemT>
+__device__ __forceinline__
+size_t nonAlignedElems(const ElemT* ptr, uint vecElems) {
+  return reinterpret_cast<size_t>(ptr) % vecElems;
+}
+
 template<typename ElemT, typename VecT, bool K_EQUALS_VAR, uint VecTNumElems>
 __device__ __forceinline__ 
-void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA, 
+void shiftAgToAsh(const uint TileSizeColsA, const uint MaxKronRows,
+                  const uint TileSizeKronRows, const uint MaxColsA,
+                  const uint NumThreads, const uint CRegRows,
+                  const uint kronRows, const uint colsA,
+                  const uint tid, const uint tileKronRow, const uint rowA,
+                  const uint a_col,
+                  const uint tile_k, const uint external_tile_kp_k,
+                  const ElemT* __restrict__ glRowAddr, ElemT* __restrict__ shA) {
+  const ElemT* addrA;
+  VecT  vec;
+  ElemT elems[VecTNumElems];
+
+  if (TileSizeKronRows == MaxKronRows) {
+    addrA = &glRowAddr[(K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + a_col];
+  } else {
+    addrA = &glRowAddr[(K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
+                  (a_col/TileSizeKronRows)*kronRows + external_tile_kp_k * TileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
+  }
+
+  globalLoadVec(addrA, vec);
+  loadVecToRegs(vec, elems);
+
+  #pragma unroll
+  for (uint i = 0; i < VecTNumElems; i++) {
+    uint ash_col = a_col + i;
+    uint tileColA = (ash_col/TileSizeKronRows)/CRegRows;
+    
+    uint final_col = (ash_col/TileSizeKronRows)*TileSizeKronRows + 
+                      (tileColA + ash_col%TileSizeKronRows)%TileSizeKronRows;
+    shA[rowA * TileSizeColsA + final_col] = elems[i];
+  }
+}
+
+
+template<typename ElemT, typename VecT, bool K_EQUALS_VAR, uint VecTNumElems>
+__device__ __forceinline__ 
+void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA, 
                   const uint TileSizeColsA, const uint MaxKronRows,
                   const uint TileSizeKronRows, const uint MaxColsA,
                   const uint NumThreads, const uint CRegRows,
@@ -230,45 +272,23 @@ void shiftAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
                   const ElemT* __restrict__ glA, ElemT* __restrict__ shA) {
   // if (threadIdx.x == 0) printf("TileSizeRowsA %d\n", TileSizeRowsA);
   for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
-    for (uint a_col = tid*VecTNumElems; a_col < TileSizeColsA; a_col += NumThreads*VecTNumElems) {
-      const ElemT* addrA;
-      VecT  vec;
-      ElemT elems[VecTNumElems];
+    const ElemT* glRowAddr = &glA[(rowA + tileRowA) * colsA];
+    const size_t firstElems = nonAlignedElems(glRowAddr, VecTNumElems);
+    const size_t lastElems  = TileSizeColsA % VecTNumElems;
+    if (threadIdx.x == 0) printf("firstElems %d glRowAddr %p\n", firstElems, glRowAddr);
+    for (uint a_col = tid; a_col < firstElems; a_col += NumThreads) {
+      shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
+    }
 
-      if (TileSizeKronRows == MaxKronRows) {
-        addrA = &glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + a_col];
-        // *(VecT*)&shA[rowA][a_col] = a;
-        // ElemT a1[4] = {a.x, a.y, a.z, a.w};
-        // for (int j = 0; j < VecTNumElems; j++) {
-        //   shA[rowA][a_col + j] = a1[j];
-        // }
-      } else {
-        addrA = &glA[(rowA + tileRowA) * colsA + (K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
-                     (a_col/TileSizeKronRows)*kronRows + external_tile_kp_k * TileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
-        // *(VecT*)&shA[rowA][a_col] = a;
-      }
+    for (uint a_col = firstElems + tid*VecTNumElems; a_col < TileSizeColsA - lastElems; a_col += NumThreads*VecTNumElems) {
+      shiftAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
+    }
 
-      globalLoadVec(addrA, vec);
-      loadVecToRegs(vec, elems);
-
-      #pragma unroll
-      for (uint i = 0; i < VecTNumElems; i++) {
-        uint ash_col = a_col + i;
-        uint tileColA = (ash_col/TileSizeKronRows)/CRegRows; //(0,...,1024)/8 = (0,0,0,0,0,0 ... 127,127,127,127,127,127)
-       
-        uint final_col = (ash_col/TileSizeKronRows)*TileSizeKronRows + 
-                         (tileColA + ash_col%TileSizeKronRows)%TileSizeKronRows;
-        // if (blockIdx.x == 0&& blockIdx.y==0&&a_col < 64 && tileRowA == 0){
-        //   printf("a_col %d final_col %d elem %f\n", a_col, rowA * TileSizeColsA +  final_col, elems[i]);
-        // }
-        // if (a_col +i < 8 && blockIdx.x == 0 && blockIdx.y == 0)
-        //   printf("rowA %d a_col %d final_col %d TileSizeColsA %d elem %f\n", rowA, a_col + i, final_col, TileSizeColsA, elems[i]);
-        shA[rowA * TileSizeColsA + final_col] = elems[i];
-      }
+    for (uint a_col = TileSizeColsA - lastElems + tid; a_col < TileSizeColsA; a_col += NumThreads) {
+      shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
   }
 }
-
 
 template<typename ElemT, typename VecT, uint VecTNumElems>
 __device__ __forceinline__ 
@@ -288,7 +308,7 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
     // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
     const ElemT* addr = &Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col];
-    globalLoadVec_(addr, elems, loadInstr);
+    // globalLoadVec_(addr, elems, loadInstr);
     
     #pragma unroll
     for (uint e = 0; e < loadInstr; e++) {
@@ -305,8 +325,10 @@ void fullDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
                         const uint NumThreads, const uint kronRows, const uint kronCols, 
                         const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
   const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
+  const size_t sz = kronRows * kronCols;
+  const int lastLoads = sz % loadInstr;
 
-  for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols; eIdx += blockDim.x*loadInstr) {
+  for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols - lastLoads; eIdx += blockDim.x*loadInstr) {
     ElemT regElems[VecTNumElems];
     VecT vec;
 
@@ -318,6 +340,12 @@ void fullDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
       uint idx = eIdx + vecElem;
       Fsh[(idx/MaxKronCols) * TileSizeKronCols + idx%MaxKronCols] = regElems[vecElem];
     }
+  }
+
+  for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += blockDim.x) {
+    ElemT regElem;
+    regElem = Fgl[eIdx];
+    Fsh[(eIdx/MaxKronCols) * TileSizeKronCols + eIdx%MaxKronCols] = regElem; 
   }
 }
 
