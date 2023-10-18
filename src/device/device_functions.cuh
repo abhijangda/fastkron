@@ -221,7 +221,7 @@ __device__ __forceinline__ void globalStore1Elems(ElemT* addr, ElemT elem1) {
 template<typename ElemT>
 __device__ __forceinline__
 size_t nonAlignedElems(const ElemT* ptr, uint vecElems) {
-  return reinterpret_cast<size_t>(ptr) % vecElems;
+  return (reinterpret_cast<size_t>(ptr)/sizeof(ElemT)) % vecElems;
 }
 
 template<typename ElemT, typename VecT, bool K_EQUALS_VAR, uint VecTNumElems>
@@ -272,10 +272,10 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
                   const ElemT* __restrict__ glA, ElemT* __restrict__ shA) {
   // if (threadIdx.x == 0) printf("TileSizeRowsA %d\n", TileSizeRowsA);
   for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
-    const ElemT* glRowAddr = &glA[(rowA + tileRowA) * colsA];
-    const size_t firstElems = nonAlignedElems(glRowAddr, VecTNumElems);
-    const size_t lastElems  = TileSizeColsA % VecTNumElems;
-    if (threadIdx.x == 0) printf("firstElems %d glRowAddr %p\n", firstElems, glRowAddr);
+    const ElemT* glRowAddr  = &glA[(rowA + tileRowA) * colsA];
+    const size_t firstElems = 0; //nonAlignedElems(glRowAddr, VecTNumElems);
+    const size_t lastElems  = 0; //TileSizeColsA % VecTNumElems;
+
     for (uint a_col = tid; a_col < firstElems; a_col += NumThreads) {
       shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
@@ -308,7 +308,7 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
     // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
     const ElemT* addr = &Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col];
-    // globalLoadVec_(addr, elems, loadInstr);
+    globalLoadVec_(addr, elems, loadInstr);
     
     #pragma unroll
     for (uint e = 0; e < loadInstr; e++) {
@@ -326,7 +326,7 @@ void fullDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
                         const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
   const uint loadInstr = MIN(kronRows*kronCols, VecTNumElems);
   const size_t sz = kronRows * kronCols;
-  const int lastLoads = sz % loadInstr;
+  const int lastLoads = 0; //sz % loadInstr;
 
   for (uint eIdx = tid*loadInstr; eIdx < kronRows*kronCols - lastLoads; eIdx += blockDim.x*loadInstr) {
     ElemT regElems[VecTNumElems];

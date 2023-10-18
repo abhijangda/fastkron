@@ -35,6 +35,9 @@ def factors(n):
   return list(set(functools.reduce(list.__add__, 
               ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0))))
 
+def isPowerOfTwo(x):
+    return (x and (not(x & (x - 1))) )
+
 class KronMatMulShape:
   def __init__(self, m, k, n, p, q):
     self.m = m
@@ -90,7 +93,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, FusedParams<float, {self.fused_kernels}> fusedParams, DistributedParams<float> distParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
+    return f"float, float, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"
@@ -136,7 +139,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   configs = {}
   
   for (m, k, n, ps, qs) in cases:
-    allSameShapes = len(set(ps + qs)) == 1
+    allSameShapes = len(set(ps + qs)) == 1 and isPowerOfTwo(ps[0])
     for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
