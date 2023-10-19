@@ -107,6 +107,11 @@ __device__ __forceinline__ void globalLoadVec(const float* addr, float4& vec) {
 }
 
 template<>
+__device__ __forceinline__ void globalLoadVec(const float* addr, float2& vec) {
+  asm ("ld.ca.global.v2.f32 {%0, %1}, [%2];" : "=f"(vec.x), "=f"(vec.y) : "l"(addr));
+}
+
+template<>
 __device__ __forceinline__ void globalLoadVec(const int* addr, int4& vec) {
   vec = *(int4*)addr;
 }
@@ -152,6 +157,11 @@ __device__ __forceinline__ void loadVecToRegs(double4& vec, double* regs) {
 }
 
 //Two element vectors
+__device__ __forceinline__ void loadVecToRegs(float2& vec, float* regs) {
+  regs[0] = vec.x;
+  regs[1] = vec.y;
+}
+
 template<>
 __device__ __forceinline__ void loadVecToRegs(double2& vec, double* regs) {
   regs[0] = vec.x;
@@ -258,7 +268,7 @@ void shiftAgToAsh(const uint TileSizeColsA, const uint MaxKronRows,
     shA[rowA * TileSizeColsA + final_col] = elems[i];
   }
 }
-
+ 
 
 template<typename ElemT, typename VecT, bool K_EQUALS_VAR>
 __device__ __forceinline__ 
@@ -272,6 +282,7 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
                   const ElemT* __restrict__ glA, ElemT* __restrict__ shA) {
   // if (threadIdx.x == 0) printf("TileSizeRowsA %d\n", TileSizeRowsA);
   const int VecTNumElems = sizeof(VecT)/sizeof(ElemT);
+
   for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
     const ElemT* glRowAddr  = &glA[(rowA + tileRowA) * colsA];
     const size_t firstElems = 0; //nonAlignedElems(glRowAddr, VecTNumElems);
