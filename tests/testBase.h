@@ -160,6 +160,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
 
     #pragma omp parallel for
     for (uint i = 0; i < M; i++) {
+      #pragma omp parallel for
       for (uint j = 0; j < resultCols; j++) {
         T r = 0;
 
@@ -256,6 +257,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
                 uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
                 bool useUVA, int gpuInRows, int gpuInCols, int gpus,
                 uint kronBatch, bool checkResults, bool useFusion, bool tune, bool verbose) {
+  verbose = true;
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
   bool useDistributed = gpus > 1;
