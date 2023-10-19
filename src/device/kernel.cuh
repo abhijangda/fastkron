@@ -157,9 +157,10 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         for (uint colC = 0; colC < CRegCols; colC++) {
           uint shKronCol = outerTileKronCol + colC;
           #pragma unroll
-          for (uint elem = 0; elem < RegTileSizeACols; elem++)
-            if (shKronCol < TileSizeKronCols and regTileACol + elem < TileSizeKronRows)
+          for (uint elem = 0; elem < RegTileSizeACols; elem++) {
+            if (regTileACol + elem < TileSizeKronRows)
               KPr[elem][colC] = shKronMats[regTileACol + elem][shKronCol];
+          }
         }
 
         //Matrix Multiply Accumulate
