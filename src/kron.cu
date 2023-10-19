@@ -29,7 +29,9 @@
 
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
-#define DIVUP(x, y) (((x) + (y) - 1)/((y)))
+#define DIVUP(x,y) (((x) + (y) - 1)/((y)))
+#define ROUNDUP(x,y) (DIVUP(x,y)*(y))
+#define CUDA_WARP_SIZE 32
 
 #define C_IN_REG
 #define EVAL
@@ -148,7 +150,7 @@ KernelInfo selectKernel(KronMatmulShape shape) {
   int kEqVar = 0; //(maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
   auto iter = compiledKernels.find(maxColsAShape);
   if (iter == compiledKernels.end()) {
-    std::cout << "No kernel found" << std::endl;
+    std::cout << "No kernel found for " << shape << std::endl;
     abort();
     return KernelInfo{};
   }
@@ -174,20 +176,15 @@ KernelInfo selectKernel(KronMatmulShape shape) {
 bool isValidKernel(KernelInfo& kernelInfo) {
   const uint NumThreads = kernelInfo.NumThreads;
   const uint KronRows = kernelInfo.KronRows;
+  const uint KronCols = kernelInfo.KronCols;
   const uint CRegRows = kernelInfo.CRegRows;
   const uint CRegCols = kernelInfo.CRegCols;
-  const uint MaxColsC = kernelInfo.MaxColsA;
-  uint c1 = MAX(1, NumThreads/((MaxColsC/kernelInfo.KronRows)/CRegRows));
-  
-  if (kernelInfo.TileKronCols != c1 * CRegCols) {
-    printf("Invalid configuration: TileKronCols %d != c1*CRegCols %d; NumThreads %d CRegRows %d CRegCols %d MaxColsC %d\n", 
-            kernelInfo.TileKronCols, c1 * CRegCols, NumThreads, CRegRows, CRegCols, MaxColsC);
-    return false;
-  }
-  if (MaxColsC/KronRows > kernelInfo.NumThreads*c1* kernelInfo.CRegRows) {
-    printf("MaxColsC/KronRows %d kernelInfo.NumThreads*c1* kernelInfo.CRegRows %d\n", MaxColsC/KronRows, kernelInfo.NumThreads*c1* kernelInfo.CRegRows);
-    printf("Invalid configuration: MaxColsC %d KronRows %d NumThreads %d CRegRows %d CRegCols %d\n",
-            MaxColsC, KronRows, NumThreads, CRegRows, CRegCols);
+  const uint MaxColsA = kernelInfo.MaxColsA;
+  const uint TileKronCols = kernelInfo.TileKronCols;
+
+  const uint ValidThreads = ((MaxColsA/KronRows)/CRegRows) * (TileKronCols/CRegCols);
+  if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
+    std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
     return false;
   }
 
@@ -349,7 +346,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     cudaError_t status;
     
     KernelInfo selectedKernel = kernel.kernel;
-    // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
+    std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,

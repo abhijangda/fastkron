@@ -31,6 +31,13 @@ def element_size(elem_type : str) -> int:
   if elem_type.lower() == "float":
     return 4
 
+def factors(n):
+  return list(set(functools.reduce(list.__add__, 
+              ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0))))
+
+def isPowerOfTwo(x):
+    return (x and (not(x & (x - 1))) )
+
 class KronMatMulShape:
   def __init__(self, m, k, n, p, q):
     self.m = m
@@ -39,13 +46,20 @@ class KronMatMulShape:
     self.p = p
     self.q = q
 
+  def __repr__(self):
+    return f"{self.m}x{self.k}, {self.p}x{self.q}, {self.n}"
+
+WARP_SIZE=32
+
 class KernelConfig:  
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int, 
                rowModTileIsZero : int, cRegRows: int, cRegCols: int, kEqVar: int,
-               FusedKernel : int, dist: int, elemType : str):
+               FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
+    if self.num_threads%WARP_SIZE != 0:
+      self.num_threads = (self.num_threads//WARP_SIZE + 1)*WARP_SIZE
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
@@ -58,6 +72,8 @@ class KernelConfig:
     self.fused_kernels = FusedKernel
     self.dist = dist
     self.elemType = "float"
+    self.aalign = aalign
+    self.kalign = kalign
 
     """Compute several constants of kernel
        Corresponds to line numbers in kernel.cuh
@@ -67,7 +83,7 @@ class KernelConfig:
     self.shared_mem_usage = (self.tileM * self.shape.k + self.tileP * self.tileQ)*element_size(elemType)
 
   def __repr__(self):
-    return f"{self.num_threads}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar}, {self.dist}"
+    return f"{self.num_threads}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar}, {self.dist}, {self.aalign}, {self.kalign}"
 
   def kernelname(self):
     return repr(self).replace(", ", "_")
@@ -82,7 +98,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, FusedParams<float, {self.fused_kernels}> fusedParams, DistributedParams<float> distParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}"
+    return f"float, float2, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}, {self.aalign}, {self.kalign}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"
@@ -97,7 +113,7 @@ class KernelConfig:
 
   def isValid(self):
     return self.wsz > 0 and \
-           self.shape.k > self.tileP and \
+           self.shape.k % self.shape.p == 0 and \
            self.num_threads >= 32 and self.num_threads <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
@@ -107,7 +123,7 @@ class KernelConfig:
           #  and "128, 64, 64, 64, 2, 4096, 2, 16, 1, float, 1, 0" in repr(self)
 
   def __hash__(self):
-    return hash(self.__repr__())
+    return hash(repr(self))
 
 def all_sliced_mults(m, k, n, ps, qs):
   sliced_mults = []
@@ -120,30 +136,38 @@ def all_sliced_mults(m, k, n, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
+def alignment(cols):
+  return max([a for a in [1, 2, 4] if cols%a == 0])
+
 def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
   if not os.path.exists(kernel_dir):
     os.mkdir(kernel_dir)
 
   empty_dir(kernel_dir)
   configs = {}
-
+  
   for (m, k, n, ps, qs) in cases:
-    allSameShapes = len(set(ps + qs)) == 1
-    for (_, _, p, q) in all_sliced_mults(m, k, n, ps, qs):
+    allSameShapes = len(set(ps + qs)) == 1 and isPowerOfTwo(ps[0])
+    for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
-      TileQs = [2**i for i in range(1, max(2, int(math.log2(q)))+1)]
-      TileKs = [2**i for i in range(1, max(2, int(math.log2(k)))+1)]
+      TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
+      k_factors = factors(currK)
+      TileKs = [f for f in k_factors if f % p == 0]
       TileMs = [1, 2]
-      CRows = [2**i for i in range(0, max(0, int(math.log2(p)))+1)]
-      CCols = [2**i for i in range(0, max(0, int(math.log2(q)))+1)]
-
-      shape = KronMatMulShape(m, k, n, p, q)
+    
+      shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
         configs[shape] = []
       __configs = []  
       for tM in TileMs:
         for tQ in TileQs:
           for tK in TileKs:
+            if tK < p:
+              continue
+            CRows = factors(tK//p)
+            CCols = factors(tQ)
+            aalign = alignment(tK)
+            kronalign = alignment(tQ)
             for regRows in CRows:
               for regCols in CCols:
                 for tP in TilePs:
@@ -154,12 +178,12 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
                         distKernels = [0, 1] if useDistKernels else [0]
                         for dist in distKernels: 
                           __configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                                  p, q, tQ, tP, tM, 
+                                                                     p, q, tQ, tP, tM, 
                                         rowModTileIsZero, regRows, regCols, kEqVar,
-                                        numFusedKerns, dist, "Float")]
+                                        numFusedKerns, dist, "Float", aalign, kronalign)]
       configs[shape] += __configs
 
-  print("Generated configs: ", ";".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
+  print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
   
   #Filter only valid configs
   validConfigs = {}
@@ -294,8 +318,7 @@ if __name__ == "__main__":
         print(e)
         sys.exit(0)
   
-  print("Generating kernels for ")
-  print(parsed_cases)
+  print("Generating kernels for ", parsed_cases)
   assert (args.match_configs == None and args.match_configs_file == None) or \
          (args.match_configs != None and args.match_configs_file == None) or \
          (args.match_configs == None and args.match_configs_file != None)
@@ -304,5 +327,4 @@ if __name__ == "__main__":
   if args.match_configs_file != None:
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
-    print(match_configs)
   generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, match_configs)

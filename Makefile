@@ -9,7 +9,7 @@ all: libKron.so
 include src/device/Makefile
 
 kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp,-O3 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS)
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp,-O3 $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -O3
 
 libKron.so: device_kernels.o kron.o
 	$(NVCC) -shared -lnccl -o $@ device_kernels.o kron.o
@@ -62,6 +62,16 @@ single-gpu-distinct-shapes: libKron.so tests/single-gpu-distinct-shapes.cu tests
 
 run-single-gpu-distinct-shapes: single-gpu-distinct-shapes
 	LD_LIBRARY_PATH=./: ./single-gpu-distinct-shapes
+
+#Tests for Single GPU Odd Shapes
+gen-single-gpu-odd-shapes: src/gen_tuner_kernels.py
+	python3 src/gen_tuner_kernels.py -same-factors 2 31,16 -same-factors 2 16,31 -same-factors 4 31,31 
+
+single-gpu-odd-shapes: libKron.so tests/single-gpu-odd-shapes.cu tests/testBase.h
+	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
+
+run-single-gpu-odd-shapes: single-gpu-odd-shapes
+	LD_LIBRARY_PATH=./: ./single-gpu-odd-shapes
 
 #Multi GPU Tests Square Factors 
 gen-multi-gpu-tests-kernel: src/gen_tuner_kernels.py
