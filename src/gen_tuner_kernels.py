@@ -55,10 +55,11 @@ class KernelConfig:
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int, 
                rowModTileIsZero : int, cRegRows: int, cRegCols: int, kEqVar: int,
-               FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int):
+               FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
+               allPowersOf2):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
-    if self.num_threads%WARP_SIZE != 0:
+    if not allPowersOf2 and self.num_threads%WARP_SIZE != 0:
       self.num_threads = (self.num_threads//WARP_SIZE + 1)*WARP_SIZE
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
@@ -70,6 +71,7 @@ class KernelConfig:
     self.cRegCols = cRegCols
     self.kEqVar = kEqVar
     self.fused_kernels = FusedKernel
+    assert self.fused_kernels > 0
     self.dist = dist
     self.elemType = "float"
     self.aalign = aalign
@@ -173,14 +175,14 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
                 for tP in TilePs:
                   for rowModTileIsZero in [0, 1]:
                     for kEqVar in [0]:
-                      fusedCases = range(1, int(math.log(tK, tP))+1) if allSameShapes and useFusion else [1]
+                      fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
                       for numFusedKerns in fusedCases:
                         distKernels = [0, 1] if useDistKernels else [0]
                         for dist in distKernels: 
                           __configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
                                                                      p, q, tQ, tP, tM, 
                                         rowModTileIsZero, regRows, regCols, kEqVar,
-                                        numFusedKerns, dist, "Float", aalign, kronalign)]
+                                        numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes)]
       configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))

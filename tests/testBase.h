@@ -448,7 +448,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   delete[] hX;
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     delete[] hKpMats[i];
-    delete[] hKpMatmulResult[i];
+    if (checkResults) delete[] hKpMatmulResult[i];
   }
 
   return true;

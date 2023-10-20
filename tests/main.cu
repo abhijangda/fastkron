@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
   int gpuInRows = 0;
   int gpuInCols = 0;
   bool multiGPU = false;
-  bool useFusion = true;
+  bool useFusion = false;
   bool tune = false;
   AnyOption *opt = new AnyOption();
 

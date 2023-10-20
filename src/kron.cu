@@ -470,7 +470,7 @@ float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
 
 //TODO: Create another autotuning object?
 template<typename T>
-cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
+cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[],
                               uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                               T* temp1, T* temp2,
                               bool isDistributed, DistributedParams<T> distParams,
@@ -518,6 +518,7 @@ cudaError_t singleGPUAutotune(const uint NumKronMats, T* x, T* kronMats[],
     if (bestKernels.find(shape) != bestKernels.end()) {
       continue;
     }
+    if (!handle.getUseFusion() and NumFusedKerns > 1) continue;
     KernelInfo bestKernel;
     float minTime = std::numeric_limits<float>::max();
     const uint runs = 10;
@@ -640,7 +641,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   float minTime = 0;
   if (!handle.isDistributed_) {
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
-    singleGPUAutotune(NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, (T*)handle.temp_, (T*)handle.result_,
+    singleGPUAutotune(handle, NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, (T*)handle.temp_, (T*)handle.result_,
                       false, DistributedParams<T>(), bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
@@ -673,7 +674,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       DistributedParams<T> distParams(0, 0, handle.gpusInK_, prevFullK, currFullN, 
                                       prevFullK, currFullN, LocalKronMatCols, LocalKronMatRows, LocalKrons);
       distParams.updateGPUResults(gpuResults);
-      singleGPUAutotune(LocalKrons, x, kronMats, handle.gpuM_, currTempN, prevTempN, 
+      singleGPUAutotune(handle, LocalKrons, x, kronMats, handle.gpuM_, currTempN, prevTempN, 
                         LocalKronMatCols, LocalKronMatRows, (T*)handle.gpuTemp1_[0], (T*)handle.gpuTemp2_[0],
                         handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
                         distParams, bestKernels, stream);

@@ -185,7 +185,7 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
       }
 
       __syncthreads();
-      if (NumFusedKerns > 1 && fusedFac < NumFusedKerns - 1) {
+      if (isThreadValid && NumFusedKerns > 1 && fusedFac < NumFusedKerns - 1) {
       //Store C to shared memory using shift method
       for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
       if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
@@ -197,9 +197,8 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           
           cCol = (cCol/TileSizeKronRows)*TileSizeKronRows + (tileColC + cCol%TileSizeKronRows)%TileSizeKronRows;
           shA[rowA][cCol] = regC[rowA][reg_i][reg_j];
-      }}}}
+      }}}}}
       __syncthreads();
-      }
     }
   }
 
@@ -223,9 +222,6 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
         uint colShC = outerTileKronCol*(MaxColsA/MaxKronRows) + reg_j*(MaxColsA/MaxKronRows) + tileColC + reg_i;
         const uint rowC = rowShC + tileRowA;
-        //Need below to work well
-        //KronRowsPower = 512;
-        //colsA = 8*8*8*8*8*8;
         uint tile_k = 0;
         if (!K_EQUALS_VAR) {
           tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
