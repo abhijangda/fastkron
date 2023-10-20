@@ -521,15 +521,16 @@ cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T*
     if (!handle.getUseFusion() and NumFusedKerns > 1) continue;
     KernelInfo bestKernel;
     float minTime = std::numeric_limits<float>::max();
-    const uint runs = 10;
+    const uint runs = 5;
+    const uint warmups = 2;
     std::cout << "Tuning for shape "  << shape << std::endl;
     for (auto shapeAndKernels : compiledKernels) {
       if (!shapeAndKernels.first.sameKronSize(shape)) continue;
       for (auto kernel : shapeAndKernels.second) {
         if (!kernel.canCompute(shape)) continue;
         CUDA_CHECK(cudaStreamSynchronize(stream));
-        for (int r = 0; r < 5 + runs; r++) {
-          if (r == 5) CUDA_CHECK(cudaEventRecord(start, stream));
+        for (int r = 0; r < warmups + runs; r++) {
+          if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
           if (distP2PStore) {
             switch (NumFusedKerns) {
               case 1:

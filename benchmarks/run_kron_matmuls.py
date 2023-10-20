@@ -9,9 +9,10 @@ def run_command(command):
     assert False
   return o
 
-def gen_kernels(shape):
+def gen_kernels(shape, distKernels):
   run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
-              str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]))
+              str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
+              " -dist-kernels " if distKernels else "")
 
 def build_kron():
   run_command("make kron -j")
@@ -51,7 +52,7 @@ def run_single_gpu():
            Shape(M, 2, 128, 128), Shape(M, 3, 128, 128)]
 
   for shape in cases:
-    gen_kernels(shape)
+    gen_kernels(shape, False)
     build_kron()
     run_kron(shape, 1, 1, 1)
   
@@ -62,13 +63,13 @@ def multi_gpu():
   M_128 = 4
   cases += [Shape(M_128, 4, 128, 128)]
   
-  run_command("make gen-multi-gpu-tests-kernel")
-
-  build_kron()
+  # run_command("make gen-multi-gpu-tests-kernel")
 
   for shape in cases:
     GMs = [1, 2, 2, 4, 4]
     GKs = [1, 1, 2, 2, 4]
+    gen_kernels(shape, True)
+    build_kron()
     for j,gpus in enumerate([1, 2, 4, 8, 16]):
       gm = GMs[j]
       gk = GKs[j]
