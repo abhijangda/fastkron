@@ -12,7 +12,7 @@ def run_command(command):
 def gen_kernels(shape, distKernels):
   run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
               str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
-              " -dist-kernels " if distKernels else "")
+              (" -dist-kernels " if distKernels else ""))
 
 def build_kron():
   run_command("make kron -j")
@@ -24,14 +24,16 @@ def run_kron(shape, GM, GK, LocalKrons):
 
   o = run_command(kron + " --fuse")
   fused = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
-  
+  fusedtime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
   if shape.ps[0] <= 32:
     o = run_command(kron)
     wofuse = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
+    wofusetime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
   else:
     wofuse = fused
+    wofusetime = fusedtime
 
-  print(shape, GM*GK, wofuse, fused)
+  print(shape, GM*GK, wofuse, wofusetime, fused, fusedtime)
 
 class Shape:
   def __init__(self, m, n, p, q):
@@ -55,7 +57,21 @@ def run_single_gpu():
     gen_kernels(shape, False)
     build_kron()
     run_kron(shape, 1, 1, 1)
-  
+
+def run_single_gpu_small():
+  M = 16
+  cases = [Shape(M, 8, 8, 8),
+           Shape(M, 6, 16, 16),
+           Shape(M, 5, 32, 32),
+           Shape(M, 4, 64, 64),
+          #  Shape(M, 3, 128, 128)
+           ]
+
+  for shape in cases:
+    gen_kernels(shape, False)
+    build_kron()
+    run_kron(shape, 1, 1, 1)
+
 def multi_gpu():
   cases = []
   M_64 = 64
@@ -77,4 +93,6 @@ def multi_gpu():
       LocalKrons = shapeGM.n if gk == 1 else shapeGM.n - 2
       run_kron(shapeGM, gm, gk, LocalKrons)
 
-multi_gpu()
+run_single_gpu_small()
+
+# multi_gpu()

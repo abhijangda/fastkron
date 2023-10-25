@@ -11,16 +11,7 @@ import gpytorch as gp
 import torch.nn.functional as F
 import torch_kron
 
-# from matplotlib import pyplot as plt
 import math
-
-# In[2]:
-
-# # Load the allocator
-# new_alloc = torch.cuda.memory.CUDAPluggableAllocator(
-#     'pytorch-alloc.so', 'my_malloc', 'my_free')
-# # Swap the current allocator
-# torch.cuda.memory.change_current_allocator(new_alloc)
 
 use_torch_profiler = True
 epochs = 100
