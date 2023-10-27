@@ -282,6 +282,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
+  size_t resultSize = 0;
+  size_t tempSize = 0;
+  kronGeMMSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize);
   if (verbose) printf("allocating\n");
   if (useDistributed) {
     handle.initDistributed<T>(gpus, gpuInRows, gpuInCols, kronBatch);
@@ -332,22 +335,15 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     T* hResult;
     {
       //CPU implementation of algorithm
-      size_t tempN = K;
-      size_t maxTempN = tempN;
-      for (int i = 0; i < handle.NumKronMats_; i++) {
-        tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
-        if (maxTempN < tempN)
-          maxTempN = tempN;
-      }
       for (uint i = 0; i < NUM_KP_MATS; i++) {
-        hKpMatmulResult[i] = new T[(uint64_t)M*(uint64_t)maxTempN];
+        hKpMatmulResult[i] = new T[tempSize];
       }
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
 
       if (gpus == 1) {
-        CUDACHECK(cudaMalloc(&dResult[0], (uint64_t)M*(uint64_t)tempN*sizeof(T)));
-        CUDACHECK(cudaMemset(dResult[0], 0, (uint64_t)M*(uint64_t)tempN*sizeof(T)));
+        CUDACHECK(cudaMalloc(&dResult[0], resultSize*sizeof(T)));
+        CUDACHECK(cudaMemset(dResult[0], 0, resultSize*sizeof(T)));
       }
     }
     if (verbose) printf("running kron gemm\n");

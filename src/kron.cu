@@ -374,13 +374,15 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       FusedKronMatRows[k] = KronMatRows[kronMat - k];
       currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
-    cudaError_t status;
-    
+
+    //In the last iteration, write result to the results.    
     if (kronMat - NumFusedKerns + 1 == 0)
       currKronResult = result;
 
+    cudaError_t status;
+
     KernelInfo selectedKernel = kernel.kernel;
-    std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
+    // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
     switch(NumFusedKerns) {
       case 1:
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,
@@ -435,21 +437,8 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     }
   }
 
-  // *result = prevKronResult;
-
   return cudaSuccess;
 }
-
-// template<typename T>
-// struct LinkedListNode {
-//   T data;
-//   std::vector<struct TreeNode> children;
-
-//   TreeNode(T& data_) : data(data_) {}
-//   void addChild(struct TreeNode child) {
-//     children.push_back(child);
-//   }
-// }
 
 float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats, 
                           uint KronMatCols[], uint KronMatRows[],
@@ -1223,6 +1212,26 @@ cudaError_t kronDistributedSGEMM(FastKronHandle& handle, const uint NumKronMats,
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t streams[]) {
   return distributedKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, M, N, K, 
                                               KronMatCols, KronMatRows, streams);
+}
+
+cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M, uint N, uint K, 
+                          uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize) {
+  if (resultSize == nullptr) return cudaErrorInvalidValue;
+  if (tempSize   == nullptr) return cudaErrorInvalidValue;
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows)) return false;
+
+  size_t tempN = K;
+  size_t maxTempN = tempN;
+  for (int i = NumKronMats - 1; i >= 0; i--) {
+    tempN = (tempN/KronMatRows[i])*KronMatCols[i];
+    if (maxTempN < tempN)
+      maxTempN = tempN;
+  }
+
+  *tempSize = M * maxTempN;
+  *resultSize = M * tempN;
+
+  return cudaSuccess;
 }
 
 template<typename T> cudaError_t FastKronHandle_allocDistributedX(FastKronHandle& handle, T* dX[], T* hX) {

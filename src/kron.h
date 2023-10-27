@@ -147,7 +147,9 @@ struct ThreadArgs {
   } threadResult;
 };
 
-//TODO: modify such that the results are always written to the supplied result pointer 
+cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M, uint N, uint K, 
+                          uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize);
+
 cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
 
@@ -164,6 +166,7 @@ cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, 
 cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
 
+//TODO: modify such that the results are always written to the supplied result pointer 
 cudaError_t kronDistributedSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
 
