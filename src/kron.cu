@@ -341,12 +341,12 @@ template<typename T, typename VecT>
 cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
                                 T* result,
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-                                cudaStream_t stream) {
+                                T* temp1, T* temp2, cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
   if (result == NULL) return cudaErrorInvalidValue;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
-  T* kronGemmResults[2] = {(T*)handle.temp1_, (T*)handle.temp2_};
+  T* kronGemmResults[2] = {temp1, temp2};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
   //TODO: Assumes all factors are of same size and square shape
@@ -1172,21 +1172,27 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
           Library Functions
 ***************************************************/
 cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
-                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
-  return singleGPUKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, 
-                                            M, N, K, KronMatCols, KronMatRows, stream);
+                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float* temp1, float* temp2,
+                      cudaStream_t stream) {
+  return singleGPUKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result,
+                                            M, N, K, KronMatCols, KronMatRows, temp1, temp2, 
+                                            stream);
 }
 
 cudaError_t kronIGEMM(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
-                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], int* temp1, int* temp2,
+                      cudaStream_t stream) {
   return singleGPUKronMatmul<int, int4>(handle, NumKronMats, x, kronMats, result, 
-                                            M, N, K, KronMatCols, KronMatRows, stream);
+                                        M, N, K, KronMatCols, KronMatRows, temp1, temp2,
+                                        stream);
 }
 
 cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
-  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
+                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], double* temp1, double* temp2,
+                      cudaStream_t stream) {
   return singleGPUKronMatmul<double, double4>(handle, NumKronMats, x, kronMats, result, 
-      M, N, K, KronMatCols, KronMatRows, stream);
+                                              M, N, K, KronMatCols, KronMatRows, temp1, temp2,
+                                              stream);
 }
 
 
@@ -1218,7 +1224,7 @@ cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M
                           uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize) {
   if (resultSize == nullptr) return cudaErrorInvalidValue;
   if (tempSize   == nullptr) return cudaErrorInvalidValue;
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows)) return false;
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows)) return cudaErrorInvalidValue;
 
   size_t tempN = K;
   size_t maxTempN = tempN;
@@ -1228,7 +1234,7 @@ cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M
       maxTempN = tempN;
   }
 
-  *tempSize = M * maxTempN;
+  *tempSize   = M * maxTempN;
   *resultSize = M * tempN;
 
   return cudaSuccess;
