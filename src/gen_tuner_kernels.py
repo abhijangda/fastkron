@@ -59,8 +59,6 @@ class KernelConfig:
                allPowersOf2):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
-    if not allPowersOf2 and self.num_threads%WARP_SIZE != 0:
-      self.num_threads = (self.num_threads//WARP_SIZE + 1)*WARP_SIZE
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
@@ -84,8 +82,13 @@ class KernelConfig:
     self.wsz = (self.shape.k//self.shape.p)//self.cRegRows 
     self.shared_mem_usage = (self.tileM * self.shape.k + self.tileP * self.tileQ)*element_size(elemType)
 
+  def threads(self):
+    if self.num_threads%WARP_SIZE != 0:
+      return (self.num_threads//WARP_SIZE + 1)*WARP_SIZE
+    return self.num_threads
+  
   def __repr__(self):
-    return f"{self.num_threads}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar}, {self.dist}, {self.aalign}, {self.kalign}"
+    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.tileM}, {self.shape.k}, {self.cRegRows}, {self.cRegCols}, {self.fused_kernels}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar}, {self.dist}, {self.aalign}, {self.kalign}"
 
   def kernelname(self):
     return repr(self).replace(", ", "_")
@@ -100,7 +103,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<float, {self.fused_kernels}> params, FusedParams<float, {self.fused_kernels}> fusedParams, DistributedParams<float> distParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float2, float4, {self.num_threads}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}, {self.aalign}, {self.kalign}"
+    return f"float, float2, float4, {self.threads()}, RowParallelismTy::Low, {self.tileM}, {self.rowModTileIsZero}, {self.shape.k}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.kEqVar}, 1, {self.cRegRows}, {self.cRegCols}, {self.tileP}, {self.fused_kernels}, {self.dist}, {self.aalign}, {self.kalign}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"
@@ -116,7 +119,7 @@ class KernelConfig:
   def isValid(self):
     return self.wsz > 0 and \
            self.shape.k % self.shape.p == 0 and \
-           self.num_threads >= 32 and self.num_threads <= 1024 and \
+           self.num_threads >= 32 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1)) and \
@@ -149,7 +152,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   configs = {}
   
   for (m, k, n, ps, qs) in cases:
-    allSameShapes = len(set(ps + qs)) == 1 and isPowerOfTwo(ps[0])
+    allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
