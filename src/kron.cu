@@ -339,7 +339,7 @@ TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKron
 
 template<typename T, typename VecT>
 cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
-                                T** result,
+                                T* result,
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
                                 cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
@@ -432,7 +432,9 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     }
   }
 
-  *result = prevKronResult;
+  assert (result == prevKronResult); //"User given result and prev result are different"
+
+  // *result = prevKronResult;
 
   return cudaSuccess;
 }
@@ -1179,19 +1181,19 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 /**************************************************
           Library Functions
 ***************************************************/
-cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
+cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   return singleGPUKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, 
                                             M, N, K, KronMatCols, KronMatRows, stream);
 }
 
-cudaError_t kronIGEMM(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
+cudaError_t kronIGEMM(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   return singleGPUKronMatmul<int, int4>(handle, NumKronMats, x, kronMats, result, 
                                             M, N, K, KronMatCols, KronMatRows, stream);
 }
 
-cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], double** result,
+cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
   return singleGPUKronMatmul<double, double4>(handle, NumKronMats, x, kronMats, result, 
       M, N, K, KronMatCols, KronMatRows, stream);

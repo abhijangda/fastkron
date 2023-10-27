@@ -181,19 +181,19 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
               Call KronGEMM Library Functions
 ***************************************************/
 template<typename T>
-static void kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[], T* result[],
+static void kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[], T* result,
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream) {
   if (std::is_same<T, float>::value) {
     CUDACHECK(kronSGEMM(handle, NUM_KP_MATS,
-                        (float*)x, (float**)kpMats, (float**)result,
+                        (float*)x, (float**)kpMats, (float*)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, int>::value) {
     CUDACHECK(kronIGEMM(handle, NUM_KP_MATS, 
-                        (int*)x, (int**)kpMats, (int**)result, 
+                        (int*)x, (int**)kpMats, (int*)result, 
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else if (std::is_same<T, double>::value) {
     CUDACHECK(kronDGEMM(handle, NUM_KP_MATS, 
-                        (double*)x, (double**)kpMats, (double**)result,
+                        (double*)x, (double**)kpMats, (double*)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, stream));
   } else {
     printf("Invalid type\n");
@@ -344,13 +344,16 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       }
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
+
+      if (gpus == 1)
+        CUDACHECK(cudaMalloc(&dResult[0], (uint64_t)M*(uint64_t)maxTempN*sizeof(T)));
     }
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
     if (useDistributed) {
       kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream);
     } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
     }
     for (int g = 0; g < gpus; g++) {
       CUDACHECK(cudaSetDevice(g));
