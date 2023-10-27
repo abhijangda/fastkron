@@ -278,7 +278,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
@@ -345,8 +345,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
 
-      if (gpus == 1)
-        CUDACHECK(cudaMalloc(&dResult[0], (uint64_t)M*(uint64_t)maxTempN*sizeof(T)));
+      if (gpus == 1) {
+        CUDACHECK(cudaMalloc(&dResult[0], (uint64_t)M*(uint64_t)tempN*sizeof(T)));
+        CUDACHECK(cudaMemset(dResult[0], 0, (uint64_t)M*(uint64_t)tempN*sizeof(T)));
+      }
     }
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
@@ -393,7 +395,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       if (useDistributed) {
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream);
       } else {
-        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
       }
     }
     for (int g = 0; g < gpus; g++) {
@@ -412,7 +414,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       if (useDistributed) {
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream);
       } else {
-        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
+        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], dKpMats, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, stream[0]);
       }
     }
     printf("405\n");

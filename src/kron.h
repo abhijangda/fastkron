@@ -60,7 +60,8 @@ struct FastKronHandle {
     gpuM_ = 0;
     gpuK_ = 0;
     gpuN_ = 0;
-    temp_ = NULL;
+    temp1_ = NULL;
+    temp2_ = NULL;
     gpuTemp1_ = NULL;
     gpuTemp2_ = NULL;
 
@@ -71,8 +72,9 @@ struct FastKronHandle {
     isDistributed_ = false;
   }
 
-  void* temp_;
-  
+  void* temp1_;
+  void* temp2_;
+
   uint numGPUs_;
   uint gpuM_;
   uint gpuK_;

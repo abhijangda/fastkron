@@ -346,7 +346,7 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   if (result == NULL) return cudaErrorInvalidValue;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
-  T* kronGemmResults[2] = {(T*)handle.temp_, (T*)handle.result_};
+  T* kronGemmResults[2] = {(T*)handle.temp1_, (T*)handle.temp2_};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
   //TODO: Assumes all factors are of same size and square shape
@@ -376,6 +376,9 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     }
     cudaError_t status;
     
+    if (kronMat - NumFusedKerns + 1 == 0)
+      currKronResult = result;
+
     KernelInfo selectedKernel = kernel.kernel;
     std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
     switch(NumFusedKerns) {
@@ -431,8 +434,6 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
       currKronResult = kronGemmResults[0];
     }
   }
-
-  assert (result == prevKronResult); //"User given result and prev result are different"
 
   // *result = prevKronResult;
 
@@ -675,7 +676,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   float minTime = 0;
   if (!handle.isDistributed_) {
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
-    singleGPUAutotune(handle, NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, (T*)handle.temp_, (T*)handle.result_,
+    singleGPUAutotune(handle, NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, (T*)handle.temp1_, (T*)handle.temp2_,
                       false, DistributedParams<T>(), bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
@@ -1453,9 +1454,10 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
         maxTempN = tempN;
     }
     size_t sz = handle.M_ * maxTempN * sizeof(T);
-    CUDA_CHECK(cudaMalloc(&handle.temp_, sz));
-    CUDA_CHECK(cudaMalloc(&handle.result_, sz));
-    CUDA_CHECK(cudaMemset(handle.temp_, 0, sz));
+    CUDA_CHECK(cudaMalloc(&handle.temp1_, sz));
+    CUDA_CHECK(cudaMalloc(&handle.temp2_, sz));
+    CUDA_CHECK(cudaMemset(handle.temp1_, 0, sz));
+    CUDA_CHECK(cudaMemset(handle.temp2_, 0, sz));
   }
 
   //Initialize compiledKernels map
@@ -1524,10 +1526,10 @@ void FastKronHandle::free() {
     gpuTemp1_ = nullptr;
     gpuTemp2_ = nullptr;
   } else {
-    CUDA_CHECK(cudaFree(temp_));
-    CUDA_CHECK(cudaFree(result_));
+    CUDA_CHECK(cudaFree(temp1_));
+    CUDA_CHECK(cudaFree(temp2_));
   
-    temp_ = nullptr;
-    result_ = nullptr;  
+    temp1_ = nullptr;
+    temp2_ = nullptr;  
   }
 }
