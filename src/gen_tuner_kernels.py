@@ -150,7 +150,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   configs = {}
   
   for (m, k, n, ps, qs) in cases:
-    allSameShapes = len(set(ps + qs)) == 1 and isPowerOfTwo(ps[0])
+    allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
       TilePs = [min(p, 32)]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
