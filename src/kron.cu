@@ -1142,6 +1142,122 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   return status;
 }
 
+std::unordered_set<KronMatmulShape> allSlicedMatmulShapes(uint NumKronMats, uint KronMatCols[], uint KronMatRows[], bool distP2PStore) {
+  std::unordered_set<KronMatmulShape> allShapes;
+  for (uint startKron = 0; startKron < NumKronMats; startKron++) {
+    for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
+      const uint kronMat = endKron;
+      //KronMats[startKron, ..., endKron] including endKron
+      const uint NumFusedKerns = endKron - startKron + 1;
+      T* krons[NumFusedKerns];
+      uint FusedKronMatCols[NumFusedKerns];
+      uint FusedKronMatRows[NumFusedKerns];
+      for (int k = 0; k < NumFusedKerns; k++) {
+        krons[k] = kronMats[kronMat - k];
+        FusedKronMatCols[k] = KronMatCols[kronMat - k];
+        FusedKronMatRows[k] = KronMatRows[kronMat - k];
+      }
+      uint tempN = K;
+      for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
+        tempN = (tempN/KronMatRows[reverseKron])*KronMatCols[reverseKron];
+      }
+      uint outTempN = (tempN/KronMatRows[endKron])*KronMatCols[endKron];
+      // std::cout << "endKron " << endKron << " startKron " << startKron << " tempN " << tempN << std::endl;
+      bool distP2PStore = isDistributed && startKron == 0;
+      cudaError_t status;
+      KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+                                              tempN, M, NumFusedKerns, distP2PStore};
+      allShapes.insert(shape);
+    }
+  }
+
+  return allShapes;
+}
+
+int one(int i, int j) {return 1;}
+int zeroOne(int i, int j) {return i % 2;}
+int setToI(int i, int j) {return i;}
+int randMod(int i, int j) {return rand()%3 + 1;}
+
+template<typename T>
+static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
+  for (uint i = 0; i < M; i++) {    
+    for (uint j = 0; j < N; j++) {
+      mat[i*N + j] = (T)fnvalue(i,j);
+    }
+  }
+}
+
+//Serial implementation of the new Kron GEMM implementation
+template<typename T>
+void cpuKronMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
+                   uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[]) {
+  uint secFacRowMulSize = 1;
+  uint rowsTillNow = 1;
+  uint colsTillNow = 1;
+  uint resultCols = 0;
+  for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
+    T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
+    uint kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
+    uint kpSecondN = KP_MAT_N[NUM_KP_MATS - 1 - kp];
+    int prevKPMatmulCols = (kp == 0) ? K : resultCols;
+
+    resultCols = (prevKPMatmulCols/kpSecondK) * kpSecondN;
+    secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * (K/(colsTillNow * KP_MAT_K[NUM_KP_MATS - 1 - (kp)]));
+    //Number of times a column is multiplied with input matrix is equal to 
+    //N/(number of column elements of this matrix * cols so far) * number of rows so far.
+    rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
+    colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
+
+    #pragma omp parallel for collapse(2)
+    for (uint i = 0; i < M; i++) {
+      for (uint j = 0; j < resultCols; j++) {
+        T r = 0;
+
+        for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
+          uint slice = (j / secFacRowMulSize) % kpSecondN;
+
+          T v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
+          
+          r += prevKPMatmul[i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k] * v2;
+        }
+
+        kpMatmulResult[kp][i*resultCols + j] = r;
+      }
+    }
+  }
+}
+
+template<typename T>
+void checkAllKernels(FastKronHandle& handle, const uint NumKronMats,
+                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[]) {
+  //Allocate CPU data
+  T* hX;
+  T* hKpMats[NumKronMats];
+  
+  hx = new T[((uint64_t)M) * ((uint64_t)K)];
+  setMatrix(hX, M, K, randMod);
+  for (uint i = NUM_KP_MATS - 1; i>= 0; i--) {
+    hKpMats[i] = new T[KP_MAT_K[i] * KP_MAT_N[i]];
+    setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], randMod);
+  }
+
+  size_t tempN = K;
+  size_t maxTempN = tempN;
+  for (int i = 0; i < handle.NumKronMats_; i++) {
+    tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
+    if (maxTempN < tempN)
+      maxTempN = tempN;
+  }
+  for (uint i = 0; i < NUM_KP_MATS; i++) {
+    hKpMatmulResult[i] = new T[(uint64_t)M*(uint64_t)maxTempN];
+  }
+  //Do single thread CPU KronMatmul for reference
+  cpuKronMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+
+  
+}
+
 /**************************************************
           Library Functions
 ***************************************************/
