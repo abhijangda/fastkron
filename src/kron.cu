@@ -99,6 +99,37 @@ static bool checkKronMatrixSizes(const uint NumKronMats,
   return true;
 }
 
+static bool checkDistributedKronSizes(const uint NumKronMats, 
+                                      const uint M, const uint N, const uint K, 
+                                      const uint KronMatCols[], const uint KronMatRows[],
+                                      const uint LocalKrons, const uint gpusInK) {
+  uint prevTempN = K;
+  
+  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    return false;
+  
+    if (prevTempN % gpusInK != 0) return false;
+    
+  for (uint i = 0; i < NumKronMats; i += LocalKrons) {
+    const uint kronMat = NumKronMats - i - 1;
+    const uint NumFusedKerns = min(LocalKrons, NumKronMats - i);
+    uint currTempN = prevTempN;
+    // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
+    uint FusedKronMatCols[NumFusedKerns];
+    uint FusedKronMatRows[NumFusedKerns];
+    for (int k = 0; k < NumFusedKerns; k++) {
+      FusedKronMatCols[k] = KronMatCols[kronMat - k];
+      FusedKronMatRows[k] = KronMatRows[kronMat - k];
+      currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
+    }
+    
+    if (currTempN % gpusInK != 0) return false;
+    prevTempN = currTempN;
+  }
+
+  return true;
+}
+
 KronMatmulShape maxCompiledColsA(KronMatmulShape shape) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
     shape.ColsA /= 2;
@@ -649,6 +680,9 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                                   tunedKernels, bestKernels);
     handle.tunedKernelSeries = tunedKernels;
   } else {
+    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.gpusInK_, handle.perGPUKronBatch_))
+      return cudaErrorInvalidValue;
+
     //In distributed case run every LocalKron series on a single GPU
     CUDA_CHECK(cudaSetDevice(0));
     uint prevTempN = handle.gpuK_;
@@ -1094,7 +1128,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   if (handle.gpuM_ > M)            return cudaErrorInvalidValue;
   if (NumKronMats < handle.perGPUKronBatch_) return cudaErrorInvalidValue;
 
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+  if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.gpusInK_, handle.perGPUKronBatch_))
     return cudaErrorInvalidValue;
   
   const uint gpuM = handle.gpuM_;
