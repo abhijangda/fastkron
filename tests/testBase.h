@@ -286,9 +286,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (verbose) printf("values set\n");
   //Allocate GPU data
   FastKronHandle handle(M, N, K, KP_MAT_N, KP_MAT_K, NUM_KP_MATS);
-  size_t resultSize = 0;
-  size_t tempSize = 0;
-  kronGeMMSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize);
   if (verbose) printf("allocating\n");
   if (useDistributed) {
     handle.initDistributed<T>(gpus, gpuInRows, gpuInCols, kronBatch);
@@ -296,16 +293,19 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     handle.init<T>();
   }
   handle.setUseFusion(useFusion);
+  size_t resultSize = 0;
+  size_t tempSize = 0;
+  kronGeMMSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize);
   T* dX[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
-  T* dTemp1, *dTemp2;
+  T* dTemp1 = nullptr, *dTemp2 = nullptr;
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
     CUDACHECK(handle.allocDistributedX(dX, hX));  
   } else {
     CUDACHECK(cudaMalloc(&dX[0], sizeX));
-    CUDACHECK(cudaMalloc(&dTemp1, tempSize));
-    CUDACHECK(cudaMalloc(&dTemp2, tempSize));
+    CUDACHECK(cudaMalloc(&dTemp1, tempSize * sizeof(T)));
+    CUDACHECK(cudaMalloc(&dTemp2, tempSize * sizeof(T)));
   }
   if (verbose) printf("allocated\n");
   
