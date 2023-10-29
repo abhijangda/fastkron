@@ -305,7 +305,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T *dTemp2[gpus] = {nullptr};
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
-    CUDACHECK(handle.allocDistributedX(dX, hX));
+    CUDACHECK(handle.allocDistributedX(dX, hX, M, K));
   } else {
     CUDACHECK(cudaMalloc(&dX[0], sizeX));
   }
@@ -376,7 +376,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
     if (useDistributed) {
-      CUDACHECK(handle.gatherDistributedY(dResult, dResultToHost));
+      CUDACHECK(handle.gatherDistributedY(dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
       CUDACHECK(cudaMemcpy(dResultToHost, dResult[0], sizeResult, cudaMemcpyDeviceToHost));
     }
