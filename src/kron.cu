@@ -795,7 +795,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   uint gc = thArgs->gpuCol;
   uint gpusInM_ = thArgs->gpusInM_;
   uint gpusInK_ = thArgs->gpusInK_; 
-  uint prevTempN = handle.gpuK_;
   uint currTempN;
   uint g = gr * gpusInK_ + gc;
   CUDA_CHECK(cudaSetDevice(g));
@@ -811,6 +810,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   T* innerCurrResult;
   uint gpuM, gpuK;
   handle.getDistributedSizes(M, K, gpuM, gpuK);
+  uint prevTempN = gpuK;
 
   uint startGpuM = gpuM * gr;
   // const uint gpuM = min(gpuM, M - startGpuM);
@@ -968,26 +968,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       CUDA_CHECK(cudaStreamSynchronize(stream[g]));
       
       thread_barrier_wait(thArgs->barrier);
-
-      if (false) {
-        std::cout << "g " << g << " innerPrevResult "<< innerPrevResult << std::endl;
-        auto ttt = (KronMulBatchSize == 3) ? (T**)temp2 : (T**)temp2;
-        const uint PerGPUK = 64U*64U*64U*64U/2U;
-        dim3 grid = {gpuK/8192, gpuM, 1};
-        dim3 block = {256, 1, 1};
-        copyToGPUsInK<T, float2, 2U, PerGPUK, 8192, 256><<<grid,block,0,stream[g]>>>
-                                                        (gpuM, handle.N_, handle.K_, innerPrevResult, 
-                                                          ttt[0], ttt[1], gr, gc, KronMulBatchSize);
-      
-        CUDA_CHECK(cudaStreamSynchronize(stream[g]));
-        if (gc == 0) {
-          innerCurrResult = innerPrevResult;
-          innerPrevResult = ttt[0];
-        } else {
-          innerCurrResult = innerPrevResult;
-          innerPrevResult = ttt[1];
-        }
-      }
 
       if (handle.distComm_ == DistComm::NCCL && handle.gpusInK_ > 1) {
         size_t resultSize = 0, tempSize = 0;
@@ -1422,9 +1402,9 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       abort();
     }
     //TODO: Check that localKrons <= log (gpuK_)_P
-    handle.gpuM_ = handle.M_/handle.gpusInM_;
-    handle.gpuK_ = handle.K_/handle.gpusInK_;
-    handle.gpuN_ = handle.N_/handle.gpusInK_;
+    // handle.gpuM_ = handle.M_/handle.gpusInM_;
+    // handle.gpuK_ = handle.K_/handle.gpusInK_;
+    // handle.gpuN_ = handle.N_/handle.gpusInK_;
     
     //All gpus with same row shares the same barrier
     //TODO: free
@@ -1437,17 +1417,17 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
       assert (s == 0);
     }
     
-    size_t tempN = handle.gpuK_;
-    size_t maxTempN = tempN;
-    for (int i = 0; i < handle.NumKronMats_; i++) {
-      tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
-      if (maxTempN < tempN)
-        maxTempN = tempN;
-    }
+    // size_t tempN = handle.gpuK_;
+    // size_t maxTempN = tempN;
+    // for (int i = 0; i < handle.NumKronMats_; i++) {
+    //   tempN = (tempN/handle.KronMatRows_[i])*handle.KronMatCols_[i];
+    //   if (maxTempN < tempN)
+    //     maxTempN = tempN;
+    // }
 
-    size_t sz = handle.gpuM_ * maxTempN * sizeof(T);
-    std::cout << "Allocating temporaries of size "<< sz << std::endl;
-    std::cout << "Allocated temporaries"<<std::endl;
+    // size_t sz = handle.gpuM_ * maxTempN * sizeof(T);
+    // std::cout << "Allocating temporaries of size "<< sz << std::endl;
+    // std::cout << "Allocated temporaries"<<std::endl;
 
   } else {
     // size_t tempN = handle.K_;

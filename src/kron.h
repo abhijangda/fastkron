@@ -47,21 +47,16 @@ enum ProcType {
 };
 
 struct FastKronHandle {
-  const uint M_, N_, K_;
-  const uint* KronMatCols_;
-  const uint* KronMatRows_;
-  const uint NumKronMats_;
   void* result_;
 
-  FastKronHandle(uint M, uint N, uint K, uint* KronMatCols, uint* KronMatRows, uint NumKronMats) :
-    M_(M), N_(N), K_(K), KronMatCols_(KronMatCols), KronMatRows_(KronMatRows), 
-    NumKronMats_(NumKronMats), tunedKernelSeries()
+  FastKronHandle() :
+    tunedKernelSeries()
   {
-    gpuM_ = 0;
-    gpuK_ = 0;
-    gpuN_ = 0;
-    temp1_ = NULL;
-    temp2_ = NULL;
+    // gpuM_ = 0;
+    // gpuK_ = 0;
+    // gpuN_ = 0;
+    // temp1_ = NULL;
+    // temp2_ = NULL;
     // gpuTemp1_ = NULL;
     // gpuTemp2_ = NULL;
 
@@ -72,13 +67,13 @@ struct FastKronHandle {
     isDistributed_ = false;
   }
 
-  void* temp1_;
-  void* temp2_;
+  // void* temp1_;
+  // void* temp2_;
 
   uint numGPUs_;
-  uint gpuM_;
-  uint gpuK_;
-  uint gpuN_;
+  // uint gpuM_;
+  // uint gpuK_;
+  // uint gpuN_;
   uint gpusInM_;
   uint gpusInK_;
   uint perGPUKronBatch_;
