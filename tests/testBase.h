@@ -291,7 +291,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   FastKronHandle handle;
   if (verbose) printf("allocating\n");
   if (useDistributed) {
-    handle.initDistributed<T>(gpus, gpuInRows, gpuInCols, kronBatch);
+    handle.init<T>(gpus, gpuInRows, gpuInCols, kronBatch);
   } else {
     handle.init<T>();
   }

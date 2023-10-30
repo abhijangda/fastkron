@@ -1311,11 +1311,11 @@ template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY, ui
   return FastKronHandle_gatherDistributedY<int>(*this, dY, hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 
-template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDistributed, 
+template<typename T> void FastKronHandle_init(FastKronHandle& handle, 
                                               int gpus, int gpusInM, int gpusInK, int gpuKrons) {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
-  handle.isDistributed_ = isDistributed;
-  if (isDistributed) {
+  handle.isDistributed_ = gpus > 1;
+  if (handle.isDistributed_) {
     //TODO: Setting DistComm in another function
     handle.setUseFusion(false);
     handle.numGPUs_ = gpus;
@@ -1472,28 +1472,16 @@ template<typename T> void FastKronHandle_init(FastKronHandle& handle, bool isDis
   }
 }
 
-template<> void FastKronHandle::init<float>() {
-  FastKronHandle_init<float>(*this, false, 1, 1, 1, 1);
+template<> void FastKronHandle::init<float>(int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  FastKronHandle_init<float>(*this, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
-template<> void FastKronHandle::init<int>() {
-  FastKronHandle_init<int>(*this, false, 1, 1, 1, 1);
+template<> void FastKronHandle::init<int>(int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  FastKronHandle_init<int>(*this, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
-template<> void FastKronHandle::init<double>() {
-  FastKronHandle_init<double>(*this, false, 1, 1, 1, 1);
-}
-
-template<> void FastKronHandle::initDistributed<float>(int gpus, int gpusInM, int gpusInK, int localKrons) {
-  FastKronHandle_init<float>(*this, true, gpus, gpusInM, gpusInK, localKrons);
-}
-
-template<> void FastKronHandle::initDistributed<int>(int gpus, int gpusInM, int gpusInK, int localKrons) {
-  FastKronHandle_init<int>(*this, true, gpus, gpusInM, gpusInK, localKrons);
-}
-
-template<> void FastKronHandle::initDistributed<double>(int gpus, int gpusInM, int gpusInK, int localKrons) {
-  FastKronHandle_init<double>(*this, true, gpus, gpusInM, gpusInK, localKrons);
+template<> void FastKronHandle::init<double>(int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  FastKronHandle_init<double>(*this, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
 void FastKronHandle::free() {

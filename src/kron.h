@@ -87,8 +87,7 @@ struct FastKronHandle {
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
 
-  template<typename T> void init();
-  template<typename T> void initDistributed(int gpus, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+  template<typename T> void init(int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
   //TODO: these two functions should be a part of utils?
   template<typename T> cudaError_t allocDistributedX(T* dX[], T* hX, uint M, uint K);
   template<typename T> cudaError_t gatherDistributedY(T* dY[], T* hY, uint M, uint K, 
