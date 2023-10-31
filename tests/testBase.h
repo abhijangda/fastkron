@@ -290,16 +290,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate GPU data
   FastKronHandle handle;
   if (verbose) printf("allocating\n");
-  if (useDistributed) {
-    handle.init<T>(gpus, gpuInRows, gpuInCols, kronBatch);
-  } else {
-    handle.init<T>();
-  }
+  handle.init<T>(gpus, gpuInRows, gpuInCols, kronBatch);
   handle.setUseFusion(useFusion);
   size_t resultSize = 0;
   size_t tempSize = 0;
   CUDACHECK(kronGeMMSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize));
   T* dX[gpus];
+  T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
   T* dTemp1[gpus] = {nullptr};
   T *dTemp2[gpus] = {nullptr};
@@ -314,6 +311,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaSetDevice(g));
     CUDACHECK(cudaMalloc(&dTemp1[g], tempSize * sizeof(T)));
     CUDACHECK(cudaMalloc(&dTemp2[g], tempSize * sizeof(T)));
+    CUDACHECK(cudaMalloc(&dResult[g], resultSize*sizeof(T)));
+    CUDACHECK(cudaMemset(dResult[g], 0, resultSize*sizeof(T)));
   }
 
   if (verbose) printf("allocated\n");
@@ -345,7 +344,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
-  T* dResult[gpus];
   if (checkResults) {
     T* hResult;
     {
@@ -355,11 +353,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       }
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
-
-      if (gpus == 1) {
-        CUDACHECK(cudaMalloc(&dResult[0], resultSize*sizeof(T)));
-        CUDACHECK(cudaMemset(dResult[0], 0, resultSize*sizeof(T)));
-      }
     }
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation

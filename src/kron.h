@@ -113,7 +113,7 @@ struct FastKronHandle {
 
 struct ThreadArgs {
   ThreadArgs() {}
-  ThreadArgs(FastKronHandle* handle, uint NumKronMats, void* x, void** kronMats, void* result, 
+  ThreadArgs(FastKronHandle* handle, uint NumKronMats, void* x, void** kronMats, void** result, 
             uint M, uint N, uint K, uint *KronMatCols, uint *KronMatRows, void **temp1,
             void **temp2, cudaStream_t* stream,
             uint gpuRow, uint gpuCol, uint gpusInM_, uint gpusInK_, pthread_barrier_t* barrier) : 
@@ -126,7 +126,7 @@ struct ThreadArgs {
   uint NumKronMats;
   void* x;
   void** kronMats;
-  void* result;
+  void** result;
   uint M;
   uint N;
   uint K;

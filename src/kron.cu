@@ -782,7 +782,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   uint NumKronMats = thArgs->NumKronMats;
   T* x = (T*)thArgs->x;
   T** kronMats = (T**)thArgs->kronMats;
-  T* result = (T*)thArgs->result;
+  T** results = (T**)thArgs->result;
   T** temp1 = (T**)thArgs->temp1;
   T** temp2 = (T**)thArgs->temp2;
   uint M = thArgs->M;
@@ -902,11 +902,16 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           thread_barrier_wait(thArgs->barrier);
         }
         
+        if (kernel.end - NumFusedKerns + 1 == 0)
+          innerCurrResult = results[g];
+        
         T** gpuTempResults;
         if (innerCurrResult == innerResults[0]) {
           gpuTempResults = (T**)temp1;
-        } else {
+        } else if (innerCurrResult == innerResults[1]) {
           gpuTempResults = (T**)temp2;
+        } else if (innerCurrResult == results[g]) {
+          gpuTempResults = (T**)results;
         }
         
         T* gpuResults[handle.gpusInK_];
@@ -1083,7 +1088,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
       NumKronMats,
       (void*)x[thread],
       (void**)kronMats,
-      (void*)result[thread],
+      (void**)result,
       M, N, K,
       &KronMatCols[0],
       &KronMatRows[0],
@@ -1106,7 +1111,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   cudaError_t status;
   for (uint thread = 0; thread < handle.numGPUs_; thread++) {
     status = threadArgs[thread].threadResult.status;
-    result[thread] =(T*)threadArgs[thread].threadResult.result;
+    // result[thread] =(T*)threadArgs[thread].threadResult.result;
   }
 
   return status;
@@ -1169,7 +1174,7 @@ cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M
                           uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize) {
   if (resultSize == nullptr) return cudaErrorInvalidValue;
   if (tempSize   == nullptr) return cudaErrorInvalidValue;
-  uint gpuM, gpuK, gpuN;
+  uint gpuM, gpuK;
 
   if (handle.isDistributed_) {
     if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
@@ -1177,13 +1182,11 @@ cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M
       return cudaErrorInvalidValue;
     gpuM = M/handle.gpusInM_;
     gpuK = K/handle.gpusInK_;
-    gpuN = N/handle.gpusInK_;
   } else {
     if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
       return cudaErrorInvalidValue;
     gpuM = M;
     gpuK = K;
-    gpuN = N;
   }
 
   size_t tempN = gpuK;
