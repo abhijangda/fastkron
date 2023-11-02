@@ -881,6 +881,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                                       prevFullK, currFullN,
                                       prevTempN, currTempN, LocalKronCols, LocalKronRows, KronMulBatchSize);
       uint slicedMuls = 0;
+      bool ncclRecvInResult = false;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
         const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
@@ -902,8 +903,12 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           thread_barrier_wait(thArgs->barrier);
         }
         
-        if (kernel.end - NumFusedKerns + 1 == 0)
-          innerCurrResult = results[g];
+        if (kernel.end - NumFusedKerns + 1 == 0) {
+          if (handle.distComm_ == DistComm::P2P or handle.gpusInK_ == 1)
+            innerCurrResult = results[g];
+          else
+            ncclRecvInResult = true;
+        } 
         
         T** gpuTempResults;
         if (innerCurrResult == innerResults[0]) {
@@ -976,6 +981,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       if (handle.distComm_ == DistComm::NCCL && handle.gpusInK_ > 1) {
         size_t resultSize = 0, tempSize = 0;
+        if (ncclRecvInResult)
+          innerCurrResult = results[g];
         kronGeMMSizes(handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
                       &resultSize, &tempSize);
         T* sendTemp = temp1[g] + tempSize/2;
