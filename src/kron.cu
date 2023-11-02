@@ -683,17 +683,20 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     CUDA_CHECK(cudaFree(temp1_));
     CUDA_CHECK(cudaFree(temp2_));
   } else {
-    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.gpusInK_, handle.perGPUKronBatch_))
+    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.perGPUKronBatch_, handle.gpusInK_))
       return cudaErrorInvalidValue;
 
     //In distributed case run every LocalKron series on a single GPU
     CUDA_CHECK(cudaSetDevice(0));
-    T* temp1_, *temp2_;
+    T* temp1_[handle.numGPUs_], *temp2_[handle.numGPUs_];
     size_t resultSize = 0, tempSize = 0;
     kronGeMMSizes(handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
-                  &resultSize, &tempSize);  
-    CUDA_CHECK(cudaMalloc(&temp1_, tempSize * sizeof(T)));
-    CUDA_CHECK(cudaMalloc(&temp2_, tempSize * sizeof(T)));
+                  &resultSize, &tempSize);
+    for (int g = 0; g < handle.numGPUs_; g++) {
+      CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(T)));
+      CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(T)));
+    }
+
     uint gpuM, gpuK;
     handle.getDistributedSizes(M, K, gpuM, gpuK);
     uint prevTempN = gpuK;
@@ -718,7 +721,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                                       prevFullK, currFullN, LocalKronMatCols, LocalKronMatRows, LocalKrons);
       distParams.updateGPUResults(gpuResults);
       singleGPUAutotune(handle, LocalKrons, x, kronMats, gpuM, currTempN, prevTempN, 
-                        LocalKronMatCols, LocalKronMatRows, temp1_, temp2_,
+                        LocalKronMatCols, LocalKronMatRows, temp1_[0], temp2_[0],
                         handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
                         distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
@@ -734,8 +737,10 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       }
     }
 
-    CUDA_CHECK(cudaFree(temp1_));
-    CUDA_CHECK(cudaFree(temp2_));
+    for (int g = 0; g < handle.numGPUs_; g++) {
+      CUDA_CHECK(cudaFree(temp1_[g]));
+      CUDA_CHECK(cudaFree(temp2_[g]));
+    }
   }
 
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
