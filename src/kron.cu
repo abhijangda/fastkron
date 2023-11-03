@@ -343,7 +343,9 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
                                 T* temp1, T* temp2, cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
-  if (result == NULL) return cudaErrorInvalidValue;
+  if (result == nullptr) return cudaErrorInvalidValue;
+  if (temp1  == nullptr) return cudaErrorInvalidValue;
+
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
   
@@ -360,17 +362,12 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
                                       KronMatCols, KronMatRows, false);
   }
 
-  temp1 = nullptr;
-  if (temp1 == nullptr && temp2 == nullptr) {
-
-  } else if ((temp2 == nullptr && temp1 != nullptr) || 
-             (temp2 != nullptr && temp1 == nullptr)) {
-    T* temp = (temp2 == nullptr) ? temp1 : temp2;
+  if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
       kronGemmResults[0] = result;
-      kronGemmResults[1] = temp;
+      kronGemmResults[1] = temp1;
     } else {
-      kronGemmResults[0] = temp;
+      kronGemmResults[0] = temp1;
       kronGemmResults[1] = result;
     }
 

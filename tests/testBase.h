@@ -310,7 +310,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
     CUDACHECK(cudaMalloc(&dTemp1[g], tempSize * sizeof(T)));
-    CUDACHECK(cudaMalloc(&dTemp2[g], tempSize * sizeof(T)));
+    if (resultSize < tempSize)
+      CUDACHECK(cudaMalloc(&dTemp2[g], tempSize * sizeof(T)));
     CUDACHECK(cudaMalloc(&dResult[g], resultSize*sizeof(T)));
     CUDACHECK(cudaMemset(dResult[g], 0, resultSize*sizeof(T)));
   }
