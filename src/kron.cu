@@ -706,7 +706,10 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
 
     uint bestMaxLocalKrons = 1;
     TunedKernelsSeries minKernelSeries;
-    for (uint MaxLocalKrons = 1; MaxLocalKrons < NumKronMats; MaxLocalKrons += 1) {
+    //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
+    //TODO: consider only valid krons 
+    for (uint MaxLocalKrons = (handle.distComm_ == DistComm::P2P) ? 1 : NumKronMats - 1; 
+         MaxLocalKrons < NumKronMats; MaxLocalKrons += 1) {
     uint seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
     
