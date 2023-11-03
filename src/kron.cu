@@ -346,9 +346,11 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
   if (result == NULL) return cudaErrorInvalidValue;
   if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
     return cudaErrorInvalidValue;
+  
   T* kronGemmResults[2] = {temp1, temp2};
   T* prevKronResult = x;
   T* currKronResult = kronGemmResults[0];
+
   //TODO: Assumes all factors are of same size and square shape
   TunedKernelsSeries kernelSeries;
   if (handle.tunedKernelSeries.size() > 0) {
@@ -357,6 +359,25 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
     kernelSeries = selectKernelSeries(handle, NumKronMats, M, N, K, 
                                       KronMatCols, KronMatRows, false);
   }
+
+  temp1 = nullptr;
+  if (temp1 == nullptr && temp2 == nullptr) {
+
+  } else if ((temp2 == nullptr && temp1 != nullptr) || 
+             (temp2 != nullptr && temp1 == nullptr)) {
+    T* temp = (temp2 == nullptr) ? temp1 : temp2;
+    if (kernelSeries.size() % 2 == 1) {
+      kronGemmResults[0] = result;
+      kronGemmResults[1] = temp;
+    } else {
+      kronGemmResults[0] = temp;
+      kronGemmResults[1] = result;
+    }
+
+    currKronResult = kronGemmResults[0];
+    prevKronResult = x;
+  }
+
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
   uint prevTempN = K;
