@@ -858,37 +858,17 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   //For first slicedMatmul, x is the input
   innerPrevResult = x;
   innerCurrResult = innerResults[0];
-  // if (g == 1) {printf("627\n"); printGPUArray<float>(handle.gpuM_, handle.gpuK_, innerPrevResult, stream[g]);}
   CUDA_CHECK(cudaSetDevice(g));
 
-  for (uint io = 0; io < NumKronMats; io += handle.perGPUKronBatch_) {
-    // if (io == 0) {
-    // } else {
-    //   innerPrevResult = innerResults[0];
-    //   innerCurrResult = innerResults[1];
-    // }
+  //Calculate number of swaps
+  if (temp2[g] == nullptr) {
+    uint currTempN;
+    uint prevTempN = gpuK;
+    uint numSwaps = 0;
 
-    // TODO:
-    // if (uvaColsX == K) {
-    //   innerResults[0] = &kronGemmResults[0][startOutofCoreRows * K];
-    //   innerResults[1] = &kronGemmResults[1][startOutofCoreRows * K];
-    //   innerPrevResult = &x[startOutofCoreRows * K];
-    //   innerCurrResult = innerResults[0];
-    // }
-    uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
-    uint MaxI = io + KronMulBatchSize;
-    {//uint gpuColPart = gc * handle.gpuK_; gpuColPart < K; gpuColPart += handle.gpuK_ * gpusInK_) {
-      //Copy outerPrevResult to innerPrevResult
-      // if (uvaColsX < K) {
-      //   // CUDA_CHECK(cudaDeviceSynchronize());
-      //   // printf("copyXtoUVAX\n");
-      //   dim3 grid = {outOfCoreRows, 1,1};
-      //   dim3 block = {256, 1, 1};
-      //   copyXtoUVAX<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, N, K, KronMatRows[io], KronMatCols[io], innerPrevResult, outOfCoreRows, uvaColsX,
-      //                                                             &outerPrevResult[startOutofCoreRows * K], uvaPart/uvaColsX);
-      //   // CUDA_CHECK(cudaDeviceSynchronize());
-      //   // printf("Done\n");
-      // }
+    for (uint io = 0; io < NumKronMats; io += handle.perGPUKronBatch_) {
+      uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
+      uint MaxI = io + KronMulBatchSize;
       const uint endKron = NumKronMats - io - KronMulBatchSize;
       
       currTempN = prevTempN;
@@ -916,6 +896,53 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         }
         kernelSeries = localSeries;
       }
+
+      numSwaps += kernelSeries.size() + ((handle.distComm_ == DistComm::P2P) ? 0 : 1);
+    }
+
+    if (numSwaps%2 == 1) {
+      innerResults[0] = results[g];
+      innerResults[1] = temp1[g];
+    } else {
+      innerResults[0] = temp1[g];
+      innerResults[1] = results[g];
+    }
+
+    innerCurrResult = innerResults[0]; 
+  }
+
+  for (uint io = 0; io < NumKronMats; io += handle.perGPUKronBatch_) {
+    uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
+    uint MaxI = io + KronMulBatchSize;
+    {
+      const uint endKron = NumKronMats - io - KronMulBatchSize;
+      
+      currTempN = prevTempN;
+
+      TunedKernelsSeries kernelSeries;
+      uint LocalKronCols[KronMulBatchSize];
+      uint LocalKronRows[KronMulBatchSize];
+      for (int i = KronMulBatchSize - 1; i >= 0 ; i--) {
+        LocalKronCols[i] = KronMatCols[NumKronMats - MaxI + i];
+        LocalKronRows[i] = KronMatRows[NumKronMats - MaxI + i];
+        currTempN = (currTempN/LocalKronRows[i])*LocalKronCols[i];
+      }
+
+      if (handle.tunedKernelSeries.size() > 0) {
+        for (auto tunedKernel : handle.tunedKernelSeries) {
+          if (tunedKernel.start >= endKron  and tunedKernel.end < endKron + KronMulBatchSize) {
+            kernelSeries.insert(kernelSeries.begin(), tunedKernel);
+          }
+        }
+      } else {
+        auto localSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, gpuK, gpuK, 
+                                              LocalKronCols, LocalKronRows, true);
+        for (auto& kernel : localSeries) {
+          kernel.end += endKron;
+        }
+        kernelSeries = localSeries;
+      }
+
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
       DistributedParams<T> distParams(gr, gc, handle.gpusInK_, 
@@ -952,9 +979,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         } 
         
         T** gpuTempResults;
-        if (innerCurrResult == innerResults[0]) {
+        if (innerCurrResult == temp1[g]) {
           gpuTempResults = (T**)temp1;
-        } else if (innerCurrResult == innerResults[1]) {
+        } else if (innerCurrResult == temp2[g]) {
           gpuTempResults = (T**)temp2;
         } else if (innerCurrResult == results[g]) {
           gpuTempResults = (T**)results;
@@ -1124,7 +1151,8 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   if (result == NULL)                        return cudaErrorInvalidValue;
   if (M % gpuM != 0)                         return cudaErrorInvalidValue;
   if (NumKronMats < handle.perGPUKronBatch_) return cudaErrorInvalidValue;
-
+  if (temp1 == nullptr)                      return cudaErrorInvalidValue;
+                      
   const uint batchedKronMuls = handle.perGPUKronBatch_;
 
   thread_pool<ThreadArgs*>::task tasks[handle.numGPUs_];
