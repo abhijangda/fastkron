@@ -664,6 +664,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
   std::cout << "N " << N << " K " << K << " KronMatCols[0] " << KronMatCols[0] << " KronMatRows[0] " << KronMatRows[0] << std::endl;
   float minTime = 0;
   if (!handle.isDistributed_) {
+    //TODO: temp1_ and temp2_ declaration/allocation is same for both cases
     T* temp1_, *temp2_;
     size_t resultSize = 0, tempSize = 0;
     kronGeMMSizes(handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
@@ -696,14 +697,22 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(T)));
       CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(T)));
     }
-
+    minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
     handle.getDistributedSizes(M, K, gpuM, gpuK);
     uint prevTempN = gpuK;
     //TODO: This loop is really common and should be a macro?
-    for (uint i = 0; i < NumKronMats; i += handle.perGPUKronBatch_) {
+    std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
+
+    uint bestMaxLocalKrons = 1;
+    TunedKernelsSeries minKernelSeries;
+    for (uint MaxLocalKrons = 1; MaxLocalKrons < NumKronMats; MaxLocalKrons += 1) {
+    uint seriesTime = 0;
+    TunedKernelsSeries tunedKernelSeries;
+    
+    for (uint i = 0; i < NumKronMats; i += MaxLocalKrons) {
       const uint kronMat = NumKronMats - i - 1;
-      const uint LocalKrons = min(handle.perGPUKronBatch_, NumKronMats - i);
+      const uint LocalKrons = min(MaxLocalKrons, NumKronMats - i);
       uint currTempN = prevTempN;
       uint LocalKronMatCols[LocalKrons];
       uint LocalKronMatRows[LocalKrons];
@@ -713,7 +722,6 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         currTempN = (currTempN/LocalKronMatRows[k])*LocalKronMatCols[k];
       }
       
-      std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
       T** gpuResults = (T**)temp2_;
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
@@ -725,7 +733,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                         handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
                         distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
-      minTime += minExecTimeOfSeries(gpuM, prevTempN, LocalKrons,
+      seriesTime += minExecTimeOfSeries(gpuM, prevTempN, LocalKrons,
                                      LocalKronMatCols, LocalKronMatRows, 0,
                                      handle.isDistributed_ && handle.distComm_ == DistComm::P2P,
                                      tunedKernels, bestKernels);
@@ -733,8 +741,15 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       for (auto tunedKernel : tunedKernels) {
         tunedKernel.start += kronMat + 1 - LocalKrons;
         tunedKernel.end   += kronMat + 1 - LocalKrons;
-        handle.tunedKernelSeries.insert(handle.tunedKernelSeries.begin(), tunedKernel);
+        tunedKernelSeries.insert(tunedKernelSeries.begin(), tunedKernel);
       }
+    }
+    
+    if (seriesTime < minTime) {
+      minTime = seriesTime;
+      handle.tunedKernelSeries = tunedKernelSeries;
+      handle.perGPUKronBatch_ = MaxLocalKrons;
+    }
     }
 
     for (int g = 0; g < handle.numGPUs_; g++) {
