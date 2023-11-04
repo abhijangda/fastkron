@@ -307,15 +307,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaMalloc(&dX[0], sizeX));
   }
 
-  for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaMalloc(&dTemp1[g], tempSize * sizeof(T)));
-    if (resultSize < tempSize)
-      CUDACHECK(cudaMalloc(&dTemp2[g], tempSize * sizeof(T)));
-    CUDACHECK(cudaMalloc(&dResult[g], resultSize*sizeof(T)));
-    CUDACHECK(cudaMemset(dResult[g], 0, resultSize*sizeof(T)));
-  }
-
   if (verbose) printf("allocated\n");
   
   for (uint i = 0; i < NUM_KP_MATS; i++) {
@@ -337,6 +328,16 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
                             stream[0]));
   }
+
+  for (int g = 0; g < gpus; g++) {
+    CUDACHECK(cudaSetDevice(g));
+    CUDACHECK(cudaMalloc(&dTemp1[g], tempSize * sizeof(T)));
+    if (resultSize < tempSize)
+      CUDACHECK(cudaMalloc(&dTemp2[g], tempSize * sizeof(T)));
+    CUDACHECK(cudaMalloc(&dResult[g], resultSize*sizeof(T)));
+    CUDACHECK(cudaMemset(dResult[g], 0, resultSize*sizeof(T)));
+  }
+  
   if (checkResults) {
     if (useDistributed) {
       //Already done by allocDistributedX
