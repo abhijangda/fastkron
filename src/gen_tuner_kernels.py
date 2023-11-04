@@ -158,7 +158,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
-      TileMs = [1, 2]
+      TileMs = [1, 2] #[2 ** i for i in range(0, int(math.log2(m)))]
     
       shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
