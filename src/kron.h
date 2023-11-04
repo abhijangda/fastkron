@@ -52,14 +52,6 @@ struct FastKronHandle {
   FastKronHandle() :
     tunedKernelSeries()
   {
-    // gpuM_ = 0;
-    // gpuK_ = 0;
-    // gpuN_ = 0;
-    // temp1_ = NULL;
-    // temp2_ = NULL;
-    // gpuTemp1_ = NULL;
-    // gpuTemp2_ = NULL;
-
     //Optimization Options
     useFusion_ = true;
 
@@ -67,20 +59,10 @@ struct FastKronHandle {
     isDistributed_ = false;
   }
 
-  // void* temp1_;
-  // void* temp2_;
-
   uint numGPUs_;
-  // uint gpuM_;
-  // uint gpuK_;
-  // uint gpuN_;
   uint gpusInM_;
   uint gpusInK_;
   uint perGPUKronBatch_;
-  // void **gpuTemp1_;
-  // void **gpuTemp2_;
-  // void **sendTemps_;
-  // void **recvTemps_;
   bool isDistributed_;
   DistComm distComm_;
 
@@ -110,6 +92,8 @@ struct FastKronHandle {
       ncclCommDestroy(ncclComms[i]);
   }
 };
+
+typedef struct FastKronHandle* FastKronHandle_t;
 
 struct ThreadArgs {
   ThreadArgs() {}
