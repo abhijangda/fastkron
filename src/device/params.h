@@ -21,6 +21,16 @@ __host__ __device__ constexpr uint power(const uint x, const uint y) {
   return result;
 }
 
+template<typename ElemT>
+struct EpilogueParams {
+  const ElemT * __restrict__ glD;
+  const ElemT alpha;
+  const ElemT beta;
+  EpilogueParams() : alpha((ElemT)1.0f), beta(0), glD(nullptr) {}
+  EpilogueParams(const ElemT alpha, const ElemT beta, const ElemT* glD) :
+    glD(glD), alpha(alpha), beta(beta) {}
+};
+
 template<typename ElemT, uint NumFusedKerns>
 struct KernelParams {
   const uint RowsC;

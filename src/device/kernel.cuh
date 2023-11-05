@@ -18,7 +18,8 @@ template<typename ElemT, typename Vec2T, typename Vec4T, uint NumThreads, RowPar
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
                                FusedParams<ElemT, NumFusedKerns> fusedParams,
-                               DistributedParams<ElemT> distParams) {
+                               DistributedParams<ElemT> distParams,
+                               EpilogueParams<ElemT> epilogueParams) {
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
@@ -265,7 +266,12 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
           outputArray = params.glC;
         }
 
-        outputArray[cIdx] = regC[rowShC][reg_i][reg_j];
+        if (params.kp_idx == 0) {
+          ElemT d = (epilogueParams.glD) ? epilogueParams.beta * epilogueParams.glD[cIdx] : 0;
+          outputArray[cIdx] = epilogueParams.alpha * regC[rowShC][reg_i][reg_j] + d;
+        } else {
+          outputArray[cIdx] = regC[rowShC][reg_i][reg_j];
+        }
     }}}
   }} else {
   #pragma unroll
@@ -385,20 +391,28 @@ __global__ void kronGemmKernel(KernelParams<ElemT, NumFusedKerns> params,
         //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
         //if (cCol < colsC) 
         
+        if (params.kp_idx == 0) {
+          for (int i = 0; i < vecTyNumElems; i++) {
+            ElemT d = epilogueParams.beta * ((epilogueParams.glD != nullptr) ? epilogueParams.glD[cIdx + i] : 0);
+            regC[rowA][reg_i + i][reg_j] = epilogueParams.alpha * regC[rowA][reg_i + i][reg_j] + d;
+          }
+        }
         {
           switch (vecTyNumElems) {
-            case 4:
+            case 4: {
               globalStore4Elems(&outputArray[cIdx], 
                                 regC[rowA][reg_i][reg_j], 
                                 regC[rowA][reg_i+1][reg_j],
                                 regC[rowA][reg_i+2][reg_j], 
                                 regC[rowA][reg_i+3][reg_j]);
               break;
-            case 2:
+            }
+            case 2: {
               globalStore2Elems(&outputArray[cIdx],
                                 regC[rowA][reg_i][reg_j],
                                 regC[rowA][reg_i+1][reg_j]);
               break;
+            }
             case 1: {
               globalStore1Elems(&outputArray[cIdx], regC[rowA][reg_i][reg_j]);
               // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {

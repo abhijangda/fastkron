@@ -188,17 +188,17 @@ static void kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kp
     CUDACHECK(kronSGEMM(handle, NUM_KP_MATS,
                         (float*)x, (float**)kpMats, (float*)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, (float*)temp1, (float*)temp2,
-                        stream));
+                        1, 0, nullptr, stream));
   } else if (std::is_same<T, int>::value) {
     CUDACHECK(kronIGEMM(handle, NUM_KP_MATS, 
                         (int*)x, (int**)kpMats, (int*)result, 
                         M, N, K, KP_MAT_N, KP_MAT_K, (int*)temp1, (int*)temp2,
-                        stream));
+                        1, 0, nullptr, stream));
   } else if (std::is_same<T, double>::value) {
     CUDACHECK(kronDGEMM(handle, NUM_KP_MATS, 
                         (double*)x, (double**)kpMats, (double*)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, (double*)temp1, (double*)temp2,
-                        stream));
+                        1, 0, nullptr, stream));
   } else {
     printf("Invalid type\n");
     return;

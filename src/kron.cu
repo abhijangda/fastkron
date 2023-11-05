@@ -228,6 +228,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                 T* x, T* kronMat[NumFusedKerns], T* kronGemmResult,
                                 const uint M, const uint N, const uint K, 
                                 const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
+                                EpilogueParams<T> epilogueParams,
                                 cudaStream_t stream) {
   cudaError_t status;
   
@@ -256,8 +257,9 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   FusedParams<T, NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
   // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), grid, block, stream);
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, 
+                                     DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), epilogueParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -341,7 +343,9 @@ template<typename T, typename VecT>
 cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
                                 T* result,
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-                                T* temp1, T* temp2, cudaStream_t stream) {
+                                T* temp1, T* temp2, 
+                                EpilogueParams<T> epilogueParams,
+                                cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
   if (result == nullptr) return cudaErrorInvalidValue;
   if (temp1  == nullptr) return cudaErrorInvalidValue;
@@ -406,31 +410,31 @@ cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, 
         status = generalSlicedMatmul<T, 1>(selectedKernel, kronMat, prevKronResult,
                                            krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
-                                           stream);
+                                           epilogueParams, stream);
         break;
       case 2:
         status = generalSlicedMatmul<T, 2>(selectedKernel, kronMat, prevKronResult,
                                            krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
-                                           stream);
+                                           epilogueParams, stream);
         break;
       case 3:
         status = generalSlicedMatmul<T, 3>(selectedKernel, kronMat, prevKronResult,
                                            krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
-                                           stream);
+                                           epilogueParams, stream);
         break;
       case 4:
         status = generalSlicedMatmul<T, 4>(selectedKernel, kronMat, prevKronResult,
                                            krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
-                                           stream);
+                                           epilogueParams, stream);
         break;
       case 5:
         status = generalSlicedMatmul<T, 5>(selectedKernel, kronMat, prevKronResult,
                                            krons, currKronResult, M, currTempN, prevTempN,
                                            FusedKronMatCols, FusedKronMatRows,
-                                           stream);
+                                           epilogueParams, stream);
         break;
       default:
           std::cout << "Invalid number of fused kernels" << std::endl;
@@ -611,31 +615,31 @@ cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T*
                 status = generalSlicedMatmul<T, 1>(kernel, endKron, prevKronResult,
                                                   krons, currKronResult, M, outTempN, tempN, 
                                                   FusedKronMatCols, FusedKronMatRows,
-                                                  stream);
+                                                  EpilogueParams<T>(), stream);
                 break;
               case 2:
                 status = generalSlicedMatmul<T, 2>(kernel, endKron, prevKronResult,
                                                   krons, currKronResult, M, outTempN, tempN, 
                                                   FusedKronMatCols, FusedKronMatRows,
-                                                  stream);
+                                                  EpilogueParams<T>(), stream);
                 break;
               case 3:
                 status = generalSlicedMatmul<T, 3>(kernel, endKron, prevKronResult,
                                                   krons, currKronResult, M, outTempN, tempN,
                                                   FusedKronMatCols, FusedKronMatRows,
-                                                  stream);
+                                                  EpilogueParams<T>(), stream);
                 break;
               case 4:
                 status = generalSlicedMatmul<T, 4>(kernel, endKron, prevKronResult,
                                                   krons, currKronResult, M, outTempN, tempN,
                                                   FusedKronMatCols, FusedKronMatRows,
-                                                  stream);
+                                                  EpilogueParams<T>(), stream);
                 break;
               case 5:
                 status = generalSlicedMatmul<T, 5>(kernel, endKron, prevKronResult,
                                                   krons, currKronResult, M, outTempN, tempN,
                                                   FusedKronMatCols, FusedKronMatRows,
-                                                  stream);
+                                                  EpilogueParams<T>(), stream);
                 break;
               default:
                   std::cout << "Invalid number of fused kernels" << std::endl;
@@ -1198,26 +1202,26 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 ***************************************************/
 cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float* temp1, float* temp2,
-                      cudaStream_t stream) {
+                      float alpha, float beta, float *z, cudaStream_t stream) {
   return singleGPUKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result,
                                             M, N, K, KronMatCols, KronMatRows, temp1, temp2, 
-                                            stream);
+                                            EpilogueParams<float>(alpha, beta, z), stream);
 }
 
 cudaError_t kronIGEMM(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], int* temp1, int* temp2,
-                      cudaStream_t stream) {
+                      int alpha, int beta, int *z, cudaStream_t stream) {
   return singleGPUKronMatmul<int, int4>(handle, NumKronMats, x, kronMats, result, 
                                         M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-                                        stream);
+                                        EpilogueParams<int>(alpha, beta, z), stream);
 }
 
 cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], double* temp1, double* temp2,
-                      cudaStream_t stream) {
+                      double alpha, double beta, double *z, cudaStream_t stream) {
   return singleGPUKronMatmul<double, double4>(handle, NumKronMats, x, kronMats, result, 
                                               M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-                                              stream);
+                                              EpilogueParams<double>(alpha, beta, z), stream);
 }
 
 
