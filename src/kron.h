@@ -69,7 +69,6 @@ struct FastKronHandle {
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
 
-  template<typename T> void init(int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
   //TODO: these two functions should be a part of utils?
   template<typename T> cudaError_t allocDistributedX(T* dX[], T* hX, uint M, uint K);
   template<typename T> cudaError_t gatherDistributedY(T* dY[], T* hY, uint M, uint K, 
@@ -92,8 +91,6 @@ struct FastKronHandle {
       ncclCommDestroy(ncclComms[i]);
   }
 };
-
-typedef struct FastKronHandle* FastKronHandle_t;
 
 struct ThreadArgs {
   ThreadArgs() {}
@@ -131,40 +128,45 @@ struct ThreadArgs {
   } threadResult;
 };
 
-cudaError_t kronGeMMSizes(FastKronHandle& handle, const uint NumKronMats, uint M, uint N, uint K, 
+extern "C" {
+typedef struct FastKronHandle* fastKronHandle;
+
+cudaError_t fastKronHandleInit(fastKronHandle* handle, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+cudaError_t kronGeMMSizes(fastKronHandle handle, const uint NumKronMats, uint M, uint N, uint K, 
                           uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize);
 
-cudaError_t kronSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
+cudaError_t kronSGEMM(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float* temp1, float* temp2, 
                       float alpha, float beta, float *z, cudaStream_t stream);
 
-cudaError_t kronIGEMM(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
+cudaError_t kronIGEMM(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], int* temp1, int* temp2, 
                       int alpha, int beta, int *z, cudaStream_t stream);
 
-cudaError_t kronDGEMM(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
+cudaError_t kronDGEMM(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], double* temp1, double* temp2, 
                       double alpha, double beta, double *z, cudaStream_t stream);
 
-cudaError_t kronSGEMMOutofCore(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
+cudaError_t kronSGEMMOutofCore(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
-cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
+cudaError_t kronSGEMMOutofCoreX(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
-cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
+cudaError_t kronIGEMMOutofCoreX(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
 
 //TODO: modify such that the results are always written to the supplied result pointer 
-cudaError_t kronDistributedSGEMM(FastKronHandle& handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
+cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
                                  float* temp1[], float* temp2[], cudaStream_t stream[]);
 
-cudaError_t kronSGEMMTune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
+cudaError_t kronSGEMMTune(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], 
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                           cudaStream_t stream);
-cudaError_t kronDGEMMTune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
+cudaError_t kronDGEMMTune(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], 
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                           cudaStream_t stream);
-cudaError_t kronIGEMMTune(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[],
+cudaError_t kronIGEMMTune(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[],
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                           cudaStream_t stream);
+}
 #endif

@@ -181,7 +181,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
               Call KronGEMM Library Functions
 ***************************************************/
 template<typename T>
-static void kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[], T* result,
+static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, T* kpMats[], T* result,
                      uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2,
                      cudaStream_t stream) {
   if (std::is_same<T, float>::value) {
@@ -209,7 +209,7 @@ static void kronGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kp
 
 
 template<typename T>
-static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
+static T* kronGEMMOutOfCore(fastKronHandle handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream[]) {
   T* result;
   if (std::is_same<T, float>::value) {
@@ -231,7 +231,7 @@ static T* kronGEMMOutOfCore(FastKronHandle& handle, const uint NUM_KP_MATS, T* x
 }
 
 template<typename T>
-static void kronDistributedGEMM(FastKronHandle& handle, const uint NUM_KP_MATS, T* x[], T* kpMats[], T* result[],
+static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x[], T* kpMats[], T* result[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], 
             T* temp1[], T* temp2[], cudaStream_t stream[]) {
   if (std::is_same<T, float>::value) {
@@ -288,10 +288,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   if (verbose) printf("values set\n");
   //Allocate GPU data
-  FastKronHandle handle;
+  fastKronHandle handle;
   if (verbose) printf("allocating\n");
-  handle.init<T>(gpus, gpuInRows, gpuInCols, kronBatch);
-  handle.setUseFusion(useFusion);
+  fastKronHandleInit(&handle, gpus, gpuInRows, gpuInCols, kronBatch);
+  handle->setUseFusion(useFusion);
   size_t resultSize = 0;
   size_t tempSize = 0;
   CUDACHECK(kronGeMMSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize));
@@ -302,7 +302,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T *dTemp2[gpus] = {nullptr};
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
-    CUDACHECK(handle.allocDistributedX(dX, hX, M, K));
+    CUDACHECK(handle->allocDistributedX(dX, hX, M, K));
   } else {
     CUDACHECK(cudaMalloc(&dX[0], sizeX));
   }
@@ -371,7 +371,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
     if (useDistributed) {
-      CUDACHECK(handle.gatherDistributedY(dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+      CUDACHECK(handle->gatherDistributedY(dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
       CUDACHECK(cudaMemcpy(dResultToHost, dResult[0], sizeResult, cudaMemcpyDeviceToHost));
     }
@@ -456,7 +456,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaFree(dTemp2[g]));
   }
 
-  handle.free();
+  handle->free();
   
   //Free CPU RAM
   delete[] hX;
