@@ -85,11 +85,6 @@ struct FastKronHandle {
   TunedKernelsSeries tunedKernelSeries;
   
   std::vector<ncclComm_t> ncclComms;
-
-  void clean() {
-    for (int i=0; i<ncclComms.size(); i++)
-      ncclCommDestroy(ncclComms[i]);
-  }
 };
 
 struct ThreadArgs {

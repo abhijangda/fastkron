@@ -45,6 +45,7 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
  2. Debug message environment flag*/
 namespace env {
   static char DIST_COMM[] = "DIST_COMM";
+  static char FUSION[]    = "FUSION";
 
   DistComm getDistComm() {
     char* val = getenv(DIST_COMM);
@@ -53,6 +54,16 @@ namespace env {
     if (strcmp(val, "NCCL") == 0) return DistComm::NCCL;
     std::cout << "Invalid value for DIST_COMM=" << val << std::endl;
     return DistComm::DistCommNone;
+  }
+
+  bool getFusion() {
+    char* val = getenv(FUSION);
+    //Use fusion by default
+    if (val == nullptr) return true;
+    if (strcmp(val, "0") == 0) return false;
+    if (strcmp(val, "1") == 0) return true;
+    std::cout << "Invalid value for FUSION=" << val << std::endl;
+    return true;
   }
 }
 
@@ -259,7 +270,8 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, 
                                      DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), epilogueParams, grid, block, stream);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), 
+                                        epilogueParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -301,8 +313,10 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
 
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, DistributedParams<T>, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, grid, block, stream);
+  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, 
+                                     DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, EpilogueParams<T>(), 
+                                        grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -1444,6 +1458,10 @@ void FastKronHandle::free() {
       // CUDA_CHECK(cudaFree(gpuTemp2_[g]));
     }
 
+    if (distComm_ == DistComm::NCCL) {
+      for (int i=0; i<ncclComms.size(); i++)
+        ncclCommDestroy(ncclComms[i]);
+    }
     // delete[] gpuTemp1_;
     // delete[] gpuTemp2_;
 
