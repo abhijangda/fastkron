@@ -51,7 +51,8 @@ private:
     volatile thread_pool* volatile_pool = ((volatile thread_pool*)args.pool);
     while(volatile_pool->is_running()) {
       args.pool->wait_for_task(args.thread_id);
-      args.pool->run_task(args.thread_id);
+      if (volatile_pool->is_running())
+        args.pool->run_task(args.thread_id);
       args.pool->thread_done(args.thread_id);
     }
   }
@@ -82,6 +83,7 @@ public:
 
   void end() {
     running = false;
+    notify_all();
     for (uint t = 0; t < num_threads; t++) {
       threads[t].join();
     }
@@ -100,17 +102,21 @@ public:
     lk.unlock();
   }
 
+  void notify_all() {
+    for (uint i = 0; i < num_threads; i++) {
+      std::unique_lock<std::mutex> lk(wait_mutexes[i]);
+      waiting_vars[i].notify_all();
+      lk.unlock();
+    }
+  }
+
   void execute_tasks(task* tasks_) {
     for (uint i = 0; i < num_threads; i++) {
       std::unique_lock<std::mutex> tlk(tasks_mutexes[i]);
       tasks[i] = tasks_[i];
       tlk.unlock();
     }
-    for (uint i = 0; i < num_threads; i++) {
-      std::unique_lock<std::mutex> lk(wait_mutexes[i]);
-      waiting_vars[i].notify_all();
-      lk.unlock();
-    }
+    notify_all();
   }
 
   void thread_done(uint thread_id) {
@@ -126,7 +132,9 @@ public:
   }
 
   ~thread_pool() {
-    //TODO: join
+    end();
+    join_tasks();
+    delete tasks;
   }
 };
 

@@ -1437,12 +1437,12 @@ void FastKronHandle_init(FastKronHandle& handle, int gpus, int gpusInM, int gpus
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
   //do it
   //TODO: Add if debug
-  if (false) {
+  if (true) {
     uint numKernels = 0;
     std::cout << "Loading compiled kernels" << std::endl;
     for (auto iter : compiledKernels) {
       for (auto kernel : iter.second) {
-        std::cout << kernel << std::endl;
+        // std::cout << kernel << std::endl;
       }
       numKernels += iter.second.size();
     }
@@ -1453,15 +1453,19 @@ void FastKronHandle_init(FastKronHandle& handle, int gpus, int gpusInM, int gpus
 void FastKronHandle::free() {
   if (isDistributed_) {
     //TODO: Clear everything
-    for (uint g = 0; g < numGPUs_; g++) {
-      // CUDA_CHECK(cudaFree(gpuTemp1_[g]));
-      // CUDA_CHECK(cudaFree(gpuTemp2_[g]));
+    for (uint g = 0; g < gpusInM_; g++) {
+      int s = pthread_barrier_destroy(&barriers_[g]);
+      assert (s == 0);
     }
+
+    delete threads_;
+    delete barriers_;
 
     if (distComm_ == DistComm::NCCL) {
       for (int i=0; i<ncclComms.size(); i++)
         ncclCommDestroy(ncclComms[i]);
     }
+
     // delete[] gpuTemp1_;
     // delete[] gpuTemp2_;
 
@@ -1474,6 +1478,7 @@ void FastKronHandle::free() {
     // temp1_ = nullptr;
     // temp2_ = nullptr;  
   }
+  compiledKernels.clear();
 }
 
 /**************************************************
