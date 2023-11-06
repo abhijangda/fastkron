@@ -131,7 +131,8 @@ struct ThreadArgs {
 extern "C" {
 typedef struct FastKronHandle* fastKronHandle;
 
-cudaError_t fastKronHandleInit(fastKronHandle* handle, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+cudaError_t fastKronInit(fastKronHandle* handle, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+void fastKronDestroy(fastKronHandle handle);
 cudaError_t kronGeMMSizes(fastKronHandle handle, const uint NumKronMats, uint M, uint N, uint K, 
                           uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize);
 

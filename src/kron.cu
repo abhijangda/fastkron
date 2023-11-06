@@ -1461,11 +1461,16 @@ void FastKronHandle::free() {
 /**************************************************
           Library Functions
 ***************************************************/
-cudaError_t fastKronHandleInit(fastKronHandle* handle, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+cudaError_t fastKronInit(fastKronHandle* handle, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   FastKronHandle* h = new FastKronHandle;
   FastKronHandle_init(*h, gpus, gpusInM, gpusInK, gpuLocalKrons);
   *handle = h;
   return cudaSuccess;
+}
+
+void fastKronDestroy(fastKronHandle handle) {
+  handle->free();
+  delete handle;
 }
 
 cudaError_t kronSGEMM(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float* result,

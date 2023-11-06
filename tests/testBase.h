@@ -290,7 +290,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate GPU data
   fastKronHandle handle;
   if (verbose) printf("allocating\n");
-  fastKronHandleInit(&handle, gpus, gpuInRows, gpuInCols, kronBatch);
+  fastKronInit(&handle, gpus, gpuInRows, gpuInCols, kronBatch);
   handle->setUseFusion(useFusion);
   size_t resultSize = 0;
   size_t tempSize = 0;
@@ -456,7 +456,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(cudaFree(dTemp2[g]));
   }
 
-  handle->free();
+  fastKronDestroy(handle);
   
   //Free CPU RAM
   delete[] hX;
