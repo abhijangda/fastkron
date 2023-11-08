@@ -11,7 +11,7 @@ def baseline(input, kronmats):
         outputKron = torch.kron(outputKron, m)
     return torch.matmul(input, outputKron)
 
-X = torch.ones((M, P**4), dtype = torch.float).cuda()
+X = torch.ones((M, P**N), dtype = torch.float).cuda()
 Fs = []
 for n in range(N):
   Fs.append(torch.ones((P, Q), dtype = torch.float).cuda())
@@ -26,5 +26,5 @@ Y1 = torch.zeros(rs, dtype = torch.float).cuda()
 T1 = torch.zeros(ts, dtype = torch.float).cuda()
 T2 = torch.zeros(ts, dtype = torch.float).cuda()
 
-p.kmm(X, Fs, Y)
-print(Y[0])
+p.kmm(X, Fs, Y1, T1, T2)
+print(Y1[0])

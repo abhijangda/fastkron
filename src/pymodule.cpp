@@ -77,7 +77,7 @@ static PyObject* pyKronSGEMM(PyObject* self, PyObject* args) {
   void* t2;
   fastKronHandle handle;
 
-  if (PyArg_ParseTuple(args, "IIOOkOkkk", &handle, &M, &N, &objPs, &objQs, 
+  if (PyArg_ParseTuple(args, "IIIOOkOkkk", &handle, &M, &N, &objPs, &objQs, 
                                         &x, &objFs, &y, &t1, &t2) == 0)
     return Py_None;
 

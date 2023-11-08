@@ -19,10 +19,10 @@ class PyFastKron:
                                            self.ps(fs), self.qs(fs))
     return ((x.shape[0], rs//x.shape[0]), (x.shape[0], ts//x.shape[0]))
   
-  def kmm(self, x, fs, y):
+  def kmm(self, x, fs, y, t1, t2):
     if (x.shape[1] != reduce((lambda a, b: a * b), self.ps(fs))):
       return None
     fastkroncpp.pyKronSGEMM(self.cpp_handle, x.shape[0], len(fs), 
                             self.ps(fs), self.qs(fs), 
                             x.data_ptr(), [f.data_ptr() for f in fs],
-                            y.data_ptr())
+                            y.data_ptr(), t1.data_ptr(), t2.data_ptr())
