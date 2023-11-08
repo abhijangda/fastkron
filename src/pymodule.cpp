@@ -1,31 +1,50 @@
 #include <Python.h>
 
-// Function 1: A simple 'hello world' function
-static PyObject* helloworld(PyObject* self, PyObject* args)
-{
-    printf("Hello World\n");
+#include "fastkron.h"
+
+static PyObject* pyFastKronInit(PyObject* self, PyObject* args) {
+  fastKronHandle handle;
+  if (fastKronInit(&handle) != cudaSuccess)
     return Py_None;
+  return PyLong_FromUnsignedLong((unsigned long)handle);
+}
+
+static PyObject* pyFastKronDestroy(PyObject* self, PyObject* args) {
+  printf("Hello World\n");
+  return Py_None;
+}
+
+static PyObject* pyKronGeMMSizes(PyObject* self, PyObject* args) {
+  printf("Hello World\n");
+  return Py_None;
+}
+
+static PyObject* pyKronSGEMM(PyObject* self, PyObject* args) {
+  printf("Hello World\n");
+  return Py_None;
 }
 
 // Our Module's Function Definition struct
 // We require this `NULL` to signal the end of our method
 // definition
 static PyMethodDef myMethods[] = {
-    { "helloworld", helloworld, METH_NOARGS, "Prints Hello World" },
-    { NULL, NULL, 0, NULL }
+  {"pyFastKronInit",    pyFastKronInit,    METH_NOARGS, ""},
+  {"pyFastKronDestroy", pyFastKronDestroy, METH_VARARGS, ""},
+  {"pyKronGeMMSizes",   pyKronGeMMSizes,   METH_VARARGS, ""},
+  {"pyKronSGEMM",       pyKronSGEMM,       METH_VARARGS, ""},
+  {NULL, NULL, 0, NULL }
 };
 
 // Our Module Definition struct
-static struct PyModuleDef myModule = {
+static struct PyModuleDef fastKronModule = {
     PyModuleDef_HEAD_INIT,
-    "helloworld",
-    "Test Module",
+    "FastKronCPP",
+    "Python interface of FastKron",
     -1,
     myMethods
 };
 
 // Initializes our module using our above struct
-PyMODINIT_FUNC PyInit_helloworld(void)
-{
-    return PyModule_Create(&myModule);
+PyMODINIT_FUNC PyInit_fastkroncpp(void) {
+    return PyModule_Create(&fastKronModule);
 }

@@ -1,3 +1,5 @@
+#include<cuda.h>
+#include<driver_types.h>
 #pragma once
 
 extern "C" {
