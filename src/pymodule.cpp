@@ -10,7 +10,11 @@ static PyObject* pyFastKronInit(PyObject* self, PyObject* args) {
 }
 
 static PyObject* pyFastKronDestroy(PyObject* self, PyObject* args) {
-  printf("Hello World\n");
+  fastKronHandle handle;
+  if (PyArg_ParseTuple(args, "k", &handle) == 0) {
+    return Py_None;
+  }
+  fastKronDestroy(handle);
   return Py_None;
 }
 
@@ -41,10 +45,10 @@ static void PyListToVoidPtrArray(PyObject* list, void* array[], uint arraysize) 
 }
 
 static PyObject* pyKronGeMMSizes(PyObject* self, PyObject* args) {
+  fastKronHandle handle;
   uint M = 0, N = 0;
   PyObject* objPs;
   PyObject* objQs;
-  fastKronHandle handle;
 
   if (PyArg_ParseTuple(args, "kIIOO", &handle, &M, &N, &objPs, &objQs) == 0) {
     return Py_None;
@@ -67,6 +71,7 @@ static PyObject* pyKronGeMMSizes(PyObject* self, PyObject* args) {
 }
 
 static PyObject* pyKronSGEMM(PyObject* self, PyObject* args) {
+  fastKronHandle handle;
   uint M = 0, N = 0;
   PyObject* objPs;
   PyObject* objQs;
@@ -75,8 +80,7 @@ static PyObject* pyKronSGEMM(PyObject* self, PyObject* args) {
   void* y;
   void* t1;
   void* t2;
-  fastKronHandle handle;
-
+  
   if (PyArg_ParseTuple(args, "IIIOOkOkkk", &handle, &M, &N, &objPs, &objQs, 
                                         &x, &objFs, &y, &t1, &t2) == 0)
     return Py_None;

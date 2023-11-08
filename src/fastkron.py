@@ -26,3 +26,7 @@ class PyFastKron:
                             self.ps(fs), self.qs(fs), 
                             x.data_ptr(), [f.data_ptr() for f in fs],
                             y.data_ptr(), t1.data_ptr(), t2.data_ptr())
+  
+  def __del__(self):
+    fastkroncpp.pyFastKronDestroy(self.cpp_handle)
+    self.cpp_handle = None
