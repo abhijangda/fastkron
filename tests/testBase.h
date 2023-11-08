@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "fastkron.h"
 #include "kron.h"
 
 #ifndef __TEST_BASE_H__
