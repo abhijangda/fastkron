@@ -22,11 +22,12 @@ class PyFastKron:
   def kmm(self, x, fs, y, t1, t2):
     if (x.shape[1] != reduce((lambda a, b: a * b), self.ps(fs))):
       return None
-    fastkroncpp.pyKronSGEMM(self.cpp_handle, x.shape[0], len(fs), 
-                            self.ps(fs), self.qs(fs), 
-                            x.data_ptr(), [f.data_ptr() for f in fs],
-                            y.data_ptr(), t1.data_ptr(), t2.data_ptr())
-  
+    if x.dtype == torch.float:
+      fastkroncpp.pyKronSGEMM(self.cpp_handle, x.shape[0], len(fs), 
+                              self.ps(fs), self.qs(fs), 
+                              x.data_ptr(), [f.data_ptr() for f in fs],
+                              y.data_ptr(), t1.data_ptr(), t2.data_ptr())
+    
   def __del__(self):
     fastkroncpp.pyFastKronDestroy(self.cpp_handle)
     self.cpp_handle = None
