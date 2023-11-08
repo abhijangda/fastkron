@@ -27,6 +27,19 @@ static void PyListToUintArray(PyObject* list, uint array[], uint arraysize) {
   }
 }
 
+static void PyListToVoidPtrArray(PyObject* list, void* array[], uint arraysize) {
+  uint listsize = PyList_Size(list);
+  if (arraysize == listsize) {
+    assert (false);
+  }
+
+  for (uint i = 0; i < arraysize; i++) {
+    PyObject* ptr = PyList_GetItem(list, i);
+    long elem = PyLong_AsLong(ptr);
+    array[i] = (void*)elem;
+  }
+}
+
 static PyObject* pyKronGeMMSizes(PyObject* self, PyObject* args) {
   uint M = 0, N = 0;
   PyObject* objPs;
@@ -54,7 +67,36 @@ static PyObject* pyKronGeMMSizes(PyObject* self, PyObject* args) {
 }
 
 static PyObject* pyKronSGEMM(PyObject* self, PyObject* args) {
-  printf("Hello World\n");
+  uint M = 0, N = 0;
+  PyObject* objPs;
+  PyObject* objQs;
+  void* x;
+  PyObject* objFs;
+  void* y;
+  void* t1;
+  void* t2;
+  fastKronHandle handle;
+
+  if (PyArg_ParseTuple(args, "IIOOkOkkk", &handle, &M, &N, &objPs, &objQs, 
+                                        &x, &objFs, &y, &t1, &t2) == 0)
+    return Py_None;
+
+  uint ps[N];
+  uint qs[N];
+  void* fs[N];
+
+  PyListToUintArray(objPs, ps, N);
+  PyListToUintArray(objQs, qs, N);
+  PyListToVoidPtrArray(objFs, fs, N);
+
+  uint K = 1, KK = 1;
+  for (uint n = 0; n < N; n++) {K = K * ps[n]; KK = KK * qs[n];} 
+
+  auto err = kronSGEMM(handle, N, (float*)x, (float**)fs, (float*)y,
+                       M, KK, K, qs, ps, (float*)t1, (float*)t2,
+                       1, 0, nullptr, 0);
+  if (err != cudaSuccess) return Py_None;
+
   return Py_None;
 }
 

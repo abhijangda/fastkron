@@ -1,9 +1,9 @@
 import torch
 
 M = 1024
-N = 4
-P = 16
-Q = 16
+N = 2
+P = 128
+Q = 128
 
 def baseline(input, kronmats):
     outputKron = kronmats[0]
@@ -16,10 +16,15 @@ Fs = []
 for n in range(N):
   Fs.append(torch.ones((P, Q), dtype = torch.float).cuda())
 
-Y = baseline(X, Fs)
+# Y = baseline(X, Fs)
 
 from fastkron import PyFastKron
 
 p = PyFastKron()
 (rs, ts) = p.resultTempSizes(X, Fs)
-print(rs, ts)
+Y1 = torch.zeros(rs, dtype = torch.float).cuda()
+T1 = torch.zeros(ts, dtype = torch.float).cuda()
+T2 = torch.zeros(ts, dtype = torch.float).cuda()
+
+p.kmm(X, Fs, Y)
+print(Y[0])

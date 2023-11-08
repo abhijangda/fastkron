@@ -7,13 +7,22 @@ class PyFastKron:
     if self.cpp_handle == None:
       raise Exception("")
 
-  def resultTempSizes(self, x, fs):
-    return fastkroncpp.pyKronGeMMSizes(self.cpp_handle, 
-                                       x.shape[0], len(fs), 
-                                       [f.shape[0] for f in fs],
-                                       [f.shape[1] for f in fs])
+  def ps(self, fs):
+    return [f.shape[0] for f in fs]
   
-  def kmm(self, x, ps, qs, y):
-    if (x.shape[1] != reduce((lambda a, b: a * b), ps)):
+  def qs(self, fs):
+    return [f.shape[1] for f in fs]
+
+  def resultTempSizes(self, x, fs):
+    (rs, ts) = fastkroncpp.pyKronGeMMSizes(self.cpp_handle, 
+                                           x.shape[0], len(fs), 
+                                           self.ps(fs), self.qs(fs))
+    return ((x.shape[0], rs//x.shape[0]), (x.shape[0], ts//x.shape[0]))
+  
+  def kmm(self, x, fs, y):
+    if (x.shape[1] != reduce((lambda a, b: a * b), self.ps(fs))):
       return None
-    # fastkroncpp.pyKronSGEMM(self.cpp_handle, x )
+    fastkroncpp.pyKronSGEMM(self.cpp_handle, x.shape[0], len(fs), 
+                            self.ps(fs), self.qs(fs), 
+                            x.data_ptr(), [f.data_ptr() for f in fs],
+                            y.data_ptr())
