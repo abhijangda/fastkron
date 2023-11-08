@@ -14,9 +14,43 @@ static PyObject* pyFastKronDestroy(PyObject* self, PyObject* args) {
   return Py_None;
 }
 
+static void PyListToUintArray(PyObject* list, uint array[], uint arraysize) {
+  uint listsize = PyList_Size(list);
+  if (arraysize == listsize) {
+    assert (false);
+  }
+
+  for (uint i = 0; i < arraysize; i++) {
+    PyObject* intobj = PyList_GetItem(list, i);
+    long elem = PyLong_AsLong(intobj);
+    array[i] = (uint)elem;
+  }
+}
+
 static PyObject* pyKronGeMMSizes(PyObject* self, PyObject* args) {
-  printf("Hello World\n");
-  return Py_None;
+  uint M = 0, N = 0;
+  PyObject* objPs;
+  PyObject* objQs;
+  fastKronHandle handle;
+
+  if (PyArg_ParseTuple(args, "kIIOO", &handle, &M, &N, &objPs, &objQs) == 0) {
+    return Py_None;
+  }
+
+  uint ps[N];
+  uint qs[N];
+
+  PyListToUintArray(objPs, ps, N);
+  PyListToUintArray(objQs, qs, N);
+  printf("N %d\n", N);
+  uint K = 1, KK = 1;
+  for (uint n = 0; n < N; n++) {K = K * ps[n]; KK = KK * qs[n];} 
+  size_t resultSize;
+  size_t tempSize;
+  if (kronGeMMSizes(handle, N, M, KK, K, qs, ps, &resultSize, &tempSize) != cudaSuccess) 
+    return Py_None;
+  return PyTuple_Pack(2, PyLong_FromLong((long)resultSize), 
+                         PyLong_FromLong((long)tempSize));
 }
 
 static PyObject* pyKronSGEMM(PyObject* self, PyObject* args) {

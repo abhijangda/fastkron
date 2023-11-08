@@ -1564,7 +1564,7 @@ cudaError_t kronGeMMSizes(fastKronHandle handlePtr, const uint NumKronMats, uint
     gpuM = M;
     gpuK = K;
   }
-
+  printf("NumKronMats %d\n", NumKronMats);
   size_t tempN = gpuK;
   size_t maxTempN = tempN;
   for (int i = NumKronMats - 1; i >= 0; i--) {

@@ -21,4 +21,5 @@ Y = baseline(X, Fs)
 from fastkron import PyFastKron
 
 p = PyFastKron()
-
+(rs, ts) = p.resultTempSizes(X, Fs)
+print(rs, ts)
