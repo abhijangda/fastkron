@@ -35,7 +35,7 @@ public:
 private:
   std::vector<std::thread> threads;
   volatile task* tasks;
-  std::vector<char> done;
+  volatile bool* done;
 
   uint num_threads;
   std::vector<std::mutex> wait_mutexes;
@@ -53,7 +53,7 @@ private:
       args.pool->wait_for_task(args.thread_id);
       if (volatile_pool->is_running())
         args.pool->run_task(args.thread_id);
-      args.pool->thread_done(args.thread_id);
+      volatile_pool->thread_done(args.thread_id);
     }
   }
 
@@ -70,12 +70,13 @@ public:
     num_threads = num_threads_;
     running = true;
     tasks = new task[num_threads];
+    done = new bool[num_threads];
     wait_mutexes = std::vector<std::mutex>(num_threads);
     tasks_mutexes = std::vector<std::mutex>(num_threads);
     waiting_vars = std::vector<std::condition_variable>(num_threads);
     for (uint t = 0; t < num_threads; t++) {
       threads.push_back(std::thread(thread_pool::thread_func, thread_args{t, this}));
-      done.push_back(false);
+      done[t] = false;
     }
   }
 
@@ -104,6 +105,7 @@ public:
 
   void notify_all() {
     for (uint i = 0; i < num_threads; i++) {
+      done[i] = false;
       std::unique_lock<std::mutex> lk(wait_mutexes[i]);
       waiting_vars[i].notify_all();
       lk.unlock();
@@ -119,7 +121,7 @@ public:
     notify_all();
   }
 
-  void thread_done(uint thread_id) {
+  void thread_done(uint thread_id) volatile {
     done[thread_id] = true;
   }
 
@@ -127,7 +129,6 @@ public:
     for (uint t = 0; t < num_threads; t++) {
       volatile bool* d = (volatile bool*) &done[t];
       while (*d != true);
-      *d = false;
     }
   }
 
