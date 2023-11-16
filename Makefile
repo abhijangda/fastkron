@@ -3,10 +3,15 @@ TEST_INCLUDE_DIRS = -Igoogletest/googletest/include/  -Lgoogletest/build/lib/ -I
 GOOGLE_TEST_MAIN = googletest/googletest/src/gtest_main.cc
 TEST_LFLAGS = -lgtest -lpthread
 GXX=g++
+GOOGLE_TEST = googletest
+GOOGLE_TEST_BUILD = $(GOOGLE_TEST)/build
 
 all: libKron.so
 
 include src/device/Makefile
+
+gtest:
+	mkdir -p $(GOOGLE_TEST_BUILD) && cd $(GOOGLE_TEST_BUILD) && cmake .. && make -j
 
 kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O2
@@ -21,7 +26,7 @@ kron: tests/main.cu libKron.so tests/testBase.h
 gen-single-gpu-kernels: src/gen_tuner_kernels.py tests/single-gpu-kernel-decls.in
 	python3 src/gen_tuner_kernels.py -same-factors 20 2,2 -same-factors 10 4,4 -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128  -match-configs-file tests/single-gpu-kernel-decls.in
 	
-single-gpu-no-fusion-tests: libKron.so tests/single-gpu-no-fusion-tests.cu tests/testBase.h
+single-gpu-no-fusion-tests: libKron.so gtest tests/single-gpu-no-fusion-tests.cu tests/testBase.h
 	$(NVCC) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
 
 run-single-gpu-no-fusion-tests: single-gpu-no-fusion-tests
