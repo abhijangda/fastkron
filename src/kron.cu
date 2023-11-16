@@ -244,7 +244,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   cudaError_t status;
   
   if (!isValidKernel(kernelInfo)) abort();
-
+  
   //Create the grid and thread block
   dim3 grid;
   dim3 block;
@@ -258,7 +258,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
             1, 
             1
           };
-
+  
   KernelParams<T, NumFusedKerns> params (M, N, K,
                                          KronMatRows, 
                                          KronMatCols, x, 
@@ -720,7 +720,8 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     CUDA_CHECK(cudaFree(temp1_));
     CUDA_CHECK(cudaFree(temp2_));
   } else {
-    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.perGPUKronBatch_, handle.gpusInK_))
+    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
+                                   handle.perGPUKronBatch_, handle.gpusInK_))
       return cudaErrorInvalidValue;
 
     //In distributed case run every LocalKron series on a single GPU
@@ -730,9 +731,11 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     kronGeMMSizes(&handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
                   &resultSize, &tempSize);
     for (int g = 0; g < handle.numGPUs_; g++) {
+      CUDA_CHECK(cudaSetDevice(g));
       CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(T)));
       CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(T)));
     }
+    CUDA_CHECK(cudaSetDevice(0));
     minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
     handle.getDistributedSizes(M, K, gpuM, gpuK);
@@ -743,9 +746,21 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     uint bestMaxLocalKrons = 1;
     TunedKernelsSeries minKernelSeries;
     //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
+    uint MaxLocalKrons;
+    if (handle.distComm_ == DistComm::P2P) {
+      MaxLocalKrons = 1;
+    } else if (handle.distComm_ == DistComm::NCCL) {
+      if (handle.perGPUKronBatch_ > 1)
+        MaxLocalKrons = NumKronMats - 1;
+      else
+        MaxLocalKrons = 1;
+    }
+    uint UpperLocalKrons = NumKronMats;
+    if (handle.distComm_ == DistComm::NCCL && handle.perGPUKronBatch_ == 1)
+      UpperLocalKrons = 2;
+
     //TODO: consider only valid krons 
-    for (uint MaxLocalKrons = (handle.distComm_ == DistComm::P2P) ? 1 : NumKronMats - 1; 
-         MaxLocalKrons < NumKronMats; MaxLocalKrons += 1) {
+    for (; MaxLocalKrons < UpperLocalKrons; MaxLocalKrons += 1) {
     uint seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
     
@@ -792,6 +807,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     }
 
     for (int g = 0; g < handle.numGPUs_; g++) {
+      CUDA_CHECK(cudaSetDevice(g));
       CUDA_CHECK(cudaFree(temp1_[g]));
       CUDA_CHECK(cudaFree(temp2_[g]));
     }
@@ -1564,7 +1580,6 @@ cudaError_t kronGeMMSizes(fastKronHandle handlePtr, const uint NumKronMats, uint
     gpuM = M;
     gpuK = K;
   }
-  printf("NumKronMats %d\n", NumKronMats);
   size_t tempN = gpuK;
   size_t maxTempN = tempN;
   for (int i = NumKronMats - 1; i >= 0; i--) {

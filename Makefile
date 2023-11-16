@@ -9,7 +9,7 @@ all: libKron.so
 include src/device/Makefile
 
 kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O1
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
 libKron.so: device_kernels.o kron.o
 	$(NVCC) -shared -lnccl -o $@ device_kernels.o kron.o
