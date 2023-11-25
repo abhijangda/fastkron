@@ -69,6 +69,8 @@ struct FastKronHandle {
   uint perGPUKronBatch_;
   bool isDistributed_;
   DistComm distComm_;
+  //Map from Factor size and Number of factors to KernelInfos
+  std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
 
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
@@ -89,6 +91,10 @@ struct FastKronHandle {
   TunedKernelsSeries tunedKernelSeries;
   
   std::vector<ncclComm_t> ncclComms;
+
+  KronMatmulShape maxCompiledColsA(KronMatmulShape shape);
+  KernelInfo selectKernel(KronMatmulShape shape);
+  uint maxFusedKernels(KronMatmulShape shape);
 
   cudaError_t sgekmm(const uint NumKronMats, float* x, float* kronMats[], 
   float* result,
