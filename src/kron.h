@@ -89,6 +89,20 @@ struct FastKronHandle {
   TunedKernelsSeries tunedKernelSeries;
   
   std::vector<ncclComm_t> ncclComms;
+
+  cudaError_t sgekmm(const uint NumKronMats, float* x, float* kronMats[], 
+  float* result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+  float* temp1, float* temp2, 
+  EpilogueParams<float> epilogueParams,
+  cudaStream_t stream);
+
+  cudaError_t igekmm(const uint NumKronMats, int* x, int* kronMats[],
+                                  int* result,
+                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+                                  int* temp1, int* temp2, 
+                                  EpilogueParams<int> epilogueParams,
+                                  cudaStream_t stream);
 };
 
 struct ThreadArgs {
@@ -127,39 +141,24 @@ struct ThreadArgs {
   } threadResult;
 };
 
-template<typename T, typename VecT>
-cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
-                                T* result,
-                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-                                T* temp1, T* temp2, 
-                                EpilogueParams<T> epilogueParams,
-                                cudaStream_t stream);
-
-template<typename T, typename VecT>
+template<typename T>
 cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x[], T* kronMats[], T* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                   cudaStream_t streams[]);
 
-//template initialized autotune functions 
-template<typename T>
-cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
+struct Autotuner {
+  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream);
 
-template<>
-cudaError_t autotune<float>(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
+  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream);
 
-template<>
-cudaError_t autotune<int>(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], 
+  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream);
-
-template<>
-cudaError_t autotune<double>(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
-                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream);
+                     cudaStream_t stream);  
+};
                     
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                       const uint M, const uint N, const uint K, 

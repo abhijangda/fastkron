@@ -325,7 +325,7 @@ TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKron
   return tunedSeries;
 }
 
-template<typename T, typename VecT>
+template<typename T>
 cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
                                 T* result,
                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
@@ -1279,4 +1279,50 @@ template<> cudaError_t FastKronHandle::gatherDistributedY(double* dY[], double* 
 
 template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   return FastKronHandle_gatherDistributedY<int>(*this, dY, hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+}
+
+cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+  cudaStream_t stream) {
+    return autotune<float>(handle, NumKronMats, x, kronMats,
+      M, N, K, KronMatCols, KronMatRows,
+      stream);
+}
+
+cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], 
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+  cudaStream_t stream) {
+    return autotune<int>(handle, NumKronMats, x, kronMats,
+      M, N, K, KronMatCols, KronMatRows,
+      stream);
+}
+
+cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+  cudaStream_t stream) {
+    return autotune<double>(handle, NumKronMats, x, kronMats, 
+      M, N, K, KronMatCols, KronMatRows,
+      stream);
+}
+
+cudaError_t FastKronHandle::sgekmm(const uint NumKronMats, float* x, float* kronMats[], 
+  float* result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+  float* temp1, float* temp2, 
+  EpilogueParams<float> epilogueParams,
+  cudaStream_t stream) {
+    return singleGPUKronMatmul<float>(*this, NumKronMats, x, kronMats, result,
+                              M, N, K, KronMatCols, KronMatRows, temp1, temp2,
+                              epilogueParams, stream);
+}
+
+cudaError_t FastKronHandle::igekmm(const uint NumKronMats, int* x, int* kronMats[],
+  int* result,
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+  int* temp1, int* temp2, 
+  EpilogueParams<int> epilogueParams,
+  cudaStream_t stream) {
+    return singleGPUKronMatmul<int>(*this, NumKronMats, x, kronMats, result,
+                              M, N, K, KronMatCols, KronMatRows, temp1, temp2,
+                              epilogueParams, stream);
 }

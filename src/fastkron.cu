@@ -207,7 +207,7 @@ void fastKronDestroy(fastKronHandle handle) {
 cudaError_t sgekmm(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float* temp1, float* temp2,
                    float alpha, float beta, float *z, cudaStream_t stream) {
-  return singleGPUKronMatmul<float, float4>(*handle, NumKronMats, x, kronMats, result,
+  return handle->sgekmm(NumKronMats, x, kronMats, result,
                                             M, N, K, KronMatCols, KronMatRows, temp1, temp2, 
                                             EpilogueParams<float>(alpha, beta, z), stream);
 }
@@ -215,7 +215,7 @@ cudaError_t sgekmm(fastKronHandle handle, const uint NumKronMats, float* x, floa
 cudaError_t igekmm(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], int* temp1, int* temp2,
                    int alpha, int beta, int *z, cudaStream_t stream) {
-  return singleGPUKronMatmul<int, int4>(*handle, NumKronMats, x, kronMats, result, 
+  return handle->igekmm(NumKronMats, x, kronMats, result, 
                                         M, N, K, KronMatCols, KronMatRows, temp1, temp2,
                                         EpilogueParams<int>(alpha, beta, z), stream);
 }
@@ -223,9 +223,10 @@ cudaError_t igekmm(fastKronHandle handle, const uint NumKronMats, int* x, int* k
 cudaError_t dgekmm(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], double* temp1, double* temp2,
                    double alpha, double beta, double *z, cudaStream_t stream) {
-  return singleGPUKronMatmul<double, double4>(*handle, NumKronMats, x, kronMats, result, 
-                                              M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-                                              EpilogueParams<double>(alpha, beta, z), stream);
+  return cudaSuccess;
+                    // return handle->gekmm(FastKronType::Double, NumKronMats, x, kronMats, result, 
+  //                                             M, N, K, KronMatCols, KronMatRows, temp1, temp2,
+  //                                             EpilogueParams<double>(alpha, beta, z), stream);
 }
 
 
@@ -289,10 +290,10 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
   return cudaSuccess;
 }
 
-extern cudaError_t sgekmmTune(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], 
+cudaError_t sgekmmTune(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], 
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                                  cudaStream_t stream) {
-  return autotune<float>(*handle, NumKronMats, x, kronMats,
+  return Autotuner().tune(*handle, NumKronMats, x, kronMats,
                          M, N, K, KronMatCols, KronMatRows,
                          stream);
 }
@@ -300,7 +301,7 @@ extern cudaError_t sgekmmTune(fastKronHandle handle, const uint NumKronMats, flo
 cudaError_t dgekmmTune(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], 
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                           cudaStream_t stream) {
-  return autotune<double>(*handle, NumKronMats, x, kronMats, 
+  return Autotuner().tune(*handle, NumKronMats, x, kronMats, 
                           M, N, K, KronMatCols, KronMatRows,
                           stream);
 }
@@ -308,7 +309,7 @@ cudaError_t dgekmmTune(fastKronHandle handle, const uint NumKronMats, double* x,
 cudaError_t idgemmTune(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[],
                           uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                           cudaStream_t stream) {
-  return autotune<int>(*handle, NumKronMats, x, kronMats,
+  return Autotuner().tune(*handle, NumKronMats, x, kronMats,
                        M, N, K, KronMatCols, KronMatRows,
                        stream);
 }
