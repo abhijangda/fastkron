@@ -46,7 +46,7 @@ __global__ void copyToGPUsInK(const uint RowsC,    const uint ColsC,   const uin
 }
 
 
-template<typename ElemT, typename VecT, uint NumThreads>
+template<typename ElemT, uint NumThreads>
 __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint ColsA,
                              const uint KronRows, const uint KronCols,
                              const uint rank, const uint numGPUs,
