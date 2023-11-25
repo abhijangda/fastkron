@@ -103,6 +103,10 @@ struct FastKronHandle {
                                   int* temp1, int* temp2, 
                                   EpilogueParams<int> epilogueParams,
                                   cudaStream_t stream);
+
+  cudaError_t distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
+                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
+                                  cudaStream_t streams[]);
 };
 
 struct ThreadArgs {
@@ -140,11 +144,6 @@ struct ThreadArgs {
     void* result;
   } threadResult;
 };
-
-template<typename T>
-cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x[], T* kronMats[], T* result[],
-                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
-                                  cudaStream_t streams[]);
 
 struct Autotuner {
   cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 

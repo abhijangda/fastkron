@@ -251,8 +251,8 @@ cudaError_t kronSGEMMOutofCore(fastKronHandle handle, const uint NumKronMats, fl
 cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                  cudaStream_t streams[]) {
-  return distributedKronMatmul<float, float4>(*handle, NumKronMats, x, kronMats, result, M, N, K, 
-                                              KronMatCols, KronMatRows, temp1, temp2, streams);
+  return handle->distributedsgekmm(NumKronMats, x, kronMats, result, M, N, K, 
+                                   KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
 cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M, uint N, uint K, 

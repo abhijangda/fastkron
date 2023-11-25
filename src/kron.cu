@@ -800,7 +800,7 @@ void thread_barrier_wait(pthread_barrier_t* barrier) {
   assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
 }
 
-template<typename T, typename VecT>
+template<typename T>
 void perGPUKronMatmul(ThreadArgs* thArgs) {
   // ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
 
@@ -1052,7 +1052,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                       recvTemp, stream[g], g, io, true);
           dim3 grid = {gpuM, 1,1};
           dim3 block = {256, 1, 1};
-          storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
+          storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
                                                                     KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
                                                                     recvTemp, gpuM, currTempN,
                                                                     innerCurrResult, gc, KronMulBatchSize, io, distParams, false);
@@ -1084,7 +1084,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                 CUDA_CHECK(cudaStreamSynchronize(stream[g]));
                 dim3 grid = {gpuM, 1,1};
                 dim3 block = {256, 1, 1};
-                storeGPUTile<T, VecT, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
+                storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
                                                                           KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
                                                                           recvTemp, gpuM, currTempN,
                                                                           innerCurrResult, src, KronMulBatchSize, io, distParams, false);
@@ -1124,7 +1124,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   thArgs->threadResult = {status, (void*)innerPrevResult};
 }
 
-template<typename T, typename VecT>
+template<typename T>
 cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x[], T* kronMats[], T* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                   cudaStream_t streams[]) {
@@ -1163,7 +1163,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
     );
 
     threadArgs[thread] = args;
-    tasks[thread] = thread_pool<ThreadArgs*>::task(perGPUKronMatmul<T, VecT>, &threadArgs[thread]);
+    tasks[thread] = thread_pool<ThreadArgs*>::task(perGPUKronMatmul<T>, &threadArgs[thread]);
   }
 
   handle.threads_->execute_tasks(tasks);
@@ -1279,6 +1279,13 @@ template<> cudaError_t FastKronHandle::gatherDistributedY(double* dY[], double* 
 
 template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   return FastKronHandle_gatherDistributedY<int>(*this, dY, hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+}
+
+cudaError_t FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
+  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
+  cudaStream_t streams[]) {
+    return distributedKronMatmul<float>(*this, NumKronMats, x, kronMats, result, M, N, K, 
+      KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
 cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
