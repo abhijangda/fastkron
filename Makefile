@@ -13,13 +13,16 @@ include src/device/Makefile
 gtest:
 	mkdir -p $(GOOGLE_TEST_BUILD) && cd $(GOOGLE_TEST_BUILD) && cmake .. && make -j
 
+env.o: src/env.cpp src/env.h
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+
 fastkron.o: src/fastkron.cu
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
 kron.o: src/kron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/kron.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
-libKron.so: device_kernels.o kron.o fastkron.o
+libKron.so: device_kernels.o kron.o fastkron.o env.o
 	$(NVCC) -shared -lnccl -o $@ device_kernels.o kron.o fastkron.o
 
 kron: tests/main.cu libKron.so tests/testBase.h
