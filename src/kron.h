@@ -4,6 +4,7 @@
 #include "fastkron.h"
 #include "thread_pool.h"
 #include "device/kernel_info.h"
+#include "device/params.h"
 
 #ifndef __KRON_H__
 #define __KRON_H__
@@ -124,4 +125,29 @@ struct ThreadArgs {
     void* result;
   } threadResult;
 };
+
+template<typename T, typename VecT>
+cudaError_t singleGPUKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
+                                T* result,
+                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+                                T* temp1, T* temp2, 
+                                EpilogueParams<T> epilogueParams,
+                                cudaStream_t stream);
+
+template<typename T, typename VecT>
+cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x[], T* kronMats[], T* result[],
+                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
+                                  cudaStream_t streams[]);
+template<typename T>
+cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
+                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                     cudaStream_t stream);
+bool checkDistributedKronSizes(const uint NumKronMats, 
+                                      const uint M, const uint N, const uint K, 
+                                      const uint KronMatCols[], const uint KronMatRows[],
+                                      const uint LocalKrons, const uint gpusInK);
+bool checkKronMatrixSizes(const uint NumKronMats, 
+                          const uint M, const uint N, const uint K, 
+                          const uint KronMatCols[], const uint KronMatRows[]);
+
 #endif
