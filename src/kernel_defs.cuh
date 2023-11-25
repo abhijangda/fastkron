@@ -13,7 +13,7 @@
 #define NUM_ROWS_MOD_TILE_IS_ZERO 2
 #define EXTERNAL_KP_K_TILE_ MAX_K
 
-static KernelInfo KronGemmKernels[] = {
+KernelInfo KronGemmKernels[] = {
   ALL_KERNELS
   // TYPE_KERNELS(int,    int4)
   // TYPE_KERNELS(double, double4)
