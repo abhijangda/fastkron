@@ -9,9 +9,6 @@
 #include "device/kernel_info.h"
 #include "kernel_defs.cuh"
 
-// extern KernelInfo KronGemmKernels[];
-extern std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
-
 /**************************************************
           Library Functions
 ***************************************************/
@@ -138,11 +135,11 @@ void FastKronHandle_init(FastKronHandle& handle, int gpus, int gpusInM, int gpus
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
     KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-    auto iter = compiledKernels.find(shape);
-    if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
+    auto iter = handle.compiledKernels.find(shape);
+    if (iter == handle.compiledKernels.end()) {
+      handle.compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
     }
-    compiledKernels.at(shape).push_back(info);
+    handle.compiledKernels.at(shape).push_back(info);
   }
   
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
@@ -151,7 +148,7 @@ void FastKronHandle_init(FastKronHandle& handle, int gpus, int gpusInM, int gpus
   if (false) {
     uint numKernels = 0;
     std::cout << "Loading compiled kernels" << std::endl;
-    for (auto iter : compiledKernels) {
+    for (auto iter : handle.compiledKernels) {
       for (auto kernel : iter.second) {
         // std::cout << kernel << std::endl;
       }
