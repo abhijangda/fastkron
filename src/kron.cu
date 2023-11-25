@@ -758,6 +758,9 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     uint UpperLocalKrons = NumKronMats;
     if (handle.distComm_ == DistComm::NCCL && handle.perGPUKronBatch_ == 1)
       UpperLocalKrons = 2;
+    
+    if (handle.gpusInK_ == 1)
+      UpperLocalKrons = 2;
 
     //TODO: consider only valid krons 
     for (; MaxLocalKrons < UpperLocalKrons; MaxLocalKrons += 1) {
@@ -775,7 +778,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         LocalKronMatRows[k] = KronMatRows[kronMat - k];
         currTempN = (currTempN/LocalKronMatRows[k])*LocalKronMatCols[k];
       }
-      
+
       T** gpuResults = (T**)temp2_;
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
@@ -784,12 +787,12 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       distParams.updateGPUResults(gpuResults);
       singleGPUAutotune(handle, LocalKrons, x, kronMats, gpuM, currTempN, prevTempN, 
                         LocalKronMatCols, LocalKronMatRows, temp1_[0], temp2_[0],
-                        handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
+                        handle.gpusInK_ > 1 && handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
                         distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(gpuM, prevTempN, LocalKrons,
                                      LocalKronMatCols, LocalKronMatRows, 0,
-                                     handle.isDistributed_ && handle.distComm_ == DistComm::P2P,
+                                     handle.gpusInK_ > 1 &&handle.isDistributed_ && handle.distComm_ == DistComm::P2P,
                                      tunedKernels, bestKernels);
 
       for (auto tunedKernel : tunedKernels) {
