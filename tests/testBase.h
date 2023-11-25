@@ -186,17 +186,17 @@ static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, T* kpM
                      uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2,
                      cudaStream_t stream) {
   if (std::is_same<T, float>::value) {
-    CUDACHECK(kronSGEMM(handle, NUM_KP_MATS,
+    CUDACHECK(sgekmm(handle, NUM_KP_MATS,
                         (float*)x, (float**)kpMats, (float*)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, (float*)temp1, (float*)temp2,
                         1, 0, nullptr, stream));
   } else if (std::is_same<T, int>::value) {
-    CUDACHECK(kronIGEMM(handle, NUM_KP_MATS, 
+    CUDACHECK(igekmm(handle, NUM_KP_MATS, 
                         (int*)x, (int**)kpMats, (int*)result, 
                         M, N, K, KP_MAT_N, KP_MAT_K, (int*)temp1, (int*)temp2,
                         1, 0, nullptr, stream));
   } else if (std::is_same<T, double>::value) {
-    CUDACHECK(kronDGEMM(handle, NUM_KP_MATS, 
+    CUDACHECK(dgekmm(handle, NUM_KP_MATS, 
                         (double*)x, (double**)kpMats, (double*)result,
                         M, N, K, KP_MAT_N, KP_MAT_K, (double*)temp1, (double*)temp2,
                         1, 0, nullptr, stream));
@@ -295,7 +295,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   handle->setUseFusion(useFusion);
   size_t resultSize = 0;
   size_t tempSize = 0;
-  CUDACHECK(kronGeMMSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize));
+  CUDACHECK(gekmmSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize));
   T* dX[gpus];
   T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
@@ -326,8 +326,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("memcpy\n");
   if (tune) {
-    CUDACHECK(kronSGEMMTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
-                            stream[0]));
+    CUDACHECK(sgekmmTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
+                         stream[0]));
   }
 
   for (int g = 0; g < gpus; g++) {
