@@ -5,6 +5,7 @@
 #include "thread_pool.h"
 #include "device/kernel_info.h"
 #include "device/params.h"
+#include "env.h"
 
 #ifndef __KRON_H__
 #define __KRON_H__
@@ -34,13 +35,13 @@ struct TunedKernelFromStart {
   }
 };
 
+template<>
+struct std::hash<KronMatmulShape> {
+  std::size_t operator()(const KronMatmulShape& k) const;
+};
+
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
 struct ThreadArgs;
-enum DistComm {
-  DistCommNone = 0,
-  P2P,
-  NCCL,
-};
 
 enum ProcType {
   ProcNone = 0,
@@ -138,10 +139,28 @@ template<typename T, typename VecT>
 cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x[], T* kronMats[], T* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                   cudaStream_t streams[]);
+
+//template initialized autotune functions 
 template<typename T>
 cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream);
+
+template<>
+cudaError_t autotune<float>(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
+                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                     cudaStream_t stream);
+
+template<>
+cudaError_t autotune<int>(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], 
+                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                     cudaStream_t stream);
+
+template<>
+cudaError_t autotune<double>(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
+                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                     cudaStream_t stream);
+                    
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                       const uint M, const uint N, const uint K, 
                                       const uint KronMatCols[], const uint KronMatRows[],

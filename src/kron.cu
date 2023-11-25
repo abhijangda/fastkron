@@ -44,12 +44,9 @@ static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
  1. Using fusion or not should be an environemnt flag
  2. Debug message environment flag*/
 
-template<>
-struct std::hash<KronMatmulShape> {
-  std::size_t operator()(const KronMatmulShape& k) const {
-    return hash<uint>()(k.KronCols) ^ hash<uint>()(k.KronRows) ^ hash<uint>()(k.ColsA);
-  }
-};
+std::size_t std::hash<KronMatmulShape>::operator()(const KronMatmulShape& k) const {
+  return hash<uint>()(k.KronCols) ^ hash<uint>()(k.KronRows) ^ hash<uint>()(k.ColsA);
+}
 
 //Map from Factor size and Number of factors to KernelInfos
 std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
