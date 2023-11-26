@@ -269,8 +269,8 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         }
 
         if (params.kp_idx == 0) {
-          ElemT d = (epilogueParams.glD) ? epilogueParams.beta * epilogueParams.glD[cIdx] : 0;
-          outputArray[cIdx] = epilogueParams.alpha * regC[rowShC][reg_i][reg_j] + d;
+          ElemT d = (epilogueParams.getD()) ? epilogueParams.getBeta() * epilogueParams.getD()[cIdx] : 0;
+          outputArray[cIdx] = epilogueParams.getAlpha() * regC[rowShC][reg_i][reg_j] + d;
         } else {
           outputArray[cIdx] = regC[rowShC][reg_i][reg_j];
         }
@@ -395,8 +395,8 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         
         if (params.kp_idx == 0) {
           for (int i = 0; i < vecTyNumElems; i++) {
-            ElemT d = epilogueParams.beta * ((epilogueParams.glD != nullptr) ? epilogueParams.glD[cIdx + i] : 0);
-            regC[rowA][reg_i + i][reg_j] = epilogueParams.alpha * regC[rowA][reg_i + i][reg_j] + d;
+            ElemT d = epilogueParams.getBeta() * ((epilogueParams.getD() != nullptr) ? epilogueParams.getD()[cIdx + i] : 0);
+            regC[rowA][reg_i + i][reg_j] = epilogueParams.getAlpha() * regC[rowA][reg_i + i][reg_j] + d;
           }
         }
         {
