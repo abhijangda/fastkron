@@ -13,37 +13,6 @@
 /**************************************************
           Library Functions
 ***************************************************/
-void FastKronHandle::free() {
-  if (isDistributed_) {
-    //TODO: Clear everything
-    for (uint g = 0; g < gpusInM_; g++) {
-      int s = pthread_barrier_destroy(&barriers_[g]);
-      assert (s == 0);
-    }
-
-    delete threads_;
-    delete barriers_;
-
-    if (distComm_ == DistComm::NCCL) {
-      for (int i=0; i<ncclComms.size(); i++)
-        ncclCommDestroy(ncclComms[i]);
-    }
-
-    // delete[] gpuTemp1_;
-    // delete[] gpuTemp2_;
-
-    // gpuTemp1_ = nullptr;
-    // gpuTemp2_ = nullptr;
-  } else {
-    // CUDA_CHECK(cudaFree(temp1_));
-    // CUDA_CHECK(cudaFree(temp2_));
-  
-    // temp1_ = nullptr;
-    // temp2_ = nullptr;  
-  }
-  compiledKernels.clear();
-}
-
 cudaError_t fastKronInit(fastKronHandle* handle, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   FastKronHandle* h = new FastKronHandle(gpus, gpusInM, gpusInK, gpuLocalKrons);
   *handle = h;
