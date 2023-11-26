@@ -1,6 +1,8 @@
 #include <vector>
 #include <nccl.h>
 
+#include <unordered_map>
+
 #include "fastkron.h"
 #include "thread_pool.h"
 #include "device/kernel_info.h"
