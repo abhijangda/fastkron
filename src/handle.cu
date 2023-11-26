@@ -17,6 +17,7 @@
 #include "thread_pool.h"
 #include "device/otherkernels.cuh"
 #include "env.h"
+#include "autotuner.h"
 
 #define CUDA_LAST_ERROR do {                        \
   cudaError_t e = cudaGetLastError();               \
