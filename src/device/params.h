@@ -45,7 +45,6 @@ union AllTypes {
   double get(double p) {return d;}
 };
 
-template<typename ElemT>
 struct EpilogueParams {
   const void * __restrict__ glD;
   AllTypes alpha;
@@ -55,22 +54,26 @@ struct EpilogueParams {
 
   EpilogueParams(AllTypes alpha, AllTypes beta, const void* glD) :
     glD(glD), alpha(alpha), beta(beta) {}
-  
-  static EpilogueParams<ElemT> create() {
+
+  template<typename ElemT>
+  static EpilogueParams create() {
     return EpilogueParams(AllTypes((ElemT)1.0f), AllTypes(((ElemT)0.0f)), nullptr);
   }
 
-  static EpilogueParams<ElemT> create(const ElemT alpha, const ElemT beta, const ElemT* glD) {
+  template<typename ElemT>
+  static EpilogueParams create(const ElemT alpha, const ElemT beta, const ElemT* glD) {
     return EpilogueParams(AllTypes(alpha), AllTypes(beta), (const void*)glD);
   }
 
-  // template<typename ElemT>
+  template<typename ElemT>
   __device__
   ElemT getAlpha() {return alpha.get((ElemT)0);}
-  // template<typename ElemT>
+  
+  template<typename ElemT>
   __device__
   ElemT getBeta() {return beta.get((ElemT)0);}
-  // template<typename ElemT>
+  
+  template<typename ElemT>
   __device__
   const ElemT* getD() {return (const ElemT*)glD;}
 };

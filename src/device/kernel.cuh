@@ -19,7 +19,7 @@ __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                                FusedParams<NumFusedKerns> fusedParams,
                                DistributedParams distParams,
-                               EpilogueParams<ElemT> epilogueParams) {
+                               EpilogueParams epilogueParams) {
   
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
@@ -269,8 +269,8 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         }
 
         if (params.kp_idx == 0) {
-          ElemT d = (epilogueParams.getD()) ? epilogueParams.getBeta() * epilogueParams.getD()[cIdx] : 0;
-          outputArray[cIdx] = epilogueParams.getAlpha() * regC[rowShC][reg_i][reg_j] + d;
+          ElemT d = (epilogueParams.getD<ElemT>()) ? epilogueParams.getBeta<ElemT>() * epilogueParams.getD<ElemT>()[cIdx] : 0;
+          outputArray[cIdx] = epilogueParams.getAlpha<ElemT>() * regC[rowShC][reg_i][reg_j] + d;
         } else {
           outputArray[cIdx] = regC[rowShC][reg_i][reg_j];
         }
@@ -395,8 +395,8 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         
         if (params.kp_idx == 0) {
           for (int i = 0; i < vecTyNumElems; i++) {
-            ElemT d = epilogueParams.getBeta() * ((epilogueParams.getD() != nullptr) ? epilogueParams.getD()[cIdx + i] : 0);
-            regC[rowA][reg_i + i][reg_j] = epilogueParams.getAlpha() * regC[rowA][reg_i + i][reg_j] + d;
+            ElemT d = epilogueParams.getBeta<ElemT>() * ((epilogueParams.getD<ElemT>() != nullptr) ? epilogueParams.getD<ElemT>()[cIdx + i] : 0);
+            regC[rowA][reg_i + i][reg_j] = epilogueParams.getAlpha<ElemT>() * regC[rowA][reg_i + i][reg_j] + d;
           }
         }
         {
