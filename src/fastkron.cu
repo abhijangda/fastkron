@@ -8,6 +8,7 @@
 #include "env.h"
 #include "device/kernel_info.h"
 #include "kernel_defs.cuh"
+#include "autotuner.h"
 
 /**************************************************
           Library Functions
