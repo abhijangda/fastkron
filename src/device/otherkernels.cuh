@@ -54,7 +54,7 @@ __global__ void storeGPUTile(const uint RowsC,    const uint ColsC,   const uint
                              const uint perGPUM, const uint perGPUK,
                              ElemT * __restrict__ gpuOutput,
                              const uint srcRank, const uint batchedKronMuls, const uint startKronIdx, 
-                             DistributedParams<ElemT> distParams, bool canPrint) {
+                             DistributedParams distParams, bool canPrint) {
   const uint WarpSize     = 32;
   const uint tid          = threadIdx.x;
   const uint wid          = tid/WarpSize;

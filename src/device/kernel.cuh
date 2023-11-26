@@ -18,7 +18,7 @@ template<typename ElemT, typename Vec2T, typename Vec4T, uint NumThreads, RowPar
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                                FusedParams<NumFusedKerns> fusedParams,
-                               DistributedParams<ElemT> distParams,
+                               DistributedParams distParams,
                                EpilogueParams<ElemT> epilogueParams) {
   
   const uint WarpSize     = 32;

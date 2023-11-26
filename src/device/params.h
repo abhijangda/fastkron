@@ -70,17 +70,16 @@ struct FusedParams {
   }
 };
 
-template<typename ElemT>
 struct DistributedParams {
   //TODO: Set gpuResults for 16 GPUs
-  ElemT* gpuResults0;
-  ElemT* gpuResults1; 
-  ElemT* gpuResults2;
-  ElemT* gpuResults3;
-  ElemT* gpuResults4;
-  ElemT* gpuResults5; 
-  ElemT* gpuResults6;
-  ElemT* gpuResults7;
+  void* gpuResults0;
+  void* gpuResults1; 
+  void* gpuResults2;
+  void* gpuResults3;
+  void* gpuResults4;
+  void* gpuResults5; 
+  void* gpuResults6;
+  void* gpuResults7;
  
   const uint gr, gc;
   const uint gpusInK;
@@ -136,7 +135,7 @@ struct DistributedParams {
     // }
   }
 
-  void updateGPUResults(ElemT** gpuResults_) {
+  void updateGPUResults(void** gpuResults_) {
     setGPUResults(0, gpuResults0, gpuResults_);
     setGPUResults(1, gpuResults1, gpuResults_);
     setGPUResults(2, gpuResults2, gpuResults_);
@@ -147,14 +146,14 @@ struct DistributedParams {
     setGPUResults(7, gpuResults7, gpuResults_);
   }
 
-  void setGPUResults(int idx, ElemT*& thisResults, ElemT** gpuResults) {
+  void setGPUResults(int idx, void*& thisResults, void** gpuResults) {
     if (idx < gpusInK)
       thisResults = gpuResults[idx];
     else
       thisResults = nullptr;
   }
 
-  __device__ __forceinline__ ElemT* getLocalGPUResult(uint gc) {
+  __device__ __forceinline__ void* getLocalGPUResult(uint gc) {
     switch(gc) {
       case 0: return gpuResults0;
       case 1: return gpuResults1;
@@ -168,12 +167,6 @@ struct DistributedParams {
       //TODO: for all 16 GPUs
     }
   }
-  // DistributedParams(const DistributedParams<ElemT, LocalKrons>& x): numGPUs(x.numGPUs),
-  //   ColsA(x.ColsA), ColsC(ColsC), storeToDistMems(storeToDistMems) {}
-
-  //   DistributedParams<ElemT, LocalKrons>& operator=(const DistributedParams<ElemT, LocalKrons>& x) {
-
-  //   }
 };
 
 #endif
