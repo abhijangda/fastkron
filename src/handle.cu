@@ -181,12 +181,12 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
           };
   
   KernelParams<NumFusedKerns> params (M, N, K,
-                                         KronMatRows, 
-                                         KronMatCols,
-                                         (void*)x, 
-                                         (void**)kronMat, 
-                                         (void*)kronGemmResult, 
-                                         kronIndex);
+                                      KronMatRows, 
+                                      KronMatCols,
+                                      (void*)x, 
+                                      (void**)kronMat, 
+                                      (void*)kronGemmResult, 
+                                      kronIndex);
   FusedParams<NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
   // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
@@ -266,12 +266,12 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
           };
 
   KernelParams<NumFusedKerns> params(M, N, K,
-                                        KronMatRows, 
-                                        KronMatCols, 
-                                        (void*)x, 
-                                        (void**)kronMat, 
-                                        (void*)kronGemmResult, 
-                                        kronIndex);
+                                     KronMatRows, 
+                                     KronMatCols, 
+                                     (void*)x, 
+                                     (void**)kronMat, 
+                                     (void*)kronGemmResult, 
+                                     kronIndex);
   FusedParams<NumFusedKerns> fusedParams(M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
 
   //Call kernel

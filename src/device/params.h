@@ -21,14 +21,58 @@ __host__ __device__ constexpr uint power(const uint x, const uint y) {
   return result;
 }
 
+union AllTypes {
+  int i;
+  long l;
+  float f;
+  double d;
+
+  __host__ __device__
+  AllTypes() {}
+  AllTypes(float f) : f(f) {}
+  AllTypes(long l) : l(l) {}
+  AllTypes(int i) : i(i) {}
+  AllTypes(double d) : d(d) {}
+
+  // template<typename T> T get() {return (T)0.0f;}
+  __device__
+  float get(float p) {return f;}
+  __device__
+  long get(long p) {return l;}
+  __device__
+  int get(int p) {return i;}
+  __device__
+  double get(double p) {return d;}
+};
+
 template<typename ElemT>
 struct EpilogueParams {
-  const ElemT * __restrict__ glD;
-  const ElemT alpha;
-  const ElemT beta;
-  EpilogueParams() : alpha((ElemT)1.0f), beta(0), glD(nullptr) {}
-  EpilogueParams(const ElemT alpha, const ElemT beta, const ElemT* glD) :
+  const void * __restrict__ glD;
+  AllTypes alpha;
+  AllTypes beta;
+  
+  EpilogueParams(): alpha(1.0f), beta(0.0f), glD(nullptr) {}
+
+  EpilogueParams(AllTypes alpha, AllTypes beta, const void* glD) :
     glD(glD), alpha(alpha), beta(beta) {}
+  
+  static EpilogueParams<ElemT> create() {
+    return EpilogueParams(AllTypes((ElemT)1.0f), AllTypes(((ElemT)0.0f)), nullptr);
+  }
+
+  static EpilogueParams<ElemT> create(const ElemT alpha, const ElemT beta, const ElemT* glD) {
+    return EpilogueParams(AllTypes(alpha), AllTypes(beta), (const void*)glD);
+  }
+
+  // template<typename ElemT>
+  __device__
+  ElemT getAlpha() {return alpha.get((ElemT)0);}
+  // template<typename ElemT>
+  __device__
+  ElemT getBeta() {return beta.get((ElemT)0);}
+  // template<typename ElemT>
+  __device__
+  const ElemT* getD() {return (const ElemT*)glD;}
 };
 
 template<uint NumFusedKerns>
