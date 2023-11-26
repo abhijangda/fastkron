@@ -3,7 +3,7 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "kron.h"
+#include "handle.h"
 #include "device/params.h"
 #include "env.h"
 #include "device/kernel_info.h"

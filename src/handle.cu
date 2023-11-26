@@ -13,7 +13,7 @@
 #include <cstring>
 
 #include "utils.h"
-#include "kron.h"
+#include "handle.h"
 #include "thread_pool.h"
 #include "device/otherkernels.cuh"
 #include "env.h"

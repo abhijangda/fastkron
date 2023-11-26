@@ -7,9 +7,7 @@
 #include "device/params.h"
 #include "env.h"
 
-#ifndef __KRON_H__
-#define __KRON_H__
-
+#pragma once
 
 #define NCCLCHECK(cmd) do {                         \
   ncclResult_t r = cmd;                             \
@@ -164,13 +162,12 @@ struct Autotuner {
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream);  
 };
-                    
+
+//TODO: Combine all arguments in KronMatmulShape
 bool checkDistributedKronSizes(const uint NumKronMats, 
-                                      const uint M, const uint N, const uint K, 
-                                      const uint KronMatCols[], const uint KronMatRows[],
-                                      const uint LocalKrons, const uint gpusInK);
+                               const uint M, const uint N, const uint K, 
+                               const uint KronMatCols[], const uint KronMatRows[],
+                               const uint LocalKrons, const uint gpusInK);
 bool checkKronMatrixSizes(const uint NumKronMats, 
                           const uint M, const uint N, const uint K, 
                           const uint KronMatCols[], const uint KronMatRows[]);
-
-#endif
