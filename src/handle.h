@@ -82,14 +82,14 @@ struct FastKronHandle {
   float* result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
   float* temp1, float* temp2, 
-  EpilogueParams<float> epilogueParams,
+  EpilogueParams epilogueParams,
   cudaStream_t stream);
 
   cudaError_t igekmm(const uint NumKronMats, int* x, int* kronMats[],
                                   int* result,
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
                                   int* temp1, int* temp2, 
-                                  EpilogueParams<int> epilogueParams,
+                                  EpilogueParams epilogueParams,
                                   cudaStream_t stream);
 
   cudaError_t distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],

@@ -29,7 +29,7 @@ cudaError_t sgekmm(fastKronHandle handle, const uint NumKronMats, float* x, floa
                    float alpha, float beta, float *z, cudaStream_t stream) {
   return handle->sgekmm(NumKronMats, x, kronMats, result,
                                             M, N, K, KronMatCols, KronMatRows, temp1, temp2, 
-                                            EpilogueParams<float>(alpha, beta, z), stream);
+                                            EpilogueParams::create<float>(alpha, beta, z), stream);
 }
 
 cudaError_t igekmm(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
@@ -37,7 +37,7 @@ cudaError_t igekmm(fastKronHandle handle, const uint NumKronMats, int* x, int* k
                    int alpha, int beta, int *z, cudaStream_t stream) {
   return handle->igekmm(NumKronMats, x, kronMats, result, 
                                         M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-                                        EpilogueParams<int>(alpha, beta, z), stream);
+                                        EpilogueParams::create<int>(alpha, beta, z), stream);
 }
 
 cudaError_t dgekmm(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
