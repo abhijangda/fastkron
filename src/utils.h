@@ -1,17 +1,40 @@
 #include <sys/time.h>
 #include <time.h>
 
-#ifndef __UTILS_H__
-#define __UTILS_H__
+#pragma once
 
-/**************************************************
-                    Timing functions
-**************************************************/
-double convertTimeValToDouble(struct timeval _time) {
+#define CUDA_LAST_ERROR do {                        \
+  cudaError_t e = cudaGetLastError();               \
+  if (e != cudaSuccess) {                           \
+    printf("Failed: Cuda error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while (0)                                         \
+
+#define NCCLCHECK(cmd) do {                         \
+  ncclResult_t r = cmd;                             \
+  if (r!= ncclSuccess) {                            \
+    printf("Failed, NCCL error %s:%d '%s'\n",             \
+        __FILE__,__LINE__,ncclGetErrorString(r));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#define DIVUP(x,y) (((x) + (y) - 1)/((y)))
+#define ROUNDUP(x,y) (DIVUP(x,y)*(y))
+#define CUDA_WARP_SIZE 32
+
+static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
+static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
+
+static double convertTimeValToDouble(struct timeval _time) {
   return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
 }
 
-struct timeval getTimeOfDay () {
+static struct timeval getTimeOfDay () {
   struct timeval _time;
 
   if (gettimeofday (&_time, NULL) == -1) {
@@ -23,17 +46,16 @@ struct timeval getTimeOfDay () {
   return _time;
 }
 
-double getCurrTime() {
+static double getCurrTime() {
   return convertTimeValToDouble(getTimeOfDay());
 }
 
-int ilog2(uint x)
+static int ilog2(uint x)
 {
   return sizeof(uint32_t) * CHAR_BIT - __builtin_clz(x) - 1;
 }
 
-bool isPowerOf2(uint x)
+static bool isPowerOf2(uint x)
 {
     return (x & (x - 1)) == 0;
 }
-#endif

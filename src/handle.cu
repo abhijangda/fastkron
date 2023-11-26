@@ -19,28 +19,6 @@
 #include "env.h"
 #include "autotuner.h"
 
-#define CUDA_LAST_ERROR do {                        \
-  cudaError_t e = cudaGetLastError();               \
-  if (e != cudaSuccess) {                           \
-    printf("Failed: Cuda error %s:%d '%s'\n",       \
-        __FILE__,__LINE__,cudaGetErrorString(e));   \
-    exit(EXIT_FAILURE);                             \
-  }                                                 \
-} while (0)                                         \
-
-#define MIN(x,y) (((x) < (y)) ? (x) : (y))
-#define MAX(x,y) (((x) > (y)) ? (x) : (y))
-#define DIVUP(x,y) (((x) + (y) - 1)/((y)))
-#define ROUNDUP(x,y) (DIVUP(x,y)*(y))
-#define CUDA_WARP_SIZE 32
-
-#define C_IN_REG
-#define EVAL
-
-//utils.h
-static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
-static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
-
 /*TODOs:
  1. Using fusion or not should be an environemnt flag
  2. Debug message environment flag*/
