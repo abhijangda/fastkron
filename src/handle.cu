@@ -18,6 +18,7 @@
 #include "device/otherkernels.cuh"
 #include "env.h"
 #include "autotuner.h"
+#include "kernel_defs.cuh"
 
 /*TODOs:
  1. Using fusion or not should be an environemnt flag
@@ -1271,6 +1272,153 @@ cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, doub
     return autotune<double>(handle, NumKronMats, x, kronMats, 
       M, N, K, KronMatCols, KronMatRows,
       stream);
+}
+
+FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
+  //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
+  useFusion_ = true;
+  isDistributed_ = gpus > 1;
+  if (isDistributed_) {
+    //TODO: Setting DistComm in another function
+    setUseFusion(false);
+    numGPUs_ = gpus;
+    bool allP2PAccess = true;
+    for (int g1 = 0; g1 < gpus; g1++) {
+      for (int g2 = 0; g2 < gpus; g2++) {
+        if (g1 == g2) continue;
+        int p2pAccess = -1;
+        CUDA_CHECK(cudaDeviceCanAccessPeer(&p2pAccess, g1, g2));
+        if (p2pAccess == 0) {allP2PAccess = false; break;}
+        CUDA_CHECK(cudaSetDevice(g1));
+        CUDA_CHECK(cudaDeviceEnablePeerAccess(g2, 0));
+      }
+      if (!allP2PAccess) break;
+    }
+
+    distComm_ = env::getDistComm();
+
+    if (distComm_ == DistComm::P2P) {
+      if (!allP2PAccess) {
+        std::cout << "P2P Access among GPUs not available using NCCL" << std::endl;
+        distComm_ = DistComm::DistCommNone;
+      }
+    } else if (distComm_ == DistComm::NCCL) {
+      int devs[gpus];
+      distComm_ = DistComm::NCCL;
+      ncclUniqueId ncclId;
+      ncclGetUniqueId(&ncclId);
+      std::cout << "Initializing NCCL"<<std::endl;
+      for (int i = 0; i < gpus; i++) {
+        CUDA_CHECK(cudaSetDevice(i));
+        ncclComms.push_back(nullptr);
+        devs[i] = i;
+      }
+      NCCLCHECK(ncclCommInitAll(&ncclComms[0], gpus, devs));
+    }
+
+    if (distComm_ == DistComm::DistCommNone) {
+      if (allP2PAccess) {
+        distComm_ = DistComm::P2P;
+      } else {
+        int devs[gpus];
+        distComm_ = DistComm::NCCL;
+        ncclUniqueId ncclId;
+        ncclGetUniqueId(&ncclId);
+        std::cout << "Initializing NCCL"<<std::endl;
+        for (int i = 0; i < gpus; i++) {
+          CUDA_CHECK(cudaSetDevice(i));
+          ncclComms.push_back(nullptr);
+          devs[i] = i;
+        }
+        NCCLCHECK(ncclCommInitAll(&ncclComms[0], gpus, devs));
+      }
+    }
+
+    std::cout << "Using " << distComm_ << " for distributed comm" << std::endl;
+
+    if (gpusInK >= 1)
+      gpusInK_ = gpusInK;
+    else
+      gpusInK_ = 2;//ilog2(gpus);
+    
+    if (gpusInM >= 1)
+      gpusInM_ = gpusInM;  
+    else
+      gpusInM_ = 1;//ilog2(gpus);
+      
+    //TODO: Check that gpuKrons batch is valid, i.e., P1*P2..PBatch <= gpusInK
+    if (gpuKrons > 0)
+      perGPUKronBatch_ = gpuKrons;
+    else 
+      perGPUKronBatch_ = 1;
+
+    //TODO: Check if gpusInK_ == 1 then perGPUKronBatch = NumKrons
+
+    std::cout << "gpusInRows " << gpusInM_ <<
+                 " gpusInCols " << gpusInK_ << 
+                 " gpuKronBatch " << perGPUKronBatch_ <<
+                 std::endl;
+    if (gpusInK_ * gpusInM_ != numGPUs_)  {
+      std::cout << "gpusInCols * gpusInRows != total gpus (" << 
+                   gpusInK_ * gpusInM_ << "!= " << 
+                   numGPUs_<< ")" << std::endl;
+      abort();
+    }
+    //TODO: Check that localKrons <= log (gpuK_)_P
+    // gpuM_ = M_/gpusInM_;
+    // gpuK_ = K_/gpusInK_;
+    // gpuN_ = N_/gpusInK_;
+    
+    //All gpus with same row shares the same barrier
+    //TODO: free
+    barriers_ = new pthread_barrier_t[gpusInM_];
+    threads_ = new thread_pool<ThreadArgs*>(numGPUs_);
+
+    for (int i = 0; i < gpusInM_; i++) {
+      int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
+      //TODO: Create PTHREAD_CHECK?
+      assert (s == 0);
+    }
+    
+    // size_t tempN = gpuK_;
+    // size_t maxTempN = tempN;
+    // for (int i = 0; i < NumKronMats_; i++) {
+    //   tempN = (tempN/KronMatRows_[i])*KronMatCols_[i];
+    //   if (maxTempN < tempN)
+    //     maxTempN = tempN;
+    // }
+
+    // size_t sz = gpuM_ * maxTempN * sizeof(T);
+    // std::cout << "Allocating temporaries of size "<< sz << std::endl;
+    // std::cout << "Allocated temporaries"<<std::endl;
+
+  }
+
+  //Load kernels into compiledKernels map
+  for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
+    KernelInfo& info = KronGemmKernels[i];
+    KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
+    auto iter = compiledKernels.find(shape);
+    if (iter == compiledKernels.end()) {
+      compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
+    }
+    compiledKernels.at(shape).push_back(info);
+  }
+  
+  //TODO: Check that if distP2PStore is needed then there is a kernel that can 
+  //do it
+  //TODO: Add if debug
+  if (false) {
+    uint numKernels = 0;
+    std::cout << "Loading compiled kernels" << std::endl;
+    for (auto iter : compiledKernels) {
+      for (auto kernel : iter.second) {
+        // std::cout << kernel << std::endl;
+      }
+      numKernels += iter.second.size();
+    }
+    std::cout << "Number of kernels loaded: " << numKernels << std::endl;
+  }  
 }
 
 cudaError_t FastKronHandle::sgekmm(const uint NumKronMats, float* x, float* kronMats[], 

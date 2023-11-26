@@ -42,16 +42,7 @@ enum ProcType {
 struct FastKronHandle {
   void* result_;
 
-  FastKronHandle() :
-    tunedKernelSeries()
-  {
-    //Optimization Options
-    useFusion_ = true;
-
-    //Is Distributed
-    isDistributed_ = false;
-  }
-
+  FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons);
   uint numGPUs_;
   uint gpusInM_;
   uint gpusInK_;
