@@ -27,17 +27,17 @@ void fastKronDestroy(fastKronHandle handle) {
 cudaError_t sgekmm(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float* temp1, float* temp2,
                    float alpha, float beta, float *z, cudaStream_t stream) {
-  return handle->sgekmm(NumKronMats, x, kronMats, result,
-                                            M, N, K, KronMatCols, KronMatRows, temp1, temp2, 
-                                            EpilogueParams::create<float>(alpha, beta, z), stream);
+  return handle->xgekmm(NumKronMats, (void*)x, (void**)kronMats, (void*)result,
+                        M, N, K, KronMatCols, KronMatRows, (void*)temp1, (void*)temp2, 
+                        EpilogueParams::create<float>(alpha, beta, z), stream);
 }
 
 cudaError_t igekmm(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], int* temp1, int* temp2,
                    int alpha, int beta, int *z, cudaStream_t stream) {
-  return handle->igekmm(NumKronMats, x, kronMats, result, 
-                                        M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-                                        EpilogueParams::create<int>(alpha, beta, z), stream);
+  return handle->xgekmm(NumKronMats, (void*)x, (void**)kronMats, (void*)result, 
+                        M, N, K, KronMatCols, KronMatRows, (void*)temp1, (void*)temp2,
+                        EpilogueParams::create<int>(alpha, beta, z), stream);
 }
 
 cudaError_t dgekmm(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
