@@ -78,19 +78,12 @@ struct FastKronHandle {
   KernelInfo selectKernel(KronMatmulShape shape);
   uint maxFusedKernels(KronMatmulShape shape);
 
-  cudaError_t sgekmm(const uint NumKronMats, float* x, float* kronMats[], 
-  float* result,
+  cudaError_t xgekmm(const uint NumKronMats, void* x, void** kronMats, 
+  void* result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-  float* temp1, float* temp2, 
+  void* temp1, void* temp2, 
   EpilogueParams epilogueParams,
   cudaStream_t stream);
-
-  cudaError_t igekmm(const uint NumKronMats, int* x, int* kronMats[],
-                                  int* result,
-                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-                                  int* temp1, int* temp2, 
-                                  EpilogueParams epilogueParams,
-                                  cudaStream_t stream);
 
   cudaError_t distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
