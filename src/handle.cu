@@ -283,6 +283,43 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
   return status;
 }
 
+template<typename T>
+cudaError_t fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
+                                           T* x, T** kronMat, T* kronGemmResult,
+                                           const uint M, const uint N, const uint K, 
+                                           const uint* FusedKronMatCols, const uint* FusedKronMatRows,
+                                           DistributedParams<T> distParams, cudaStream_t stream) {
+  switch (NumFusedKerns) {
+    case 1:
+      return generalDistributedSlicedMatmul<T, 1>(kernel, kronIndex, x, 
+                                                    kronMat, kronGemmResult, M, N, K, 
+                                                    FusedKronMatCols, FusedKronMatRows, 
+                                                    distParams, stream);
+    case 2:
+      return generalDistributedSlicedMatmul<T, 2>(kernel, kronIndex, x, 
+                                                    kronMat, kronGemmResult, M, N, K,
+                                                    FusedKronMatCols, FusedKronMatRows, 
+                                                    distParams, stream);
+    case 3:
+      return generalDistributedSlicedMatmul<T, 3>(kernel, kronIndex, x, 
+                                                    kronMat, kronGemmResult, M, N, K,
+                                                    FusedKronMatCols, FusedKronMatRows, 
+                                                    distParams, stream);
+    case 4:
+      return generalDistributedSlicedMatmul<T, 4>(kernel, kronIndex, x, 
+                                                    kronMat, kronGemmResult, M, N, K,
+                                                    FusedKronMatCols, FusedKronMatRows, 
+                                                    distParams, stream);
+    case 5:
+      return generalDistributedSlicedMatmul<T, 5>(kernel, kronIndex, x, 
+                                                    kronMat, kronGemmResult, M, N, K, 
+                                                    FusedKronMatCols, FusedKronMatRows, 
+                                                    distParams, stream);
+  }
+
+  return cudaErrorInvalidValue;
+}
+
 //TODO: These methods that take handle should be private methods of FastKronHandle
 TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKronMats,
                                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
@@ -521,38 +558,10 @@ cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T*
         for (int r = 0; r < warmups + runs; r++) {
           if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
           if (distP2PStore) {
-            switch (NumFusedKerns) {
-              case 1:
-                status = generalDistributedSlicedMatmul<T, 1>(kernel, endKron, prevKronResult, 
+            status = fusedDistributedSlicedMatmul<T>(NumFusedKerns, kernel, endKron, prevKronResult, 
                                                               krons, currKronResult, M, outTempN, tempN, 
                                                               FusedKronMatCols, FusedKronMatRows, 
                                                               distParams, stream);
-                break;
-              case 2:
-                status = generalDistributedSlicedMatmul<T, 2>(kernel, endKron, prevKronResult, 
-                                                              krons, currKronResult, M, outTempN, tempN,
-                                                              FusedKronMatCols, FusedKronMatRows, 
-                                                              distParams, stream);
-                break;
-              case 3:
-                status = generalDistributedSlicedMatmul<T, 3>(kernel, endKron, prevKronResult, 
-                                                              krons, currKronResult, M, outTempN, tempN,
-                                                              FusedKronMatCols, FusedKronMatRows, 
-                                                              distParams, stream);
-                break;
-              case 4:
-                status = generalDistributedSlicedMatmul<T, 4>(kernel, endKron, prevKronResult, 
-                                                              krons, currKronResult, M, outTempN, tempN,
-                                                              FusedKronMatCols, FusedKronMatRows, 
-                                                              distParams, stream);
-                break;
-              case 5:
-                status = generalDistributedSlicedMatmul<T, 5>(kernel, endKron, prevKronResult, 
-                                                              krons, currKronResult, M, outTempN, tempN, 
-                                                              FusedKronMatCols, FusedKronMatRows, 
-                                                              distParams, stream);
-                break;
-            }
           } else {
             status = fusedSlicedMatmul<T>(NumFusedKerns, kernel, endKron, prevKronResult,
                                                   krons, currKronResult, M, outTempN, tempN, 
@@ -907,35 +916,10 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
-        switch (NumFusedKerns) {
-          case 1:
-            status = generalDistributedSlicedMatmul<T, 1>(kernel.kernel, kernel.end, innerPrevResult, 
+        status = fusedDistributedSlicedMatmul<T>(NumFusedKerns, kernel.kernel, kernel.end, innerPrevResult, 
                                                           krons, innerCurrResult, gpuM, currTempN, 
                                                           prevTempN, kronCols, kronRows, distParams, 
                                                           stream[g]);
-            break;
-          case 2:
-          //TODO: for all other cases
-            status = generalDistributedSlicedMatmul<T, 2>(kernel.kernel, kernel.end, innerPrevResult, 
-                                                          krons, innerCurrResult, gpuM, gpuK, gpuK, 
-                                                          kronCols, kronRows, distParams, stream[g]);
-            break;
-          case 3:
-            status = generalDistributedSlicedMatmul<T, 3>(kernel.kernel, kernel.end, innerPrevResult, 
-                                                          krons, innerCurrResult, gpuM, gpuK, gpuK, 
-                                                          kronCols, kronRows, distParams, stream[g]);
-            break;
-          case 4:
-            status = generalDistributedSlicedMatmul<T, 4>(kernel.kernel, kernel.end, innerPrevResult, 
-                                                          krons, innerCurrResult, gpuM, gpuK, gpuK, 
-                                                          kronCols, kronRows, distParams, stream[g]);
-            break;
-          case 5:
-            status = generalDistributedSlicedMatmul<T, 5>(kernel.kernel, kernel.end, innerPrevResult, 
-                                                          krons, innerCurrResult, gpuM, gpuK, gpuK, 
-                                                          kronCols, kronRows, distParams, stream[g]);
-            break;
-        }
         assert(status == cudaSuccess);        
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         
