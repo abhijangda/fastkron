@@ -31,21 +31,21 @@ struct EpilogueParams {
     glD(glD), alpha(alpha), beta(beta) {}
 };
 
-template<typename ElemT, uint NumFusedKerns>
+template<uint NumFusedKerns>
 struct KernelParams {
   const uint RowsC;
   const uint ColsC; //TODO: Change to LocalColsC
   const uint ColsA;
   uint KronRows[NumFusedKerns];
   uint KronCols[NumFusedKerns];
-  const ElemT * __restrict__ glA;
-  const ElemT * __restrict__ glKronMats[NumFusedKerns];
-  ElemT       * __restrict__ glC;
+  const void * __restrict__ glA;
+  const void * __restrict__ glKronMats[NumFusedKerns];
+  void       * __restrict__ glC;
   const uint kp_idx;
 
   KernelParams(const uint RowsC, const uint ColsC, const uint ColsA,
-               const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns], const ElemT* glA,
-               ElemT* glKronMats[NumFusedKerns], ElemT* glC, uint kp_idx) :
+               const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns], const void* glA,
+               void* glKronMats[NumFusedKerns], void* glC, uint kp_idx) :
                RowsC(RowsC), ColsC(ColsC), ColsA(ColsA), glA(glA), glC(glC), kp_idx(kp_idx) {
     for (int i = 0; i < NumFusedKerns; i++) {
       this->KronRows[i] = KronRows[i];
@@ -56,7 +56,7 @@ struct KernelParams {
 };
 
 
-template<typename ElemT, uint NumFusedKerns>
+template<uint NumFusedKerns>
 struct FusedParams {
   uint KronColsPower;
   uint UVAColsRatioKronColsSquare;

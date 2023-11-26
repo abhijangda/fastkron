@@ -180,16 +180,17 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
             1
           };
   
-  KernelParams<T, NumFusedKerns> params (M, N, K,
+  KernelParams<NumFusedKerns> params (M, N, K,
                                          KronMatRows, 
-                                         KronMatCols, x, 
-                                         kronMat, 
-                                         kronGemmResult, 
+                                         KronMatCols,
+                                         (void*)x, 
+                                         (void**)kronMat, 
+                                         (void*)kronGemmResult, 
                                          kronIndex);
-  FusedParams<T, NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
+  FusedParams<NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
   // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, 
+  typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
                                      DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), 
                                         epilogueParams, grid, block, stream);
@@ -264,17 +265,18 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
             1
           };
 
-  KernelParams<T, NumFusedKerns> params(M, N, K,
+  KernelParams<NumFusedKerns> params(M, N, K,
                                         KronMatRows, 
-                                        KronMatCols, x, 
-                                        kronMat, 
-                                        kronGemmResult, 
+                                        KronMatCols, 
+                                        (void*)x, 
+                                        (void**)kronMat, 
+                                        (void*)kronGemmResult, 
                                         kronIndex);
-  FusedParams<T, NumFusedKerns> fusedParams(M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
+  FusedParams<NumFusedKerns> fusedParams(M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
 
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
-  typedef void (*KronMatmulKernelTy)(KernelParams<T, NumFusedKerns>, FusedParams<T, NumFusedKerns>, 
+  typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
                                      DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, EpilogueParams<T>(), 
                                         grid, block, stream);
@@ -1228,8 +1230,6 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
   useFusion_ = true;
   isDistributed_ = gpus > 1;
   if (isDistributed_) {
-    //TODO: Setting DistComm in another function
-    setUseFusion(false);
     numGPUs_ = gpus;
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {
@@ -1370,6 +1370,24 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
   }  
 }
 
+void FastKronHandle::free() {
+  if (isDistributed_) {
+    for (uint g = 0; g < gpusInM_; g++) {
+      int s = pthread_barrier_destroy(&barriers_[g]);
+      assert (s == 0);
+    }
+
+    delete threads_;
+    delete barriers_;
+
+    if (distComm_ == DistComm::NCCL) {
+      for (int i=0; i<ncclComms.size(); i++)
+        ncclCommDestroy(ncclComms[i]);
+    }
+  }
+  compiledKernels.clear();
+}
+
 cudaError_t FastKronHandle::sgekmm(const uint NumKronMats, float* x, float* kronMats[], 
   float* result,
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
@@ -1391,3 +1409,4 @@ cudaError_t FastKronHandle::igekmm(const uint NumKronMats, int* x, int* kronMats
                               M, N, K, KronMatCols, KronMatRows, temp1, temp2,
                               epilogueParams, stream);
 }
+
