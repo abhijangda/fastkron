@@ -10,6 +10,6 @@ TEST(SingleGPUDistinctShapesTest, Case1) {
     N *= KP_MAT_N[i];
     K *= KP_MAT_K[i];
   }
-  bool b = run<float>(8, N, K, 4, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, false, true, false);
+  bool b = run<float>(16, N, K, 4, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, false, true, false);
   EXPECT_TRUE(b);
 }
