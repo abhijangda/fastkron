@@ -21,9 +21,11 @@ gen_test_kernels = {'gen-single-gpu-kernels'            : ['run-single-gpu-no-fu
                     'gen-multi-gpu-no-fusion-non-square-tests-kernel' : ['run-p2p-multi-gpu-no-fusion-non-square-tests', 'run-nccl-multi-gpu-no-fusion-non-square-tests'],
                     'gen-multi-gpu-distinct-shapes'     : ['run-p2p-multi-gpu-distinct-shapes', 'run-nccl-multi-gpu-distinct-shapes']}
 
-for gen, runs in gen_test_kernels.items():
+sorted_keys = sorted(list(gen_test_kernels.keys()))
+
+for gen in sorted_keys:
     execute(f'make {gen}')
-    for run in runs:
+    for run in gen_test_kernels[gen]:
         print(f"========= Running {run[len('run-'):]} =========")
         output = execute(f'make {run} -j')
         if 'FAILED' in output:
