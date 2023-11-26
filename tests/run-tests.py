@@ -3,6 +3,7 @@
 import subprocess
 
 def execute(command):
+    print(f"Executing {command}")
     (s, o) = subprocess.getstatusoutput(command)
     if s != 0:
         print(f'Error in executing "{command}"')
