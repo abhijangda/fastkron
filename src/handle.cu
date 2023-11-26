@@ -191,8 +191,8 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
-                                     DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams<T>(), 
+                                     DistributedParams, EpilogueParams<T>, dim3, dim3, cudaStream_t);
+  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams(), 
                                         epilogueParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
@@ -245,7 +245,7 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
                                            T* x, T* kronMat[NumFusedKerns], T* kronGemmResult,
                                            const uint M, const uint N, const uint K, 
                                            const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
-                                           DistributedParams<T> distParams, cudaStream_t stream) {
+                                           DistributedParams distParams, cudaStream_t stream) {
   cudaError_t status;
   
   if (!isValidKernel(kernelInfo)) abort();
@@ -277,7 +277,7 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
-                                     DistributedParams<T>, EpilogueParams<T>, dim3, dim3, cudaStream_t);
+                                     DistributedParams, EpilogueParams<T>, dim3, dim3, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, EpilogueParams<T>(), 
                                         grid, block, stream);
   status = cudaGetLastError();
@@ -290,7 +290,7 @@ cudaError_t fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& k
                                            T* x, T** kronMat, T* kronGemmResult,
                                            const uint M, const uint N, const uint K, 
                                            const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                                           DistributedParams<T> distParams, cudaStream_t stream) {
+                                           DistributedParams distParams, cudaStream_t stream) {
   switch (NumFusedKerns) {
     case 1:
       return generalDistributedSlicedMatmul<T, 1>(kernel, kronIndex, x, 
@@ -501,7 +501,7 @@ template<typename T>
 cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[],
                               uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                               T* temp1, T* temp2,
-                              bool isDistributed, DistributedParams<T> distParams,
+                              bool isDistributed, DistributedParams distParams,
                               std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
                               cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
@@ -619,7 +619,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
     CUDA_CHECK(cudaMalloc(&temp1_, tempSize * sizeof(T)));
     CUDA_CHECK(cudaMalloc(&temp2_, tempSize * sizeof(T)));
     singleGPUAutotune(handle, NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, 
-                      (T*)temp1_, (T*)temp2_, false, DistributedParams<T>(), 
+                      (T*)temp1_, (T*)temp2_, false, DistributedParams(), 
                       bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
@@ -692,9 +692,9 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       T** gpuResults = (T**)temp2_;
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
-      DistributedParams<T> distParams(0, 0, handle.gpusInK_, prevFullK, currFullN, 
+      DistributedParams distParams(0, 0, handle.gpusInK_, prevFullK, currFullN, 
                                       prevFullK, currFullN, LocalKronMatCols, LocalKronMatRows, LocalKrons);
-      distParams.updateGPUResults(gpuResults);
+      distParams.updateGPUResults((void**)gpuResults);
       singleGPUAutotune(handle, LocalKrons, x, kronMats, gpuM, currTempN, prevTempN, 
                         LocalKronMatCols, LocalKronMatRows, temp1_[0], temp2_[0],
                         handle.gpusInK_ > 1 && handle.isDistributed_ && handle.distComm_ == DistComm::P2P, 
@@ -868,7 +868,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
-      DistributedParams<T> distParams(gr, gc, handle.gpusInK_, 
+      DistributedParams distParams(gr, gc, handle.gpusInK_, 
                                       prevFullK, currFullN,
                                       prevTempN, currTempN, LocalKronCols, LocalKronRows, KronMulBatchSize);
       uint slicedMuls = 0;
@@ -914,7 +914,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
           gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
         }
-        distParams.updateGPUResults(gpuResults);
+        distParams.updateGPUResults((void**)gpuResults);
 
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
