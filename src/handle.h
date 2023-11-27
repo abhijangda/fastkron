@@ -7,6 +7,7 @@
 #include "thread_pool.h"
 #include "kernel_invoker.h"
 #include "env.h"
+#include "kmmalgo.h"
 
 #pragma once
 
@@ -145,6 +146,8 @@ struct ThreadArgs {
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                const uint M, const uint N, const uint K, 
                                const uint KronMatCols[], const uint KronMatRows[],
+                               const uint LocalKrons, const uint gpusInK);
+bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);
 bool checkKronMatrixSizes(const uint NumKronMats, 
                           const uint M, const uint N, const uint K, 

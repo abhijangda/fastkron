@@ -115,9 +115,10 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
 
   uint gpuM, gpuK;
   FastKronHandle& handle = *handlePtr;
+  KMMProblem problem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols),
+                     GeKMMPtrs());
   if (handle.isDistributed_) {
-    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
-                                   handle.perGPUKronBatch_, handle.gpusInK_))
+    if (!checkDistributedKronSizes(problem, handle.perGPUKronBatch_, handle.gpusInK_))
       return cudaErrorInvalidValue;
     gpuM = M/handle.gpusInM_;
     gpuK = K/handle.gpusInK_;
@@ -130,14 +131,12 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
 
   uint maxTempN = 0;
   uint resultCols = 0;
-
-  KMMProblem problem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols),
-                     GeKMMPtrs());
                      
-  executeGeKMM(problem, nullptr, nullptr,
-    [&maxTempN, &resultCols](KMMProblem& kmm, void* t1, void* t2, cudaError_t& e) {
+  auto e = executeGeKMM(problem, nullptr, nullptr,
+    [&maxTempN, &resultCols](const KMMProblem kmm, void* t1, void* t2, cudaError_t& e) {
                             maxTempN = std::max(maxTempN, kmm.l);
                             resultCols = kmm.l;
+                            e = cudaSuccess;
                             return 1U;
                           });
 
@@ -147,7 +146,7 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
     *tempSize = (*tempSize) * 2;
   *resultSize = gpuM * resultCols;
 
-  return cudaSuccess;
+  return e;
 }
 
 // cudaError_t allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K) {

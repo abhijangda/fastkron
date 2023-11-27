@@ -5,6 +5,7 @@ TEST_LFLAGS = -lgtest -lpthread
 GXX=g++
 GOOGLE_TEST = googletest
 GOOGLE_TEST_BUILD = $(GOOGLE_TEST)/build
+OPT_FLAGS=-O1 -g
 
 all: libKron.so
 
@@ -14,31 +15,31 @@ gtest:
 	mkdir -p $(GOOGLE_TEST_BUILD) && cd $(GOOGLE_TEST_BUILD) && cmake .. && make -j
 
 env.o: src/env.cpp src/env.h
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS) 
 
 kmmalgo.o: src/kmmalgo.cu src/kmmalgo.h
-		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 kernel_invoker.o: src/kernel_invoker.cu src/kernel_invoker.h
-		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 fastkron.o: src/fastkron.cu
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 autotuner.o: src/autotuner.cpp src/autotuner.h
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 distrib_handle.o: src/distrib_handle.cu src/handle.h
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 kron.o: src/handle.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/handle.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
-	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 libKron.so: device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o
 	$(NVCC) -shared -lnccl device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o -o $@
 
 kron: tests/main.cu libKron.so tests/testBase.h
-	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@ -O3 -g
+	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@ $(OPT_FLAGS)
 
 #Make tests
 gen-single-gpu-kernels: src/gen_tuner_kernels.py tests/single-gpu-kernel-decls.in
