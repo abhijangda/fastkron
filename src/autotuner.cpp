@@ -55,6 +55,107 @@ static float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
   return minTime;
 }
 
+static cudaError_t tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kronMats[],
+                              uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                              void* temp1, void* temp2,
+                              bool isDistributed, DistributedParams distParams,
+                              std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
+                              cudaStream_t stream) {
+  //Only row major layout of all matrics is supported.
+  void* kronGemmResults[2] = {(void*)temp1, (void*)temp2};
+  //For performance eval we do not need these to contain any value
+  void* prevKronResult = kronGemmResults[0];
+  void* currKronResult = kronGemmResults[1];
+  //TODO: Assumes all factors are of same size and square shape
+  // const uint MaxFusedKerns = fastKron.getUseFusion() ? 
+  //                            maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}) : 1;
+  //Use double buffering for writing result and using output 
+  //of previous iteration as input to current
+  cudaEvent_t start, end;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
+  
+  //A KronMat is a series of SlicedMats
+  //We need to get best kernel for all contiguous SlicedMats
+  for (uint startKron = 0; startKron < NumKronMats; startKron++) {
+  for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
+    const uint kronMat = endKron;
+    //KronMats[startKron, ..., endKron] including endKron
+    const uint NumFusedKerns = endKron - startKron + 1;
+    void* krons[NumFusedKerns];
+    uint FusedKronMatCols[NumFusedKerns];
+    uint FusedKronMatRows[NumFusedKerns];
+    for (int k = 0; k < NumFusedKerns; k++) {
+      krons[k] = kronMats[kronMat - k];
+      FusedKronMatCols[k] = KronMatCols[kronMat - k];
+      FusedKronMatRows[k] = KronMatRows[kronMat - k];
+    }
+    uint tempN = K;
+    for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
+      tempN = (tempN/KronMatRows[reverseKron])*KronMatCols[reverseKron];
+    }
+    uint outTempN = (tempN/KronMatRows[endKron])*KronMatCols[endKron];
+    // std::cout << "endKron " << endKron << " startKron " << startKron << " tempN " << tempN << std::endl;
+    bool distP2PStore = isDistributed && startKron == 0;
+    cudaError_t status;
+    KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+                                            tempN, M, NumFusedKerns, distP2PStore};
+    if (bestKernels.find(shape) != bestKernels.end()) {
+      continue;
+    }
+    if (!fastKron.getUseFusion() and NumFusedKerns > 1) continue;
+    KernelInfo bestKernel;
+    float minTime = std::numeric_limits<float>::max();
+    const uint runs = 5;
+    const uint warmups = 2;
+    std::cout << "Tuning for shape "  << shape << std::endl;
+    for (auto shapeAndKernels : fastKron.compiledKernels) {
+      if (!shapeAndKernels.first.sameKronSize(shape)) continue;
+      for (auto kernel : shapeAndKernels.second) {
+        if (!kernel.canCompute(shape)) continue;
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+        for (int r = 0; r < warmups + runs; r++) {
+          if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
+          if (distP2PStore) {
+            status = fastKron.fusedDistributedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult, 
+                                                  (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
+                                                  FusedKronMatCols, FusedKronMatRows, 
+                                                  distParams, EpilogueParams::create<float>(), stream);
+          } else {
+            status = fastKron.fusedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult,
+                                       (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
+                                       FusedKronMatCols, FusedKronMatRows,
+                                       EpilogueParams::create<float>(), stream);
+          }
+          // if (status != cudaSuccess) break;
+        }
+        CUDA_CHECK(cudaEventRecord(end, stream));
+        CUDA_CHECK(cudaEventSynchronize(end));
+        
+        if (status != cudaSuccess)
+          std::cout << "Error: " << cudaGetErrorString(status) << " for " << kernel << " tempN " << tempN << std::endl;
+        float kernelTime;
+        CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
+        std::cout << std::fixed << std::setprecision(2) << 
+                     kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
+        if (kernelTime < minTime) {
+          bestKernel = kernel;
+          minTime = kernelTime;
+        }
+        if (status != cudaSuccess) return status;
+      }
+    }
+
+    if (minTime < std::numeric_limits<float>::max()) {
+      std::cout << std::fixed << std::setprecision(2) <<
+                   "Best kernel for " << shape << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
+      bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
+    }
+  }}
+
+  return cudaSuccess;
+}
+
 cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats, 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream) {
@@ -178,106 +279,5 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
   for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
   }
-  return cudaSuccess;
-}
-
-cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kronMats[],
-                              uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                              void* temp1, void* temp2,
-                              bool isDistributed, DistributedParams distParams,
-                              std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
-                              cudaStream_t stream) {
-  //Only row major layout of all matrics is supported.
-  void* kronGemmResults[2] = {(void*)temp1, (void*)temp2};
-  //For performance eval we do not need these to contain any value
-  void* prevKronResult = kronGemmResults[0];
-  void* currKronResult = kronGemmResults[1];
-  //TODO: Assumes all factors are of same size and square shape
-  // const uint MaxFusedKerns = fastKron.getUseFusion() ? 
-  //                            maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}) : 1;
-  //Use double buffering for writing result and using output 
-  //of previous iteration as input to current
-  cudaEvent_t start, end;
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&end));
-  
-  //A KronMat is a series of SlicedMats
-  //We need to get best kernel for all contiguous SlicedMats
-  for (uint startKron = 0; startKron < NumKronMats; startKron++) {
-  for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
-    const uint kronMat = endKron;
-    //KronMats[startKron, ..., endKron] including endKron
-    const uint NumFusedKerns = endKron - startKron + 1;
-    void* krons[NumFusedKerns];
-    uint FusedKronMatCols[NumFusedKerns];
-    uint FusedKronMatRows[NumFusedKerns];
-    for (int k = 0; k < NumFusedKerns; k++) {
-      krons[k] = kronMats[kronMat - k];
-      FusedKronMatCols[k] = KronMatCols[kronMat - k];
-      FusedKronMatRows[k] = KronMatRows[kronMat - k];
-    }
-    uint tempN = K;
-    for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
-      tempN = (tempN/KronMatRows[reverseKron])*KronMatCols[reverseKron];
-    }
-    uint outTempN = (tempN/KronMatRows[endKron])*KronMatCols[endKron];
-    // std::cout << "endKron " << endKron << " startKron " << startKron << " tempN " << tempN << std::endl;
-    bool distP2PStore = isDistributed && startKron == 0;
-    cudaError_t status;
-    KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-                                            tempN, M, NumFusedKerns, distP2PStore};
-    if (bestKernels.find(shape) != bestKernels.end()) {
-      continue;
-    }
-    if (!fastKron.getUseFusion() and NumFusedKerns > 1) continue;
-    KernelInfo bestKernel;
-    float minTime = std::numeric_limits<float>::max();
-    const uint runs = 5;
-    const uint warmups = 2;
-    std::cout << "Tuning for shape "  << shape << std::endl;
-    for (auto shapeAndKernels : fastKron.compiledKernels) {
-      if (!shapeAndKernels.first.sameKronSize(shape)) continue;
-      for (auto kernel : shapeAndKernels.second) {
-        if (!kernel.canCompute(shape)) continue;
-        CUDA_CHECK(cudaStreamSynchronize(stream));
-        for (int r = 0; r < warmups + runs; r++) {
-          if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
-          if (distP2PStore) {
-            status = fastKron.fusedDistributedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult, 
-                                                  (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
-                                                  FusedKronMatCols, FusedKronMatRows, 
-                                                  distParams, EpilogueParams::create<float>(), stream);
-          } else {
-            status = fastKron.fusedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult,
-                                       (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
-                                       FusedKronMatCols, FusedKronMatRows,
-                                       EpilogueParams::create<float>(), stream);
-          }
-          // if (status != cudaSuccess) break;
-        }
-        CUDA_CHECK(cudaEventRecord(end, stream));
-        CUDA_CHECK(cudaEventSynchronize(end));
-        
-        if (status != cudaSuccess)
-          std::cout << "Error: " << cudaGetErrorString(status) << " for " << kernel << " tempN " << tempN << std::endl;
-        float kernelTime;
-        CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
-        std::cout << std::fixed << std::setprecision(2) << 
-                     kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
-        if (kernelTime < minTime) {
-          bestKernel = kernel;
-          minTime = kernelTime;
-        }
-        if (status != cudaSuccess) return status;
-      }
-    }
-
-    if (minTime < std::numeric_limits<float>::max()) {
-      std::cout << std::fixed << std::setprecision(2) <<
-                   "Best kernel for " << shape << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
-      bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
-    }
-  }}
-
   return cudaSuccess;
 }

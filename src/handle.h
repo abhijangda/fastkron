@@ -5,7 +5,7 @@
 
 #include "fastkron.h"
 #include "thread_pool.h"
-#include "device/kernel_info.h"
+#include "kernel_invoke.h"
 #include "device/params.h"
 #include "env.h"
 
@@ -51,6 +51,7 @@ struct FastKronHandle {
   uint perGPUKronBatch_;
   bool isDistributed_;
   DistComm distComm_;
+  KernelInvoker kernelInvoker;
   //Map from Factor size and Number of factors to KernelInfos
   std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
 

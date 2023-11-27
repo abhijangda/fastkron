@@ -136,192 +136,6 @@ KernelInfo FastKronHandle::selectKernel(KronMatmulShape shape) {
   return KernelInfo();
 }
 
-bool isValidKernel(KernelInfo& kernelInfo) {
-  const uint NumThreads = kernelInfo.NumThreads;
-  const uint KronRows = kernelInfo.KronRows;
-  const uint KronCols = kernelInfo.KronCols;
-  const uint CRegRows = kernelInfo.CRegRows;
-  const uint CRegCols = kernelInfo.CRegCols;
-  const uint MaxColsA = kernelInfo.MaxColsA;
-  const uint TileKronCols = kernelInfo.TileKronCols;
-
-  const uint ValidThreads = ((MaxColsA/KronRows)/CRegRows) * (TileKronCols/CRegCols);
-  if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
-    std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
-    return false;
-  }
-
-  return true;
-}
-
-//Launch cuda kernels
-template<uint NumFusedKerns>
-cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
-                                void* x, void** kronMat, void* kronGemmResult,
-                                const uint M, const uint N, const uint K, 
-                                const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
-                                EpilogueParams epilogueParams,
-                                cudaStream_t stream) {
-  cudaError_t status;
-  
-  if (!isValidKernel(kernelInfo)) abort();
-  
-  //Create the grid and thread block
-  dim3 grid;
-  dim3 block;
-  grid = {
-          (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
-          DIVUP(M, kernelInfo.TileRowsA),
-          1
-         };
-  block = {
-            kernelInfo.NumThreads, 
-            1, 
-            1
-          };
-  
-  KernelParams<NumFusedKerns> params (M, N, K,
-                                      KronMatRows, 
-                                      KronMatCols,
-                                      x, 
-                                      kronMat, 
-                                      kronGemmResult, 
-                                      kronIndex);
-  FusedParams<NumFusedKerns> fusedParams (M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
-  // std::cout << "Invoking " << kernelInfo << std::endl;
-  //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
-                                     DistributedParams, EpilogueParams, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams(), 
-                                        epilogueParams, grid, block, stream);
-  status = cudaGetLastError();
-  CUDA_CHECK(status);
-  return status;
-}
-
-cudaError_t FastKronHandle::fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& kernelInfo, const uint kronIndex, 
-                              void* x, void** krons, void* kronGemmResult,
-                              const uint M, const uint N, const uint K, 
-                              const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                              EpilogueParams epilogueParams,
-                              cudaStream_t stream) {
-  switch(NumFusedKerns) {
-    case 1:
-      return generalSlicedMatmul<1>(kernelInfo, kronIndex, x,
-                                        krons, kronGemmResult, M, N, K,
-                                        FusedKronMatCols, FusedKronMatRows,
-                                        epilogueParams, stream);
-    case 2:
-      return generalSlicedMatmul<2>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
-    case 3:
-      return generalSlicedMatmul<3>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
-    case 4:
-      return generalSlicedMatmul<4>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
-    case 5:
-      return generalSlicedMatmul<5>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
-      break;
-    default:
-        std::cout << "Invalid number of fused kernels" << std::endl;
-      return cudaErrorInvalidValue;
-  }
-}
-
-//Launch cuda kernels
-template<uint NumFusedKerns>
-cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
-                                           void* x, void** kronMat, void* kronGemmResult,
-                                           const uint M, const uint N, const uint K, 
-                                           const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
-                                           DistributedParams distParams, EpilogueParams epilogueParams,
-                                           cudaStream_t stream) {
-  cudaError_t status;
-  
-  if (!isValidKernel(kernelInfo)) abort();
-
-  //Create the grid and thread block
-  dim3 grid;
-  dim3 block;
-  
-  grid = {
-          (K/kernelInfo.MaxColsA) * DIVUP(KronMatCols[0], kernelInfo.TileKronCols),
-          DIVUP(M, kernelInfo.TileRowsA),
-          1
-         };
-  block = {
-            kernelInfo.NumThreads, 
-            1, 
-            1
-          };
-
-  KernelParams<NumFusedKerns> params(M, N, K,
-                                     KronMatRows, 
-                                     KronMatCols, 
-                                     (void*)x, 
-                                     (void**)kronMat, 
-                                     (void*)kronGemmResult, 
-                                     kronIndex);
-  FusedParams<NumFusedKerns> fusedParams(M, N, K, kernelInfo.MaxColsA, KronMatRows, KronMatCols);
-
-  //Call kernel
-  //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
-  typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
-                                     DistributedParams, EpilogueParams, dim3, dim3, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, epilogueParams, 
-                                        grid, block, stream);
-  status = cudaGetLastError();
-  CUDA_CHECK(status);
-  return status;
-}
-
-cudaError_t FastKronHandle::fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
-                                           void* x, void** kronMat, void* kronGemmResult,
-                                           const uint M, const uint N, const uint K, 
-                                           const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                                           DistributedParams distParams, EpilogueParams epilogueParams,
-                                           cudaStream_t stream) {
-  switch (NumFusedKerns) {
-    case 1:
-      return generalDistributedSlicedMatmul<1>(kernel, kronIndex, x, 
-                                                  kronMat, kronGemmResult, M, N, K, 
-                                                  FusedKronMatCols, FusedKronMatRows, 
-                                                  distParams, epilogueParams, stream);
-    case 2:
-      return generalDistributedSlicedMatmul<2>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K,
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
-    case 3:
-      return generalDistributedSlicedMatmul<3>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K,
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
-    case 4:
-      return generalDistributedSlicedMatmul<4>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K,
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
-    case 5:
-      return generalDistributedSlicedMatmul<5>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K, 
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
-  }
-
-  return cudaErrorInvalidValue;
-}
-
 //TODO: These methods that take handle should be private methods of FastKronHandle
 TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKronMats,
                                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
@@ -418,7 +232,7 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
 
     KernelInfo selectedKernel = kernel.kernel;
     // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
-    status = fusedSlicedMatmul(NumFusedKerns, selectedKernel, kronMat, (void*)prevKronResult,
+    status = kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kronMat, (void*)prevKronResult,
                                (void**)krons, (void*)currKronResult, M, currTempN, prevTempN,
                                FusedKronMatCols, FusedKronMatRows,
                                epilogueParams, stream);
@@ -629,7 +443,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
-        status = handle.fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
+        status = kernelInvoker.fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
                                               (void**)krons, (void*)innerCurrResult, gpuM, currTempN, 
                                               prevTempN, kronCols, kronRows, distParams, 
                                               EpilogueParams::create<T>(), stream[g]);
@@ -1075,25 +889,3 @@ void FastKronHandle::free() {
   }
   compiledKernels.clear();
 }
-
-// cudaError_t FastKronHandle::sgekmm(const uint NumKronMats, float* x, float* kronMats[], 
-//   float* result,
-//   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-//   float* temp1, float* temp2, 
-//   EpilogueParams epilogueParams,
-//   cudaStream_t stream) {
-//     return gekmm(NumKronMats, (void*)x, (void**)kronMats, (void*)result,
-//                               M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-//                               epilogueParams, stream);
-// }
-
-// cudaError_t FastKronHandle::igekmm(const uint NumKronMats, int* x, int* kronMats[],
-//   int* result,
-//   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-//   int* temp1, int* temp2, 
-//   EpilogueParams epilogueParams,
-//   cudaStream_t stream) {
-//     return singleGPUKronMatmul(*this, NumKronMats, (void*)x, (void**)kronMats, (void*)result,
-//                               M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-//                               epilogueParams, stream);
-// }
