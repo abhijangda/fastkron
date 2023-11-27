@@ -57,6 +57,6 @@ struct KMMProblem {
     KMMProblem(problem.shape, problem.ptrs, start, end, k, l) {}
 };
 
-cudaError_t executeGeKMM(KMMProblem& problem, void* temp1,
+cudaError_t executeGeKMM(const KMMProblem problem, void* temp1,
                          void* temp2, 
-                         std::function<uint (KMMProblem&, void*, void*, cudaError_t&)> func);
+                         std::function<uint (const KMMProblem, void*, void*, cudaError_t&)> func);

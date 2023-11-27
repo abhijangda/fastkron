@@ -73,6 +73,17 @@ bool checkDistributedKronSizes(const uint NumKronMats,
   return true;
 }
 
+bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, const uint gpusInK) {
+  bool correct = true;
+  executeGeKMM(problem, nullptr, nullptr,
+    [&correct, &gpusInK](const KMMProblem kmm, void* t1, void* t2, cudaError_t& e) {
+      correct = correct && (kmm.l % gpusInK == 0);
+      e = cudaSuccess;
+      return 1U;
+    });
+  return correct;
+}
+
 KronMatmulShape FastKronHandle::maxCompiledColsA(KronMatmulShape shape) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
     shape.ColsA /= 2;
