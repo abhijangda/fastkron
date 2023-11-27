@@ -102,10 +102,10 @@ cudaError_t idgemmTune(fastKronHandle handle, const uint NumKronMats, int* x, in
 
 
 cudaError_t allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K) {
-  handle->allocDistributedX((void**)dX, (void*)hX, M, K);
+  return handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
 cudaError_t gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
-  handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+  return handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 
 cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M, uint N, uint K, 
@@ -133,13 +133,11 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
   uint resultCols = 0;
                      
   auto e = executeGeKMM(problem, nullptr, nullptr,
-    [&maxTempN, &resultCols](const KMMProblem kmm, void* t1, void* t2, cudaError_t& e) {
+    [&maxTempN, &resultCols](const KMMProblem kmm, void* t1, void* t2) {
                             maxTempN = std::max(maxTempN, kmm.l);
                             resultCols = kmm.l;
-                            e = cudaSuccess;
                             return 1U;
                           });
-
   *tempSize   = gpuM * maxTempN;
   if (handle.isDistributed_ and handle.distComm_ == DistComm::NCCL)
     //Include size of send and recv buffers 

@@ -1,5 +1,6 @@
 #include <functional>
 #include <cassert>
+#include <stdio.h>
 
 #pragma once
 
@@ -29,12 +30,12 @@ struct KMMProblem {
   KMMShape shape;
   GeKMMPtrs ptrs;
 
-  const uint start;
-  const uint end;
+  const int start;
+  const int end;
   uint k;
   uint l;
 
-  KMMProblem(KMMShape shape, GeKMMPtrs ptrs, uint start, uint end, 
+  KMMProblem(KMMShape shape, GeKMMPtrs ptrs, int start, int end, 
              const uint k, const uint l) : shape(shape), ptrs(ptrs), 
              start(start), end(end), k(k), l(l) {
     assert (start >= 0);
@@ -44,19 +45,20 @@ struct KMMProblem {
   }
   
   KMMProblem(KMMShape shape, GeKMMPtrs ptrs) : shape(shape), ptrs(ptrs), start(0), end(shape.n) {
+    printf("shape.n %d\n", shape.n);
     k = 1;
     l = 1;
-    for (int i = 0; i < shape.n; i++) {
+    for (uint i = 0; i < shape.n; i++) {
       k *= shape.ps[i];
       l *= shape.qs[i];
     }
   }
 
-  KMMProblem(KMMProblem problem, uint start, uint end, 
+  KMMProblem(KMMProblem problem, int start, int end, 
     const uint k, const uint l) : 
     KMMProblem(problem.shape, problem.ptrs, start, end, k, l) {}
 };
 
 cudaError_t executeGeKMM(const KMMProblem problem, void* temp1,
                          void* temp2, 
-                         std::function<uint (const KMMProblem, void*, void*, cudaError_t&)> func);
+                         std::function<uint (const KMMProblem, void*, void*)> func);
