@@ -551,9 +551,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   thArgs->threadResult = {status, (void*)innerPrevResult};
 }
 
-template<typename T>
-cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, T* x[], T* kronMats[], T* result[],
-                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
+cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
+                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
                                   cudaStream_t streams[]) {
   uint gpuM, gpuK;
   handle.getDistributedSizes(M, K, gpuM, gpuK);
@@ -564,7 +563,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   if (M % gpuM != 0)                         return cudaErrorInvalidValue;
   if (NumKronMats < handle.perGPUKronBatch_) return cudaErrorInvalidValue;
   if (temp1 == nullptr)                      return cudaErrorInvalidValue;
-                      
+
   const uint batchedKronMuls = handle.perGPUKronBatch_;
 
   thread_pool<ThreadArgs*>::task tasks[handle.numGPUs_];
@@ -689,8 +688,8 @@ cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uin
 cudaError_t FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
   cudaStream_t streams[]) {
-    return distributedKronMatmul<float>(*this, NumKronMats, x, kronMats, result, M, N, K, 
-      KronMatCols, KronMatRows, temp1, temp2, streams);
+    return distributedKronMatmul(*this, NumKronMats, (void*)x, (void**)kronMats, (void*)result, M, N, K, 
+      KronMatCols, KronMatRows, (void**)temp1, (void**)temp2, streams);
 }
 
 FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
