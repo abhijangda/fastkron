@@ -100,6 +100,9 @@ struct FastKronHandle {
                               const uint* FusedKronMatCols, const uint* FusedKronMatRows,
                               EpilogueParams epilogueParams,
                               cudaStream_t stream);
+  TunedKernelsSeries selectKernelSeries(const uint NumKronMats,
+                                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                                      bool distributedKernel);
 };
 
 struct ThreadArgs {
