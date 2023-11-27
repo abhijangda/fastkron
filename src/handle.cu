@@ -10,6 +10,8 @@
 #include <limits>
 #include <iomanip>
 #include <cstring>
+#include <functional>
+#include <algorithm>
 
 #include "utils.h"
 #include "handle.h"
@@ -29,10 +31,128 @@ std::size_t std::hash<KronMatmulShape>::operator()(const KronMatmulShape& k) con
 
 /**Library entry points to launch cuda kernels**/
 
+//Change arg to KronMatmulProblem
+struct KMMShape {
+  const uint m;
+  const uint n;
+  const uint *qs;
+  const uint *ps;
+
+  KMMShape(uint m, uint n, uint *ps, uint *qs) : 
+    m(m), n(n), ps(ps), qs(qs)
+  {}
+};
+
+struct GeKMMPtrs {
+  void * x;
+  void ** fs;
+  void * y;
+
+  GeKMMPtrs() : x(nullptr), fs(nullptr), y(nullptr) {}
+
+  GeKMMPtrs(void* x, void ** fs, void * y) : 
+    x(x), fs(fs), y(y) {}
+};
+
+struct KMMProblem {
+  KMMShape shape;
+  GeKMMPtrs ptrs;
+
+  const uint start;
+  const uint end;
+  uint k;
+  uint l;
+
+  KMMProblem(KMMShape shape, GeKMMPtrs ptrs, uint start, uint end, 
+             const uint k, const uint l) : shape(shape), ptrs(ptrs), 
+             start(start), end(end), k(k), l(l) {
+    assert (start >= 0);
+    assert (end <= shape.n);
+    assert (start < end);
+    assert (shape.n >= end - start);
+  }
+  
+  KMMProblem(KMMShape shape, GeKMMPtrs ptrs) : shape(shape), ptrs(ptrs), start(0), end(shape.n) {
+    k = 1;
+    l = 1;
+    for (int i = 0; i < shape.n; i++) {
+      k *= shape.ps[i];
+      l *= shape.qs[i];
+    }
+  }
+
+  KMMProblem(KMMProblem problem, uint start, uint end, 
+    const uint k, const uint l) : 
+    KMMProblem(problem.shape, problem.ptrs, start, end, k, l) {}
+
+};
+
+cudaError_t executeGeKMM(KMMProblem& problem, void* temp1,
+                         void* temp2, 
+                         std::function<uint (KMMProblem&, void*, void*, cudaError_t&)> func) {
+  uint k = problem.k;
+  size_t l = k;
+  for (int i = problem.shape.n - 1; i >= 0; i--) {
+    l = (k/problem.shape.ps[i])*problem.shape.qs[i];
+    
+    KMMProblem subProblem(problem, i, i+1, k, l);
+
+    cudaError_t e;
+    func(subProblem, temp1, temp2, e);
+    
+    if (e != cudaSuccess) return e;
+    k = l;
+  }
+
+  return cudaSuccess;
+}
+
+cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M, uint N, uint K, 
+                       uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize) {
+  if (resultSize == nullptr) return cudaErrorInvalidValue;
+  if (tempSize   == nullptr) return cudaErrorInvalidValue;
+  uint gpuM, gpuK;
+  FastKronHandle& handle = *handlePtr;
+  if (handle.isDistributed_) {
+    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
+                                   handle.perGPUKronBatch_, handle.gpusInK_))
+      return cudaErrorInvalidValue;
+    gpuM = M/handle.gpusInM_;
+    gpuK = K/handle.gpusInK_;
+  } else {
+    if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+      return cudaErrorInvalidValue;
+    gpuM = M;
+    gpuK = K;
+  }
+
+  uint maxTempN = 0;
+  uint resultCols = 0;
+
+  KMMProblem problem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols),
+                     GeKMMPtrs());
+                     
+  executeGeKMM(problem, nullptr, nullptr,
+    [&maxTempN, &resultCols](KMMProblem& kmm, void* t1, void* t2, cudaError_t& e) {
+                            maxTempN = std::max(maxTempN, kmm.l);
+                            resultCols = kmm.l;
+                            return 1U;
+                          });
+
+  printf("maxTempN %u resultCols %u\n", maxTempN, resultCols);
+  *tempSize   = gpuM * maxTempN;
+  if (handle.isDistributed_ and handle.distComm_ == DistComm::NCCL)
+    //Include size of send and recv buffers 
+    *tempSize = (*tempSize) * 2;
+  *resultSize = gpuM * resultCols;
+
+  return cudaSuccess;
+}
+
 //Check N and K is a multiplication of KronMatCols and KronMatRows
 bool checkKronMatrixSizes(const uint NumKronMats, 
-                                 const uint M, const uint N, const uint K, 
-                                 const uint KronMatCols[], const uint KronMatRows[]) {
+                          const uint M, const uint N, const uint K, 
+                          const uint KronMatCols[], const uint KronMatRows[]) {
   uint n=1,k=1;
   for (uint i = 0; i < NumKronMats; i++) {
     k *= KronMatRows[i];
@@ -59,15 +179,9 @@ bool checkDistributedKronSizes(const uint NumKronMats,
     
   for (uint i = 0; i < NumKronMats; i += LocalKrons) {
     const uint kronMat = NumKronMats - i - 1;
-    const uint NumFusedKerns = min(LocalKrons, NumKronMats - i);
     uint currTempN = prevTempN;
-    // printf("243: NumFusedKerns %d kronMat \n", NumFusedKerns);
-    uint FusedKronMatCols[NumFusedKerns];
-    uint FusedKronMatRows[NumFusedKerns];
-    for (int k = 0; k < NumFusedKerns; k++) {
-      FusedKronMatCols[k] = KronMatCols[kronMat - k];
-      FusedKronMatRows[k] = KronMatRows[kronMat - k];
-      currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
+    for (int k = 0; k < min(LocalKrons, NumKronMats - i); k++) {
+      currTempN = (currTempN/KronMatRows[kronMat - k])*KronMatCols[kronMat - k];
     }
   
     if (currTempN % gpusInK != 0) return false;

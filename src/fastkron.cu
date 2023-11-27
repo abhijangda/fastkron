@@ -75,41 +75,6 @@ cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, 
                                    KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
-cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M, uint N, uint K, 
-                       uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize) {
-  if (resultSize == nullptr) return cudaErrorInvalidValue;
-  if (tempSize   == nullptr) return cudaErrorInvalidValue;
-  uint gpuM, gpuK;
-  FastKronHandle& handle = *handlePtr;
-  if (handle.isDistributed_) {
-    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
-                                   handle.perGPUKronBatch_, handle.gpusInK_))
-      return cudaErrorInvalidValue;
-    gpuM = M/handle.gpusInM_;
-    gpuK = K/handle.gpusInK_;
-  } else {
-    if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-      return cudaErrorInvalidValue;
-    gpuM = M;
-    gpuK = K;
-  }
-  size_t tempN = gpuK;
-  size_t maxTempN = tempN;
-  for (int i = NumKronMats - 1; i >= 0; i--) {
-    tempN = (tempN/KronMatRows[i])*KronMatCols[i];
-    if (maxTempN < tempN)
-      maxTempN = tempN;
-  }
-
-  *tempSize   = gpuM * maxTempN;
-  if (handle.isDistributed_ and handle.distComm_ == DistComm::NCCL)
-    //Include size of send and recv buffers 
-    *tempSize = (*tempSize) * 2;
-  *resultSize = gpuM * tempN;
-
-  return cudaSuccess;
-}
-
 cudaError_t sgekmmTune(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], 
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                                  cudaStream_t stream) {
