@@ -55,7 +55,7 @@ static float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
   return minTime;
 }
 
-static cudaError_t tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kronMats[],
+cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kronMats[],
                               uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                               void* temp1, void* temp2,
                               bool isDistributed, DistributedParams distParams,
@@ -117,12 +117,12 @@ static cudaError_t tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kr
         for (int r = 0; r < warmups + runs; r++) {
           if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
           if (distP2PStore) {
-            status = fastKron.fusedDistributedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult, 
+            status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult, 
                                                   (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
                                                   FusedKronMatCols, FusedKronMatRows, 
                                                   distParams, EpilogueParams::create<float>(), stream);
           } else {
-            status = fastKron.fusedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult,
+            status = fastKron.kernelInvoker.fusedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult,
                                        (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
                                        FusedKronMatCols, FusedKronMatRows,
                                        EpilogueParams::create<float>(), stream);
