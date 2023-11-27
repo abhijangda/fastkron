@@ -16,6 +16,9 @@ gtest:
 env.o: src/env.cpp src/env.h
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
+kmmalgo.o: src/kmmalgo.cu src/kmmalgo.h
+		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
+
 kernel_invoker.o: src/kernel_invoker.cu src/kernel_invoker.h
 		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
@@ -31,8 +34,8 @@ distrib_handle.o: src/distrib_handle.cu src/handle.h
 kron.o: src/handle.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/handle.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
-libKron.so: device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o
-	$(NVCC) -shared -lnccl device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o -o $@
+libKron.so: device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o
+	$(NVCC) -shared -lnccl device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o -o $@
 
 kron: tests/main.cu libKron.so tests/testBase.h
 	$(NVCC) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@ -O3 -g
