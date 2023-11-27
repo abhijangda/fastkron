@@ -188,11 +188,11 @@ int main(int argc, char* argv[]) {
   bool status = false;
   if (strcmp(type, "float") == 0)
     status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
-  else if (strcmp(type, "int") == 0)
-    status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
-                      gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
-  else if (strcmp(type, "double") == 0)
-    status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+  // else if (strcmp(type, "int") == 0)
+  //   status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
+  //                     gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+  // else if (strcmp(type, "double") == 0)
+  //   status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   else
     printf("type not supported %s\n", type);
 

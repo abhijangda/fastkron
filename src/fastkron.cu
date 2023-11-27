@@ -134,7 +134,24 @@ cudaError_t idgemmTune(fastKronHandle handle, const uint NumKronMats, int* x, in
                        stream);
 }
 
-void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {
-  gpuM = M/gpusInM_;
-  gpuK = K/gpusInK_;
+
+cudaError_t allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K) {
+  handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
+cudaError_t gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+  handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+}
+
+// cudaError_t allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K) {
+//   assert(false); handle->allocDistributedX((void**)dX, (void*)hX, M, K);
+// }
+// cudaError_t gatherDistributedY(fastKronHandle handle, int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+//   assert(false); handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+// }
+
+// cudaError_t allocDistributedX(fastKronHandle handle, double* dX[], double* hX, uint M, uint K) {
+//   assert(false);handle->allocDistributedX((void**)dX, (void*)hX, M, K);
+// }
+// cudaError_t gatherDistributedY(fastKronHandle handle, double* dY[], double* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+//   assert(false);handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+// }

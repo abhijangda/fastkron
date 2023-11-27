@@ -628,30 +628,31 @@ uint getYColumns(uint M, uint K, uint NumKronMats, uint KronMatCols[], uint Kron
   return tempN;
 }
 
-template<typename T> cudaError_t FastKronHandle_allocDistributedX(FastKronHandle& handle, T* dX[], T* hX, uint M, uint K) {
+cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint K) {
   //TODO: Make FastKronError type
-  if (!handle.isDistributed_) return cudaErrorInvalidValue;
+  if (!isDistributed_) return cudaErrorInvalidValue;
   uint gpuM, gpuK;
-  handle.getDistributedSizes(M, K, gpuM, gpuK);
+  getDistributedSizes(M, K, gpuM, gpuK);
   //TODO: Check that hX is on host memory
+  typedef float T;
   T* gpuHostX = new T[((size_t)gpuM) * ((size_t)gpuK)];
   std::cout << "Distributing X to all GPUs "<<std::endl;
   // std::cout << handle.gpuM_ << "  " << handle.gpuK_ << "  " << sizeof(T) << std::endl;
-  for (int g = 0; g < handle.numGPUs_; g++) {
+  for (int g = 0; g < numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaMalloc(&dX[g], sizeof(T) * gpuM * gpuK));
   }
 
-  for(int gr = 0; gr < handle.gpusInM_; gr++) {
-    for (uint gc = 0; gc < handle.gpusInK_; gc++) {
-      const uint g = gr * handle.gpusInK_ + gc;
+  for(int gr = 0; gr < gpusInM_; gr++) {
+    for (uint gc = 0; gc < gpusInK_; gc++) {
+      const uint g = gr * gpusInK_ + gc;
       // std::cout << "g " << g << " gr " <<gr << " gc " << gc << std::endl;
       CUDA_CHECK(cudaSetDevice(g));
       uint startGpuM = gpuM * gr;
       uint startGpuK = gpuK * gc;
         
       for (uint m = 0; m < gpuM; m++) {
-        std::memcpy(&gpuHostX[m * gpuK], &hX[(startGpuM+m)*K + startGpuK], sizeof(T)*gpuK);
+        std::memcpy(&gpuHostX[m * gpuK], &((T*)hX)[(startGpuM+m)*K + startGpuK], sizeof(T)*gpuK);
       }
       CUDA_CHECK(cudaMemcpy(dX[g], gpuHostX, sizeof(T) * gpuM * gpuK, cudaMemcpyHostToDevice));
     }
@@ -661,19 +662,20 @@ template<typename T> cudaError_t FastKronHandle_allocDistributedX(FastKronHandle
   return cudaSuccess;
 }
 
-template<typename T> cudaError_t FastKronHandle_gatherDistributedY(FastKronHandle& handle, T* dY[], T* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   //TODO: Make FastKronError type
-  if (!handle.isDistributed_) return cudaErrorInvalidValue;
+  typedef float T;
+  if (!isDistributed_) return cudaErrorInvalidValue;
   //TODO: Check that hY is on host memory
   uint gpuM, gpuYCols, YCols;
   YCols = getYColumns(M, K, NumKronMats, KronMatCols, KronMatRows);
-  handle.getDistributedSizes(M, YCols, gpuM, gpuYCols);
+  getDistributedSizes(M, YCols, gpuM, gpuYCols);
   T* gpuHostY = new T[gpuM * gpuYCols];
   std::cout << "Gather Y from all GPUs"<<std::endl;
 
-  for(int gr = 0; gr < handle.gpusInM_; gr++) {
-    for (uint gc = 0; gc < handle.gpusInK_; gc++) {
-      uint g = gr * handle.gpusInK_ + gc;
+  for(int gr = 0; gr < gpusInM_; gr++) {
+    for (uint gc = 0; gc < gpusInK_; gc++) {
+      uint g = gr * gpusInK_ + gc;
       CUDA_CHECK(cudaSetDevice(g));
       //TODO: check that dX[g] is on GPU g
       CUDA_CHECK(cudaMemcpy(gpuHostY, dY[g], 
@@ -682,7 +684,7 @@ template<typename T> cudaError_t FastKronHandle_gatherDistributedY(FastKronHandl
       const uint startGpuM = gpuM * gr;
       const uint startGpuN = gpuYCols * gc;
       for (int m = 0; m < gpuM; m++) {
-        std::memcpy(&hY[(startGpuM+m)*YCols + startGpuN],
+        std::memcpy(&((T*)hY)[(startGpuM+m)*YCols + startGpuN],
                     &gpuHostY[m * gpuYCols], sizeof(T)*gpuYCols);
       }
     }
@@ -693,30 +695,6 @@ template<typename T> cudaError_t FastKronHandle_gatherDistributedY(FastKronHandl
   std::cout << "Gathered Y" << std::endl;
 
   return cudaSuccess;
-}
-
-template<> cudaError_t FastKronHandle::allocDistributedX(float* dX[], float* hX, uint M, uint K) {
-  return FastKronHandle_allocDistributedX<float>(*this, dX, hX, M, K);
-}
-
-template<> cudaError_t FastKronHandle::allocDistributedX(double* dX[], double* hX, uint M, uint K) {
-  return FastKronHandle_allocDistributedX<double>(*this, dX, hX, M, K);
-}
-
-template<> cudaError_t FastKronHandle::allocDistributedX(int* dX[], int* hX, uint M, uint K) {
-  return FastKronHandle_allocDistributedX<int>(*this, dX, hX, M, K);
-}
-
-template<> cudaError_t FastKronHandle::gatherDistributedY(float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
-  return FastKronHandle_gatherDistributedY<float>(*this, dY, hY, M, K, NumKronMats, KronMatCols, KronMatRows);
-}
-
-template<> cudaError_t FastKronHandle::gatherDistributedY(double* dY[], double* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
-  return FastKronHandle_gatherDistributedY<double>(*this, dY, hY, M, K, NumKronMats, KronMatCols, KronMatRows);
-}
-
-template<> cudaError_t FastKronHandle::gatherDistributedY(int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
-  return FastKronHandle_gatherDistributedY<int>(*this, dY, hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 
 cudaError_t FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
@@ -888,4 +866,9 @@ void FastKronHandle::free() {
     }
   }
   compiledKernels.clear();
+}
+
+void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {
+  gpuM = M/gpusInM_;
+  gpuK = K/gpusInK_;
 }
