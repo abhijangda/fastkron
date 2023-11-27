@@ -1,4 +1,9 @@
+#include <cassert>
+#include <cstring>
+
 #include "handle.h"
+#include "utils.h"
+#include "device/otherkernels.cuh"
 
 static void thread_barrier_wait(pthread_barrier_t* barrier) {
   int s = pthread_barrier_wait(barrier);
@@ -78,7 +83,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           }
         }
       } else {
-        auto localSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, gpuK, gpuK, 
+        auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
                                               LocalKronCols, LocalKronRows, true);
         for (auto& kernel : localSeries) {
           kernel.end += endKron;
@@ -124,7 +129,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           }
         }
       } else {
-        auto localSeries = selectKernelSeries(handle, KronMulBatchSize, gpuM, gpuK, gpuK, 
+        auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
                                               LocalKronCols, LocalKronRows, true);
         for (auto& kernel : localSeries) {
           kernel.end += endKron;
@@ -430,6 +435,6 @@ cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uin
 cudaError_t FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
   cudaStream_t streams[]) {
-    return distributedKronMatmul(*this, NumKronMats, (void*)x, (void**)kronMats, (void*)result, M, N, K, 
+    return distributedKronMatmul(*this, NumKronMats, (void**)x, (void**)kronMats, (void**)result, M, N, K, 
       KronMatCols, KronMatRows, (void**)temp1, (void**)temp2, streams);
 }

@@ -137,10 +137,10 @@ KernelInfo FastKronHandle::selectKernel(KronMatmulShape shape) {
 }
 
 //TODO: These methods that take handle should be private methods of FastKronHandle
-TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKronMats,
+TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
                                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                                       bool distributedKernel) {
-  uint MaxFusedKerns = handle.getUseFusion() ? handle.maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
+  uint MaxFusedKerns = getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
   MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
   TunedKernelsSeries tunedSeries;
   uint prevTempN = K;
@@ -157,8 +157,8 @@ TunedKernelsSeries selectKernelSeries(FastKronHandle& handle, const uint NumKron
       currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
     }
   
-    bool DistributeToGPUs = distributedKernel && handle.distComm_ == DistComm::P2P && handle.gpusInK_ > 1 && (i == NumKronMats - 1);
-    auto selectedKernel = handle.selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+    bool DistributeToGPUs = distributedKernel && distComm_ == DistComm::P2P && gpusInK_ > 1 && (i == NumKronMats - 1);
+    auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
                                        prevTempN, M, NumFusedKerns, DistributeToGPUs});
     tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
     prevTempN = currTempN;
@@ -189,7 +189,7 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
   if (tunedKernelSeries.size() > 0) {
     kernelSeries = tunedKernelSeries;
   } else {
-    kernelSeries = selectKernelSeries(*this, NumKronMats, M, N, K, 
+    kernelSeries = selectKernelSeries(NumKronMats, M, N, K, 
                                       KronMatCols, KronMatRows, false);
   }
 
