@@ -58,9 +58,9 @@ struct FastKronHandle {
   thread_pool<ThreadArgs*>* threads_;
 
   //TODO: these two functions should be a part of utils?
-  template<typename T> cudaError_t allocDistributedX(T* dX[], T* hX, uint M, uint K);
-  template<typename T> cudaError_t gatherDistributedY(T* dY[], T* hY, uint M, uint K, 
-                                                     uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
+  cudaError_t allocDistributedX(void* dX[], void* hX, uint M, uint K);
+  cudaError_t gatherDistributedY(void* dY[], void* hY, uint M, uint K, 
+                                 uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
 
   void getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK);
   void free();
