@@ -260,7 +260,7 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
 
 void thread_barrier_wait(pthread_barrier_t* barrier) {
   int s = pthread_barrier_wait(barrier);
-  assert (s == 0 || s == PTHREAD_BARRIER_SERIAL_THREAD);
+  PTHREAD_BARRIER_CHECK(s);
 }
 
 template<typename T>
@@ -394,8 +394,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
       DistributedParams distParams(gr, gc, handle.gpusInK_, 
-                                      prevFullK, currFullN,
-                                      prevTempN, currTempN, LocalKronCols, LocalKronRows, KronMulBatchSize);
+                                   prevFullK, currFullN,
+                                   prevTempN, currTempN, LocalKronCols, LocalKronRows, KronMulBatchSize);
       uint slicedMuls = 0;
       bool ncclRecvInResult = false;
       for (auto kernel : kernelSeries) {
@@ -491,20 +491,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           dim3 grid = {gpuM, 1,1};
           dim3 block = {256, 1, 1};
           storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
-                                                                    KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
-                                                                    recvTemp, gpuM, currTempN,
-                                                                    innerCurrResult, gc, KronMulBatchSize, io, distParams, false);
-          // if (g == 0) {
-          //   std::cout << "io " << io << " SliceCols " << SliceCols << std::endl;
-          //   float val;
-          //   if (io == 0) val = 64.0f;
-          //   else if (io == 1) val = 64.0f * 64.0f;
-          //   else if (io == 2) val = 64.0f * 64.0f * 64.0f;
-          //   else if (io == 3) val = 64.0f * 64.0f * 64.0f * 64.0f;
-          //   if (io <= 0)
-          //   printGPUArray<float>(handle.gpuM_, SliceCols, val,
-          //     (float*)innerCurrResult, stream[g]);
-          // }
+                                                              KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
+                                                              recvTemp, gpuM, currTempN,
+                                                              innerCurrResult, gc, KronMulBatchSize, io, distParams, false);
           CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         }
 
@@ -523,9 +512,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                 dim3 grid = {gpuM, 1,1};
                 dim3 block = {256, 1, 1};
                 storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
-                                                                          KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
-                                                                          recvTemp, gpuM, currTempN,
-                                                                          innerCurrResult, src, KronMulBatchSize, io, distParams, false);
+                                                                    KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
+                                                                    recvTemp, gpuM, currTempN,
+                                                                    innerCurrResult, src, KronMulBatchSize, io, distParams, false);
                 CUDA_CHECK(cudaStreamSynchronize(stream[g]));
               }
             }
@@ -805,8 +794,7 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
 
     for (int i = 0; i < gpusInM_; i++) {
       int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
-      //TODO: Create PTHREAD_CHECK?
-      assert (s == 0);
+      PTHREAD_BARRIER_CHECK(s);
     }
     
     // size_t tempN = gpuK_;
@@ -854,7 +842,7 @@ void FastKronHandle::free() {
   if (isDistributed_) {
     for (uint g = 0; g < gpusInM_; g++) {
       int s = pthread_barrier_destroy(&barriers_[g]);
-      assert (s == 0);
+      PTHREAD_BARRIER_CHECK(s);
     }
 
     delete threads_;
