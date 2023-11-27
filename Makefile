@@ -25,7 +25,7 @@ fastkron.o: src/fastkron.cu
 autotuner.o: src/autotuner.cpp src/autotuner.h
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
-kron.o: src/handle.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/handle.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
+kron.o: src/handle.cu src/distrib_fastkron.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/handle.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
 libKron.so: device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o
