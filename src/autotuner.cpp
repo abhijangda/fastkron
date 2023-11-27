@@ -1,3 +1,6 @@
+#include <cassert>
+#include <iostream>
+
 #include "autotuner.h"
 
 static float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats, 
