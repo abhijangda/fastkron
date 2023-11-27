@@ -76,9 +76,8 @@ bool checkDistributedKronSizes(const uint NumKronMats,
 bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, const uint gpusInK) {
   bool correct = true;
   executeGeKMM(problem, nullptr, nullptr,
-    [&correct, &gpusInK](const KMMProblem kmm, void* t1, void* t2, cudaError_t& e) {
+    [&correct, gpusInK](const KMMProblem kmm, void* t1, void* t2) {
       correct = correct && (kmm.l % gpusInK == 0);
-      e = cudaSuccess;
       return 1U;
     });
   return correct;

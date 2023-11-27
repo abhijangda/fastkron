@@ -366,8 +366,10 @@ static uint getYColumns(uint M, uint K, uint NumKronMats, uint KronMatCols[], ui
 cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint K) {
   //TODO: Make FastKronError type
   if (!isDistributed_) return cudaErrorInvalidValue;
+
   uint gpuM, gpuK;
   getDistributedSizes(M, K, gpuM, gpuK);
+
   //TODO: Check that hX is on host memory
   typedef float T;
   T* gpuHostX = new T[((size_t)gpuM) * ((size_t)gpuK)];

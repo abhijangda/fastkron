@@ -307,6 +307,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   } else {
     CUDACHECK(cudaMalloc(&dX[0], sizeX));
   }
+  
   if (verbose) printf("allocated\n");
   
   for (uint i = 0; i < NUM_KP_MATS; i++) {
