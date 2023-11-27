@@ -199,7 +199,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   return status;
 }
 
-cudaError_t fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& kernelInfo, const uint kronIndex, 
+cudaError_t FastKronHandle::fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& kernelInfo, const uint kronIndex, 
                               void* x, void** krons, void* kronGemmResult,
                               const uint M, const uint N, const uint K, 
                               const uint* FusedKronMatCols, const uint* FusedKronMatRows,
@@ -285,7 +285,7 @@ cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kr
   return status;
 }
 
-cudaError_t fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
+cudaError_t FastKronHandle::fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
                                            void* x, void** kronMat, void* kronGemmResult,
                                            const uint M, const uint N, const uint K, 
                                            const uint* FusedKronMatCols, const uint* FusedKronMatRows,
@@ -496,18 +496,17 @@ float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
 }
 
 //TODO: Create another autotuning object?
-template<typename T>
-cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[],
+cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, void* x, void* kronMats[],
                               uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                              T* temp1, T* temp2,
+                              void* temp1, void* temp2,
                               bool isDistributed, DistributedParams distParams,
                               std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
                               cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
-  T* kronGemmResults[2] = {(T*)temp1, (T*)temp2};
+  void* kronGemmResults[2] = {(void*)temp1, (void*)temp2};
   //For performance eval we do not need these to contain any value
-  T* prevKronResult = kronGemmResults[0];
-  T* currKronResult = kronGemmResults[1];
+  void* prevKronResult = kronGemmResults[0];
+  void* currKronResult = kronGemmResults[1];
   //TODO: Assumes all factors are of same size and square shape
   // const uint MaxFusedKerns = handle.getUseFusion() ? 
   //                            maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K}) : 1;
@@ -520,11 +519,11 @@ cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T*
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
   for (uint startKron = 0; startKron < NumKronMats; startKron++) {
-  for (uint endKron = startKron; endKron < NumKronMats; endKron++)   {
+  for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
     const uint kronMat = endKron;
     //KronMats[startKron, ..., endKron] including endKron
     const uint NumFusedKerns = endKron - startKron + 1;
-    T* krons[NumFusedKerns];
+    void* krons[NumFusedKerns];
     uint FusedKronMatCols[NumFusedKerns];
     uint FusedKronMatRows[NumFusedKerns];
     for (int k = 0; k < NumFusedKerns; k++) {
@@ -559,15 +558,15 @@ cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T*
         for (int r = 0; r < warmups + runs; r++) {
           if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
           if (distP2PStore) {
-            status = fusedDistributedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult, 
+            status = handle.fusedDistributedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult, 
                                                   (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
                                                   FusedKronMatCols, FusedKronMatRows, 
-                                                  distParams, EpilogueParams::create<T>(), stream);
+                                                  distParams, EpilogueParams::create<float>(), stream);
           } else {
-            status = fusedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult,
+            status = handle.fusedSlicedMatmul(NumFusedKerns, kernel, endKron, (void*)prevKronResult,
                                        (void**)krons, (void*)currKronResult, M, outTempN, tempN, 
                                        FusedKronMatCols, FusedKronMatRows,
-                                       EpilogueParams::create<T>(), stream);
+                                       EpilogueParams::create<float>(), stream);
           }
           // if (status != cudaSuccess) break;
         }
@@ -598,8 +597,7 @@ cudaError_t singleGPUAutotune(FastKronHandle& handle, const uint NumKronMats, T*
   return cudaSuccess;
 }
 
-template<typename T>
-cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kronMats[], 
+cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, void* x, void** kronMats, 
                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                      cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
@@ -608,17 +606,21 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
 
   std::cout << "N " << N << " K " << K << " KronMatCols[0] " << KronMatCols[0] << " KronMatRows[0] " << KronMatRows[0] << std::endl;
   float minTime = 0;
+  void* temp1_[handle.numGPUs_], *temp2_[handle.numGPUs_];
+  size_t resultSize = 0, tempSize = 0;
+  gekmmSizes(&handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
+             &resultSize, &tempSize);
+  for (int g = 0; g < handle.numGPUs_; g++) {
+    CUDA_CHECK(cudaSetDevice(g));
+    CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(float)));
+  }
+
   if (!handle.isDistributed_) {
-    //TODO: temp1_ and temp2_ declaration/allocation is same for both cases
-    T* temp1_, *temp2_;
-    size_t resultSize = 0, tempSize = 0;
-    gekmmSizes(&handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
-               &resultSize, &tempSize);  
+    CUDA_CHECK(cudaSetDevice(0));
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
-    CUDA_CHECK(cudaMalloc(&temp1_, tempSize * sizeof(T)));
-    CUDA_CHECK(cudaMalloc(&temp2_, tempSize * sizeof(T)));
     singleGPUAutotune(handle, NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, 
-                      (T*)temp1_, (T*)temp2_, false, DistributedParams(), 
+                      (void*)temp1_[0], (void*)temp2_[0], false, DistributedParams(), 
                       bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
@@ -626,24 +628,13 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
                                   KronMatCols, KronMatRows, 0, false,
                                   tunedKernels, bestKernels);
     handle.tunedKernelSeries = tunedKernels;
-    CUDA_CHECK(cudaFree(temp1_));
-    CUDA_CHECK(cudaFree(temp2_));
+
   } else {
     if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
                                    handle.perGPUKronBatch_, handle.gpusInK_))
       return cudaErrorInvalidValue;
 
-    //In distributed case run every LocalKron series on a single GPU
-    CUDA_CHECK(cudaSetDevice(0));
-    T* temp1_[handle.numGPUs_], *temp2_[handle.numGPUs_];
-    size_t resultSize = 0, tempSize = 0;
-    gekmmSizes(&handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
-                  &resultSize, &tempSize);
-    for (int g = 0; g < handle.numGPUs_; g++) {
-      CUDA_CHECK(cudaSetDevice(g));
-      CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(T)));
-      CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(T)));
-    }
+    //In distributed case run every LocalKron series on a single GPU    
     CUDA_CHECK(cudaSetDevice(0));
     minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
@@ -688,7 +679,7 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
         currTempN = (currTempN/LocalKronMatRows[k])*LocalKronMatCols[k];
       }
 
-      T** gpuResults = (T**)temp2_;
+      void** gpuResults = (void**)temp2_;
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
       DistributedParams distParams(0, 0, handle.gpusInK_, prevFullK, currFullN, 
@@ -717,12 +708,12 @@ cudaError_t autotune(FastKronHandle& handle, const uint NumKronMats, T* x, T* kr
       handle.perGPUKronBatch_ = MaxLocalKrons;
     }
     }
+  }
 
-    for (int g = 0; g < handle.numGPUs_; g++) {
-      CUDA_CHECK(cudaSetDevice(g));
-      CUDA_CHECK(cudaFree(temp1_[g]));
-      CUDA_CHECK(cudaFree(temp2_[g]));
-    }
+  for (int g = 0; g < handle.numGPUs_; g++) {
+    CUDA_CHECK(cudaSetDevice(g));
+    CUDA_CHECK(cudaFree(temp1_[g]));
+    CUDA_CHECK(cudaFree(temp2_[g]));
   }
 
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
@@ -917,7 +908,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
-        status = fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
+        status = handle.fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
                                               (void**)krons, (void*)innerCurrResult, gpuM, currTempN, 
                                               prevTempN, kronCols, kronRows, distParams, 
                                               EpilogueParams::create<T>(), stream[g]);
@@ -1200,36 +1191,13 @@ cudaError_t FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x[]
       KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
-cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
-  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-  cudaStream_t stream) {
-    return autotune<float>(handle, NumKronMats, x, kronMats,
-      M, N, K, KronMatCols, KronMatRows,
-      stream);
-}
-
-cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], 
-  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-  cudaStream_t stream) {
-    return autotune<int>(handle, NumKronMats, x, kronMats,
-      M, N, K, KronMatCols, KronMatRows,
-      stream);
-}
-
-cudaError_t Autotuner::tune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
-  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-  cudaStream_t stream) {
-    return autotune<double>(handle, NumKronMats, x, kronMats, 
-      M, N, K, KronMatCols, KronMatRows,
-      stream);
-}
-
 FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   useFusion_ = true;
   isDistributed_ = gpus > 1;
+  numGPUs_ = gpus;
+
   if (isDistributed_) {
-    numGPUs_ = gpus;
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {
       for (int g2 = 0; g2 < gpus; g2++) {

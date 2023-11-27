@@ -2,16 +2,14 @@
 
 #pragma once
 
-struct Autotuner {
-  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], 
-                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream);
+class Autotuner {
+  FastKronHandle& fastKron;
 
-  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], 
-                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream);
+public:
+  Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
+  {}
 
-  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, double* x, double* kronMats[], 
-                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream);  
+  cudaError_t tune(FastKronHandle& handle, const uint NumKronMats, void* x, void** kronMats, 
+                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+                       cudaStream_t stream);
 };
