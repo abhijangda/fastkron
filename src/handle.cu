@@ -443,7 +443,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
-        status = kernelInvoker.fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
+        status = handle.kernelInvoker.fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
                                               (void**)krons, (void*)innerCurrResult, gpuM, currTempN, 
                                               prevTempN, kronCols, kronRows, distParams, 
                                               EpilogueParams::create<T>(), stream[g]);

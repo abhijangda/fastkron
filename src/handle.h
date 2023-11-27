@@ -5,8 +5,7 @@
 
 #include "fastkron.h"
 #include "thread_pool.h"
-#include "kernel_invoke.h"
-#include "device/params.h"
+#include "kernel_invoker.h"
 #include "env.h"
 
 #pragma once

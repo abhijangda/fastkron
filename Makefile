@@ -16,7 +16,7 @@ gtest:
 env.o: src/env.cpp src/env.h
 	$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
-kernel_invoker.o: src/kernel_invoker.cpp src/kernel_invoker.h
+kernel_invoker.o: src/kernel_invoker.cu src/kernel_invoker.h
 		$(NVCC) -std=c++17 -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) -g -O3
 
 fastkron.o: src/fastkron.cu
