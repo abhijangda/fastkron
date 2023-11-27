@@ -21,6 +21,14 @@
   }                                                 \
 } while(0)
 
+#define PTHREAD_BARRIER_CHECK(x) do {                        \
+  if (x != 0 && x != PTHREAD_BARRIER_SERIAL_THREAD) {                           \
+    printf("Failed: pthread barrier error %s:%d\n",       \
+        __FILE__,__LINE__);   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while (0)                                         \
+
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x,y) (((x) + (y) - 1)/((y)))
