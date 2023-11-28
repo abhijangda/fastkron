@@ -218,21 +218,14 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
   KMMProblem problem(shape, ptrs);
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err;
-  executeGeKMM(problem, kronGemmResults[0], kronGemmResults[1],
+  cudaError_t err = executeGeKMM(problem, kronGemmResults[0], kronGemmResults[1],
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
     [&kernelSeriesIter, &err, epilogueParams, stream, this, KronMatCols](const KMMProblem problem, void* temp1, void* temp2) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;
-      const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
-      CUDA_CHECK(cudaDeviceSynchronize());
-      
-      printf("problem.start %d NumFusedKerns %d kernel.end %d\n", problem.rstart, NumFusedKerns, kernel.end);
+      const uint NumFusedKerns = kernel.kernel.NumFusedKerns;      
       assert(problem.rstart == kernel.end);
-      std::cout << "ptrs.x " << problem.ptrs.x <<  " ptrs.fs " << problem.ptrs.fs[0] << " ptrs.y " << problem.ptrs.y << std::endl;
-      std::cout << "KronMatCols " << KronMatCols[0] << " shape.qs " << problem.shape.qs[0] << " shape.ps " << problem.shape.ps[0] << std::endl;
-      std::cout << "Invoking " << selectedKernel << " for " << problem.shape.qs[0] << "x" << problem.shape.ps[0] << "  " << problem.k << " " << problem.l << std::endl;
       err = this->kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kernel.end, 
                                                   problem.ptrs.x,
                                                   problem.ptrs.fs, problem.ptrs.y, 
@@ -241,13 +234,12 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
                                                   epilogueParams, stream);
     
       CUDA_CHECK(err);
-      CUDA_CHECK(cudaDeviceSynchronize());
       kernelSeriesIter++;
 
-      return 0;
+      return err;
     });
 
-  return cudaSuccess;
+  return err;
 
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
