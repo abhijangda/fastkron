@@ -98,4 +98,4 @@ struct KMMProblem {
 cudaError_t executeGeKMM(const KMMProblem problem, void* temp1,
                          void* temp2,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<uint (const KMMProblem, void*, void*)> func);
+                         std::function<cudaError_t (const KMMProblem, void*, void*)> func);

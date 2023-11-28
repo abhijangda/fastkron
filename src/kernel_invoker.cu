@@ -44,7 +44,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
             1, 
             1
           };
-  std::cout << "NumFusedKerns " << NumFusedKerns << " x " << x << " kronMat " << kronMat[0] << " y " << kronGemmResult << " " << KronMatCols[0] << " " << KronMatRows[0] << std::endl;
+
   KernelParams<NumFusedKerns> params (M, N, K,
                                       KronMatRows, 
                                       KronMatCols,
