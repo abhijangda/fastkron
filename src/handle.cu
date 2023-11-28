@@ -79,7 +79,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, 
     [](const KMMProblem kmm) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, void* t1, void* t2) {
       correct = correct && (kmm.l % gpusInK == 0);
-      return 1U;
+      return cudaSuccess;
     });
   return correct;
 }
@@ -213,14 +213,18 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
     prevKronResult = x;
   }
 
+  // std::cout << "prevKronResult " << x << " " << " currKronResult " << currKronResult << 
+  // " kronGemmResults " << kronGemmResults[0] << "  " << kronGemmResults[1] << std::endl;
+  // std::cout << "result " << result << std::endl;
+
   GeKMMPtrs ptrs(prevKronResult, kronMats, currKronResult);
   KMMShape shape(M, NumKronMats, KronMatRows, KronMatCols);
   KMMProblem problem(shape, ptrs);
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err = executeGeKMM(problem, kronGemmResults[0], kronGemmResults[1],
+  cudaError_t err = executeGeKMM(problem, kronGemmResults, result,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
-    [&kernelSeriesIter, &err, epilogueParams, stream, this, KronMatCols](const KMMProblem problem, void* temp1, void* temp2) {
+    [&kernelSeriesIter, &err, epilogueParams, stream, this, KronMatCols](const KMMProblem problem, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;
