@@ -329,7 +329,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     CUDACHECK(sgekmmTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
                          stream[0]));
   }
-
+  printf("resultSize %ld\n", resultSize);
+    
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
     CUDACHECK(cudaMalloc(&dTemp1[g], tempSize * sizeof(T)));
@@ -370,7 +371,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
+    printf("sizeResult %l resultSize %l\n", sizeResult, resultSize * sizeof(T));
     T* dResultToHost = (T*)malloc(sizeResult);
+    CUDACHECK(cudaDeviceSynchronize());
     if (useDistributed) {
       CUDACHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {

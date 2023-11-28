@@ -76,6 +76,7 @@ bool checkDistributedKronSizes(const uint NumKronMats,
 bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, const uint gpusInK) {
   bool correct = true;
   executeGeKMM(problem, nullptr, nullptr,
+    [](const KMMProblem kmm) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, void* t1, void* t2) {
       correct = correct && (kmm.l % gpusInK == 0);
       return 1U;
@@ -212,54 +213,91 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
     prevKronResult = x;
   }
 
+  GeKMMPtrs ptrs(prevKronResult, kronMats, currKronResult);
+  KMMShape shape(M, NumKronMats, KronMatRows, KronMatCols);
+  KMMProblem problem(shape, ptrs);
+
+  auto kernelSeriesIter = kernelSeries.begin();
+  cudaError_t err;
+  executeGeKMM(problem, kronGemmResults[0], kronGemmResults[1],
+    [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
+    [&kernelSeriesIter, &err, epilogueParams, stream, this, KronMatCols](const KMMProblem problem, void* temp1, void* temp2) {
+      auto kernel = *kernelSeriesIter;
+      
+      KernelInfo selectedKernel = kernel.kernel;
+      const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
+      CUDA_CHECK(cudaDeviceSynchronize());
+      
+      printf("problem.start %d NumFusedKerns %d kernel.end %d\n", problem.rstart, NumFusedKerns, kernel.end);
+      assert(problem.rstart == kernel.end);
+      std::cout << "ptrs.x " << problem.ptrs.x <<  " ptrs.fs " << problem.ptrs.fs[0] << " ptrs.y " << problem.ptrs.y << std::endl;
+      std::cout << "KronMatCols " << KronMatCols[0] << " shape.qs " << problem.shape.qs[0] << " shape.ps " << problem.shape.ps[0] << std::endl;
+      std::cout << "Invoking " << selectedKernel << " for " << problem.shape.qs[0] << "x" << problem.shape.ps[0] << "  " << problem.k << " " << problem.l << std::endl;
+      err = this->kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kernel.end, 
+                                                  problem.ptrs.x,
+                                                  problem.ptrs.fs, problem.ptrs.y, 
+                                                  problem.shape.m, problem.l, problem.k,
+                                                  problem.shape.qs, problem.shape.ps,
+                                                  epilogueParams, stream);
+    
+      CUDA_CHECK(err);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      kernelSeriesIter++;
+
+      return 0;
+    });
+
+  return cudaSuccess;
+
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  uint prevTempN = K;
-  uint currTempN;
-  for (auto kernel : kernelSeries) {
-    const uint kronMat = kernel.end;
-    const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
-    void* krons[NumFusedKerns];
-    uint FusedKronMatCols[NumFusedKerns];
-    uint FusedKronMatRows[NumFusedKerns];
-    currTempN = prevTempN;
-    for (int k = 0; k < NumFusedKerns; k++) {
-      krons[k] = kronMats[kronMat - k];
-      FusedKronMatCols[k] = KronMatCols[kronMat - k];
-      FusedKronMatRows[k] = KronMatRows[kronMat - k];
-      currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
-    }
 
-    //In the last iteration, write result to the results.    
-    if (kronMat - NumFusedKerns + 1 == 0)
-      currKronResult = result;
+  // uint prevTempN = K;
+  // uint currTempN;
+  // for (auto kernel : kernelSeries) {
+  //   const uint kronMat = kernel.end;
+  //   const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
+  //   void* krons[NumFusedKerns];
+  //   uint FusedKronMatCols[NumFusedKerns];
+  //   uint FusedKronMatRows[NumFusedKerns];
+  //   currTempN = prevTempN;
+  //   for (int k = 0; k < NumFusedKerns; k++) {
+  //     krons[k] = kronMats[kronMat - k];
+  //     FusedKronMatCols[k] = KronMatCols[kronMat - k];
+  //     FusedKronMatRows[k] = KronMatRows[kronMat - k];
+  //     currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
+  //   }
 
-    cudaError_t status;
+  //   //In the last iteration, write result to the results.    
+  //   if (kronMat - NumFusedKerns + 1 == 0)
+  //     currKronResult = result;
 
-    KernelInfo selectedKernel = kernel.kernel;
-    // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
-    status = kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kronMat, (void*)prevKronResult,
-                               (void**)krons, (void*)currKronResult, M, currTempN, prevTempN,
-                               FusedKronMatCols, FusedKronMatRows,
-                               epilogueParams, stream);
+  //   cudaError_t status;
+
+  //   KernelInfo selectedKernel = kernel.kernel;
+  //   // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
+  //   status = kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kronMat, (void*)prevKronResult,
+  //                              (void**)krons, (void*)currKronResult, M, currTempN, prevTempN,
+  //                              FusedKronMatCols, FusedKronMatRows,
+  //                              epilogueParams, stream);
     
-    if (status != cudaSuccess) return status;
+  //   if (status != cudaSuccess) return status;
     
-    // if (kronMat >= 1)
-    // printGPUArray<float>(M, currTempN, (kronMat == 3) ? 8.0f : (kronMat == 2 ? 64.0f : 512.0f),
-    //                      (float*)currKronResult, stream);
-    // if (kronMat == 3) return cudaSuccess;
-    prevTempN = currTempN;
-    // if (kronMat == 1) return cudaSuccess;
-    // return cudaSuccess;
-    //Double/ring/circular buffer previous result and new result
-    prevKronResult = currKronResult;
-    if (prevKronResult == kronGemmResults[0]) {        
-      currKronResult = kronGemmResults[1];
-    } else if (prevKronResult == kronGemmResults[1]) {
-      currKronResult = kronGemmResults[0];
-    }
-  }
+  //   // if (kronMat >= 1)
+  //   // printGPUArray<float>(M, currTempN, (kronMat == 3) ? 8.0f : (kronMat == 2 ? 64.0f : 512.0f),
+  //   //                      (float*)currKronResult, stream);
+  //   // if (kronMat == 3) return cudaSuccess;
+  //   prevTempN = currTempN;
+  //   // if (kronMat == 1) return cudaSuccess;
+  //   // return cudaSuccess;
+  //   //Double/ring/circular buffer previous result and new result
+  //   prevKronResult = currKronResult;
+  //   if (prevKronResult == kronGemmResults[0]) {        
+  //     currKronResult = kronGemmResults[1];
+  //   } else if (prevKronResult == kronGemmResults[1]) {
+  //     currKronResult = kronGemmResults[0];
+  //   }
+  // }
 
   return cudaSuccess;
 }
