@@ -371,7 +371,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
-    printf("sizeResult %l resultSize %l\n", sizeResult, resultSize * sizeof(T));
+    printf("sizeResult %ld resultSize %ld\n", sizeResult, resultSize * sizeof(T));
     T* dResultToHost = (T*)malloc(sizeResult);
     CUDACHECK(cudaDeviceSynchronize());
     if (useDistributed) {

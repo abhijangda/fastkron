@@ -13,7 +13,7 @@ cudaError_t executeGeKMM(const KMMProblem problem, void* temp1,
   printf("ptrs-> f %p\n", ptrs.fs);
   for (int i = problem.shape.n - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
-    for (int f = i; f >= i - nextF; f--) {
+    for (int f = i; f > i - nextF; f--) {
       l = (l/problem.shape.ps[f])*problem.shape.qs[f];
     }
     uint qs[problem.shape.n];
