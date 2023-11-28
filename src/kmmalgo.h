@@ -16,7 +16,7 @@ struct KMMShape {
 
   KMMShape rsub(int rstart, int subn, uint ps[], uint qs[]) const {
     assert (rstart >= 0);
-    assert (subn < n);
+    assert (subn <= n);
     assert (rstart - (subn - 1) >= 0);
     for (int i = 0; i < subn; i++) {
       ps[i]  = this->ps[rstart - i];
@@ -95,7 +95,7 @@ struct KMMProblem {
   }
 };
 
-cudaError_t executeGeKMM(const KMMProblem problem, void* temp1,
-                         void* temp2,
+cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
+                         void* result,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<cudaError_t (const KMMProblem, void*, void*)> func);
+                         std::function<cudaError_t (const KMMProblem, void*[2], void*)> func);
