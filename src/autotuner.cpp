@@ -263,7 +263,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(KMMProblem(KMMShape(M, NumKronMats,
-                                  KronMatCols, KronMatRows), GeKMMPtrs()), 0, false,
+                                  KronMatRows, KronMatCols), GeKMMPtrs()), 0, false,
                                   tunedKernels, bestKernels);
     fastKron.tunedKernelSeries = tunedKernels;
 
