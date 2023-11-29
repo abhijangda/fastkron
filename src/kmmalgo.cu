@@ -24,8 +24,8 @@ cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
       ptrs = GeKMMPtrs(ptrs.x, ptrs.fs, result);
     }
     auto subProblem = problem.rsub(ptrs, ps, qs, fs, i, nextF);
-    assert (problem.k == k);
-    assert (problem.l == l);
+    assert (subProblem.k == k);
+    assert (subProblem.l == l);
     err = func(subProblem, temps, result);
     if (err != cudaSuccess) break;
     k = l;
