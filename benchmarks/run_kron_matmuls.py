@@ -93,6 +93,6 @@ def multi_gpu():
       LocalKrons = shapeGM.n if gk == 1 else shapeGM.n - 2
       run_kron(shapeGM, gm, gk, LocalKrons)
 
-run_single_gpu_small()
+run_single_gpu()
 
 # multi_gpu()
