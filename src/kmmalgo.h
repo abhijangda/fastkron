@@ -24,6 +24,17 @@ struct KMMShape {
     }
     return KMMShape(m, subn, ps, qs);
   }
+
+  KMMShape sub(int start, int subn, uint ps[], uint qs[]) const {
+    assert (start >= 0);
+    assert (subn <= n);
+    assert (start + (subn - 1) <= n);
+    for (int i = 0; i < subn; i++) {
+      ps[i]  = this->ps[start + i];
+      qs[i]  = this->qs[start + i];
+    }
+    return KMMShape(m, subn, ps, qs);
+  }
 };
 
 struct GeKMMPtrs {
@@ -54,6 +65,17 @@ struct GeKMMPtrs {
 
     for (int i = 0; i < subn; i++) {
       fs[i] = this->fs[rstart - i];
+    }
+    return GeKMMPtrs(x, fs, y);
+  }
+
+  GeKMMPtrs sub(int start, int subn, void* fs[]) const {
+    if (this->fs == nullptr) {
+      return GeKMMPtrs(x, nullptr, y);
+    }
+
+    for (int i = 0; i < subn; i++) {
+      fs[i] = this->fs[start + i];
     }
     return GeKMMPtrs(x, fs, y);
   }
@@ -88,9 +110,24 @@ struct KMMProblem {
     KMMProblem(problem.shape, problem.ptrs, rstart, k, l) {}
   
   KMMProblem rsub(GeKMMPtrs ptrs, uint ps[], uint qs[], void* fs[], 
-                  uint rstart, uint num, uint k, uint l) const {
+                  int rstart, int num) const {
+    uint subk = k, subl = l;
+    for (int i = 0; i <= rstart - num; i++) {
+      subl = (l/shape.qs[i])*shape.ps[i];
+    }
+
+    for (int i = shape.n - 1; i > rstart; i--) {
+      subk = (k/shape.ps[i])*shape.qs[i];
+    }
+
     return KMMProblem(shape.rsub(rstart, num, ps, qs),
                       ptrs.rsub(rstart, num, fs),
+                      rstart, subk, subl);
+  }
+  KMMProblem sub(GeKMMPtrs ptrs, uint ps[], uint qs[], void* fs[], 
+                 uint start, uint num, uint k, uint l) const {
+    return KMMProblem(shape.sub(start, num, ps, qs),
+                      ptrs.sub(start, num, fs),
                       rstart, k, l);
   }
 };
@@ -99,3 +136,7 @@ cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
                          void* result,
                          std::function<uint (const KMMProblem)> next,
                          std::function<cudaError_t (const KMMProblem, void*[2], void*)> func);
+cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
+                                void* result,
+                                std::function<uint (const KMMProblem)> next,
+                                std::function<cudaError_t (const KMMProblem, void*[2], void*)> func);
