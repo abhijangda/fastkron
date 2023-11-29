@@ -124,10 +124,18 @@ struct KMMProblem {
                       rstart, subk, subl);
   }
   KMMProblem sub(GeKMMPtrs ptrs, uint ps[], uint qs[], void* fs[], 
-                 uint start, uint num, uint k, uint l) const {
+                 uint start, uint num) const {
+    uint subk = k, subl = l;
+    for (int i = 0; i < start; i++) {
+      subl = (subl/shape.qs[i])*shape.ps[i];
+    }
+    for (int i = shape.n - 1; i >= start + num; i--) {
+      subk = (subk/shape.ps[i])*shape.qs[i];
+    }
+
     return KMMProblem(shape.sub(start, num, ps, qs),
                       ptrs.sub(start, num, fs),
-                      rstart, k, l);
+                      start, subk, subl);
   }
 };
 

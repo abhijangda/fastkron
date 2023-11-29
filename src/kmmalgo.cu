@@ -57,7 +57,9 @@ cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
     if(i + nextF >= problem.shape.n) {
       ptrs = GeKMMPtrs(ptrs.x, ptrs.fs, result);
     }
-    auto subProblem = problem.sub(ptrs, ps, qs, fs, i, nextF, k, l);
+    auto subProblem = problem.sub(ptrs, ps, qs, fs, i, nextF);
+    assert (subProblem.k == k);
+    assert (subProblem.l == l);
     err = func(subProblem, temps, result);
     if (err != cudaSuccess) break;
     k = l;
