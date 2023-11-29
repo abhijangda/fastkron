@@ -98,34 +98,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 
       return cudaSuccess;
     });
-  
-  // for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
-  //   const uint kronMat = endKron;
-  //   //Include KronMats [startKron, ..., endKron]
-  //   const uint NumFusedKerns = endKron - startKron + 1;
 
-  //   //TODO: Change tempN to tempK everywhere else
-  //   uint tempK = K;
-  //   for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
-  //     tempK = (tempK/KronMatRows[reverseKron])*KronMatCols[reverseKron];
-  //   }
-
-  //   KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
-  //                                           tempK, M, NumFusedKerns, 
-  //                                           distP2PStore && startKron == 0};
-  //   if (bestKernels.find(shape) == bestKernels.end()) continue;
-  //   auto iter = bestKernels.find(shape);
-  //   TunedKernelsSeries epilogueKernels;
-  //   float kernelTime = iter->second.second;
-  //   float epilogueTime = minExecTimeOfSeries(problem, endKron + 1, isDistributed, 
-  //                                            epilogueKernels, bestKernels);
-  //   if (minTime > kernelTime + epilogueTime) {
-  //     minTime = kernelTime + epilogueTime;
-  //     minEpilogueKernels = epilogueKernels;
-  //     minPrologueKernel = TunedKernelFromStart(iter->second.first, 
-  //                                              startKron, endKron, tempK, kernelTime);
-  //   }
-  // }
   tunedKernels = minEpilogueKernels;
   tunedKernels.push_back(minPrologueKernel);
 
@@ -268,7 +241,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     fastKron.tunedKernelSeries = tunedKernels;
 
   } else {
-    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, 
+    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows,
                                    fastKron.perGPUKronBatch_, fastKron.gpusInK_))
       return cudaErrorInvalidValue;
 
