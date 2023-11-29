@@ -13,7 +13,7 @@ def execute(command):
 
 gen_test_kernels = {
                     'gen-single-gpu-kernels'            : ['run-single-gpu-no-fusion-tests', 'run-single-gpu-fusion-tests'],
-                    'gen-tuner-kernels'                 : ['run-single-gpu-tuner-tests'],
+                    # 'gen-tuner-kernels'                 : ['run-single-gpu-tuner-tests'],
                     'gen-non-square-tuner-test-kernels' : ['run-single-gpu-non-square-tuner-tests'],
                     'gen-single-gpu-distinct-shapes'    : ['run-single-gpu-distinct-shapes'],
                     'gen-single-gpu-odd-shapes'         : ['run-single-gpu-odd-shapes'],

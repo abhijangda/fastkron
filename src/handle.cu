@@ -213,10 +213,6 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
     prevKronResult = x;
   }
 
-  // std::cout << "prevKronResult " << x << " " << " currKronResult " << currKronResult << 
-  // " kronGemmResults " << kronGemmResults[0] << "  " << kronGemmResults[1] << std::endl;
-  // std::cout << "result " << result << std::endl;
-
   GeKMMPtrs ptrs(prevKronResult, kronMats, currKronResult);
   KMMShape shape(M, NumKronMats, KronMatRows, KronMatCols);
   KMMProblem problem(shape, ptrs);
@@ -244,58 +240,6 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
     });
 
   return err;
-
-  //Use double buffering for writing result and using output 
-  //of previous iteration as input to current
-
-  // uint prevTempN = K;
-  // uint currTempN;
-  // for (auto kernel : kernelSeries) {
-  //   const uint kronMat = kernel.end;
-  //   const uint NumFusedKerns = kernel.kernel.NumFusedKerns;
-  //   void* krons[NumFusedKerns];
-  //   uint FusedKronMatCols[NumFusedKerns];
-  //   uint FusedKronMatRows[NumFusedKerns];
-  //   currTempN = prevTempN;
-  //   for (int k = 0; k < NumFusedKerns; k++) {
-  //     krons[k] = kronMats[kronMat - k];
-  //     FusedKronMatCols[k] = KronMatCols[kronMat - k];
-  //     FusedKronMatRows[k] = KronMatRows[kronMat - k];
-  //     currTempN = (currTempN/FusedKronMatRows[k])*FusedKronMatCols[k];
-  //   }
-
-  //   //In the last iteration, write result to the results.    
-  //   if (kronMat - NumFusedKerns + 1 == 0)
-  //     currKronResult = result;
-
-  //   cudaError_t status;
-
-  //   KernelInfo selectedKernel = kernel.kernel;
-  //   // std::cout << "Invoking " << selectedKernel << " for " << FusedKronMatCols[0] << "x" << FusedKronMatRows[0] << "  " << prevTempN << " " << currTempN << std::endl;
-  //   status = kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kronMat, (void*)prevKronResult,
-  //                              (void**)krons, (void*)currKronResult, M, currTempN, prevTempN,
-  //                              FusedKronMatCols, FusedKronMatRows,
-  //                              epilogueParams, stream);
-    
-  //   if (status != cudaSuccess) return status;
-    
-  //   // if (kronMat >= 1)
-  //   // printGPUArray<float>(M, currTempN, (kronMat == 3) ? 8.0f : (kronMat == 2 ? 64.0f : 512.0f),
-  //   //                      (float*)currKronResult, stream);
-  //   // if (kronMat == 3) return cudaSuccess;
-  //   prevTempN = currTempN;
-  //   // if (kronMat == 1) return cudaSuccess;
-  //   // return cudaSuccess;
-  //   //Double/ring/circular buffer previous result and new result
-  //   prevKronResult = currKronResult;
-  //   if (prevKronResult == kronGemmResults[0]) {        
-  //     currKronResult = kronGemmResults[1];
-  //   } else if (prevKronResult == kronGemmResults[1]) {
-  //     currKronResult = kronGemmResults[0];
-  //   }
-  // }
-
-  return cudaSuccess;
 }
 
 FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {

@@ -3,6 +3,7 @@
 #include <iomanip>
 
 #include "autotuner.h"
+#include "kmmalgo.h"
 
 static float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats, 
                                  uint KronMatCols[], uint KronMatRows[],
@@ -54,6 +55,60 @@ static float minExecTimeOfSeries(uint M, uint K, const uint NumKronMats,
   assert(minTime < std::numeric_limits<float>::max());
   return minTime;
 }
+
+// static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
+//                                  TunedKernelsSeries& tunedKernels,
+//                                  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels) {
+//   if (startKron >= NumKronMats) return 0;
+//   bool distP2PStore = isDistributed;
+//   float minTime = std::numeric_limits<float>::max();
+//   TunedKernelsSeries minEpilogueKernels;
+//   TunedKernelFromStart minPrologueKernel;
+
+//   // reverseExecuteGeKMM(problem, nullptr, nullptr, 
+//   //              [](const KMMProblem p){return 1;},
+//   //   [problem](const KMMProblem firstPart, void* temps[2], void* r) {
+//   //     const int subn = p.start - startKron + 1;
+//   //     uint qs[problem.shape.n];
+//   //     uint ps[problem.shape.n];
+//   //     auto secondPart = problem.sub(GeKMMPtrs(), ps, qs, nullptr, p.start, p.n - p.start + 1);
+      
+//   //     return cudaSuccess;
+//   //   });
+  
+//   for (uint endKron = startKron; endKron < NumKronMats; endKron++) {
+//     const uint kronMat = endKron;
+//     //Include KronMats [startKron, ..., endKron]
+//     const uint NumFusedKerns = endKron - startKron + 1;
+
+//     //TODO: Change tempN to tempK everywhere else
+//     uint tempK = K;
+//     for (int reverseKron = NumKronMats - 1; reverseKron > endKron; reverseKron--) {
+//       tempK = (tempK/KronMatRows[reverseKron])*KronMatCols[reverseKron];
+//     }
+
+//     KronMatmulShape shape = KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+//                                             tempK, M, NumFusedKerns, 
+//                                             distP2PStore && startKron == 0};
+//     if (bestKernels.find(shape) == bestKernels.end()) continue;
+//     auto iter = bestKernels.find(shape);
+//     TunedKernelsSeries epilogueKernels;
+//     float kernelTime = iter->second.second;
+//     float epilogueTime = minExecTimeOfSeries(problem, endKron + 1, isDistributed, 
+//                                              epilogueKernels, bestKernels);
+//     if (minTime > kernelTime + epilogueTime) {
+//       minTime = kernelTime + epilogueTime;
+//       minEpilogueKernels = epilogueKernels;
+//       minPrologueKernel = TunedKernelFromStart(iter->second.first, 
+//                                                startKron, endKron, tempK, kernelTime);
+//     }
+//   }
+//   tunedKernels = minEpilogueKernels;
+//   tunedKernels.push_back(minPrologueKernel);
+
+//   assert(minTime < std::numeric_limits<float>::max());
+//   return minTime;
+// }
 
 cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kronMats[],
                               uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
