@@ -136,17 +136,13 @@ cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void
       uint qs[problem.shape.n];
       uint ps[problem.shape.n];
       void* fs[problem.shape.n];
-
-      auto secondPart = problem.sub(problem.ptrs, ps, qs, fs, endP, endP-firstPart.rstart+1);
+      
+      auto secondPart = problem.sub(problem.ptrs, ps, qs, fs, firstPart.rstart, endP-firstPart.rstart+1);
       bool distP2PStore = isDistributed && firstPart.rstart == 0;
       KronMatmulShape shape = KronMatmulShape{secondPart.shape.qs[0], secondPart.shape.ps[0], 
                                               secondPart.k, M, secondPart.shape.n, distP2PStore};
-      std::cout << "144: " << secondPart.shape.n << " " << secondPart.rstart << " " << firstPart.rstart << std::endl;
-      if (bestKernels.find(shape) != bestKernels.end())
-        return cudaSuccess;
-      if (!this->fastKron.getUseFusion() and secondPart.shape.n > 1)
-        return cudaSuccess;
-
+      if (bestKernels.find(shape) != bestKernels.end()) continue;
+      if (!this->fastKron.getUseFusion() and secondPart.shape.n > 1) continue;
       KernelInfo bestKernel;
       float minTime = std::numeric_limits<float>::max();
       const uint runs = 5;
