@@ -132,16 +132,18 @@ cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void
                [](const KMMProblem p){return 1;},
   [&](const KMMProblem firstPart, void* temps[2], void* r) {
     
-    reverseExecuteGeKMM(firstPart, nullptr, nullptr, 
-                        [](const KMMProblem p){return 1;},
-    [&](const KMMProblem secondPart, void* temps[2], void* r) {
-      
+    for (int endP = firstPart.rstart; endP < problem.shape.n; endP++) {
+      uint qs[problem.shape.n];
+      uint ps[problem.shape.n];
+      void* fs[problem.shape.n];
+
+      auto secondPart = problem.sub(problem.ptrs, ps, qs, fs, endP, endP-firstPart.rstart+1);
       bool distP2PStore = isDistributed && firstPart.rstart == 0;
       KronMatmulShape shape = KronMatmulShape{secondPart.shape.qs[0], secondPart.shape.ps[0], 
                                               secondPart.k, M, secondPart.shape.n, distP2PStore};
+      std::cout << "144: " << secondPart.shape.n << " " << secondPart.rstart << " " << firstPart.rstart << std::endl;
       if (bestKernels.find(shape) != bestKernels.end())
         return cudaSuccess;
-
       if (!this->fastKron.getUseFusion() and secondPart.shape.n > 1)
         return cudaSuccess;
 
@@ -151,15 +153,9 @@ cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void
       const uint warmups = 2;
       std::cout << "Tuning for shape "  << shape << std::endl;
       for (auto shapeAndKernels : fastKron.compiledKernels) {
-        if (!shapeAndKernels.first.sameKronSize(shape)) {
-          std::cout << "shapeAndKernels.first " << shapeAndKernels.first << std::endl;
-          continue;
-        }
+        if (!shapeAndKernels.first.sameKronSize(shape)) continue;
         for (auto kernel : shapeAndKernels.second) {
-          if (!kernel.canCompute(shape)) {
-            continue;
-          }
-          std::cout << kernel << std::endl;
+          if (!kernel.canCompute(shape)) continue;
           CUDA_CHECK(cudaStreamSynchronize(stream));
           cudaError_t status;
           for (int r = 0; r < warmups + runs; r++) {
@@ -202,10 +198,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(const uint NumKronMats, void* x, void
                     "Best kernel for " << shape << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
         bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
       }
-
-      //TODO: Error handling
-      return cudaSuccess;
-    });
+    }
     
     //TODO: Error handling
     return cudaSuccess;
