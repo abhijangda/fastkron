@@ -84,7 +84,7 @@ struct GeKMMPtrs {
 struct KMMProblem {
   KMMShape shape;
   GeKMMPtrs ptrs;
-
+  //TODO: Remove rstart
   const int rstart;
   uint k;
   uint l;
