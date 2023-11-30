@@ -67,32 +67,33 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   uint qs[problem.shape.n];
   uint ps[problem.shape.n];
       
-  auto part = problem.sub(GeKMMPtrs(), ps, qs, nullptr, 
+  auto nextSeries = problem.sub(GeKMMPtrs(), ps, qs, nullptr, 
                           startKron, problem.shape.n - startKron);
 
-  reverseExecuteGeKMM(problem, nullptr, nullptr, 
+  reverseExecuteGeKMM(nextSeries, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
     [&](const KMMProblem firstPart, void* temps[2], void* r) {
-      const int subn = firstPart.rstart - startKron + 1;
+      const int subn = firstPart.rstart + 1;
       uint qs[problem.shape.n];
       uint ps[problem.shape.n];
+
+      auto nextPart = problem.sub(GeKMMPtrs(), ps, qs, nullptr, firstPart.rstart + 1, problem.shape.n - firstPart.rstart);
       
-      KronMatmulShape shape = KronMatmulShape{problem.shape.qs[0], problem.shape.ps[0], 
+      KronMatmulShape shape = KronMatmulShape{firstPart.shape.qs[0], firstPart.shape.ps[0], 
                                               firstPart.k, problem.shape.m, subn, 
                                               distP2PStore && startKron == 0};
-
       if (bestKernels.find(shape) != bestKernels.end()) {
         auto iter = bestKernels.find(shape);
         TunedKernelsSeries epilogueKernels;
         float kernelTime = iter->second.second;
-        float epilogueTime = minExecTimeOfSeries(problem, firstPart.rstart + 1,
+        float epilogueTime = minExecTimeOfSeries(problem, startKron + firstPart.rstart + 1,
                                                 isDistributed, 
                                                 epilogueKernels, bestKernels);
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
           minPrologueKernel = TunedKernelFromStart(iter->second.first, 
-                                                  startKron, firstPart.rstart, firstPart.k, kernelTime);
+                                                  startKron, startKron + firstPart.rstart, firstPart.k, kernelTime);
         }
       }
 
@@ -101,7 +102,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 
   tunedKernels = minEpilogueKernels;
   tunedKernels.push_back(minPrologueKernel);
-
+  std::cout << " " << problem.rstart << " " << problem.shape.n << std::endl;
   assert(minTime < std::numeric_limits<float>::max());
   return minTime;
 }
