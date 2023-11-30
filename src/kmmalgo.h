@@ -127,10 +127,10 @@ struct KMMProblem {
                  uint start, uint num) const {
     uint subk = k, subl = l;
     
-    for (int i = shape.n - 1; i > start; i--) {
+    for (int i = 0; i < start; i++) {
       subl = (subl/shape.qs[i])*shape.ps[i];
     }
-    for (int i = 0; i < start + num - 1; i++) {
+    for (int i = shape.n - 1; i >= start + num; i--) {
       subk = (subk/shape.ps[i])*shape.qs[i];
     }
 
