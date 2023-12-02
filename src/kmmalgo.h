@@ -6,13 +6,15 @@
 
 struct KMMShape {
   const uint m;
-  const uint n;
+  const int n;
   const uint *qs;
   const uint *ps;
 
-  KMMShape(const uint m, const uint n, const uint *ps, const uint *qs) : 
+  KMMShape(const uint m, const int n, const uint *ps, const uint *qs) : 
     m(m), n(n), ps(ps), qs(qs)
-  {}
+  {
+    assert (n > 0);
+  }
 
   KMMShape rsub(int rstart, int subn, uint ps[], uint qs[]) const {
     assert (rstart >= 0);
@@ -86,11 +88,11 @@ struct KMMProblem {
   GeKMMPtrs ptrs;
   //TODO: Remove rstart
   const int rstart;
-  uint k;
-  uint l;
+  int k;
+  int l;
 
   KMMProblem(KMMShape shape, GeKMMPtrs ptrs, int rstart, 
-             const uint k, const uint l) : shape(shape), ptrs(ptrs), 
+             const int k, const int l) : shape(shape), ptrs(ptrs), 
              rstart(rstart), k(k), l(l) {
     assert (rstart >= 0);
   }
@@ -99,19 +101,19 @@ struct KMMProblem {
     KMMProblem(shape, ptrs, 0, 1, 1) {
     k = 1;
     l = 1;
-    for (uint i = 0; i < shape.n; i++) {
+    for (int i = 0; i < shape.n; i++) {
       k *= shape.ps[i];
       l *= shape.qs[i];
     }
   }
 
   KMMProblem(KMMProblem problem, int rstart, 
-    const uint k, const uint l) : 
+    const int k, const int l) : 
     KMMProblem(problem.shape, problem.ptrs, rstart, k, l) {}
   
   KMMProblem rsub(GeKMMPtrs ptrs, uint ps[], uint qs[], void* fs[], 
                   int rstart, int num) const {
-    uint subk = k, subl = l;
+    int subk = k, subl = l;
     for (int i = 0; i <= rstart - num; i++) {
       subl = (subl/shape.qs[i])*shape.ps[i];
     }
@@ -124,8 +126,8 @@ struct KMMProblem {
                       rstart, subk, subl);
   }
   KMMProblem sub(GeKMMPtrs ptrs, uint ps[], uint qs[], void* fs[], 
-                 uint start, uint num) const {
-    uint subk = k, subl = l;
+                 int start, int num) const {
+    int subk = k, subl = l;
     
     for (int i = 0; i < start; i++) {
       subl = (subl/shape.qs[i])*shape.ps[i];

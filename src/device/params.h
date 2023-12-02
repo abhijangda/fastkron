@@ -193,7 +193,7 @@ struct DistributedParams {
     setGPUResults(7, gpuResults7, gpuResults_);
   }
 
-  void setGPUResults(int idx, void*& thisResults, void** gpuResults) {
+  void setGPUResults(uint idx, void*& thisResults, void** gpuResults) {
     if (idx < gpusInK)
       thisResults = gpuResults[idx];
     else
