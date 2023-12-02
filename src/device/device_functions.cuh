@@ -288,15 +288,15 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
     const size_t firstElems = 0; //nonAlignedElems(glRowAddr, VecTNumElems);
     const size_t lastElems  = 0; //TileSizeColsA % VecTNumElems;
 
-    for (uint a_col = tid; a_col < firstElems; a_col += NumThreads) {
+    for (int a_col = tid; a_col < firstElems; a_col += NumThreads) {
       shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
 
-    for (uint a_col = firstElems + tid*VecTNumElems; a_col < TileSizeColsA - lastElems; a_col += NumThreads*VecTNumElems) {
+    for (int a_col = firstElems + tid*VecTNumElems; a_col < TileSizeColsA - lastElems; a_col += NumThreads*VecTNumElems) {
       shiftAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
 
-    for (uint a_col = TileSizeColsA - lastElems + tid; a_col < TileSizeColsA; a_col += NumThreads) {
+    for (int a_col = TileSizeColsA - lastElems + tid; a_col < TileSizeColsA; a_col += NumThreads) {
       shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
   }
@@ -313,7 +313,6 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
   const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
   //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
   for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
-    VecT  vec;
     ElemT elems[VecTNumElems];
 
     const uint col = external_tile_kp_n*TileSizeKronCols + (tid%(TileSizeKronCols/loadInstr))*loadInstr;

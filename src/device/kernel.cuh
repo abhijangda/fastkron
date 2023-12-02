@@ -19,9 +19,7 @@ __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                                FusedParams<NumFusedKerns> fusedParams,
                                DistributedParams distParams,
-                               EpilogueParams epilogueParams) {
-  
-  const uint WarpSize     = 32;
+                               EpilogueParams epilogueParams) {  
   const uint tid          = threadIdx.x;
   // const uint wid          = tid/WarpSize;
   // const uint lane         = tid%WarpSize;
@@ -97,7 +95,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                                             glA, &shA[0][0]);
 
     #pragma unroll
-    for (uint fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
+    for (int fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
       if (NumFusedKerns > 1) {
         #pragma unroll
         for (uint r = 0; r < TileSizeRowsA; r++) {
@@ -265,7 +263,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));
         } else {
           cIdx = rowC * colsC + cCol;
-          outputArray = (ElemT* __restrict__)params.glC;
+          outputArray = (ElemT*)params.glC;
         }
 
         if (params.kp_idx == 0) {
@@ -316,7 +314,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
           const uint cIdx = cRow * colsC + cCol;
           if (cCol < colsC) {
-            ((ElemT* __restrict__)params.glC)[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
+            ((ElemT*)params.glC)[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
           }
         }
         __syncwarp();
@@ -326,7 +324,6 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                     reg_j*(MaxColsA/MaxKronRows) +//0-30*(496/16)=0,4,8,16,20,24,28,...,120
                     tileColC + //0 or 2
                     reg_i;//0 to 2
-        uint cCol2 = cCol;
         if (!K_EQUALS_VAR) {
           uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
           cCol = tile_k * (MaxColsC/kronCols) +
@@ -364,7 +361,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
           int newcCol = p5Index + withinP5;
           int gpuCol = newcCol - nextGc * perGPUN;
           cIdx = cRow * perGPUN + gpuCol;
-          outputArray = (ElemT* __restrict__)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
+          outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
           // if (params.kp_idx == 0 && blockIdx.y == 0) {//(gpuCol >= perGPUN || gpuCol < 0) {
           //   printf("344 outputArray %p nextGc %d cIdx %d perGPUN %d\n", outputArray, nextGc, cIdx, perGPUN);
           // }
@@ -385,7 +382,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
          cIdx = cRow * colsC + cCol;
         //  if (threadIdx.x == 0)
         //   printf("363 cCol %d\n", cCol);
-         outputArray = (ElemT* __restrict__)params.glC;
+         outputArray = (ElemT*)params.glC;
         //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
         }
         // assert(tid == cCol);
