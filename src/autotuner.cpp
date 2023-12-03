@@ -180,7 +180,6 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
     fastKron.getDistributedSizes(M, K, gpuM, gpuK);
-    uint prevTempN = gpuK;
     //TODO: This loop is really common and should be a macro?
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
 
@@ -252,11 +251,18 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     CUDA_CHECK(cudaFree(temp1_[g]));
     CUDA_CHECK(cudaFree(temp2_[g]));
   }
-
-  //TODO: Should also print Share NCCL or Share P2P kernels
+  
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
+    if (fastKron.isDistributed_ and fastKron.gpusInK_ > 1 and 
+        ((NumKronMats - iter->start) % fastKron.perGPUKronBatch_ == 0 or 
+        iter->start == 0)) {
+      uint gpuM, gpuK;
+      fastKron.getDistributedSizes(M, K, gpuM, gpuK);
+      std::cout << "  " << "Share [" << gpuM << ", " << gpuK << "] among " << 
+                   "[GM, " << fastKron.gpusInK_ << "] using " << fastKron.distComm_ << std::endl;
+    }
   }
   return cudaSuccess;
 }
