@@ -14,8 +14,7 @@ public:
                        cudaStream_t stream);
 
   cudaError_t tuneSlicedMulSeries(KMMProblem problem,
-                              void* temp1, void* temp2,
-                              bool isDistributed, DistributedParams distParams,
-                              std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
-                              cudaStream_t stream);
+                                  bool isDistributed, DistributedParams distParams,
+                                  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
+                                  cudaStream_t stream);
 };
