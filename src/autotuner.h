@@ -13,8 +13,7 @@ public:
                        uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                        cudaStream_t stream);
 
-  cudaError_t tuneSlicedMulSeries(const uint NumKronMats, void* x, void* kronMats[],
-                              uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+  cudaError_t tuneSlicedMulSeries(KMMProblem problem,
                               void* temp1, void* temp2,
                               bool isDistributed, DistributedParams distParams,
                               std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
