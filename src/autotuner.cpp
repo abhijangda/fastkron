@@ -68,7 +68,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   cudaEvent_t start, end;
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
-
+  std::cout << "Fusion enabled?  " << this->fastKron.getUseFusion() << std::endl;
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
   auto err = reverseExecuteGeKMM(problem, nullptr, nullptr, 
