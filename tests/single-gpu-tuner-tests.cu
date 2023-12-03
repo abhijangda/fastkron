@@ -12,13 +12,13 @@
     K *= FacSize;\
     KP_MAT_K[i] = KP_MAT_N[i] = FacSize;\
   }\
-  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, false, true, false);\
+  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, true, true, false);\
   EXPECT_TRUE(b);\
 }
 
-SINGLE_GPU_NO_FUSION_TUNER_TEST(12, 4, 16, float)
+SINGLE_GPU_NO_FUSION_TUNER_TEST(512, 4, 16, float)
 
-SINGLE_GPU_NO_FUSION_TUNER_TEST(10, 3, 64, float)
+SINGLE_GPU_NO_FUSION_TUNER_TEST(512, 3, 64, float)
 
 // SINGLE_GPU_NO_FUSION_TUNER_TEST(1, 3, 32, float)
 
