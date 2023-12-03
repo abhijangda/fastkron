@@ -15,7 +15,6 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   TunedKernelFromStart minPrologueKernel;
   uint qs[problem.shape.n];
   uint ps[problem.shape.n];
-  std::cout << "18 " << problem.k << std::endl;
   auto nextSeries = problem.sub(GeKMMPtrs(), ps, qs, nullptr, 
                           startKron, problem.shape.n - startKron);
 
@@ -29,7 +28,6 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
       KronMatmulShape shape = KronMatmulShape{firstPart.shape.qs[0], firstPart.shape.ps[0], 
                                               firstPart.k, problem.shape.m, subn, 
                                               distP2PStore && startKron == 0};
-      std::cout << "32 " << shape << " firstPart.k " << firstPart.k << std::endl;
       if (bestKernels.find(shape) != bestKernels.end()) {
         auto iter = bestKernels.find(shape);
         TunedKernelsSeries epilogueKernels;
@@ -71,9 +69,6 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
 
-  // KMMProblem problem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols), 
-  //                    GeKMMPtrs(prevKronResult, kronMats, currKronResult));
-  std::cout << problem.shape.m << "  " << problem.shape.n << " "  << problem.shape.ps[0] << " " << problem.shape.qs[0] << std::endl;
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
   auto err = reverseExecuteGeKMM(problem, nullptr, nullptr, 
@@ -88,7 +83,6 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
       bool distP2PStore = isDistributed && firstPart.rstart == 0;
       KronMatmulShape shape = KronMatmulShape{secondPart.shape.qs[0], secondPart.shape.ps[0], 
                                               secondPart.k, secondPart.shape.m, secondPart.shape.n, distP2PStore};
-      std::cout << "143: " << shape << std::endl;
       if (bestKernels.find(shape) != bestKernels.end()) continue;
       if (!this->fastKron.getUseFusion() and secondPart.shape.n > 1) continue;
       KernelInfo bestKernel;
@@ -169,15 +163,15 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
 
   if (!fastKron.isDistributed_) {
     CUDA_CHECK(cudaSetDevice(0));
+    auto problem = KMMProblem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols), 
+                              GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
-    assert (false);
-    // tuneSlicedMulSeries(NumKronMats, x, kronMats, M, N, K, KronMatCols, KronMatRows, 
-    //                   (void*)temp1_[0], (void*)temp2_[0], false, DistributedParams(), 
-    //                   bestKernels, stream);
+    tuneSlicedMulSeries(problem, 
+                      (void*)temp1_[0], (void*)temp2_[0], false, DistributedParams(), 
+                      bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
-    minTime = minExecTimeOfSeries(KMMProblem(KMMShape(M, NumKronMats,
-                                  KronMatRows, KronMatCols), GeKMMPtrs()), 0, false,
+    minTime = minExecTimeOfSeries(problem, 0, false,
                                   tunedKernels, bestKernels);
     fastKron.tunedKernelSeries = tunedKernels;
 
@@ -216,13 +210,10 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
       MaxLocalKrons = NumKronMats;
     }
 
-    std::cout << "267 " << MaxLocalKrons << "  " << UpperLocalKrons << " " << NumKronMats << " " << fastKron.perGPUKronBatch_ << std::endl;
-
     //TODO: consider only valid krons 
     for (; MaxLocalKrons < UpperLocalKrons; MaxLocalKrons += 1) {
     float seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
-    std::cout << "MaxLocalKrons " << MaxLocalKrons << std::endl;
 
     KMMProblem problem(KMMShape(gpuM, NumKronMats, KronMatRows, KronMatCols), 
                        GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
@@ -244,12 +235,9 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
                           fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P, 
                           distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
-      std::cout << "gpuM " << gpuM << " LocalKrons " << subproblem.shape.n << " i " << i << " " << 
-                   ps[0] << " " << qs[0] << std::endl;
       seriesTime += minExecTimeOfSeries(subproblem, 0, 
                                         fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P,
                                         tunedKernels, bestKernels);
-      std::cout << "seriesTime " << seriesTime << std::endl;
       for (auto tunedKernel : tunedKernels) {
         tunedKernel.start += kronMat + 1 - LocalKrons;
         tunedKernel.end   += kronMat + 1 - LocalKrons;
@@ -271,6 +259,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     CUDA_CHECK(cudaFree(temp2_[g]));
   }
 
+  //TODO: Should also print Share NCCL or Share P2P kernels
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
