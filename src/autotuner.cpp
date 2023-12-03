@@ -260,7 +260,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
         iter->start == 0)) {
       uint gpuM, gpuK;
       fastKron.getDistributedSizes(M, K, gpuM, gpuK);
-      std::cout << "  " << "Share [" << gpuM << ", " << gpuK << "] among " << 
+      std::cout << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
                    "[GM, " << fastKron.gpusInK_ << "] using " << fastKron.distComm_ << std::endl;
     }
   }
