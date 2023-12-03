@@ -53,16 +53,12 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 }
 
 cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
-                                           void* temp1, void* temp2,
                                            bool isDistributed, DistributedParams distParams,
                                            std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
                                            cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
-  void* kronGemmResults[2] = {(void*)temp1, (void*)temp2};
   //For performance eval we do not need these to contain any value
-  void* prevKronResult = kronGemmResults[0];
-  void* currKronResult = kronGemmResults[1];
-  //TODO: Assumes all factors are of same size and square shape
+  
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
   cudaEvent_t start, end;
@@ -106,8 +102,8 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
                                                     distParams, EpilogueParams::create<float>(), stream);
             } else {
               status = fastKron.kernelInvoker.fusedSlicedMatmul(secondPart.shape.n, kernel, firstPart.rstart + secondPart.rstart,
-                                                                temp1, 
-                                                                secondPart.ptrs.fs, temp2, secondPart.shape.m, secondPart.l, secondPart.k, 
+                                                                secondPart.ptrs.x, 
+                                                                secondPart.ptrs.fs, secondPart.ptrs.y, secondPart.shape.m, secondPart.l, secondPart.k, 
                                                                 secondPart.shape.qs, secondPart.shape.ps,
                                                                 EpilogueParams::create<float>(), stream);
             }
@@ -166,8 +162,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     auto problem = KMMProblem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols), 
                               GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
     std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
-    tuneSlicedMulSeries(problem, 
-                      (void*)temp1_[0], (void*)temp2_[0], false, DistributedParams(), 
+    tuneSlicedMulSeries(problem, false, DistributedParams(), 
                       bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
@@ -231,12 +226,11 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
                                    subproblem.k, subproblem.k * fastKron.gpusInK_, subproblem.shape.qs, subproblem.shape.ps, 
                                    subproblem.shape.n);
       distParams.updateGPUResults((void**)gpuResults);
-      tuneSlicedMulSeries(subproblem, temp1_[0], temp2_[0],
-                          fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P, 
+      bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
+      tuneSlicedMulSeries(subproblem, distP2PStore, 
                           distParams, bestKernels, stream);
       TunedKernelsSeries tunedKernels;
-      seriesTime += minExecTimeOfSeries(subproblem, 0, 
-                                        fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P,
+      seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
                                         tunedKernels, bestKernels);
       for (auto tunedKernel : tunedKernels) {
         tunedKernel.start += kronMat + 1 - LocalKrons;
