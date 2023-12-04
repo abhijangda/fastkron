@@ -327,8 +327,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("memcpy\n");
   if (tune) {
-    CUDACHECK(sgekmmTune(handle, NUM_KP_MATS, (float*)dX[0], (float**)dKpMats, M, N, K, KP_MAT_N, KP_MAT_K,
-                         stream[0]));
+    CUDACHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, stream[0]));
   }
   printf("resultSize %ld\n", resultSize);
     

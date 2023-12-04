@@ -9,9 +9,7 @@ public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
   {}
 
-  cudaError_t tune(const uint NumKronMats, void* x, void** kronMats, 
-                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                       cudaStream_t stream);
+  cudaError_t tune(uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream);
 
   cudaError_t tuneSlicedMulSeries(KMMProblem problem,
                                   bool isDistributed, DistributedParams distParams,

@@ -71,28 +71,14 @@ cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, 
                                    KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
-cudaError_t sgekmmTune(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], 
-                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                                 cudaStream_t stream) {
-  return Autotuner(*handle).tune(NumKronMats, (void*)x, (void**)kronMats,
-                                 M, N, K, KronMatCols, KronMatRows,
-                                 stream);
+cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
+  return Autotuner(*handle).tune(M, N, Ps, Qs, stream);
 }
-
-cudaError_t dgekmmTune(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], 
-                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                          cudaStream_t stream) {
-  return Autotuner(*handle).tune(NumKronMats, (void*)x, (void**)kronMats,
-                                 M, N, K, KronMatCols, KronMatRows,
-                                 stream);
+cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
+  return Autotuner(*handle).tune(M, N, Ps, Qs, stream);
 }
-
-cudaError_t idgemmTune(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[],
-                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                          cudaStream_t stream) {
-  return Autotuner(*handle).tune(NumKronMats, (void*)x, (void**)kronMats,
-                       M, N, K, KronMatCols, KronMatRows,
-                       stream);
+cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
+  return Autotuner(*handle).tune(M, N, Ps, Qs, stream);
 }
 
 

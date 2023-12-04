@@ -177,15 +177,6 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
 cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[], 
                                    void* X, void* Fs[], void* Y, void* temp1, void* temp2,
                                    EpilogueParams epilogueParams, cudaStream_t stream) {
-  //Only row major layout of all matrics is supported.
-  if (Y == nullptr) return cudaErrorInvalidValue;
-  if (temp1 == nullptr) return cudaErrorInvalidValue;
-  
-  void* kronGemmResults[2] = {temp1, temp2};
-  void* prevKronResult = X;
-  void* currKronResult = kronGemmResults[0];
-
-  //TODO: Assumes all factors are of same size and square shape
   TunedKernelsSeries kernelSeries;
   if (tunedKernelSeries.size() > 0) {
     kernelSeries = tunedKernelSeries;
@@ -195,23 +186,30 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
     kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   }
 
+  if (Y == nullptr) return cudaErrorInvalidValue;
+  if (temp1 == nullptr) return cudaErrorInvalidValue;
+
+  void* temps[2] = {temp1, temp2};
+  void* input = X;
+  void* output = temps[0];
+
   if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
-      kronGemmResults[0] = Y;
-      kronGemmResults[1] = temp1;
+      temps[0] = Y;
+      temps[1] = temp1;
     } else {
-      kronGemmResults[0] = temp1;
-      kronGemmResults[1] = Y;
+      temps[0] = temp1;
+      temps[1] = Y;
     }
 
-    currKronResult = kronGemmResults[0];
-    prevKronResult = X;
+    output = temps[0];
+    input = X;
   }
 
-  KMMProblem problem(M, N, Ps, Qs, prevKronResult, Fs, currKronResult);
+  KMMProblem problem(M, N, Ps, Qs, input, Fs, output);
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err = executeGeKMM(problem, kronGemmResults, Y,
+  cudaError_t err = executeGeKMM(problem, temps, Y,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
     [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;

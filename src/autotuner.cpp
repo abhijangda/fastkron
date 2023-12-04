@@ -139,30 +139,35 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   return err;
 }
 
-cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats, 
-                     uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                     cudaStream_t stream) {
+cudaError_t Autotuner::tune(uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-    return cudaErrorInvalidValue;
-
+  const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
+  const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
   float minTime = 0;
   void* temp1_[fastKron.numGPUs_], *temp2_[fastKron.numGPUs_];
+  void* Fs[N * fastKron.numGPUs_];
   size_t resultSize = 0, tempSize = 0;
-  gekmmSizes(&fastKron, M, NumKronMats, KronMatRows, KronMatCols, 
-             &resultSize, &tempSize);
+  gekmmSizes(&fastKron, M, N, Ps, Qs, &resultSize, &tempSize);
   for (int g = 0; g < fastKron.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(float)));
+
+    CUDA_CHECK(cudaMemset(temp1_[g], 1, tempSize * sizeof(float)));
+    CUDA_CHECK(cudaMemset(temp2_[g], 1, tempSize * sizeof(float)));
+
+    for (int f = 0; f < N; f++) {
+      auto sz = Ps[f] * Qs[f] * sizeof(float);
+      CUDA_CHECK(cudaMalloc(&Fs[g * N + f], sz));
+      CUDA_CHECK(cudaMemset(Fs[g * N + f], 1, sz));
+    }
   }
 
   std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
 
   if (!fastKron.isDistributed_) {
     CUDA_CHECK(cudaSetDevice(0));
-    auto problem = KMMProblem(M, NumKronMats, KronMatRows, KronMatCols, 
-                              temp1_[0], kronMats, temp2_[0]);
+    auto problem = KMMProblem(M, N, Ps, Qs, temp1_[0], Fs, temp2_[0]);
     tuneSlicedMulSeries(problem, false, DistributedParams(), 
                       bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
@@ -172,7 +177,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     fastKron.tunedKernelSeries = tunedKernels;
 
   } else {
-    if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows,
+    if (!checkDistributedKronSizes(M, N, L, K, Qs, Ps,
                                    fastKron.perGPUKronBatch_, fastKron.gpusInK_))
       return cudaErrorInvalidValue;
 
@@ -189,18 +194,18 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
       MaxLocalKrons = 1;
     } else if (fastKron.distComm_ == DistComm::NCCL) {
       if (fastKron.perGPUKronBatch_ > 1)
-        MaxLocalKrons = NumKronMats - 1;
+        MaxLocalKrons = N - 1;
       else
         MaxLocalKrons = 1;
     }
 
-    uint UpperLocalKrons = NumKronMats;
+    uint UpperLocalKrons = N;
     if (fastKron.distComm_ == DistComm::NCCL && fastKron.perGPUKronBatch_ == 1)
       UpperLocalKrons = 2;
     
     if (fastKron.gpusInK_ == 1) {
-      UpperLocalKrons = NumKronMats + 1;
-      MaxLocalKrons = NumKronMats;
+      UpperLocalKrons = N + 1;
+      MaxLocalKrons = N;
     }
 
     //TODO: consider only valid krons 
@@ -208,8 +213,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     float seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
 
-    KMMProblem problem(gpuM, NumKronMats, KronMatRows, KronMatCols,
-                       temp1_[0], kronMats, temp2_[0]);
+    KMMProblem problem(gpuM, N, Ps, Qs, temp1_[0], Fs, temp2_[0]);
     for (int i = problem.n - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
       //TODO: any way to avoid declaring ps, qs, and fs on stack
@@ -247,13 +251,16 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaFree(temp1_[g]));
     CUDA_CHECK(cudaFree(temp2_[g]));
+    for (int f = 0; f < N; f++) {
+      CUDA_CHECK(cudaFree(Fs[g * N + f]));
+    }
   }
   
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
     if (fastKron.isDistributed_ and fastKron.gpusInK_ > 1 and 
-        ((NumKronMats - iter->start) % fastKron.perGPUKronBatch_ == 0 or 
+        ((N - iter->start) % fastKron.perGPUKronBatch_ == 0 or 
         iter->start == 0)) {
       uint gpuM, gpuK;
       fastKron.getDistributedSizes(M, K, gpuM, gpuK);
