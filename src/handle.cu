@@ -174,21 +174,15 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
   return tunedSeries;
 }
 
-cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronMats,
-                                void* result,
-                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-                                void* temp1, void* temp2, 
-                                EpilogueParams epilogueParams,
-                                cudaStream_t stream) {
+cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[], 
+                                   void* X, void* Fs[], void* Y, void* temp1, void* temp2,
+                                   EpilogueParams epilogueParams, cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
-  if (result == nullptr) return cudaErrorInvalidValue;
-  if (temp1  == nullptr) return cudaErrorInvalidValue;
-
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-    return cudaErrorInvalidValue;
+  if (Y == nullptr) return cudaErrorInvalidValue;
+  if (temp1 == nullptr) return cudaErrorInvalidValue;
   
   void* kronGemmResults[2] = {temp1, temp2};
-  void* prevKronResult = x;
+  void* prevKronResult = X;
   void* currKronResult = kronGemmResults[0];
 
   //TODO: Assumes all factors are of same size and square shape
@@ -196,29 +190,30 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
   if (tunedKernelSeries.size() > 0) {
     kernelSeries = tunedKernelSeries;
   } else {
-    kernelSeries = selectKernelSeries(NumKronMats, M, N, K, 
-                                      KronMatCols, KronMatRows, false);
+    const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
+    const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
+    kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   }
 
   if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
-      kronGemmResults[0] = result;
+      kronGemmResults[0] = Y;
       kronGemmResults[1] = temp1;
     } else {
       kronGemmResults[0] = temp1;
-      kronGemmResults[1] = result;
+      kronGemmResults[1] = Y;
     }
 
     currKronResult = kronGemmResults[0];
-    prevKronResult = x;
+    prevKronResult = X;
   }
 
-  KMMProblem problem(M, NumKronMats, KronMatRows, KronMatCols, prevKronResult, kronMats, currKronResult);
+  KMMProblem problem(M, N, Ps, Qs, prevKronResult, Fs, currKronResult);
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err = executeGeKMM(problem, kronGemmResults, result,
+  cudaError_t err = executeGeKMM(problem, kronGemmResults, Y,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
-    [&kernelSeriesIter, &err, epilogueParams, stream, this, KronMatCols](const KMMProblem problem, void* temps[2], void* result) {
+    [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;

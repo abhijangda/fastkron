@@ -221,7 +221,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         size_t resultSize = 0, tempSize = 0;
         if (ncclRecvInResult)
           innerCurrResult = results[g];
-        gekmmSizes(&handle, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
+        gekmmSizes(&handle, M, NumKronMats, KronMatRows, KronMatCols, 
                    &resultSize, &tempSize);
         T* sendTemp = (T*)temp1[g] + tempSize/2;
         T* recvTemp = (T*)temp2[g] + tempSize/2;

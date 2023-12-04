@@ -149,7 +149,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
   float minTime = 0;
   void* temp1_[fastKron.numGPUs_], *temp2_[fastKron.numGPUs_];
   size_t resultSize = 0, tempSize = 0;
-  gekmmSizes(&fastKron, NumKronMats, M, N, K, KronMatCols, KronMatRows, 
+  gekmmSizes(&fastKron, M, NumKronMats, KronMatRows, KronMatCols, 
              &resultSize, &tempSize);
   for (int g = 0; g < fastKron.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
