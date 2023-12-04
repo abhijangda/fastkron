@@ -157,11 +157,12 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(float)));
   }
 
+  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
+
   if (!fastKron.isDistributed_) {
     CUDA_CHECK(cudaSetDevice(0));
     auto problem = KMMProblem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols), 
                               GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
-    std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
     tuneSlicedMulSeries(problem, false, DistributedParams(), 
                       bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
@@ -180,13 +181,10 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
     fastKron.getDistributedSizes(M, K, gpuM, gpuK);
-    //TODO: This loop is really common and should be a macro?
-    std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
-
     uint bestMaxLocalKrons = 1;
     TunedKernelsSeries minKernelSeries;
     //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
-    uint MaxLocalKrons;
+    int MaxLocalKrons;
     if (fastKron.distComm_ == DistComm::P2P) {
       MaxLocalKrons = 1;
     } else if (fastKron.distComm_ == DistComm::NCCL) {
@@ -211,15 +209,12 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
 
     KMMProblem problem(KMMShape(gpuM, NumKronMats, KronMatRows, KronMatCols), 
                        GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
-
-    for (uint i = 0; i < NumKronMats; i += MaxLocalKrons) {
-      const uint kronMat = NumKronMats - i - 1;
-      const uint LocalKrons = std::min(MaxLocalKrons, NumKronMats - i);
+    for (int i = problem.shape.n - 1; i >= 0; i -= MaxLocalKrons) {
+      const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
       uint ps[LocalKrons];
       uint qs[LocalKrons];
-      void* fs[problem.shape.n];
-
-      auto subproblem = problem.rsub(problem.ptrs, ps, qs, fs, kronMat, LocalKrons);
+      void* fs[LocalKrons];
+      auto subproblem = problem.rsub(problem.ptrs, ps, qs, fs, i, LocalKrons);
       void** gpuResults = (void**)temp2_;
       DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k, subproblem.l * fastKron.gpusInK_, 
                                    subproblem.k, subproblem.k * fastKron.gpusInK_, subproblem.shape.qs, subproblem.shape.ps, 
@@ -232,8 +227,8 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
                                         tunedKernels, bestKernels);
       for (auto tunedKernel : tunedKernels) {
-        tunedKernel.start += kronMat + 1 - LocalKrons;
-        tunedKernel.end   += kronMat + 1 - LocalKrons;
+        tunedKernel.start += i + 1 - LocalKrons;
+        tunedKernel.end   += i + 1 - LocalKrons;
         tunedKernelSeries.insert(tunedKernelSeries.begin(), tunedKernel);
       }
     }

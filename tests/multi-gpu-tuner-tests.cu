@@ -16,5 +16,5 @@
   EXPECT_TRUE(b);\
 }
 
-MULTI_GPU_TUNER_TEST(512, 5, 16, 2, 1, 5, float);
-MULTI_GPU_TUNER_TEST(512, 4, 16, 2, 2, 3, float);
+MULTI_GPU_TUNER_TEST(128, 5, 16, 2, 1, 5, float);
+MULTI_GPU_TUNER_TEST(128, 4, 16, 2, 2, 3, float);
