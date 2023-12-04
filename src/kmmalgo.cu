@@ -14,6 +14,7 @@ cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
 
   for (int i = problem.shape.n - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
+    nextF = std::min(nextF, i+1);
     for (int f = i; f > i - nextF; f--) {
       l = (l/problem.shape.ps[f])*problem.shape.qs[f];
     }
