@@ -115,8 +115,7 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
 
   uint gpuM, gpuK;
   FastKronHandle& handle = *handlePtr;
-  KMMProblem problem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols),
-                     GeKMMPtrs());
+  KMMProblem problem(M, NumKronMats, KronMatRows, KronMatCols);
   if (handle.isDistributed_) {
     if (!checkDistributedKronSizes(problem, handle.perGPUKronBatch_, handle.gpusInK_))
       return cudaErrorInvalidValue;
@@ -129,8 +128,8 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M,
     gpuK = K;
   }
 
-  uint maxTempN = 0;
-  uint resultCols = 0;
+  int maxTempN = 0;
+  int resultCols = 0;
                      
   auto e = executeGeKMM(problem, nullptr, nullptr,
     [](const KMMProblem kmm) {return 1;},

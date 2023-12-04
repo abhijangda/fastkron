@@ -213,9 +213,7 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
     prevKronResult = x;
   }
 
-  GeKMMPtrs ptrs(prevKronResult, kronMats, currKronResult);
-  KMMShape shape(M, NumKronMats, KronMatRows, KronMatCols);
-  KMMProblem problem(shape, ptrs);
+  KMMProblem problem(M, NumKronMats, KronMatRows, KronMatCols, prevKronResult, kronMats, currKronResult);
 
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(problem, kronGemmResults, result,
@@ -227,10 +225,10 @@ cudaError_t FastKronHandle::xgekmm(const uint NumKronMats, void* x, void** kronM
       const uint NumFusedKerns = kernel.kernel.NumFusedKerns;      
       assert(problem.rstart == kernel.end);
       err = this->kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kernel.end, 
-                                                  problem.ptrs.x,
-                                                  problem.ptrs.fs, problem.ptrs.y, 
-                                                  problem.shape.m, problem.l, problem.k,
-                                                  problem.shape.qs, problem.shape.ps,
+                                                  problem.x,
+                                                  problem.fs, problem.y,
+                                                  problem.m, problem.l, problem.k,
+                                                  problem.qs, problem.ps,
                                                   epilogueParams, stream);
     
       CUDA_CHECK(err);
@@ -332,9 +330,6 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
       abort();
     }
     //TODO: Check that localKrons <= log (gpuK_)_P
-    // gpuM_ = M_/gpusInM_;
-    // gpuK_ = K_/gpusInK_;
-    // gpuN_ = N_/gpusInK_;
     
     //All gpus with same row shares the same barrier
     //TODO: free
@@ -345,19 +340,6 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
       int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
       PTHREAD_BARRIER_CHECK(s);
     }
-    
-    // size_t tempN = gpuK_;
-    // size_t maxTempN = tempN;
-    // for (int i = 0; i < NumKronMats_; i++) {
-    //   tempN = (tempN/KronMatRows_[i])*KronMatCols_[i];
-    //   if (maxTempN < tempN)
-    //     maxTempN = tempN;
-    // }
-
-    // size_t sz = gpuM_ * maxTempN * sizeof(T);
-    // std::cout << "Allocating temporaries of size "<< sz << std::endl;
-    // std::cout << "Allocated temporaries"<<std::endl;
-
   }
 
   //Load kernels into compiledKernels map
