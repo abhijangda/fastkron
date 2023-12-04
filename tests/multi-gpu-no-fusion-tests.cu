@@ -12,6 +12,9 @@
     K *= FacSize;\
     KP_MAT_K[i] = KP_MAT_N[i] = FacSize;\
   }\
+  int devices = 0;\
+  CUDA_CHECK(cudaDeviceCount(&devices));\
+  if (devices < GM * GK) {EXPECT_TRUE(true); return;}\
   bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 0, 0, false, GM, GK, GM*GK, KronBatch, true, false, false, false);\
   EXPECT_TRUE(b);\
 }
@@ -21,4 +24,4 @@ MULTI_GPU_NO_FUSION_TEST(18, 4, 64, 1, 2, 3, float);
 MULTI_GPU_NO_FUSION_TEST(18, 4, 64, 2, 2, 2, float);
 
 MULTI_GPU_NO_FUSION_TEST(12, 3, 128, 1, 4, 2, float);
-MULTI_GPU_NO_FUSION_TEST(8, 4, 128, 2, 2, 3, float);
+MULTI_GPU_NO_FUSION_TEST(8, 4, 128, 2, 4, 3, float);
