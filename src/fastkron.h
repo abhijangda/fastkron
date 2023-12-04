@@ -30,15 +30,9 @@ cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, 
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
                                  float* temp1[], float* temp2[], cudaStream_t stream[]);
 
-cudaError_t sgekmmTune(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], 
-                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                          cudaStream_t stream);
-cudaError_t dgekmmTune(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], 
-                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                          cudaStream_t stream);
-cudaError_t idgemmTune(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[],
-                          uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                          cudaStream_t stream);
+cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream);
+cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream);
+cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream);
 
 cudaError_t allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K);
 cudaError_t gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
