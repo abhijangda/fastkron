@@ -8,25 +8,25 @@
 static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
                                  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels) {
-  if (startKron >= problem.shape.n) return 0;
+  if (startKron >= problem.n) return 0;
   bool distP2PStore = isDistributed;
   float minTime = std::numeric_limits<float>::max();
   TunedKernelsSeries minEpilogueKernels;
   TunedKernelFromStart minPrologueKernel;
-  uint qs[problem.shape.n];
-  uint ps[problem.shape.n];
-  auto nextSeries = problem.sub(GeKMMPtrs(), ps, qs, nullptr, 
-                          startKron, problem.shape.n - startKron);
+  uint qs[problem.n];
+  uint ps[problem.n];
+  auto nextSeries = problem.sub(ps, qs, nullptr, 
+                                startKron, problem.n - startKron);
 
   reverseExecuteGeKMM(nextSeries, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
     [&](const KMMProblem firstPart, void* temps[2], void* r) {
       const int subn = firstPart.rstart + 1;
-      uint qs[problem.shape.n];
-      uint ps[problem.shape.n];
+      uint qs[problem.n];
+      uint ps[problem.n];
       
-      KronMatmulShape shape = KronMatmulShape{firstPart.shape.qs[0], firstPart.shape.ps[0], 
-                                              firstPart.k, problem.shape.m, subn, 
+      KronMatmulShape shape = KronMatmulShape{firstPart.qs[0], firstPart.ps[0], 
+                                              firstPart.k, problem.m, subn, 
                                               distP2PStore && startKron == 0};
       if (bestKernels.find(shape) != bestKernels.end()) {
         auto iter = bestKernels.find(shape);
@@ -70,17 +70,17 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   auto err = reverseExecuteGeKMM(problem, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
   [&](const KMMProblem firstPart, void* temps[2], void* r) {
-    for (int endP = firstPart.rstart; endP < problem.shape.n; endP++) {
-      uint qs[problem.shape.n];
-      uint ps[problem.shape.n];
-      void* fs[problem.shape.n];
+    for (int endP = firstPart.rstart; endP < problem.n; endP++) {
+      uint qs[problem.n];
+      uint ps[problem.n];
+      void* fs[problem.n];
       
-      auto secondPart = problem.sub(problem.ptrs, ps, qs, fs, firstPart.rstart, endP-firstPart.rstart+1);
+      auto secondPart = problem.sub(ps, qs, fs, firstPart.rstart, endP-firstPart.rstart+1);
       bool distP2PStore = isDistributed && firstPart.rstart == 0;
-      KronMatmulShape shape = KronMatmulShape{secondPart.shape.qs[0], secondPart.shape.ps[0], 
-                                              secondPart.k, secondPart.shape.m, secondPart.shape.n, distP2PStore};
+      KronMatmulShape shape = KronMatmulShape{secondPart.qs[0], secondPart.ps[0], 
+                                              secondPart.k, secondPart.m, secondPart.n, distP2PStore};
       if (bestKernels.find(shape) != bestKernels.end()) continue;
-      if (!this->fastKron.getUseFusion() and secondPart.shape.n > 1) continue;
+      if (!this->fastKron.getUseFusion() and secondPart.n > 1) continue;
       KernelInfo bestKernel;
       float minTime = std::numeric_limits<float>::max();
       const uint runs = 5;
@@ -95,16 +95,16 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
           for (int r = 0; r < warmups + runs; r++) {
             if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
             if (distP2PStore) {
-              status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(secondPart.shape.n, kernel, firstPart.rstart + secondPart.rstart,
-                                                    secondPart.ptrs.x, 
-                                                    secondPart.ptrs.fs, secondPart.ptrs.y, secondPart.shape.m, 1, secondPart.k, 
-                                                    secondPart.shape.qs, secondPart.shape.ps,
+              status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(secondPart.n, kernel, firstPart.rstart + secondPart.rstart,
+                                                    secondPart.x,
+                                                    secondPart.fs, secondPart.y, secondPart.m, 1, secondPart.k, 
+                                                    secondPart.qs, secondPart.ps,
                                                     distParams, EpilogueParams::create<float>(), stream);
             } else {
-              status = fastKron.kernelInvoker.fusedSlicedMatmul(secondPart.shape.n, kernel, firstPart.rstart + secondPart.rstart,
-                                                                secondPart.ptrs.x, 
-                                                                secondPart.ptrs.fs, secondPart.ptrs.y, secondPart.shape.m, secondPart.l, secondPart.k, 
-                                                                secondPart.shape.qs, secondPart.shape.ps,
+              status = fastKron.kernelInvoker.fusedSlicedMatmul(secondPart.n, kernel, firstPart.rstart + secondPart.rstart,
+                                                                secondPart.x, 
+                                                                secondPart.fs, secondPart.y, secondPart.m, secondPart.l, secondPart.k, 
+                                                                secondPart.qs, secondPart.ps,
                                                                 EpilogueParams::create<float>(), stream);
             }
             // if (status != cudaSuccess) break;
@@ -161,8 +161,8 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
 
   if (!fastKron.isDistributed_) {
     CUDA_CHECK(cudaSetDevice(0));
-    auto problem = KMMProblem(KMMShape(M, NumKronMats, KronMatRows, KronMatCols), 
-                              GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
+    auto problem = KMMProblem(M, NumKronMats, KronMatRows, KronMatCols, 
+                              temp1_[0], kronMats, temp2_[0]);
     tuneSlicedMulSeries(problem, false, DistributedParams(), 
                       bestKernels, stream);
     std::cout << "Finding min execution time of the series" << std::endl;
@@ -193,6 +193,7 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
       else
         MaxLocalKrons = 1;
     }
+
     uint UpperLocalKrons = NumKronMats;
     if (fastKron.distComm_ == DistComm::NCCL && fastKron.perGPUKronBatch_ == 1)
       UpperLocalKrons = 2;
@@ -207,18 +208,19 @@ cudaError_t Autotuner::tune(const uint NumKronMats, void* x, void** kronMats,
     float seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
 
-    KMMProblem problem(KMMShape(gpuM, NumKronMats, KronMatRows, KronMatCols), 
-                       GeKMMPtrs(temp1_[0], kronMats, temp2_[0]));
-    for (int i = problem.shape.n - 1; i >= 0; i -= MaxLocalKrons) {
+    KMMProblem problem(gpuM, NumKronMats, KronMatRows, KronMatCols,
+                       temp1_[0], kronMats, temp2_[0]);
+    for (int i = problem.n - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
+      //TODO: any way to avoid declaring ps, qs, and fs on stack
       uint ps[LocalKrons];
       uint qs[LocalKrons];
       void* fs[LocalKrons];
-      auto subproblem = problem.rsub(problem.ptrs, ps, qs, fs, i, LocalKrons);
+      auto subproblem = problem.rsub(ps, qs, fs, i, LocalKrons);
       void** gpuResults = (void**)temp2_;
       DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k, subproblem.l * fastKron.gpusInK_, 
-                                   subproblem.k, subproblem.k * fastKron.gpusInK_, subproblem.shape.qs, subproblem.shape.ps, 
-                                   subproblem.shape.n);
+                                   subproblem.k, subproblem.k * fastKron.gpusInK_, subproblem.qs, subproblem.ps, 
+                                   subproblem.n);
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
       tuneSlicedMulSeries(subproblem, distP2PStore, 

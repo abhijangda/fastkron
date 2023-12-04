@@ -5,7 +5,7 @@ TEST_LFLAGS = -lgtest -lpthread
 GXX=g++
 GOOGLE_TEST = googletest
 GOOGLE_TEST_BUILD = $(GOOGLE_TEST)/build
-OPT_FLAGS=-O1 -g
+OPT_FLAGS=-O3 -g
 PYTHON=python3
 
 all: libKron.so
