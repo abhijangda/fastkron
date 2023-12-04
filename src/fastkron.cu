@@ -25,25 +25,20 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
-cudaError_t sgekmm(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float* result,
-                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float* temp1, float* temp2,
-                   float alpha, float beta, float *z, cudaStream_t stream) {
-  return handle->xgekmm(NumKronMats, (void*)x, (void**)kronMats, (void*)result,
-                        M, N, K, KronMatCols, KronMatRows, (void*)temp1, (void*)temp2, 
-                        EpilogueParams::create<float>(alpha, beta, z), stream);
+cudaError_t sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, float* Fs[], float* Y,
+                    float alpha, float beta, float *Z, float* temp1, float* temp2, cudaStream_t stream) {
+  return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
+                        (void*)temp1, (void*)temp2, 
+                        EpilogueParams::create<float>(alpha, beta, Z), stream);
 }
-
-cudaError_t igekmm(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int* result,
-                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], int* temp1, int* temp2,
-                   int alpha, int beta, int *z, cudaStream_t stream) {
-  return handle->xgekmm(NumKronMats, (void*)x, (void**)kronMats, (void*)result, 
-                        M, N, K, KronMatCols, KronMatRows, (void*)temp1, (void*)temp2,
-                        EpilogueParams::create<int>(alpha, beta, z), stream);
+cudaError_t igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, int* Fs[], int* Y,
+                   int alpha, int beta, int *Z, int* temp1, int* temp2, cudaStream_t stream) {
+  return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
+                        (void*)temp1, (void*)temp2, 
+                        EpilogueParams::create<int>(alpha, beta, Z), stream);
 }
-
-cudaError_t dgekmm(fastKronHandle handle, const uint NumKronMats, double* x, double* kronMats[], double* result,
-                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], double* temp1, double* temp2,
-                   double alpha, double beta, double *z, cudaStream_t stream) {
+cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, double* Fs[], double* Y,
+                   double alpha, double beta, double *Z, double* temp1, double* temp2, cudaStream_t stream) {
   return cudaSuccess;
                     // return handle->gekmm(FastKronType::Double, NumKronMats, x, kronMats, result, 
   //                                             M, N, K, KronMatCols, KronMatRows, temp1, temp2,
@@ -108,21 +103,25 @@ cudaError_t gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, ui
   return handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 
-cudaError_t gekmmSizes(fastKronHandle handlePtr, const uint NumKronMats, uint M, uint N, uint K, 
-                       uint KronMatCols[], uint KronMatRows[], size_t* resultSize, size_t* tempSize) {
+cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
+                       size_t* resultSize, size_t* tempSize) {
   if (resultSize == nullptr) return cudaErrorInvalidValue;
   if (tempSize   == nullptr) return cudaErrorInvalidValue;
 
   uint gpuM, gpuK;
+
+  const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
+  const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
+
   FastKronHandle& handle = *handlePtr;
-  KMMProblem problem(M, NumKronMats, KronMatRows, KronMatCols);
+  KMMProblem problem(M, N, Ps, Qs);
   if (handle.isDistributed_) {
     if (!checkDistributedKronSizes(problem, handle.perGPUKronBatch_, handle.gpusInK_))
       return cudaErrorInvalidValue;
     gpuM = M/handle.gpusInM_;
     gpuK = K/handle.gpusInK_;
   } else {
-    if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
+    if (!checkKronMatrixSizes(N, M, L, K, Qs, Ps))
       return cudaErrorInvalidValue;
     gpuM = M;
     gpuK = K;

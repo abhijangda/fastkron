@@ -186,20 +186,20 @@ static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, T* kpM
                      uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2,
                      cudaStream_t stream) {
   if (std::is_same<T, float>::value) {
-    CUDACHECK(sgekmm(handle, NUM_KP_MATS,
-                        (float*)x, (float**)kpMats, (float*)result,
-                        M, N, K, KP_MAT_N, KP_MAT_K, (float*)temp1, (float*)temp2,
-                        1, 0, nullptr, stream));
+    CUDACHECK(sgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                     (float*)x, (float**)kpMats, (float*)result,
+                     1, 0, nullptr, (float*)temp1, (float*)temp2,
+                     stream));
   } else if (std::is_same<T, int>::value) {
-    CUDACHECK(igekmm(handle, NUM_KP_MATS, 
-                        (int*)x, (int**)kpMats, (int*)result, 
-                        M, N, K, KP_MAT_N, KP_MAT_K, (int*)temp1, (int*)temp2,
-                        1, 0, nullptr, stream));
+    CUDACHECK(igekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                     (int*)x, (int**)kpMats, (int*)result,
+                     1, 0, nullptr, (int*)temp1, (int*)temp2,
+                     stream));
   } else if (std::is_same<T, double>::value) {
-    CUDACHECK(dgekmm(handle, NUM_KP_MATS, 
-                        (double*)x, (double**)kpMats, (double*)result,
-                        M, N, K, KP_MAT_N, KP_MAT_K, (double*)temp1, (double*)temp2,
-                        1, 0, nullptr, stream));
+    CUDACHECK(dgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                     (double*)x, (double**)kpMats, (double*)result,
+                     1, 0, nullptr, (double*)temp1, (double*)temp2,
+                     stream));
   } else {
     printf("Invalid type\n");
     return;
@@ -295,7 +295,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   handle->setUseFusion(useFusion);
   size_t resultSize = 0;
   size_t tempSize = 0;
-  CUDACHECK(gekmmSizes(handle, NUM_KP_MATS, M, N, K, KP_MAT_N, KP_MAT_K, &resultSize, &tempSize));
+  CUDACHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
+                       &resultSize, &tempSize));
   T* dX[gpus];
   T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
