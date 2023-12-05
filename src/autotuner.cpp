@@ -21,8 +21,8 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
       const int subn = rstart + 1;
       
       SlicedMulShape shape = SlicedMulShape{firstPart.qs[0], firstPart.ps[0], 
-                                              firstPart.k, problem.m, subn, 
-                                              distP2PStore && startKron == 0};
+                                            firstPart.k, problem.m, subn, 
+                                            distP2PStore && startKron == 0};
       if (bestKernels.find(shape) != bestKernels.end()) {
         auto iter = bestKernels.find(shape);
         TunedKernelsSeries epilogueKernels;
