@@ -153,4 +153,4 @@ run-nccl-multi-gpu-distinct-shapes: multi-gpu-distinct-shapes
 #run-all-multi-gpu-tests: run-multi-gpu-p2p-no-fusion-tests run-multi-gpu-nccl-no-fusion-tests
 
 clean:
-	rm -rf kron libKron.so
+	rm -rf kron libKron.so *.o
