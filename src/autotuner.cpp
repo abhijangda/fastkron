@@ -7,7 +7,7 @@
 
 static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
-                                 std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels) {
+                                 std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>> bestKernels) {
   if (startKron >= problem.n) return 0;
   bool distP2PStore = isDistributed;
   float minTime = std::numeric_limits<float>::max();
@@ -20,7 +20,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
     [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
       const int subn = rstart + 1;
       
-      KronMatmulShape shape = KronMatmulShape{firstPart.qs[0], firstPart.ps[0], 
+      SlicedMulShape shape = SlicedMulShape{firstPart.qs[0], firstPart.ps[0], 
                                               firstPart.k, problem.m, subn, 
                                               distP2PStore && startKron == 0};
       if (bestKernels.find(shape) != bestKernels.end()) {
@@ -49,7 +49,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 
 cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
                                            bool isDistributed, DistributedParams distParams,
-                                           std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
+                                           std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>>& bestKernels,
                                            cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
   //For performance eval we do not need these to contain any value
@@ -68,7 +68,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
     for (int endP = rstart; endP < problem.n; endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
       bool distP2PStore = isDistributed && rstart == 0;
-      KronMatmulShape shape = KronMatmulShape{secondPart.qs[0], secondPart.ps[0], 
+      SlicedMulShape shape = SlicedMulShape{secondPart.qs[0], secondPart.ps[0], 
                                               secondPart.k, secondPart.m, secondPart.n, distP2PStore};
       if (bestKernels.find(shape) != bestKernels.end()) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n > 1) continue;
@@ -154,7 +154,7 @@ cudaError_t Autotuner::tune(uint M, uint N, uint Ps[], uint Qs[], cudaStream_t s
     }
   }
 
-  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>> bestKernels;
+  std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>> bestKernels;
 
   if (!fastKron.isDistributed_) {
     CUDA_CHECK(cudaSetDevice(0));
