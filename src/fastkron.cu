@@ -107,8 +107,6 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint
     gpuM = M/handle.gpusInM_;
     gpuK = K/handle.gpusInK_;
   } else {
-    if (!checkKronMatrixSizes(N, M, L, K, Qs, Ps))
-      return cudaErrorInvalidValue;
     gpuM = M;
     gpuK = K;
   }
