@@ -5,8 +5,6 @@
 #pragma once
 
 struct KMMProblem {
-  //TODO: Remove rstart
-  const int rstart;
   int k;
   int l;
 
@@ -23,11 +21,10 @@ struct KMMProblem {
   void * y;
 
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs, 
-             void* x, void ** fs, void* y, int rstart,
+             void* x, void ** fs, void* y,
              const int k, const int l) : m(m), n(n),
-             x(x), y(y), rstart(rstart), k(k), l(l) {
-    assert (rstart >= 0);
-
+             x(x), y(y), k(k), l(l) {
+    assert (n < MaxN);
     for (int i = 0; i < n; i++) {
       this->ps[i] = ps[i];
       this->qs[i] = qs[i];
@@ -45,7 +42,7 @@ struct KMMProblem {
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
              void* x, void ** fs, void * y) :
-    KMMProblem(m, n, ps, qs, x, fs, y, 0, 1, 1) {
+    KMMProblem(m, n, ps, qs, x, fs, y, 1, 1) {
     k = 1;
     l = 1;
     for (int i = 0; i < n; i++) {
@@ -57,10 +54,9 @@ struct KMMProblem {
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs) :
     KMMProblem(m, n, ps, qs, nullptr, nullptr, nullptr) {}
 
-  KMMProblem(KMMProblem problem, int rstart,
-    const int k, const int l) :
+  KMMProblem(KMMProblem problem, const int k, const int l) :
     KMMProblem(problem.m, problem.n, problem.ps, problem.qs, 
-               problem.x, problem.fs, problem.y, rstart, k, l) {}
+               problem.x, problem.fs, problem.y, k, l) {}
   
   KMMProblem rsub(int rstart, int subn) const {
     uint ps[n];
@@ -88,7 +84,7 @@ struct KMMProblem {
     }
 
     return KMMProblem(m, subn, ps, qs,
-                      x, fs, y, rstart, subk, subl);
+                      x, fs, y, subk, subl);
   }
 
   KMMProblem sub(int start, int subn) const {
@@ -118,7 +114,7 @@ struct KMMProblem {
     }
 
     return KMMProblem(m, subn, ps, qs,
-                      x, fs, y, start, subk, subl);
+                      x, fs, y, subk, subl);
   }
 
   void swap(void* temp1, void* temp2) {
@@ -138,8 +134,8 @@ struct KMMProblem {
 cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
                          void* result,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<cudaError_t (const KMMProblem, void*[2], void*)> func);
+                         std::function<cudaError_t (const KMMProblem, int, void*[2], void*)> func);
 cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
                                 void* result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<cudaError_t (const KMMProblem, void*[2], void*)> func);
+                                std::function<cudaError_t (const KMMProblem, int, void*[2], void*)> func);

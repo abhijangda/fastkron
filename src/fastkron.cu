@@ -116,7 +116,7 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint
                      
   auto e = executeGeKMM(problem, nullptr, nullptr,
     [](const KMMProblem kmm) {return 1;},
-    [&maxTempN, &resultCols](const KMMProblem kmm, void* temps[2], void* result) {
+    [&maxTempN, &resultCols](const KMMProblem kmm, int rstart, void* temps[2], void* result) {
                             maxTempN = std::max(maxTempN, std::max(kmm.k, kmm.l));
                             resultCols = kmm.l;
                             return cudaSuccess;
