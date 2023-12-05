@@ -126,8 +126,7 @@ KernelInfo FastKronHandle::selectKernel(SlicedMulShape shape) {
     //TODO: need to check for type
     //TODO: make use of KernelInfo.canCompute
     if (info.KEqVar == kEqVar) {
-      uint tileRowA = info.TileRowsA;
-      bool row_mod_tile_zero = (shape.M % tileRowA) == 0;    
+      bool row_mod_tile_zero = (shape.M % info.tiledShape.M) == 0;    
       if (info.RowModTileIsZero == row_mod_tile_zero) {
         return info;
       }
@@ -206,12 +205,12 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
 
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(problem, temps, Y,
-    [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
+    [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.tiledShape.NumFusedKerns;},
     [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, int rstart, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;
-      const uint NumFusedKerns = kernel.kernel.NumFusedKerns;      
+      const uint NumFusedKerns = kernel.kernel.tiledShape.NumFusedKerns;
       assert(rstart == kernel.end);
       err = this->kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kernel.end, 
                                                   problem.x,
@@ -334,7 +333,9 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
-    SlicedMulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
+    SlicedMulShape shape = info.tiledShape;
+    shape.M = 0;
+    //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
     auto iter = compiledKernels.find(shape);
     if (iter == compiledKernels.end()) {
       compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
