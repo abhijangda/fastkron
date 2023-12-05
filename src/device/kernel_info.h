@@ -14,58 +14,49 @@ enum ElementType {
 struct KernelInfo {
   void* kernel;
   uint NumThreads;
-  uint KronCols;
-  uint KronRows;
-  uint TileKronCols;
-  uint TileRowsA;
-  uint MaxColsA;
+
+  SlicedMulShape tiledShape;
+
+  // uint KronCols;
+  // uint KronRows;
+  // uint MaxColsA;
+  // uint NumFusedKerns;
+  // bool DistributeToGPUs;
+  // uint TileRowsA;
+  
   uint CRegRows;
   uint CRegCols;
-  uint NumFusedKerns;
   ElementType elemType;
   bool RowModTileIsZero;
   bool KEqVar;
-  bool DistributeToGPUs;
   uint AAlignment;
   uint KronAlignment;
 
   //TODO: Add SharedTileKronRows??
   KernelInfo() : kernel(nullptr) {}
-  KernelInfo(void* kernel_, uint NumThreads_,  uint KronCols_, uint KronRows_, uint TileKronCols_,
-             uint TileRowsA_, uint MaxColsA_, uint CRegRows_, uint CRegCols_, uint NumFusedKerns_,
+  KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileQ,
+             uint TileM, uint TileK, uint CRegRows_, uint CRegCols_, uint NumFusedKerns_,
              ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_, bool DistributeToGPUs_,
              uint AAlignment_, uint KronAlignment_) :
-             kernel(kernel_), NumThreads(NumThreads_), KronCols(KronCols_), KronRows(KronRows_),
-             TileKronCols(TileKronCols_), TileRowsA(TileRowsA_), MaxColsA(MaxColsA_), CRegRows(CRegRows_),
-             CRegCols(CRegCols_), NumFusedKerns(NumFusedKerns_), elemType(elemType_), 
-             RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_), DistributeToGPUs(DistributeToGPUs_),
+             kernel(kernel_), NumThreads(NumThreads_), tiledShape{tileQ, P, TileK, TileM, NumFusedKerns_, DistributeToGPUs_},
+             CRegRows(CRegRows_),
+             CRegCols(CRegCols_), elemType(elemType_), 
+             RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_),
              AAlignment(AAlignment_), KronAlignment(KronAlignment_) {}
 
   bool isValid() {return kernel != nullptr;}
-  friend std::ostream& operator<<(std::ostream &out, const KernelInfo &shape) {
-    out << shape.NumThreads << "_" << shape.KronCols << "x" << shape.KronRows <<
-           "_" << shape.TileKronCols << "_" << 
-           shape.TileRowsA << "x" << shape.MaxColsA << "_" <<
-           shape.CRegRows << "x" << shape.CRegCols << "_" <<
-           shape.NumFusedKerns << "_" << shape.RowModTileIsZero << "_" << 
-           shape.KEqVar << "_" << shape.DistributeToGPUs << "_" << 
-           shape.AAlignment << "_" << shape.KronAlignment;
+  friend std::ostream& operator<<(std::ostream &out, const KernelInfo &info) {
+    out << info.NumThreads << "_" << info.tiledShape << "_" <<
+           info.CRegRows << "x" << info.CRegCols << "_" <<
+           info.RowModTileIsZero << "_" << 
+           info.KEqVar << "_" << 
+           info.AAlignment << "_" << info.KronAlignment;
       
     return out;
   }
 
   bool canCompute(SlicedMulShape shape) {
-    return RowModTileIsZero == ((shape.M % TileRowsA) == 0) &&
-           this->NumFusedKerns == shape.NumFusedKerns &&
-           this->DistributeToGPUs == shape.DistributeToGPUs &&
-           shape.K % MaxColsA == 0;
-  //KEqVar == (shape.ColsA == MaxColsA) && 
-  }
-
-  bool isDistributedLike(KernelInfo& other) {
-    return KEqVar == other.KEqVar && 
-           RowModTileIsZero == other.RowModTileIsZero &&
-           NumFusedKerns == other.NumFusedKerns &&
-           MaxColsA == other.MaxColsA && DistributeToGPUs == true;
+    return RowModTileIsZero == ((shape.M % tiledShape.M) == 0) &&
+           tiledShape.isTileOf(shape); 
   }
 };

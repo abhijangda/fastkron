@@ -21,6 +21,13 @@ struct SlicedMulShape {
   bool sameKronSize(const SlicedMulShape& other) const {
     return P == other.P && Q == other.Q;
   }
+
+  bool isTileOf(const SlicedMulShape& other) const {
+    return other.P == P && other.Q % Q == 0 && other.K % K == 0 && 
+           other.NumFusedKerns == NumFusedKerns && 
+           other.DistributeToGPUs == DistributeToGPUs; //TODO: is this needed? && other.M % M == 0;
+  }
+
   // bool operator>(const SlicedMulShape& other) const {
   //   return KronCols > other.KronCols && KronRows > other.KronRows && ColsA > other.ColsA;
   // }
