@@ -362,6 +362,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
           int gpuCol = newcCol - nextGc * perGPUN;
           cIdx = cRow * perGPUN + gpuCol;
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
+
           // if (params.kp_idx == 0 && blockIdx.y == 0) {//(gpuCol >= perGPUN || gpuCol < 0) {
           //   printf("344 outputArray %p nextGc %d cIdx %d perGPUN %d\n", outputArray, nextGc, cIdx, perGPUN);
           // }
@@ -389,7 +390,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         // if (kp_idx == 0&& cRow == 0 && cCol < 64)
         //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
         //if (cCol < colsC) 
-        
+
         if (params.kp_idx == 0) {
           for (int i = 0; i < vecTyNumElems; i++) {
             ElemT d = epilogueParams.getBeta<ElemT>() * ((epilogueParams.getD<ElemT>() != nullptr) ? epilogueParams.getD<ElemT>()[cIdx + i] : 0);

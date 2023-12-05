@@ -88,7 +88,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
             if (distP2PStore) {
               status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(secondPart.n, kernel, rstart,
                                                     secondPart.x,
-                                                    secondPart.fs, secondPart.y, secondPart.m, 1, secondPart.k, 
+                                                    secondPart.fs, secondPart.y, secondPart.m, secondPart.l, secondPart.k, 
                                                     secondPart.qs, secondPart.ps,
                                                     distParams, EpilogueParams::create<float>(), stream);
             } else {
