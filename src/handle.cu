@@ -27,7 +27,7 @@
  2. Debug message environment flag*/
 
 std::size_t std::hash<SlicedMulShape>::operator()(const SlicedMulShape& shape) const {
-  return hash<uint>()(shape.KronCols) ^ hash<uint>()(shape.KronRows) ^ hash<uint>()(shape.ColsA);
+  return hash<uint>()(shape.Q) ^ hash<uint>()(shape.P) ^ hash<uint>()(shape.K);
 }
 
 /**Library entry points to launch cuda kernels**/
@@ -86,8 +86,8 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, 
 
 SlicedMulShape FastKronHandle::maxCompiledColsA(SlicedMulShape shape) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
-    shape.ColsA /= 2;
-    if (shape.ColsA == 1) {
+    shape.K /= 2;
+    if (shape.K == 1) {
      break;
     }
   }
@@ -103,7 +103,7 @@ uint FastKronHandle::maxFusedKernels(SlicedMulShape shape) {
   while (true) {
     shape.NumFusedKerns = numFusedKernels + 1;
     auto shapeFound = maxCompiledColsA(shape);
-    if (shapeFound.ColsA == 1) {
+    if (shapeFound.K == 1) {
       break;
     }
     numFusedKernels++;
@@ -131,7 +131,7 @@ KernelInfo FastKronHandle::selectKernel(SlicedMulShape shape) {
     //TODO: make use of KernelInfo.canCompute
     if (info.KEqVar == kEqVar) {
       uint tileRowA = info.TileRowsA;
-      bool row_mod_tile_zero = (shape.RowsA % tileRowA) == 0;    
+      bool row_mod_tile_zero = (shape.M % tileRowA) == 0;    
       if (info.RowModTileIsZero == row_mod_tile_zero) {
         return info;
       }
