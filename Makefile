@@ -15,8 +15,11 @@ include src/device/Makefile
 gtest:
 	mkdir -p $(GOOGLE_TEST_BUILD) && cd $(GOOGLE_TEST_BUILD) && cmake .. && make -j
 
+sliced_mul_shape.o: src/sliced_mul_shape.cpp src/sliced_mul_shape.h
+	$(NVCC) $(STD_CPP) -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
+
 env.o: src/env.cpp src/env.h
-	$(NVCC) $(STD_CPP) -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS) 
+	$(NVCC) $(STD_CPP) -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
 kmmalgo.o: src/kmmalgo.cu src/kmmalgo.h
 	$(NVCC) $(STD_CPP) -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
@@ -36,8 +39,8 @@ distrib_handle.o: src/distrib_handle.cu src/handle.h
 kron.o: src/handle.cu src/kernel_defs.cuh $(KRON_KERNELS)/kernel_decl.inc src/handle.h src/fastkron.h src/thread_pool.h src/device/params.h src/device/otherkernels.cuh
 	$(NVCC) $(STD_CPP) -Xcompiler=-fPIC,-fopenmp $< -Isrc/ -I$(KRON_KERNELS) -c -o $@ -Xptxas=-v,-O3 $(ARCH_CODE_FLAGS) $(OPT_FLAGS)
 
-libKron.so: device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o
-	$(NVCC) -shared -lnccl device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o -o $@
+libKron.so: device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o sliced_mul_shape.o
+	$(NVCC) -shared -lnccl device_kernels.o kron.o fastkron.o env.o autotuner.o kernel_invoker.o distrib_handle.o kmmalgo.o sliced_mul_shape.o -o $@
 
 kron: tests/main.cu libKron.so tests/testBase.h
 	$(NVCC) $(STD_CPP) $< -Xcompiler=-fopenmp,-O3,-Wall -Isrc/ $(ANYOPTION) -L. -lKron -o $@ $(OPT_FLAGS)

@@ -27,11 +27,6 @@ struct TunedKernelFromStart {
   }
 };
 
-template<>
-struct std::hash<SlicedMulShape> {
-  std::size_t operator()(const SlicedMulShape& k) const;
-};
-
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
 struct ThreadArgs;
 
