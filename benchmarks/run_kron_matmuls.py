@@ -86,13 +86,13 @@ def multi_gpu():
     GKs = [1, 1, 2, 2, 4]
     gen_kernels(shape, True)
     build_kron()
-    for j,gpus in enumerate([1, 2, 4, 8, 16]):
+    for j,gpus in enumerate([1, 2, 4, 8]):
       gm = GMs[j]
       gk = GKs[j]
-      shapeGM = Shape(shape.m * gm, shape.n, shape.ps[0], shape.qs[0])
+      shapeGM = Shape(shape.m * gpus, shape.n, shape.ps[0], shape.qs[0])
       LocalKrons = shapeGM.n if gk == 1 else shapeGM.n - 2
       run_kron(shapeGM, gm, gk, LocalKrons)
 
-run_single_gpu()
+#run_single_gpu()
 
-# multi_gpu()
+multi_gpu()

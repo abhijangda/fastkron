@@ -303,6 +303,7 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
                                   cudaStream_t streams[]) {
   uint gpuM, gpuK;
   handle.getDistributedSizes(M, K, gpuM, gpuK);
+  
   if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.perGPUKronBatch_, handle.gpusInK_))
     return cudaErrorInvalidValue;
 
