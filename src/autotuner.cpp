@@ -13,17 +13,12 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   float minTime = std::numeric_limits<float>::max();
   TunedKernelsSeries minEpilogueKernels;
   TunedKernelFromStart minPrologueKernel;
-  uint qs[problem.n];
-  uint ps[problem.n];
-  auto nextSeries = problem.sub(ps, qs, nullptr, 
-                                startKron, problem.n - startKron);
+  auto nextSeries = problem.sub(startKron, problem.n - startKron);
 
   reverseExecuteGeKMM(nextSeries, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
     [&](const KMMProblem firstPart, void* temps[2], void* r) {
       const int subn = firstPart.rstart + 1;
-      uint qs[problem.n];
-      uint ps[problem.n];
       
       KronMatmulShape shape = KronMatmulShape{firstPart.qs[0], firstPart.ps[0], 
                                               firstPart.k, problem.m, subn, 
@@ -71,11 +66,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
                [](const KMMProblem p){return 1;},
   [&](const KMMProblem firstPart, void* temps[2], void* r) {
     for (int endP = firstPart.rstart; endP < problem.n; endP++) {
-      uint qs[problem.n];
-      uint ps[problem.n];
-      void* fs[problem.n];
-      
-      auto secondPart = problem.sub(ps, qs, fs, firstPart.rstart, endP-firstPart.rstart+1);
+      auto secondPart = problem.sub(firstPart.rstart, endP-firstPart.rstart+1);
       bool distP2PStore = isDistributed && firstPart.rstart == 0;
       KronMatmulShape shape = KronMatmulShape{secondPart.qs[0], secondPart.ps[0], 
                                               secondPart.k, secondPart.m, secondPart.n, distP2PStore};
@@ -217,10 +208,8 @@ cudaError_t Autotuner::tune(uint M, uint N, uint Ps[], uint Qs[], cudaStream_t s
     for (int i = problem.n - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
       //TODO: any way to avoid declaring ps, qs, and fs on stack
-      uint ps[LocalKrons];
-      uint qs[LocalKrons];
-      void* fs[LocalKrons];
-      auto subproblem = problem.rsub(ps, qs, fs, i, LocalKrons);
+      //set max value of N as 64
+      auto subproblem = problem.rsub(i, LocalKrons);
       void** gpuResults = (void**)temp2_;
       DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k, subproblem.l * fastKron.gpusInK_, 
                                    subproblem.k, subproblem.k * fastKron.gpusInK_, subproblem.qs, subproblem.ps, 
