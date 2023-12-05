@@ -320,10 +320,10 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         __syncwarp();
       } else {
         const uint cRow = (rowA + tileRowA);
-        uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) + //0
-                    reg_j*(MaxColsA/MaxKronRows) +//0-30*(496/16)=0,4,8,16,20,24,28,...,120
-                    tileColC + //0 or 2
-                    reg_i;//0 to 2
+        uint cCol = outerTileKronCol*(MaxColsA/MaxKronRows) +
+                    reg_j*(MaxColsA/MaxKronRows) +
+                    tileColC +
+                    reg_i;
         if (!K_EQUALS_VAR) {
           uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
           cCol = tile_k * (MaxColsC/kronCols) +
