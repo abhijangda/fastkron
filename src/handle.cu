@@ -26,10 +26,6 @@
  1. Using fusion or not should be an environemnt flag
  2. Debug message environment flag*/
 
-std::size_t std::hash<SlicedMulShape>::operator()(const SlicedMulShape& shape) const {
-  return hash<uint>()(shape.Q) ^ hash<uint>()(shape.P) ^ hash<uint>()(shape.K);
-}
-
 /**Library entry points to launch cuda kernels**/
 //Check N and K is a multiplication of KronMatCols and KronMatRows
 bool checkKronMatrixSizes(const uint NumKronMats, 
