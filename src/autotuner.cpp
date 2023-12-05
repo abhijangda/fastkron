@@ -168,7 +168,7 @@ cudaError_t Autotuner::tune(uint M, uint N, uint Ps[], uint Qs[], cudaStream_t s
     fastKron.tunedKernelSeries = tunedKernels;
 
   } else {
-    if (!checkDistributedKronSizes(M, N, L, K, Qs, Ps,
+    if (!checkDistributedKronSizes(N, M, L, K, Qs, Ps,
                                    fastKron.perGPUKronBatch_, fastKron.gpusInK_))
       return cudaErrorInvalidValue;
 
