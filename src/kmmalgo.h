@@ -12,18 +12,35 @@ struct KMMProblem {
 
   const uint m;
   const int n;
-  const uint *qs;
-  const uint *ps;
+  
+  static const int MaxN = 64;
+  
+  uint qs[MaxN];
+  uint ps[MaxN];
   
   void * x;
-  void ** fs;
+  void * fs[MaxN];
   void * y;
 
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs, 
              void* x, void ** fs, void* y, int rstart,
-             const int k, const int l) : m(m), n(n), ps(ps), qs(qs),
-             x(x), fs(fs), y(y), rstart(rstart), k(k), l(l) {
+             const int k, const int l) : m(m), n(n),
+             x(x), y(y), rstart(rstart), k(k), l(l) {
     assert (rstart >= 0);
+
+    for (int i = 0; i < n; i++) {
+      this->ps[i] = ps[i];
+      this->qs[i] = qs[i];
+      if (fs)
+        this->fs[i] = fs[i];
+      else
+        this->fs[i] = nullptr;
+    }
+
+    for (int i = n; i < MaxN; i++) {
+      this->ps[i] = this->qs[i] = 0;
+      this->fs[i] = nullptr;
+    }
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
@@ -45,8 +62,11 @@ struct KMMProblem {
     KMMProblem(problem.m, problem.n, problem.ps, problem.qs, 
                problem.x, problem.fs, problem.y, rstart, k, l) {}
   
-  KMMProblem rsub(uint ps[], uint qs[], void* fs[], 
-                  int rstart, int subn) const {
+  KMMProblem rsub(int rstart, int subn) const {
+    uint ps[n];
+    uint qs[n];
+    void* fs[n];
+    
     int subk = k, subl = l;
     for (int i = 0; i <= rstart - subn; i++) {
       subl = (subl/this->qs[i])*this->ps[i];
@@ -63,18 +83,19 @@ struct KMMProblem {
       qs[i]  = this->qs[rstart - i];
     }
 
-    if (this->fs && fs) {
-      for (int i = 0; i < subn; i++) {
-        fs[i] = this->fs[rstart - i];
-      }
+    for (int i = 0; i < subn; i++) {
+      fs[i] = this->fs[rstart - i];
     }
 
     return KMMProblem(m, subn, ps, qs,
                       x, fs, y, rstart, subk, subl);
   }
 
-  KMMProblem sub(uint ps[], uint qs[], void* fs[], 
-                 int start, int subn) const {
+  KMMProblem sub(int start, int subn) const {
+    uint ps[n];
+    uint qs[n];
+    void* fs[n];
+    
     int subk = k, subl = l;
     
     for (int i = 0; i < start; i++) {
@@ -92,10 +113,8 @@ struct KMMProblem {
       qs[i]  = this->qs[start + i];
     }
 
-    if (this->fs && fs) {
-      for (int i = 0; i < subn; i++) {
-        fs[i] = this->fs[start + i];
-      }
+    for (int i = 0; i < subn; i++) {
+      fs[i] = this->fs[start + i];
     }
 
     return KMMProblem(m, subn, ps, qs,

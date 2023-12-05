@@ -219,7 +219,7 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
       assert(problem.rstart == kernel.end);
       err = this->kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kernel.end, 
                                                   problem.x,
-                                                  problem.fs, problem.y,
+                                                  (void**)problem.fs, problem.y,
                                                   problem.m, problem.l, problem.k,
                                                   problem.qs, problem.ps,
                                                   epilogueParams, stream);
