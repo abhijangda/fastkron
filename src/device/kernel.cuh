@@ -11,9 +11,9 @@ enum RowParallelismTy {
 };
 
 template<typename ElemT, typename Vec2T, typename Vec4T, uint NumThreads, RowParallelismTy RowParallelism, 
-         uint TileSizeRowsA, bool RowsCModTileIsZero, uint MaxColsA, uint MaxKronCols, 
-         uint MaxKronRows, uint TileSizeKronCols, uint K_EQUALS_VAR,
-         uint KPK_EQUALS_VAR, uint CRegRows, uint CRegCols, uint SharedTileKronRows, uint NumFusedKerns, bool DistributeToGPUs,
+         uint MaxKronCols, uint MaxKronRows, uint TileSizeKronCols, uint MaxColsA,
+         uint TileSizeRowsA, uint NumFusedKerns, bool DistributeToGPUs, uint CRegRows, uint CRegCols,
+         bool RowsCModTileIsZero, uint K_EQUALS_VAR, uint KPK_EQUALS_VAR, uint SharedTileKronRows, 
          int AAlignment, int KronAlignment>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
