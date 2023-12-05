@@ -103,7 +103,7 @@ run-single-gpu-odd-shapes: single-gpu-odd-shapes
 
 #Multi GPU Tests Square Factors 
 gen-multi-gpu-tests-kernel: src/gen_tuner_kernels.py
-	$(PYTHON) src/gen_tuner_kernels.py -same-factors 4 64,64 -same-factors 4 128,128 -dist-kernels -match-configs 128,64,64,64,2,4096,2,16,1 128,128,128,128,1,8192,2,32,1
+	$(PYTHON) src/gen_tuner_kernels.py -same-factors 4 64,64 -same-factors 4 128,128 -dist-kernels -match-configs 128,64,64,64,4096,2,1,0,2,16 128,64,64,64,4096,2,1,1,2,16 128,128,128,128,8192,1,1,0,2,32 128,128,128,128,8192,1,1,1,2,32
 
 multi-gpu-no-fusion-tests: libKron.so gtest tests/testBase.h tests/multi-gpu-no-fusion-tests.cu
 	$(NVCC) $(STD_CPP) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@

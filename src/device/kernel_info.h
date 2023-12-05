@@ -14,15 +14,9 @@ enum ElementType {
 struct KernelInfo {
   void* kernel;
   uint NumThreads;
-
+  
+  uint Q;
   SlicedMulShape tiledShape;
-
-  // uint KronCols;
-  // uint KronRows;
-  // uint MaxColsA;
-  // uint NumFusedKerns;
-  // bool DistributeToGPUs;
-  // uint TileRowsA;
   
   uint CRegRows;
   uint CRegCols;
@@ -32,13 +26,12 @@ struct KernelInfo {
   uint AAlignment;
   uint KronAlignment;
 
-  //TODO: Add SharedTileKronRows??
   KernelInfo() : kernel(nullptr) {}
   KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileQ,
-             uint TileM, uint TileK, uint CRegRows_, uint CRegCols_, uint NumFusedKerns_,
-             ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_, bool DistributeToGPUs_,
+             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
+             uint CRegRows_, uint CRegCols_, ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_,
              uint AAlignment_, uint KronAlignment_) :
-             kernel(kernel_), NumThreads(NumThreads_), tiledShape{tileQ, P, TileK, TileM, NumFusedKerns_, DistributeToGPUs_},
+             kernel(kernel_), NumThreads(NumThreads_), Q(Q), tiledShape{tileQ, P, TileK, TileM, NumFusedKerns_, DistributeToGPUs_},
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_), 
              RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_),
