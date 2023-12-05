@@ -13,6 +13,6 @@ public:
 
   cudaError_t tuneSlicedMulSeries(KMMProblem problem,
                                   bool isDistributed, DistributedParams distParams,
-                                  std::unordered_map<KronMatmulShape, std::pair<KernelInfo, float>>& bestKernels,
+                                  std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>>& bestKernels,
                                   cudaStream_t stream);
 };

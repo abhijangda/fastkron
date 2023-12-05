@@ -39,10 +39,9 @@ cudaError_t igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
 }
 cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, double* Fs[], double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2, cudaStream_t stream) {
-  return cudaSuccess;
-                    // return handle->gekmm(FastKronType::Double, NumKronMats, x, kronMats, result, 
-  //                                             M, N, K, KronMatCols, KronMatRows, temp1, temp2,
-  //                                             EpilogueParams<double>(alpha, beta, z), stream);
+  return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
+                        (void*)temp1, (void*)temp2, 
+                        EpilogueParams::create<double>(alpha, beta, Z), stream);
 }
 
 

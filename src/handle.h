@@ -28,8 +28,8 @@ struct TunedKernelFromStart {
 };
 
 template<>
-struct std::hash<KronMatmulShape> {
-  std::size_t operator()(const KronMatmulShape& k) const;
+struct std::hash<SlicedMulShape> {
+  std::size_t operator()(const SlicedMulShape& k) const;
 };
 
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
@@ -54,7 +54,7 @@ struct FastKronHandle {
   DistComm distComm_;
   KernelInvoker kernelInvoker;
   //Map from Factor size and Number of factors to KernelInfos
-  std::unordered_map<KronMatmulShape, std::vector<KernelInfo>> compiledKernels;
+  std::unordered_map<SlicedMulShape, std::vector<KernelInfo>> compiledKernels;
 
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
@@ -76,9 +76,9 @@ struct FastKronHandle {
   
   std::vector<ncclComm_t> ncclComms;
 
-  KronMatmulShape maxCompiledColsA(KronMatmulShape shape);
-  KernelInfo selectKernel(KronMatmulShape shape);
-  uint maxFusedKernels(KronMatmulShape shape);
+  SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
+  KernelInfo selectKernel(SlicedMulShape shape);
+  uint maxFusedKernels(SlicedMulShape shape);
 
   cudaError_t xgekmm(uint M, uint N, uint Ps[], uint Qs[], void* X, void* Fs[], void* Y,
                      void* temp1, void* temp2, EpilogueParams epilogueParams, cudaStream_t stream);
@@ -139,7 +139,7 @@ struct ThreadArgs {
   } threadResult;
 };
 
-//TODO: Combine all arguments in KronMatmulShape
+//TODO: Combine all arguments in SlicedMulShape
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                const uint M, const uint N, const uint K, 
                                const uint KronMatCols[], const uint KronMatRows[],

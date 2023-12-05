@@ -11,9 +11,9 @@ enum ElementType {
 
 
 //TODO: Change this to SlicedMatMulShape
-//TODO: Add NumFusedKernels also as a parameter to KronmatmulShape for compiledKernels map
+//TODO: Add NumFusedKernels also as a parameter to SlicedMulShape for compiledKernels map
 //TODO: Add array of NumFusedKernels of KronCols and KronRows
-struct KronMatmulShape {
+struct SlicedMulShape {
   uint KronCols;
   uint KronRows;
   uint ColsA;
@@ -21,21 +21,21 @@ struct KronMatmulShape {
   uint NumFusedKerns;
   bool DistributeToGPUs;
 
-  bool operator==(const KronMatmulShape& other) const {
+  bool operator==(const SlicedMulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows &&
     ColsA == other.ColsA && 
     NumFusedKerns == other.NumFusedKerns &&
     DistributeToGPUs == other.DistributeToGPUs;
   }
 
-  bool sameKronSize(const KronMatmulShape& other) const {
+  bool sameKronSize(const SlicedMulShape& other) const {
     return KronCols == other.KronCols && KronRows == other.KronRows;
   }
-  // bool operator>(const KronMatmulShape& other) const {
+  // bool operator>(const SlicedMulShape& other) const {
   //   return KronCols > other.KronCols && KronRows > other.KronRows && ColsA > other.ColsA;
   // }
 
-  friend std::ostream& operator<<(std::ostream &out, const KronMatmulShape &shape) {
+  friend std::ostream& operator<<(std::ostream &out, const SlicedMulShape &shape) {
     out << shape.KronRows << "x" << shape.KronCols << "_" << shape.RowsA << "x" << shape.ColsA << "**" << shape.NumFusedKerns << "_" << shape.DistributeToGPUs;
     return out;
   }
@@ -84,7 +84,7 @@ struct KernelInfo {
     return out;
   }
 
-  bool canCompute(KronMatmulShape shape) {
+  bool canCompute(SlicedMulShape shape) {
     return RowModTileIsZero == ((shape.RowsA % TileRowsA) == 0) &&
            this->NumFusedKerns == shape.NumFusedKerns &&
            this->DistributeToGPUs == shape.DistributeToGPUs &&

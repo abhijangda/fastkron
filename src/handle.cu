@@ -26,8 +26,8 @@
  1. Using fusion or not should be an environemnt flag
  2. Debug message environment flag*/
 
-std::size_t std::hash<KronMatmulShape>::operator()(const KronMatmulShape& k) const {
-  return hash<uint>()(k.KronCols) ^ hash<uint>()(k.KronRows) ^ hash<uint>()(k.ColsA);
+std::size_t std::hash<SlicedMulShape>::operator()(const SlicedMulShape& shape) const {
+  return hash<uint>()(shape.KronCols) ^ hash<uint>()(shape.KronRows) ^ hash<uint>()(shape.ColsA);
 }
 
 /**Library entry points to launch cuda kernels**/
@@ -84,7 +84,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, 
   return correct;
 }
 
-KronMatmulShape FastKronHandle::maxCompiledColsA(KronMatmulShape shape) {
+SlicedMulShape FastKronHandle::maxCompiledColsA(SlicedMulShape shape) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
     shape.ColsA /= 2;
     if (shape.ColsA == 1) {
@@ -95,7 +95,7 @@ KronMatmulShape FastKronHandle::maxCompiledColsA(KronMatmulShape shape) {
   return shape;
 }
 
-uint FastKronHandle::maxFusedKernels(KronMatmulShape shape) {
+uint FastKronHandle::maxFusedKernels(SlicedMulShape shape) {
   uint numFusedKernels = 0;
   //Go through fused kernels starting from 1 
   //find if the shape exists for the fused kernel
@@ -112,9 +112,9 @@ uint FastKronHandle::maxFusedKernels(KronMatmulShape shape) {
   return numFusedKernels;
 }
 
-KernelInfo FastKronHandle::selectKernel(KronMatmulShape shape) {
+KernelInfo FastKronHandle::selectKernel(SlicedMulShape shape) {
   //Go through all MaxColsA starting from MAX_K and select the relevant
-  KronMatmulShape maxColsAShape = maxCompiledColsA(shape);
+  SlicedMulShape maxColsAShape = maxCompiledColsA(shape);
   //TODO: Remove kEqVar. it provides only a little improvement in perf
   //but makes writing code hard
   int kEqVar = 0; //(maxColsAShape.ColsA == shape.ColsA) ? 1 : 0;
@@ -147,7 +147,7 @@ KernelInfo FastKronHandle::selectKernel(KronMatmulShape shape) {
 TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
                                       uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
                                       bool distributedKernel) {
-  uint MaxFusedKerns = getUseFusion() ? maxFusedKernels(KronMatmulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
+  uint MaxFusedKerns = getUseFusion() ? maxFusedKernels(SlicedMulShape{KronMatCols[0], KronMatRows[0], K, M, 0}) : 1;
   MaxFusedKerns = min(MaxFusedKerns, NumKronMats);
   TunedKernelsSeries tunedSeries;
   uint prevTempN = K;
@@ -165,7 +165,7 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
     }
   
     bool DistributeToGPUs = distributedKernel && distComm_ == DistComm::P2P && gpusInK_ > 1 && (i == NumKronMats - 1);
-    auto selectedKernel = selectKernel(KronMatmulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
+    auto selectedKernel = selectKernel(SlicedMulShape{KronMatCols[kronMat], KronMatRows[kronMat], 
                                        prevTempN, M, NumFusedKerns, DistributeToGPUs});
     tunedSeries.push_back({selectedKernel, kronMat - NumFusedKerns, kronMat, prevTempN, 0.0f});
     prevTempN = currTempN;
@@ -338,7 +338,7 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
-    KronMatmulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
+    SlicedMulShape shape {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
     auto iter = compiledKernels.find(shape);
     if (iter == compiledKernels.end()) {
       compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
