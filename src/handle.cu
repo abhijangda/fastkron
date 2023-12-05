@@ -77,7 +77,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, 
   bool correct = true;
   executeGeKMM(problem, nullptr, nullptr,
     [](const KMMProblem kmm) {return 1;},
-    [&correct, gpusInK](const KMMProblem kmm, void* t1, void* t2) {
+    [&correct, gpusInK](const KMMProblem kmm, int, void* t1, void* t2) {
       correct = correct && (kmm.l % gpusInK == 0);
       return cudaSuccess;
     });
@@ -211,12 +211,12 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(problem, temps, Y,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns;},
-    [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, void* temps[2], void* result) {
+    [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, int rstart, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;
       const uint NumFusedKerns = kernel.kernel.NumFusedKerns;      
-      assert(problem.rstart == kernel.end);
+      assert(rstart == kernel.end);
       err = this->kernelInvoker.fusedSlicedMatmul(NumFusedKerns, selectedKernel, kernel.end, 
                                                   problem.x,
                                                   (void**)problem.fs, problem.y,

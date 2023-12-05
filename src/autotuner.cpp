@@ -17,8 +17,8 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 
   reverseExecuteGeKMM(nextSeries, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
-    [&](const KMMProblem firstPart, void* temps[2], void* r) {
-      const int subn = firstPart.rstart + 1;
+    [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
+      const int subn = rstart + 1;
       
       KronMatmulShape shape = KronMatmulShape{firstPart.qs[0], firstPart.ps[0], 
                                               firstPart.k, problem.m, subn, 
@@ -27,14 +27,14 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
         auto iter = bestKernels.find(shape);
         TunedKernelsSeries epilogueKernels;
         float kernelTime = iter->second.second;
-        float epilogueTime = minExecTimeOfSeries(problem, startKron + firstPart.rstart + 1,
+        float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
                                                 isDistributed, 
                                                 epilogueKernels, bestKernels);
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
           minPrologueKernel = TunedKernelFromStart(iter->second.first, 
-                                                  startKron, startKron + firstPart.rstart, firstPart.k, kernelTime);
+                                                   startKron, startKron + rstart, firstPart.k, kernelTime);
         }
       }
 
@@ -64,10 +64,10 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   //We need to get best kernel for all contiguous SlicedMats
   auto err = reverseExecuteGeKMM(problem, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
-  [&](const KMMProblem firstPart, void* temps[2], void* r) {
-    for (int endP = firstPart.rstart; endP < problem.n; endP++) {
-      auto secondPart = problem.sub(firstPart.rstart, endP-firstPart.rstart+1);
-      bool distP2PStore = isDistributed && firstPart.rstart == 0;
+  [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
+    for (int endP = rstart; endP < problem.n; endP++) {
+      auto secondPart = problem.sub(rstart, endP-rstart+1);
+      bool distP2PStore = isDistributed && rstart == 0;
       KronMatmulShape shape = KronMatmulShape{secondPart.qs[0], secondPart.ps[0], 
                                               secondPart.k, secondPart.m, secondPart.n, distP2PStore};
       if (bestKernels.find(shape) != bestKernels.end()) continue;
@@ -86,13 +86,13 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
           for (int r = 0; r < warmups + runs; r++) {
             if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
             if (distP2PStore) {
-              status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(secondPart.n, kernel, firstPart.rstart + secondPart.rstart,
+              status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(secondPart.n, kernel, rstart,
                                                     secondPart.x,
                                                     secondPart.fs, secondPart.y, secondPart.m, 1, secondPart.k, 
                                                     secondPart.qs, secondPart.ps,
                                                     distParams, EpilogueParams::create<float>(), stream);
             } else {
-              status = fastKron.kernelInvoker.fusedSlicedMatmul(secondPart.n, kernel, firstPart.rstart + secondPart.rstart,
+              status = fastKron.kernelInvoker.fusedSlicedMatmul(secondPart.n, kernel, rstart,
                                                                 secondPart.x, 
                                                                 secondPart.fs, secondPart.y, secondPart.m, secondPart.l, secondPart.k, 
                                                                 secondPart.qs, secondPart.ps,
