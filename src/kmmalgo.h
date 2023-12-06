@@ -75,12 +75,12 @@ struct KMMProblem {
     assert (subn <= n);
     assert (rstart - (subn - 1) >= 0);
     for (int i = 0; i < subn; i++) {
-      ps[i]  = this->ps[rstart - i];
-      qs[i]  = this->qs[rstart - i];
+      ps[i]  = this->ps[rstart - (subn - 1) + i];
+      qs[i]  = this->qs[rstart - (subn - 1) + i];
     }
 
     for (int i = 0; i < subn; i++) {
-      fs[i] = this->fs[rstart - i];
+      fs[i] = this->fs[rstart  - (subn - 1) + i];
     }
 
     return KMMProblem(m, subn, ps, qs,
