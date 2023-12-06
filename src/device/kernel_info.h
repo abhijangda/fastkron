@@ -15,7 +15,7 @@ struct KernelInfo {
   void* kernel;
   uint NumThreads;
   
-  uint Q;
+  Factor factor;
   SlicedMulShape tiledShape;
   
   uint CRegRows;
@@ -25,13 +25,12 @@ struct KernelInfo {
   bool KEqVar;
   uint AAlignment;
   uint KronAlignment;
-
-  KernelInfo() : kernel(nullptr) {}
+  KernelInfo() {}
   KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileQ,
              uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
              uint CRegRows_, uint CRegCols_, ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_,
              uint AAlignment_, uint KronAlignment_) :
-             kernel(kernel_), NumThreads(NumThreads_), Q(Q), tiledShape{tileQ, P, TileK, TileM, NumFusedKerns_, DistributeToGPUs_},
+             kernel(kernel_), NumThreads(NumThreads_), factor(Q, P), tiledShape{tileQ, P, TileK, TileM, NumFusedKerns_, DistributeToGPUs_},
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_), 
              RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_),

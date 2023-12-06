@@ -27,7 +27,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   cudaError_t status;
   
   if (!isValidKernel(kernelInfo)) abort();
-  
+
   const SlicedMulShape tiledShape = kernelInfo.tiledShape;
 
   //Create the grid and thread block
@@ -43,7 +43,6 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
             1, 
             1
           };
-
   KernelParams<NumFusedKerns> params (M, N, K,
                                       KronMatRows, 
                                       KronMatCols,
@@ -60,6 +59,7 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                         epilogueParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
+  CUDA_CHECK(cudaDeviceSynchronize());
   return status;
 }
 

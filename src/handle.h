@@ -18,9 +18,10 @@ struct TunedKernelFromStart {
   float time;
   bool distShare;
 
+  TunedKernelFromStart() {}
   TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, uint K_, float time_):
     kernel(kernel_), start(start_), end(end_), K(K_), time(time_), distShare(false) {}
-  TunedKernelFromStart() {}
+
   friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
     out << "[" << k.start << ", " << k.end << "] = " << k.K << " " << k.kernel << " runs for " << k.time << " ms";
     return out;
@@ -49,7 +50,7 @@ struct FastKronHandle {
   DistComm distComm_;
   KernelInvoker kernelInvoker;
   //Map from Factor size and Number of factors to KernelInfos
-  std::unordered_map<SlicedMulShape, std::vector<KernelInfo>> compiledKernels;
+  std::unordered_map<Factor, std::vector<KernelInfo>> compiledKernels;
 
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
@@ -71,9 +72,9 @@ struct FastKronHandle {
   
   std::vector<ncclComm_t> ncclComms;
 
-  SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
-  KernelInfo selectKernel(SlicedMulShape shape);
-  uint maxFusedKernels(SlicedMulShape shape);
+  //SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
+  //KernelInfo selectKernel(SlicedMulShape shape);
+  //uint maxFusedKernels(SlicedMulShape shape);
 
   cudaError_t xgekmm(uint M, uint N, uint Ps[], uint Qs[], void* X, void* Fs[], void* Y,
                      void* temp1, void* temp2, EpilogueParams epilogueParams, cudaStream_t stream);
@@ -93,9 +94,9 @@ struct FastKronHandle {
                               const uint* FusedKronMatCols, const uint* FusedKronMatRows,
                               EpilogueParams epilogueParams,
                               cudaStream_t stream);
-  TunedKernelsSeries selectKernelSeries(const uint NumKronMats,
-                                      uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-                                      bool distributedKernel);
+  //TunedKernelsSeries selectKernelSeries(const uint NumKronMats,
+  //                                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
+  //                                    bool distributedKernel);
 };
 
 struct ThreadArgs {

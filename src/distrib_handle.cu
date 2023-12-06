@@ -83,13 +83,16 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           }
         }
       } else {
-        auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
-                                              LocalKronCols, LocalKronRows, true);
-        for (auto& kernel : localSeries) {
-          kernel.end += endKron;
-        }
-        kernelSeries = localSeries;
+        assert (false);
       }
+      //  else {
+      //   auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
+      //                                         LocalKronCols, LocalKronRows, true);
+      //   for (auto& kernel : localSeries) {
+      //     kernel.end += endKron;
+      //   }
+      //   kernelSeries = localSeries;
+      // }
 
       numSwaps += kernelSeries.size() + ((handle.distComm_ == DistComm::P2P) ? 0 : 1);
     }
@@ -129,12 +132,13 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           }
         }
       } else {
-        auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
-                                              LocalKronCols, LocalKronRows, true);
-        for (auto& kernel : localSeries) {
-          kernel.end += endKron;
-        }
-        kernelSeries = localSeries;
+        assert(false);
+        // auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
+        //                                       LocalKronCols, LocalKronRows, true);
+        // for (auto& kernel : localSeries) {
+        //   kernel.end += endKron;
+        // }
+        // kernelSeries = localSeries;
       }
 
       int prevFullK = prevTempN * handle.gpusInK_;

@@ -42,3 +42,25 @@ template<>
 struct std::hash<SlicedMulShape> {
   std::size_t operator()(const SlicedMulShape& k) const;
 };
+
+struct Factor {
+  uint Q;
+  uint P;
+
+  Factor() {}
+
+  Factor(uint Q, uint P) : Q(Q), P(P) {}
+
+  bool operator==(const Factor& other) const {
+    return Q == other.Q && P == other.P;
+  }
+
+  bool operator!=(const Factor& other) const {
+    return !(*this == other);
+  }
+};
+
+template<>
+struct std::hash<Factor> {
+  std::size_t operator()(const Factor& f) const;
+};
