@@ -80,6 +80,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalKrons, 
   return correct;
 }
 
+/*
 SlicedMulShape FastKronHandle::maxCompiledColsA(SlicedMulShape shape) {
   while (compiledKernels.find(shape) == compiledKernels.end()) {
     shape.K /= 2;
@@ -168,6 +169,7 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
 
   return tunedSeries;
 }
+*/
 
 cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[], 
                                    void* X, void* Fs[], void* Y, void* temp1, void* temp2,
@@ -175,11 +177,12 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
   TunedKernelsSeries kernelSeries;
   if (tunedKernelSeries.size() > 0) {
     kernelSeries = tunedKernelSeries;
-  } else {
-    const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
-    const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
-    kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
-  }
+  } 
+  // else {
+  //   const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
+  //   const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
+  //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
+  // }
 
   if (Y == nullptr) return cudaErrorInvalidValue;
   if (temp1 == nullptr) return cudaErrorInvalidValue;
@@ -333,14 +336,12 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
-    SlicedMulShape shape = info.tiledShape;
-    shape.M = 0;
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-    auto iter = compiledKernels.find(shape);
+    auto iter = compiledKernels.find(info.factor);
     if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(shape, std::vector<KernelInfo>()));
+      compiledKernels.emplace(std::make_pair(info.factor, std::vector<KernelInfo>()));
     }
-    compiledKernels.at(shape).push_back(info);
+    compiledKernels.at(info.factor).push_back(info);
   }
   
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 

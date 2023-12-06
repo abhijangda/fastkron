@@ -67,9 +67,10 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
     for (int endP = rstart; endP < problem.n; endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
+      Factor factor(secondPart.qs[0], secondPart.ps[0]);
       bool distP2PStore = isDistributed && rstart == 0;
       SlicedMulShape shape = SlicedMulShape{secondPart.qs[0], secondPart.ps[0], 
-                                              secondPart.k, secondPart.m, secondPart.n, distP2PStore};
+                                            secondPart.k, secondPart.m, secondPart.n, distP2PStore};
       if (bestKernels.find(shape) != bestKernels.end()) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n > 1) continue;
       KernelInfo bestKernel;
@@ -78,7 +79,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
       const uint warmups = 2;
       std::cout << "Tuning for shape "  << shape << std::endl;
       for (auto shapeAndKernels : fastKron.compiledKernels) {
-        if (!shapeAndKernels.first.sameKronSize(shape)) continue;
+        if (shapeAndKernels.first != factor) continue;
         for (auto kernel : shapeAndKernels.second) {
           if (!kernel.canCompute(shape)) continue;
           CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -98,7 +99,6 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
                                                                 secondPart.qs, secondPart.ps,
                                                                 EpilogueParams::create<float>(), stream);
             }
-            // if (status != cudaSuccess) break;
           }
           CUDA_CHECK(cudaEventRecord(end, stream));
           CUDA_CHECK(cudaEventSynchronize(end));

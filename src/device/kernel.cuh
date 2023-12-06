@@ -63,7 +63,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   } else {
     colsA = params.ColsA;
   }
-
+  
   colsC = params.ColsC;
   const ElemT* __restrict__ glA = (const ElemT*) params.glA;
 

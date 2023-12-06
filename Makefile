@@ -139,7 +139,7 @@ run-nccl-multi-gpu-no-fusion-non-square-tests: multi-gpu-no-fusion-non-square-te
 
 #Multi GPU different shapes
 gen-multi-gpu-distinct-shapes: src/gen_tuner_kernels.py
-	$(PYTHON) src/gen_tuner_kernels.py -distinct-factors 3 8,16 32,8 16,8 -match-configs 64,16,8,16,1,256,1,8,1 32,8,32,8,1,256,1,2,1 128,8,16,8,1,256,1,1 -dist-kernels
+	$(PYTHON) src/gen_tuner_kernels.py -distinct-factors 3 8,16 32,8 16,8 -match-configs 64,16,8,16,256 32,8,32,8,256 128,8,16,8,256 -dist-kernels
 
 multi-gpu-distinct-shapes: libKron.so gtest tests/testBase.h tests/multi-gpu-distinct-shapes.cu
 	$(NVCC) $(STD_CPP) tests/$@.cu $(TEST_INCLUDE_DIRS) $(TEST_LFLAGS) $(GOOGLE_TEST_MAIN) $(ARCH_CODE_FLAGS) -O3 -Xcompiler=-fopenmp,-O3,-Wall -L. -lKron -o $@
