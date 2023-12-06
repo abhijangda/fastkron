@@ -157,11 +157,12 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         uint kronRows[NumFusedKerns];
         
         currTempN = prevTempN;
+        //TODO: Store krons, kronRows, and Cols in reverse order because FusedParams copies them in reverse order
         for (int kk = 0; kk < NumFusedKerns; kk++) {
-          krons[kk] = kronMats[g * NumKronMats + kernel.end - kk];
-          kronRows[kk] = KronMatRows[kernel.end - kk];
-          kronCols[kk] = KronMatCols[kernel.end - kk];
-          currTempN = (currTempN/kronRows[kk])*kronCols[kk];
+          krons[NumFusedKerns - 1 - kk] = kronMats[g * NumKronMats + kernel.end - kk];
+          kronRows[NumFusedKerns - 1 - kk] = KronMatRows[kernel.end - kk];
+          kronCols[NumFusedKerns - 1 - kk] = KronMatCols[kernel.end - kk];
+          currTempN = (currTempN/kronRows[NumFusedKerns - 1 -kk])*kronCols[NumFusedKerns - 1 -kk];
         }
 
         if (slicedMuls == KronMulBatchSize - 1) {
