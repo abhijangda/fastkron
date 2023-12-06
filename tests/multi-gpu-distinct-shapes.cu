@@ -11,7 +11,7 @@ TEST(MultiGPUDistinctShapesTest, GM##_##GK##_##LocalKrons##_) {\
     N *= KP_MAT_N[i];\
     K *= KP_MAT_K[i];\
   }\
-  bool b = run<float>(8, N, K, 4, KP_MAT_N, KP_MAT_K, 1, 0, false, GM, GK, GM*GK, LocalKrons, true, false, false, false);\
+  bool b = run<float>(8, N, K, 4, KP_MAT_N, KP_MAT_K, 1, 0, false, GM, GK, GM*GK, LocalKrons, true, false, true, false);\
   EXPECT_TRUE(b);\
 }
 
