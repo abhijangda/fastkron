@@ -95,9 +95,9 @@ struct KernelParams {
                void* glKronMats[NumFusedKerns], void* glC, uint kp_idx) :
                RowsC(RowsC), ColsC(ColsC), ColsA(ColsA), glA(glA), glC(glC), kp_idx(kp_idx) {
     for (int i = 0; i < NumFusedKerns; i++) {
-      this->KronRows[i] = KronRows[i];
-      this->KronCols[i] = KronCols[i];
-      this->glKronMats[i] = glKronMats[i];
+      this->KronRows[NumFusedKerns - 1 - i] = KronRows[i];
+      this->KronCols[NumFusedKerns - 1 - i] = KronCols[i];
+      this->glKronMats[NumFusedKerns - 1 - i] = glKronMats[i];
     }
   }
 };

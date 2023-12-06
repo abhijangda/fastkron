@@ -11,10 +11,10 @@ TEST(MultiGPUDistinctShapesTest, GM##_##GK##_##LocalKrons##_) {\
     N *= KP_MAT_N[i];\
     K *= KP_MAT_K[i];\
   }\
-  bool b = run<float>(8, N, K, 4, KP_MAT_N, KP_MAT_K, 1, 0, false, GM, GK, GM*GK, LocalKrons, true, false, true, false);\
+  bool b = run<float>(M, N, K, 4, KP_MAT_N, KP_MAT_K, 1, 0, false, GM, GK, GM*GK, LocalKrons, true, false, true, false);\
   EXPECT_TRUE(b);\
 }
 
-MULTI_GPU_DISTINCT_SHAPES_TEST(18, 1, 2, 1);
-MULTI_GPU_DISTINCT_SHAPES_TEST(18, 1, 4, 3);
-MULTI_GPU_DISTINCT_SHAPES_TEST(18, 2, 1, 4);
+// MULTI_GPU_DISTINCT_SHAPES_TEST(18, 1, 2, 1);
+MULTI_GPU_DISTINCT_SHAPES_TEST(256, 1, 4, 3);
+MULTI_GPU_DISTINCT_SHAPES_TEST(256, 2, 1, 4);

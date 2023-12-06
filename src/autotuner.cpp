@@ -60,6 +60,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
   std::cout << "Fusion enabled?  " << this->fastKron.getUseFusion() << std::endl;
+  std::cout << "problem.k " << problem.k << " " << problem.l << "  " << problem.ps[0] << ", " << problem.qs[0] << std::endl;
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
   auto err = reverseExecuteGeKMM(problem, nullptr, nullptr, 
@@ -205,6 +206,7 @@ cudaError_t Autotuner::tune(uint M, uint N, uint Ps[], uint Qs[], cudaStream_t s
     TunedKernelsSeries tunedKernelSeries;
 
     KMMProblem problem(gpuM, N, Ps, Qs, temp1_[0], Fs, temp2_[0]);
+    std::cout << MaxLocalKrons << std::endl;
     for (int i = problem.n - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
       //TODO: any way to avoid declaring ps, qs, and fs on stack
