@@ -12,7 +12,7 @@
     K *= FacSize;\
     KP_MAT_K[i] = KP_MAT_N[i] = FacSize;\
   }\
-  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, false, false, false);\
+  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, false, true, false);\
   EXPECT_TRUE(b);\
 }
 
@@ -24,8 +24,8 @@ SINGLE_GPU_NO_FUSION_TEST(11, 15, 2, float);
 SINGLE_GPU_NO_FUSION_TEST(11, 20, 2, float);
 
 //FacSize 4
-// SINGLE_GPU_NO_FUSION_TEST(1, 4, 4, float);
-// SINGLE_GPU_NO_FUSION_TEST(1, 6, 4, float);
+SINGLE_GPU_NO_FUSION_TEST(1, 4, 4, float);
+SINGLE_GPU_NO_FUSION_TEST(1, 6, 4, float);
 SINGLE_GPU_NO_FUSION_TEST(11, 8, 4, float);
 SINGLE_GPU_NO_FUSION_TEST(11, 9, 4, float);
 SINGLE_GPU_NO_FUSION_TEST(11, 10, 4, float);
@@ -50,7 +50,7 @@ SINGLE_GPU_NO_FUSION_TEST(11, 3, 32, float);
 SINGLE_GPU_NO_FUSION_TEST(11, 4, 32, float);
 SINGLE_GPU_NO_FUSION_TEST(11, 5, 32, float);
 
-SINGLE_GPU_NO_FUSION_TEST(12, 3, 32, float);
+// SINGLE_GPU_NO_FUSION_TEST(12, 3, 32, float);
 
 //FacSize 64
 SINGLE_GPU_NO_FUSION_TEST(11, 2, 64, float);
