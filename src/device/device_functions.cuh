@@ -312,20 +312,23 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
   const int VecTNumElems = sizeof(VecT)/sizeof(ElemT);
   const uint loadInstr = MIN(TileSizeKronCols, VecTNumElems);
   //Create kronCols subwarps and each subwarp loads 0 to TileSizeKronRows elements
-  for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += NumThreads/(TileSizeKronCols/loadInstr)) {
+  const uint subWarps = MAX(1, NumThreads/(TileSizeKronCols/loadInstr));
+  for (uint swid = tid/(TileSizeKronCols/loadInstr); swid < TileSizeKronRows; swid += subWarps) {
     ElemT elems[VecTNumElems];
 
-    const uint col = external_tile_kp_n*TileSizeKronCols + (tid%(TileSizeKronCols/loadInstr))*loadInstr;
-    const uint row = swid;
-    // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
+    for (uint elem = tid%(TileSizeKronCols/loadInstr); elem < TileSizeKronCols/loadInstr; elem += NumThreads/subWarps) {
+      const uint col = external_tile_kp_n*TileSizeKronCols + elem*loadInstr;
+      const uint row = swid;
+      // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
-    const ElemT* addr = &Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col];
-    globalLoadVec_(addr, elems, loadInstr);
-    
-    #pragma unroll
-    for (uint e = 0; e < loadInstr; e++) {
-      uint linearIdx = (tid%(TileSizeKronCols/loadInstr))*loadInstr + e;
-      Fsh[row * TileSizeKronCols + linearIdx] = elems[e];
+      const ElemT* addr = &Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col];
+      globalLoadVec_(addr, elems, loadInstr);
+      
+      #pragma unroll
+      for (uint e = 0; e < loadInstr; e++) {
+        uint linearIdx = elem*loadInstr + e;
+        Fsh[row * TileSizeKronCols + linearIdx] = elems[e];
+      }
     }
   }
 }
