@@ -329,6 +329,9 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
         uint linearIdx = elem*loadInstr + e;
         Fsh[row * TileSizeKronCols + linearIdx] = elems[e];
       }
+
+      //This condition avoids generating the loop => better performance
+      if (TileSizeKronCols/loadInstr == NumThreads/subWarps) break;
     }
   }
 }
