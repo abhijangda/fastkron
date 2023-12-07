@@ -119,6 +119,7 @@ class KernelConfig:
   def isValid(self):
     return self.wsz > 0 and \
            self.shape.k % self.shape.p == 0 and \
+           self.cRegRows * self.cRegCols <= 32 and \
            self.num_threads >= 32 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
