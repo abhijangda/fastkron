@@ -319,7 +319,6 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
     for (uint elem = tid%(TileSizeKronCols/loadInstr); elem < TileSizeKronCols/loadInstr; elem += NumThreads/subWarps) {
       const uint col = external_tile_kp_n*TileSizeKronCols + elem*loadInstr;
       const uint row = swid;
-      // shKronMats[tid%TileSizeKronRows][row] = glKronMats[(external_tile_kp_k * TileSizeKronCols + tileKronRow + row) * kronRows + col];
 
       const ElemT* addr = &Fgl[(external_tile_kp_k * TileSizeKronRows + tileKronRow + row) * kronCols + col];
       globalLoadVec_(addr, elems, loadInstr);
@@ -330,7 +329,7 @@ void tiledDirectFglToFsh(const uint MaxKronRows, const uint MaxKronCols,
         Fsh[row * TileSizeKronCols + linearIdx] = elems[e];
       }
 
-      //This condition avoids generating the loop => better performance
+      //This condition avoids generating the loop giving better performance
       if (TileSizeKronCols/loadInstr == NumThreads/subWarps) break;
     }
   }
