@@ -252,12 +252,12 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
     f.write(host_decls)
     f.write(kernel_infos)
   
-  make_device_kernels = "DEVICE_KERNELS="
+  kernels_cmake = "set(CUDA_KERNELS "
   for config in combinedConfigs:
-    make_device_kernels += os.path.join(kernel_dir, config.filename().replace(".cu",".o")) + " "
+    kernels_cmake += os.path.join(kernel_dir, config.filename()) + "\n"
 
-  with open(os.path.join(kernel_dir, "make_device_kernels"), "w") as f:
-    f.write(make_device_kernels)
+  with open(os.path.join(kernel_dir, "kernels.cmake"), "w") as f:
+    f.write(kernels_cmake + ")")
 
 def compute_k(ps, qs):
   k = 1
