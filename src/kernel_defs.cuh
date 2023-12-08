@@ -1,4 +1,4 @@
-#include "kernel_decl.inc"
+#include "device/kron-kernels/kernel_decl.inc"
 
 //No need to generate kernels for both values of K_EQUALS_VAR
 //when we know in autotuning that K will never be equal to MaxColsA
