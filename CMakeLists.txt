@@ -46,3 +46,19 @@ add_dependencies(kron anyoption)
 target_include_directories(kron PUBLIC AnyOption ${SRC}/)
 #Fix NCCL
 target_link_libraries(kron PUBLIC FastKron anyoption nccl)
+
+#Kernel Generation for Tests
+
+find_package (Python3)
+set(GEN_TUNER_KERNELS_PY ${CMAKE_CURRENT_SOURCE_DIR}/${SRC}/gen_tuner_kernels.py)
+
+
+add_custom_target(gen-single-gpu-kernels
+    ALL
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 20 2,2 -same-factors 10 4,4 -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128 -match-configs-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/single-gpu-kernel-decls.in
+)
+
+add_custom_target(gen-tuner-kernels
+    ALL
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 16,16 -same-factors 3 64,64
+)

@@ -5,9 +5,8 @@ import os
 import shutil
 import functools
 
-print(os.getcwd())
-assert 'src' in os.listdir('.')
-kernel_dir = "src/device/kron-kernels/"
+print(os.path.dirname(__file__))
+kernel_dir = os.path.join(os.path.dirname(__file__), "device/kron-kernels/")
 
 #Device limits
 MAX_SHARED_MEM = 48 * 1024
