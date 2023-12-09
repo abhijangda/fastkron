@@ -47,8 +47,7 @@ target_include_directories(kron PUBLIC AnyOption ${SRC}/)
 #Fix NCCL
 target_link_libraries(kron PUBLIC FastKron anyoption nccl)
 
-#Kernel Generation for Tests
-
+############################### Tests ###################################
 find_package (Python3)
 set(GEN_TUNER_KERNELS_PY ${CMAKE_CURRENT_SOURCE_DIR}/${SRC}/gen_tuner_kernels.py)
 
@@ -57,7 +56,7 @@ enable_testing()
 include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
 
 set(TESTS_INCLUDES ${SRC}/ tests)
-set(TESTS_LIBS GTest::gtest_main FastKron)
+set(TESTS_LIBS GTest::gtest_main FastKron nccl)
 
 add_executable(single-gpu-no-fusion-tests tests/single-gpu-no-fusion-tests.cu)
 add_executable(single-gpu-fusion-tests tests/single-gpu-no-fusion-tests.cu)
@@ -66,6 +65,9 @@ add_custom_target(gen-single-gpu-kernels
     COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 20 2,2 -same-factors 10 4,4 -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128 -match-configs-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/single-gpu-kernel-decls.in
 )
 target_include_directories(single-gpu-no-fusion-tests PUBLIC ${TESTS_INCLUDES})
+target_link_libraries(single-gpu-no-fusion-tests ${TESTS_LIBS})
+
+target_include_directories(single-gpu-fusion-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-fusion-tests ${TESTS_LIBS})
 
 add_executable(single-gpu-tuner-tests tests/single-gpu-tuner-tests.cu)
@@ -75,6 +77,14 @@ add_custom_target(gen-tuner-kernels
 )
 target_include_directories(single-gpu-tuner-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-tuner-tests ${TESTS_LIBS})
+
+add_executable(single-gpu-non-square-tuner-tests tests/single-gpu-non-square-tuner-tests.cu)
+add_custom_target(gen-non-square-tuner-test-kernels
+    ALL
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 8,16 -same-factors 3 32,16 -same-factors 3 128,32
+)
+target_include_directories(single-gpu-non-square-tuner-tests PUBLIC ${TESTS_INCLUDES})
+target_link_libraries(single-gpu-non-square-tuner-tests ${TESTS_LIBS})
 
 add_executable(single-gpu-distinct-shapes tests/single-gpu-distinct-shapes.cu)
 add_custom_target(gen-single-gpu-distinct-shapes

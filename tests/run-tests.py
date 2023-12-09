@@ -12,23 +12,25 @@ def execute(command):
     return o
 
 gen_test_kernels = {
-                    # 'gen-single-gpu-kernels'            : ['run-single-gpu-no-fusion-tests', 'run-single-gpu-fusion-tests'],
-                    # 'gen-tuner-kernels'                 : ['run-single-gpu-tuner-tests'],
-                    # 'gen-non-square-tuner-test-kernels' : ['run-single-gpu-non-square-tuner-tests'],
-                    # 'gen-single-gpu-distinct-shapes'    : ['run-single-gpu-distinct-shapes'],
-                    # 'gen-single-gpu-odd-shapes'         : ['run-single-gpu-odd-shapes'],
-                    'gen-multi-gpu-tests-kernel'        : ['run-multi-gpu-nccl-no-fusion-tests', 'run-multi-gpu-p2p-no-fusion-tests'],
-                    'gen-multi-gpu-tuner-kernels'       : ['run-multi-gpu-tuner-tests'],
-                    'gen-multi-gpu-no-fusion-non-square-tests-kernel' : ['run-p2p-multi-gpu-no-fusion-non-square-tests', 'run-nccl-multi-gpu-no-fusion-non-square-tests'],
-                    'gen-multi-gpu-distinct-shapes'     : ['run-p2p-multi-gpu-distinct-shapes', 'run-nccl-multi-gpu-distinct-shapes']
+                    # 'gen-single-gpu-kernels'            : ['single-gpu-no-fusion-tests', 'single-gpu-fusion-tests'],
+                    # 'gen-tuner-kernels'                 : ['single-gpu-tuner-tests'],
+                    # 'gen-non-square-tuner-test-kernels' : ['single-gpu-non-square-tuner-tests'],
+                    # 'gen-single-gpu-distinct-shapes'    : ['single-gpu-distinct-shapes'],
+                    # 'gen-single-gpu-odd-shapes'         : ['single-gpu-odd-shapes'],
+                    'gen-multi-gpu-tests-kernel'        : ['DIST_COMM=NCCL multi-gpu-no-fusion-tests', 'DIST_COMM=P2P multi-gpu-no-fusion-tests'],
+                    'gen-multi-gpu-tuner-kernels'       : ['multi-gpu-tuner-tests'],
+                    'gen-multi-gpu-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-gpu-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-gpu-no-fusion-non-square-tests'],
+                    # 'gen-multi-gpu-distinct-shapes'     : ['DIST_COMM=P2P multi-gpu-distinct-shapes', 'DIST_COMM=NCCL multi-gpu-distinct-shapes']
                     }
 
 sorted_keys = sorted(list(gen_test_kernels.keys()))
 
 for gen in sorted_keys:
     execute(f'make {gen}')
+    print(f"========= Running {gen} =========")
     for run in gen_test_kernels[gen]:
-        print(f"========= Running {run[len('run-'):]} =========")
-        output = execute(f'make {run} -j')
+        output = execute(f'make {run if " " not in run else run.split(" ")[1]} -j')
+        output = execute(("./"+run) if ' ' not in run else run.replace(' ', ' ./'))
         if 'FAILED' in output:
             print(output)
+        
