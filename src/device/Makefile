@@ -1,5 +1,5 @@
 NVCC=/usr/local/cuda/bin/nvcc
-ARCH_CODE_FLAGS=-gencode arch=compute_70,code=sm_70
+ARCH_CODE_FLAGS=-gencode arch=compute_70,code=sm_70 -gencode arch=compute_80,code=sm_80
 DEVICE=src/device
 KRON_KERNELS=$(DEVICE)/kron-kernels
 
