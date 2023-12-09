@@ -1,6 +1,7 @@
 import os
 import subprocess
 import re
+import shutil
 
 def run_command(command):
   (s, o) = subprocess.getstatusoutput(command)
@@ -9,16 +10,25 @@ def run_command(command):
     assert False
   return o
 
+def setup_cmake():
+  d = os.getcwd()
+  if os.path.exists('build/'):
+     shutil.rmtree('build/')
+  os.mkdir('build/')
+  os.chdir('build/')
+  run_command('cmake ..')
+  os.chdir(d)
+
 def gen_kernels(shape, distKernels):
   run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
               str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
               (" -dist-kernels " if distKernels else ""))
 
 def build_kron():
-  run_command("make kron -j")
+  run_command("cd build && make kron -j")
 
 def run_kron(shape, GM, GK, LocalKrons):
-  kron = f"./kron -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 20 -w 10 -t float --tune"
+  kron = f"cd build && ./kron -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 20 -w 10 -t float --tune"
   if GM * GK != 1:
     kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
 
@@ -55,6 +65,7 @@ def run_single_gpu():
 
   for shape in cases:
     gen_kernels(shape, False)
+    setup_cmake()
     build_kron()
     run_kron(shape, 1, 1, 1)
 
@@ -69,6 +80,7 @@ def run_single_gpu_small():
 
   for shape in cases:
     gen_kernels(shape, False)
+    setup_cmake()
     build_kron()
     run_kron(shape, 1, 1, 1)
 
@@ -85,6 +97,7 @@ def multi_gpu():
     GMs = [1, 2, 2, 4, 4]
     GKs = [1, 1, 2, 2, 4]
     gen_kernels(shape, True)
+    setup_cmake()
     build_kron()
     for j,gpus in enumerate([1, 2, 4, 8]):
       gm = GMs[j]
@@ -94,5 +107,5 @@ def multi_gpu():
       run_kron(shapeGM, gm, gk, LocalKrons)
 
 run_single_gpu()
-
+run_single_gpu_small()
 multi_gpu()
