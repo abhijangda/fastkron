@@ -34,7 +34,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   uint g = gr * gpusInK_ + gc;
   CUDA_CHECK(cudaSetDevice(g));
 
-  cudaError_t status;
+  cudaError_t status = cudaSuccess;
   
   //Temporaries are swaped after every slicedMatmul
   //TODO: User supplied result should be used as a temp and the final results are written in it
@@ -83,6 +83,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           }
         }
       } else {
+        printf("86\n");
         assert (false);
       }
       //  else {
@@ -132,6 +133,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           }
         }
       } else {
+        printf("136\n");
         assert(false);
         // auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
         //                                       LocalKronCols, LocalKronRows, true);
@@ -176,7 +178,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           else
             ncclRecvInResult = true;
         } 
-        
+
         void** gpuTempResults;
         if (innerCurrResult == temp1[g]) {
           gpuTempResults = (void**)temp1;
@@ -300,6 +302,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   }
 
   end:
+  std::cout << cudaGetErrorString(status) << std::endl;
   thArgs->threadResult = {status, (void*)innerPrevResult};
 }
 
