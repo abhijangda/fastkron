@@ -5,7 +5,6 @@ import os
 import shutil
 import functools
 
-print(os.path.dirname(__file__))
 kernel_dir = os.path.join(os.path.dirname(__file__), "device/kron-kernels/")
 
 #Device limits
@@ -77,7 +76,6 @@ class KernelConfig:
     """Compute several constants of kernel
        Corresponds to line numbers in kernel.cuh
     """
-    #Line 67
     self.wsz = (self.shape.k//self.shape.p)//self.cRegRows 
     self.shared_mem_usage = (self.tileM * self.shape.k + self.tileP * self.tileQ)*element_size(elemType)
 
