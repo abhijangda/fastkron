@@ -44,48 +44,4 @@ python setup.py install
 ```
 
 ### Example
-An example CUDA program to use FastKron is written as follows:
-```
-//example.cu
-#include <fastKron.h>
-
-int main() {
-  //Define Problem Sizes
-  int N = 5;
-  int M = 1024;
-  int P = 8, Q = 8;
-  
-  //Allocate inputs and output
-  float* x, *fs[], *y;
-  cudaMalloc(&x, M * (int)powf(P, N) * sizeof(float));
-  for (int i = 0; i < N; i++) cudaMalloc(&fs[i], P*Q * sizeof(float));
-  cudaMalloc(&y, M * (int)powf(Q, N) * sizeof(float));
-  
-  //Initialize FastKron
-  fastKronHandle handle;
-  fastKronInit(&handle);
-  
-  //Get Temporary size and allocate temporary
-  size_t tempSize;
-  gekmmSizes(handle, M, N, P, Q, nullptr, &tempSize);
-  float* temp;
-  cudaMalloc(&temp, tempSize * sizeof(float));
-
-  //Tune for best performing kernel
-  sgekmmTune(handle, M, N, P, Q, 0);
-
-  //Do KronMatmul using the tuned kernel
-  sgekmm(handle, M, N, P, Q,  
-         x, fs, y, 1, 0, nullptr, 
-         temp, nullptr, 0);
-  
-  //Destroy FastKron
-  fastKronDestroy(handle);
-}
-```
-Compiling using nvcc, add the include directory, and link to `libFastKron.so`
-
-```nvcc example.cu -Isrc/ -L build/ -lFastKron -o example```
-
-Run the example 
-```./example```
+`example/` contains an example file to perform KronMatmul using FastKron.
