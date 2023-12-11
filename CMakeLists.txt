@@ -69,13 +69,13 @@ target_include_directories(FastKron
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
 ##########################
 
 ##### kron ################
 add_subdirectory(AnyOption)
 add_dependencies(kron anyoption)
 target_include_directories(kron PUBLIC AnyOption ${SRC}/)
-#Fix NCCL
 target_link_libraries(kron PUBLIC FastKron anyoption nccl)
 ##########################
 
