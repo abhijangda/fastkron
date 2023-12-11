@@ -47,7 +47,7 @@ include(${DEVICE}/kron-kernels/kernels.cmake)
 set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc ${DEVICE}/device_functions.cuh 
                         ${DEVICE}/kernel_info.h ${DEVICE}/kernel.cuh ${DEVICE}/otherkernels.cuh
                         ${DEVICE}/params.h)
-set(HEADER_FILES ${SRC}/env.h ${SRC}/autotuner.h ${SRC}/fastkron.h ${SRC}/handle.h
+set(HEADER_FILES ${SRC}/env.h ${SRC}/autotuner.h ${SRC}/handle.h
                  ${SRC}/kernel_defs.cuh ${SRC}/kernel_invoker.h ${SRC}/kmmalgo.h
                  ${SRC}/sliced_mul_shape.h ${SRC}/thread_pool.h ${SRC}/utils.h)
 set(SOURCES ${SRC}/fastkron.cu ${SRC}/autotuner.cpp ${SRC}/distrib_handle.cu
@@ -63,7 +63,12 @@ cuda_add_library(FastKron SHARED
 )
 
 #FixNCCL target_link_libraries(FastKron PUBLIC nccl)
-target_include_directories(FastKron PRIVATE ${SRC}/)
+target_include_directories(FastKron 
+                           PRIVATE 
+                              ${SRC}/
+                           PUBLIC
+                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 ##########################
 
 ##### kron ################
