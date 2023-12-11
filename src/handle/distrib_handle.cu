@@ -1,8 +1,8 @@
 #include <cassert>
 #include <cstring>
 
-#include "handle.h"
-#include "utils.h"
+#include "handle/handle.h"
+#include "utils/utils.h"
 #include "device/otherkernels.cuh"
 
 struct ThreadArgs {

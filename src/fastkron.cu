@@ -3,13 +3,12 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "handle.h"
+#include "handle/handle.h"
 #include "device/params.h"
-#include "env.h"
 #include "device/kernel_info.h"
-#include "autotuner.h"
-#include "utils.h"
-#include "kmmalgo.h"
+#include "autotuner/autotuner.h"
+#include "utils/utils.h"
+#include "kmm/kmmalgo.h"
 
 /**************************************************
           Library Functions

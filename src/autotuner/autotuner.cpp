@@ -2,8 +2,8 @@
 #include <iostream>
 #include <iomanip>
 
-#include "autotuner.h"
-#include "kmmalgo.h"
+#include "autotuner/autotuner.h"
+#include "kmm/kmmalgo.h"
 
 static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,

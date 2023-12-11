@@ -13,14 +13,14 @@
 #include <functional>
 #include <algorithm>
 
-#include "utils.h"
-#include "handle.h"
-#include "thread_pool.h"
+#include "utils/utils.h"
+#include "utils/thread_pool.h"
+#include "handle/handle.h"
+#include "handle/kernel_defs.cuh"
 #include "device/otherkernels.cuh"
-#include "env.h"
-#include "autotuner.h"
-#include "kernel_defs.cuh"
-#include "kmmalgo.h"
+#include "env/env.h"
+#include "autotuner/autotuner.h"
+#include "kmm/kmmalgo.h"
 
 /*TODOs:
  1. Using fusion or not should be an environemnt flag

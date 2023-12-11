@@ -4,10 +4,10 @@
 #include <unordered_map>
 
 #include "fastkron.h"
-#include "thread_pool.h"
-#include "kernel_invoker.h"
-#include "env.h"
-#include "kmmalgo.h"
+#include "utils/thread_pool.h"
+#include "kernel_invoker/kernel_invoker.h"
+#include "env/env.h"
+#include "kmm/kmmalgo.h"
 
 #pragma once
 

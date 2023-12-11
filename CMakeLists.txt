@@ -47,12 +47,21 @@ include(${DEVICE}/kron-kernels/kernels.cmake)
 set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc ${DEVICE}/device_functions.cuh 
                         ${DEVICE}/kernel_info.h ${DEVICE}/kernel.cuh ${DEVICE}/otherkernels.cuh
                         ${DEVICE}/params.h)
-set(HEADER_FILES ${SRC}/env.h ${SRC}/autotuner.h ${SRC}/handle.h
-                 ${SRC}/kernel_defs.cuh ${SRC}/kernel_invoker.h ${SRC}/kmmalgo.h
-                 ${SRC}/sliced_mul_shape.h ${SRC}/thread_pool.h ${SRC}/utils.h)
-set(SOURCES ${SRC}/fastkron.cu ${SRC}/autotuner.cpp ${SRC}/distrib_handle.cu
-            ${SRC}/env.cpp ${SRC}/handle.cu ${SRC}/kernel_invoker.cu ${SRC}/kmmalgo.cu
-            ${SRC}/sliced_mul_shape.cpp)
+set(HEADER_FILES ${SRC}/env/env.h 
+                 ${SRC}/autotuner/autotuner.h
+                 ${SRC}/handle/handle.h ${SRC}/handle/kernel_defs.cuh
+                 ${SRC}/kernel_invoker/kernel_invoker.h 
+                 ${SRC}/kmm/kmmalgo.h
+                 ${SRC}/device/sliced_mul_shape.h
+                 ${SRC}/utils/thread_pool.h ${SRC}/utils/utils.h)
+
+set(SOURCES ${SRC}/fastkron.cu 
+            ${SRC}/env/env.cpp
+            ${SRC}/autotuner/autotuner.cpp 
+            ${SRC}/handle/handle.cu ${SRC}/handle/distrib_handle.cu
+            ${SRC}/kernel_invoker/kernel_invoker.cu 
+            ${SRC}/kmm/kmmalgo.cu
+            ${SRC}/device/sliced_mul_shape.cpp)
 
 cuda_add_library(FastKron SHARED
     ${SOURCES}

@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include "fastkron.h"
-#include "handle.h"
+#include "handle/handle.h"
 
 #ifndef __TEST_BASE_H__
 #define __TEST_BASE_H__

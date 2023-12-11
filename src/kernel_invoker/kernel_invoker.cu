@@ -1,5 +1,5 @@
-#include "kernel_invoker.h"
-#include "utils.h"
+#include "kernel_invoker/kernel_invoker.h"
+#include "utils/utils.h"
 
 static bool isValidKernel(KernelInfo& kernelInfo) {
   const uint NumThreads = kernelInfo.NumThreads;

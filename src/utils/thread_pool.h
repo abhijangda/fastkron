@@ -4,8 +4,7 @@
 #include <functional>
 #include <condition_variable>
 
-#ifndef __THREAD_POOL__
-#define __THREAD_POOL__
+#pragma once
 
 template<typename task_args>
 class thread_pool {
@@ -138,5 +137,3 @@ public:
     delete tasks;
   }
 };
-
-#endif /*__THREAD_POOL__*/
