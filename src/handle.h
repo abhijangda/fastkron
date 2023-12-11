@@ -99,42 +99,6 @@ struct FastKronHandle {
   //                                    bool distributedKernel);
 };
 
-struct ThreadArgs {
-  ThreadArgs() {}
-  ThreadArgs(FastKronHandle* handle, uint NumKronMats, void* x, void** kronMats, void** result, 
-            uint M, uint N, uint K, uint *KronMatCols, uint *KronMatRows, void **temp1,
-            void **temp2, cudaStream_t* stream,
-            uint gpuRow, uint gpuCol, uint gpusInM_, uint gpusInK_, pthread_barrier_t* barrier) : 
-            handle(handle), NumKronMats(NumKronMats), x(x), kronMats(kronMats), result(result),
-            M(M), N(N), K(K), KronMatCols(KronMatCols), KronMatRows(KronMatRows), temp1(temp1),
-            temp2(temp2), stream(stream),
-            gpuRow(gpuRow), gpuCol(gpuCol), gpusInM_(gpusInM_), gpusInK_(gpusInK_), barrier(barrier) {}
-
-  FastKronHandle* handle;
-  uint NumKronMats;
-  void* x;
-  void** kronMats;
-  void** result;
-  uint M;
-  uint N;
-  uint K;
-  uint *KronMatCols;
-  uint *KronMatRows;
-  void **temp1;
-  void **temp2;
-  cudaStream_t* stream;
-  uint gpuRow;
-  uint gpuCol;
-  uint gpusInM_;
-  uint gpusInK_;
-  pthread_barrier_t* barrier;
-
-  struct ThreadResult {
-    cudaError_t status;
-    void* result;
-  } threadResult;
-};
-
 //TODO: Combine all arguments in SlicedMulShape
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                const uint M, const uint N, const uint K, 
