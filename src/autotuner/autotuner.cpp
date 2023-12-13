@@ -8,9 +8,8 @@
 
 static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
-                                 std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>> bestKernels) {
+                                 TunedKernelsMap tunedKernelsMap) {
   if (startKron >= problem.n) return 0;
-  bool distP2PStore = isDistributed;
   float minTime = std::numeric_limits<float>::max();
   TunedKernelsSeries minEpilogueKernels;
   TunedKernelFromStart minPrologueKernel;
@@ -20,21 +19,18 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
                [](const KMMProblem p){return 1;},
     [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
       const int subn = rstart + 1;
-      
-      SlicedMulShape shape = SlicedMulShape{firstPart.qs[0], firstPart.ps[0], 
-                                            firstPart.k, problem.m, subn, 
-                                            distP2PStore && startKron == 0};
-      if (bestKernels.find(shape) != bestKernels.end()) {
-        auto iter = bestKernels.find(shape);
+      auto tunedProblem = problem.sub(startKron, subn);
+      bool isP2P = isDistributed && startKron == 0;
+      if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
         TunedKernelsSeries epilogueKernels;
-        float kernelTime = iter->second.second;
+        float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
         float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
-                                                isDistributed, 
-                                                epilogueKernels, bestKernels);
+                                                 isDistributed, 
+                                                 epilogueKernels, tunedKernelsMap);
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
-          minPrologueKernel = TunedKernelFromStart(iter->second.first, 
+          minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(tunedProblem, isP2P),
                                                    startKron, startKron + rstart, firstPart.k, kernelTime);
         }
       }
@@ -50,7 +46,6 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 
 cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
                                            bool isDistributed, DistributedParams distParams,
-                                           std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>>& bestKernels,
                                            cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
   //For performance eval we do not need these to contain any value
@@ -72,7 +67,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
       bool distP2PStore = isDistributed && rstart == 0;
       SlicedMulShape shape = SlicedMulShape{secondPart.qs[0], secondPart.ps[0], 
                                             secondPart.k, secondPart.m, secondPart.n, distP2PStore};
-      if (bestKernels.find(shape) != bestKernels.end()) continue;
+      if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n > 1) continue;
       KernelInfo bestKernel;
       float minTime = std::numeric_limits<float>::max();
@@ -116,7 +111,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
       if (minTime < std::numeric_limits<float>::max()) {
         std::cout << std::fixed << std::setprecision(2) <<
                     "Best kernel for " << shape << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
-        bestKernels.emplace(std::make_pair(shape, std::make_pair(bestKernel, minTime/runs)));
+        tunedKernelsMap.add(secondPart, distP2PStore, bestKernel, minTime/runs);
       }
     }
     
@@ -148,20 +143,17 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     }
   }
 
-  std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>> bestKernels;
-
   CUDA_CHECK(cudaSetDevice(0));
 
   if (!fastKron.isDistributed_) {
     //Use temporary as input/output matrix
     auto tmpProblem = KMMProblem(problem, temp1_[0], Fs, temp2_[0]);
 
-    tuneSlicedMulSeries(tmpProblem, false, DistributedParams(), 
-                        bestKernels, stream);
+    tuneSlicedMulSeries(tmpProblem, false, DistributedParams(), stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(problem, 0, false,
-                                  tunedKernels, bestKernels);
+                                  tunedKernels, tunedKernelsMap);
     fastKron.tunedKernelSeries = tunedKernels;
 
   } else {
@@ -215,10 +207,10 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
       tuneSlicedMulSeries(subproblem, distP2PStore, 
-                          distParams, bestKernels, stream);
+                          distParams, stream);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
-                                        tunedKernels, bestKernels);
+                                        tunedKernels, tunedKernelsMap);
       for (auto tunedKernel : tunedKernels) {
         tunedKernel.start += i + 1 - LocalKrons;
         tunedKernel.end   += i + 1 - LocalKrons;

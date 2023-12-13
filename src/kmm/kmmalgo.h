@@ -132,6 +132,16 @@ struct KMMProblem {
     x = x1;
     y = y1;
   }
+  
+  bool operator==(const KMMProblem& other) const {
+    bool eq = m == other.m && n == other.n;
+    if (eq) {
+      for (int i = 0; i < n; i++) {
+        eq = eq && ps[i] == other.ps[i] && qs[i] == other.qs[i];
+      }
+    }
+    return eq;
+  }
 };
 
 template<>

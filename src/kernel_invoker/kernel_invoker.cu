@@ -102,7 +102,7 @@ static cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const 
          };
   block = {
             kernelInfo.NumThreads, 
-            1, 
+            1,
             1
           };
 

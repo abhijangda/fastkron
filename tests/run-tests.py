@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import os
 import subprocess
 
 def execute(command):
@@ -24,6 +24,12 @@ gen_test_kernels = {
                     }
 
 sorted_keys = sorted(list(gen_test_kernels.keys()))
+
+if not os.path.exists("build/"):
+    os.mkdir("build/")
+
+os.chdir("build/")
+execute("cmake ..")
 
 for gen in sorted_keys:
     execute(f'make {gen}')

@@ -1,13 +1,51 @@
 #include "handle/handle.h"
+#include "kmm/kmmalgo.h"
 
 #pragma once
 
+class TunedKernelsMap {
+  using ProblemToKernels = std::unordered_map<KMMProblem, std::pair<KernelInfo, float>>;
+
+  ProblemToKernels kernels;
+  ProblemToKernels p2pKernels;
+
+  ProblemToKernels::const_iterator getKernel(const ProblemToKernels& map, const KMMProblem& problem) {
+    return map.find(problem);
+  }
+
+public:
+  TunedKernelsMap() {}
+
+  void add(const KMMProblem& problem, bool p2p, KernelInfo kernel, float time) {
+    if (p2p) {
+      p2pKernels.emplace(std::make_pair(problem, std::make_pair(kernel, time)));
+    } else {
+      kernels.emplace(std::make_pair(problem, std::make_pair(kernel, time)));
+    }
+  }
+
+  bool hasKernel(const KMMProblem& problem, bool p2p) {
+    return (p2p) ? getKernel(p2pKernels, problem) != p2pKernels.end():
+                   getKernel(kernels, problem) != kernels.end();
+  }
+
+  KernelInfo getKernel(const KMMProblem& problem, bool p2p) {
+    return (p2p) ? getKernel(p2pKernels, problem)->second.first :
+                   getKernel(kernels, problem)->second.first;    
+  }
+
+  float getKernelTime(const KMMProblem& problem, bool p2p) {
+    return (p2p) ? getKernel(p2pKernels, problem)->second.second :
+                   getKernel(kernels, problem)->second.second;    
+  }
+};
+
 class Autotuner {
   FastKronHandle& fastKron;
+  TunedKernelsMap tunedKernelsMap;
 
   cudaError_t tuneSlicedMulSeries(KMMProblem problem,
                                   bool isDistributed, DistributedParams distParams,
-                                  std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>>& bestKernels,
                                   cudaStream_t stream);
 public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
