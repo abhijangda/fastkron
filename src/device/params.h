@@ -2,6 +2,8 @@
 #include <numeric>
 #include <cmath>
 
+#include "kmm/kmmalgo.h"
+
 #pragma once
 
 union AllTypes {
@@ -72,14 +74,12 @@ struct KernelParams {
   void       * __restrict__ glC;
   const uint kp_idx;
 
-  KernelParams(const uint RowsC, const uint ColsC, const uint ColsA,
-               const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns], const void* glA,
-               void* glKronMats[NumFusedKerns], void* glC, uint kp_idx) :
-               RowsC(RowsC), ColsC(ColsC), ColsA(ColsA), glA(glA), glC(glC), kp_idx(kp_idx) {
+  KernelParams(KMMProblem problem, uint kp_idx) :
+               RowsC(problem.m), ColsC(problem.l), ColsA(problem.k), glA(problem.x), glC(problem.y), kp_idx(kp_idx) {
     for (int i = 0; i < NumFusedKerns; i++) {
-      this->KronRows[NumFusedKerns - 1 - i] = KronRows[i];
-      this->KronCols[NumFusedKerns - 1 - i] = KronCols[i];
-      this->glKronMats[NumFusedKerns - 1 - i] = glKronMats[i];
+      this->KronRows[NumFusedKerns - 1 - i] = problem.ps[i];
+      this->KronCols[NumFusedKerns - 1 - i] = problem.ps[i];
+      this->glKronMats[NumFusedKerns - 1 - i] = problem.fs[i];
     }
   }
 };
@@ -91,11 +91,10 @@ struct FusedParams {
   uint UVAColsRatioKronColsSquare;
   uint ColsCByKronColsPower;
   
-  FusedParams(const uint RowsC, const uint ColsC, const uint ColsA, const uint TileSizeColsA,
-              const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns]) {
-    KronColsPower = (uint)std::pow((double)KronCols[0], (double)NumFusedKerns);
+  FusedParams(KMMProblem problem, const uint TileSizeColsA) {
+    KronColsPower = (uint)std::pow((double)problem.qs[0], (double)NumFusedKerns);
     UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
-    ColsCByKronColsPower = ColsC/KronColsPower;
+    ColsCByKronColsPower = problem.l/KronColsPower;
   }
 };
 

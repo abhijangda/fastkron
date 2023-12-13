@@ -5,16 +5,12 @@
 
 class KernelInvoker {
 public:
-  cudaError_t fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& kernelInfo, const uint kronIndex, 
-                                void* x, void** krons, void* kronGemmResult,
-                                const uint M, const uint N, const uint K, 
-                                const uint* FusedKronMatCols, const uint* FusedKronMatRows,
+  cudaError_t fusedSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
+                                KMMProblem problem,
                                 EpilogueParams epilogueParams,
                                 cudaStream_t stream);
-  cudaError_t fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
-                                           void* x, void** kronMat, void* kronGemmResult,
-                                           const uint M, const uint N, const uint K, 
-                                           const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                                           DistributedParams distParams, EpilogueParams epilogueParams,
+  cudaError_t fusedDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
+                                           KMMProblem problem, DistributedParams distParams, 
+                                           EpilogueParams epilogueParams,
                                            cudaStream_t stream);
 };

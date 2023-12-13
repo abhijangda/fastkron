@@ -134,6 +134,11 @@ struct KMMProblem {
   }
 };
 
+template<>
+struct std::hash<KMMProblem> {
+  std::size_t operator()(const KMMProblem& k) const;
+};
+
 cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
                          void* result,
                          std::function<uint (const KMMProblem)> next,

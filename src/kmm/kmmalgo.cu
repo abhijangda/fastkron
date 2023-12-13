@@ -2,6 +2,14 @@
 
 #include "kmmalgo.h"
 
+std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& shape) const {
+  std::size_t h = hash<uint>()(shape.k) ^ hash<uint>()(shape.n);
+  for (int i = 0; i < shape.n; i++) {
+    h = h ^ hash<uint>()(shape.ps[i]) ^ hash<uint>()(shape.qs[i]);
+  }
+  return h;
+}
+
 cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
                          void* result,
                          std::function<uint (const KMMProblem)> next,

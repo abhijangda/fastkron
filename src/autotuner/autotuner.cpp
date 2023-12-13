@@ -87,18 +87,13 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
           cudaError_t status;
           for (int r = 0; r < warmups + runs; r++) {
             if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
+            auto& invoker = fastKron.kernelInvoker;
             if (distP2PStore) {
-              status = fastKron.kernelInvoker.fusedDistributedSlicedMatmul(secondPart.n, kernel, rstart,
-                                                    secondPart.x,
-                                                    secondPart.fs, secondPart.y, secondPart.m, secondPart.l, secondPart.k, 
-                                                    secondPart.qs, secondPart.ps,
-                                                    distParams, EpilogueParams::create<float>(), stream);
+              status = invoker.fusedDistributedSlicedMatmul(kernel, rstart, secondPart,
+                                                            distParams, EpilogueParams::create<float>(), stream);
             } else {
-              status = fastKron.kernelInvoker.fusedSlicedMatmul(secondPart.n, kernel, rstart,
-                                                                secondPart.x, 
-                                                                secondPart.fs, secondPart.y, secondPart.m, secondPart.l, secondPart.k, 
-                                                                secondPart.qs, secondPart.ps,
-                                                                EpilogueParams::create<float>(), stream);
+              status = invoker.fusedSlicedMatmul(kernel, rstart, secondPart,
+                                                 EpilogueParams::create<float>(), stream);
             }
           }
           CUDA_CHECK(cudaEventRecord(end, stream));

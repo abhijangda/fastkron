@@ -232,9 +232,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
-        status = handle.kernelInvoker.fusedDistributedSlicedMatmul(NumFusedKerns, kernel.kernel, kernel.end, (void*)innerPrevResult, 
-                                              (void**)krons, (void*)innerCurrResult, gpuM, currTempN, 
-                                              prevTempN, kronCols, kronRows, distParams, 
+        KMMProblem subProblem(gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
+                              (void**)krons, (void*)innerCurrResult, prevTempN, currTempN);
+        status = handle.kernelInvoker.fusedDistributedSlicedMatmul(kernel.kernel, kernel.end, subProblem, distParams, 
                                               EpilogueParams::create<float>(), stream[g]);
         assert(status == cudaSuccess);        
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));

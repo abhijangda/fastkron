@@ -19,9 +19,7 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
 //Launch cuda kernels
 template<uint NumFusedKerns>
 cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
-                                void* x, void** kronMat, void* kronGemmResult,
-                                const uint M, const uint N, const uint K, 
-                                const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
+                                KMMProblem problem,
                                 EpilogueParams epilogueParams,
                                 cudaStream_t stream) {
   cudaError_t status;
@@ -34,8 +32,8 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   dim3 grid;
   dim3 block;
   grid = {
-          (K/tiledShape.K) * DIVUP(KronMatCols[0], tiledShape.Q),
-          DIVUP(M, tiledShape.M),
+          (problem.k/tiledShape.K) * DIVUP(problem.qs[0], tiledShape.Q),
+          DIVUP(problem.m, tiledShape.M),
           1
          };
   block = {
@@ -44,14 +42,8 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
             1
           };
 
-  KernelParams<NumFusedKerns> params (M, N, K,
-                                      KronMatRows, 
-                                      KronMatCols,
-                                      x, 
-                                      kronMat, 
-                                      kronGemmResult, 
-                                      kronIndex);
-  FusedParams<NumFusedKerns> fusedParams (M, N, K, tiledShape.K, KronMatRows, KronMatCols);
+  KernelParams<NumFusedKerns> params (problem, kronIndex);
+  FusedParams<NumFusedKerns> fusedParams (problem, tiledShape.K);
   // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
@@ -63,38 +55,25 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
   return status;
 }
 
-cudaError_t KernelInvoker::fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& kernelInfo, const uint kronIndex, 
-                              void* x, void** krons, void* kronGemmResult,
-                              const uint M, const uint N, const uint K, 
-                              const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                              EpilogueParams epilogueParams,
-                              cudaStream_t stream) {
-  switch(NumFusedKerns) {
+cudaError_t KernelInvoker::fusedSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
+                                             KMMProblem problem, EpilogueParams epilogueParams,
+                                             cudaStream_t stream) {
+  switch(problem.n) {
     case 1:
-      return generalSlicedMatmul<1>(kernelInfo, kronIndex, x,
-                                        krons, kronGemmResult, M, N, K,
-                                        FusedKronMatCols, FusedKronMatRows,
-                                        epilogueParams, stream);
+      return generalSlicedMatmul<1>(kernelInfo, kronIndex, problem,
+                                    epilogueParams, stream);
     case 2:
-      return generalSlicedMatmul<2>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
+      return generalSlicedMatmul<2>(kernelInfo, kronIndex, problem,
+                                    epilogueParams, stream);
     case 3:
-      return generalSlicedMatmul<3>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
+      return generalSlicedMatmul<3>(kernelInfo, kronIndex, problem,
+                                    epilogueParams, stream);
     case 4:
-      return generalSlicedMatmul<4>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
+      return generalSlicedMatmul<4>(kernelInfo, kronIndex, problem,
+                                    epilogueParams, stream);
     case 5:
-      return generalSlicedMatmul<5>(kernelInfo, kronIndex, x,
-                                          krons, kronGemmResult, M, N, K,
-                                          FusedKronMatCols, FusedKronMatRows,
-                                          epilogueParams, stream);
+      return generalSlicedMatmul<5>(kernelInfo, kronIndex, problem,
+                                    epilogueParams, stream);
       break;
     default:
         std::cout << "Invalid number of fused kernels" << std::endl;
@@ -105,11 +84,9 @@ cudaError_t KernelInvoker::fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& ker
 //Launch cuda kernels
 template<uint NumFusedKerns>
 static cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex, 
-                                           void* x, void** kronMat, void* kronGemmResult,
-                                           const uint M, const uint N, const uint K, 
-                                           const uint KronMatCols[NumFusedKerns], const uint KronMatRows[NumFusedKerns],
-                                           DistributedParams distParams, EpilogueParams epilogueParams,
-                                           cudaStream_t stream) {
+                                                  KMMProblem problem,
+                                                  DistributedParams distParams, EpilogueParams epilogueParams,
+                                                  cudaStream_t stream) {
   cudaError_t status;
   const SlicedMulShape tiledShape = kernelInfo.tiledShape;
 
@@ -118,10 +95,9 @@ static cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const 
   //Create the grid and thread block
   dim3 grid;
   dim3 block;
-  
   grid = {
-          (K/tiledShape.K) * DIVUP(KronMatCols[0], tiledShape.Q),
-          DIVUP(M, tiledShape.M),
+          (problem.k/tiledShape.K) * DIVUP(problem.qs[0], tiledShape.Q),
+          DIVUP(problem.m, tiledShape.M),
           1
          };
   block = {
@@ -130,14 +106,8 @@ static cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const 
             1
           };
 
-  KernelParams<NumFusedKerns> params(M, N, K,
-                                     KronMatRows, 
-                                     KronMatCols, 
-                                     (void*)x, 
-                                     (void**)kronMat, 
-                                     (void*)kronGemmResult, 
-                                     kronIndex);
-  FusedParams<NumFusedKerns> fusedParams(M, N, K, tiledShape.K, KronMatRows, KronMatCols);
+  KernelParams<NumFusedKerns> params (problem, kronIndex);
+  FusedParams<NumFusedKerns> fusedParams (problem, tiledShape.K);
 
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
@@ -150,38 +120,26 @@ static cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const 
   return status;
 }
 
-cudaError_t KernelInvoker::fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
-                                           void* x, void** kronMat, void* kronGemmResult,
-                                           const uint M, const uint N, const uint K, 
-                                           const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                                           DistributedParams distParams, EpilogueParams epilogueParams,
-                                           cudaStream_t stream) {
-  switch (NumFusedKerns) {
+cudaError_t KernelInvoker::fusedDistributedSlicedMatmul(KernelInfo& kernel, const uint kronIndex, 
+                                                        KMMProblem problem, DistributedParams distParams, 
+                                                        EpilogueParams epilogueParams,
+                                                        cudaStream_t stream) {
+  switch (problem.n) {
     case 1:
-      return generalDistributedSlicedMatmul<1>(kernel, kronIndex, x, 
-                                                  kronMat, kronGemmResult, M, N, K, 
-                                                  FusedKronMatCols, FusedKronMatRows, 
-                                                  distParams, epilogueParams, stream);
+      return generalDistributedSlicedMatmul<1>(kernel, kronIndex, problem, 
+                                               distParams, epilogueParams, stream);
     case 2:
-      return generalDistributedSlicedMatmul<2>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K,
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
+      return generalDistributedSlicedMatmul<2>(kernel, kronIndex, problem, 
+                                               distParams, epilogueParams, stream);
     case 3:
-      return generalDistributedSlicedMatmul<3>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K,
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
+      return generalDistributedSlicedMatmul<3>(kernel, kronIndex, problem, 
+                                               distParams, epilogueParams, stream);
     case 4:
-      return generalDistributedSlicedMatmul<4>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K,
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
+      return generalDistributedSlicedMatmul<4>(kernel, kronIndex, problem, 
+                                               distParams, epilogueParams, stream);
     case 5:
-      return generalDistributedSlicedMatmul<5>(kernel, kronIndex, x, 
-                                                    kronMat, kronGemmResult, M, N, K, 
-                                                    FusedKronMatCols, FusedKronMatRows, 
-                                                    distParams, epilogueParams, stream);
+      return generalDistributedSlicedMatmul<5>(kernel, kronIndex, problem, 
+                                               distParams, epilogueParams, stream);
   }
 
   return cudaErrorInvalidValue;
