@@ -8,8 +8,8 @@ struct KMMProblem {
   int k;
   int l;
 
-  const uint m;
-  const int n;
+  uint m;
+  int n;
   
   static const int MaxN = 64;
   
@@ -57,7 +57,10 @@ struct KMMProblem {
   KMMProblem(KMMProblem problem, const int k, const int l) :
     KMMProblem(problem.m, problem.n, problem.ps, problem.qs, 
                problem.x, problem.fs, problem.y, k, l) {}
-  
+
+  KMMProblem(KMMProblem problem, void* x, void** fs, void* y) :
+    KMMProblem(problem.m, problem.n, problem.ps, problem.qs, x, fs, y) {}
+
   KMMProblem rsub(int rstart, int subn) const {
     uint ps[n];
     uint qs[n];

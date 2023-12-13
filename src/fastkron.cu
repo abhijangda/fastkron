@@ -24,6 +24,12 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
+cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
+                       size_t* resultSize, size_t* tempSize) {
+  KMMProblem problem(M, N, Ps, Qs);
+  return handlePtr->gekmmSizes(problem, resultSize, tempSize);
+}
+
 cudaError_t sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, float* Fs[], float* Y,
                     float alpha, float beta, float *Z, float* temp1, float* temp2, cudaStream_t stream) {
   return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
@@ -43,24 +49,15 @@ cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
                         EpilogueParams::create<double>(alpha, beta, Z), stream);
 }
 
-
-cudaError_t kronSGEMMOutofCore(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
-  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream) {
-  // return singleGPUOutOfCoreKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, 
-  //                                                    M, N, K, KronMatCols, KronMatRows, stream);
+cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
+  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs), stream);
 }
-
-// cudaError_t kronSGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
-//   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]) {
-//   return singleGPUOutOfCoreKronMatmul<float, float4>(handle, NumKronMats, x, kronMats, result, 
-//                                                      M, N, K, KronMatCols, KronMatRows, stream);
-// }
-
-// cudaError_t kronIGEMMOutofCoreX(FastKronHandle& handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
-//   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]) {
-//   return singleGPUOutOfCoreKronMatmul<int, int4>(handle, NumKronMats, x, kronMats, result, 
-//                                                  M, N, K, KronMatCols, KronMatRows, stream);
-// }
+cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
+  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs), stream);
+}
+cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
+  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs), stream);
+}
 
 cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
@@ -69,63 +66,11 @@ cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, 
                                    KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
-cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
-  return Autotuner(*handle).tune(M, N, Ps, Qs, stream);
-}
-cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
-  return Autotuner(*handle).tune(M, N, Ps, Qs, stream);
-}
-cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], cudaStream_t stream) {
-  return Autotuner(*handle).tune(M, N, Ps, Qs, stream);
-}
-
-
 cudaError_t allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K) {
   return handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
 cudaError_t gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   return handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
-}
-
-cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
-                       size_t* resultSize, size_t* tempSize) {
-  if (resultSize == nullptr) return cudaErrorInvalidValue;
-  if (tempSize   == nullptr) return cudaErrorInvalidValue;
-
-  uint gpuM, gpuK;
-
-  const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
-  const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
-
-  FastKronHandle& handle = *handlePtr;
-  KMMProblem problem(M, N, Ps, Qs);
-  if (handle.isDistributed_) {
-    if (!checkDistributedKronSizes(problem, handle.perGPUKronBatch_, handle.gpusInK_))
-      return cudaErrorInvalidValue;
-    gpuM = M/handle.gpusInM_;
-    gpuK = K/handle.gpusInK_;
-  } else {
-    gpuM = M;
-    gpuK = K;
-  }
-
-  int maxTempN = 0;
-  int resultCols = 0;
-                     
-  auto e = executeGeKMM(problem, nullptr, nullptr,
-    [](const KMMProblem kmm) {return 1;},
-    [&maxTempN, &resultCols](const KMMProblem kmm, int rstart, void* temps[2], void* result) {
-                            maxTempN = std::max(maxTempN, std::max(kmm.k, kmm.l));
-                            resultCols = kmm.l;
-                            return cudaSuccess;
-                          });
-  *tempSize   = gpuM * maxTempN;
-  if (handle.isDistributed_ and handle.distComm_ == DistComm::NCCL)
-    //Include size of send and recv buffers 
-    *tempSize = (*tempSize) * 2;
-  *resultSize = gpuM * resultCols;
-
-  return e;
 }
 
 // cudaError_t allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K) {

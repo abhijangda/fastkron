@@ -238,6 +238,42 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
   return err;
 }
 
+cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize) {
+  if (resultSize == nullptr) return cudaErrorInvalidValue;
+  if (tempSize   == nullptr) return cudaErrorInvalidValue;
+
+  uint gpuM, gpuK;
+
+  if (isDistributed_) {
+    if (!checkDistributedKronSizes(problem, perGPUKronBatch_, gpusInK_))
+      return cudaErrorInvalidValue;
+    gpuM = problem.m/gpusInM_;
+    gpuK = problem.k/gpusInK_;
+  } else {
+    gpuM = problem.m;
+    gpuK = problem.k;
+  }
+
+  int maxTempN = 0;
+  int resultCols = 0;
+                     
+  auto e = executeGeKMM(problem, nullptr, nullptr,
+    [](const KMMProblem kmm) {return 1;},
+    [&maxTempN, &resultCols](const KMMProblem kmm, int rstart, void* temps[2], void* result) {
+                            maxTempN = std::max(maxTempN, std::max(kmm.k, kmm.l));
+                            resultCols = kmm.l;
+                            return cudaSuccess;
+                          });
+
+  *tempSize   = gpuM * maxTempN;
+  if (isDistributed_ and distComm_ == DistComm::NCCL)
+    //Include size of send and recv buffers 
+    *tempSize = (*tempSize) * 2;
+  *resultSize = gpuM * resultCols;
+
+  return e;
+}
+
 FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   useFusion_ = true;

@@ -10,14 +10,13 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
-#define CUDA_CHECK(cmd) do {                         \
-  cudaError_t e = cmd;                              \
-  if( e != cudaSuccess and e != cudaErrorPeerAccessAlreadyEnabled) {\
-    printf("Failed: Cuda error %s:%d '%s'\n",             \
-        __FILE__,__LINE__,cudaGetErrorString(e));   \
-    exit(EXIT_FAILURE);                             \
-  }                                                 \
-} while(0)
+__host__ __device__ constexpr uint power(const uint x, const uint y) {
+  uint result = 1;
+  for (uint i = 0; i < y; i++) {
+    result = result * x;
+  }
+  return result;
+}
 
 template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ __forceinline__ uint get_tile_k() {return blockIdx.x/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ __forceinline__ uint get_external_tile_kp_n() {return blockIdx.x%DIVUP(MaxKronCols, MaxTileSizeKronCols);}

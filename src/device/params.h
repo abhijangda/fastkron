@@ -1,25 +1,8 @@
 #include <iostream>
 #include <numeric>
+#include <cmath>
 
-#ifndef __COMMON_H__
-#define __COMMON_H__
-
-#define CUDA_CHECK(cmd) do {                         \
-  cudaError_t e = cmd;                              \
-  if( e != cudaSuccess and e != cudaErrorPeerAccessAlreadyEnabled) {                          \
-    printf("Failed: Cuda error %s:%d '%s'\n",             \
-        __FILE__,__LINE__,cudaGetErrorString(e));   \
-    exit(EXIT_FAILURE);                             \
-  }                                                 \
-} while(0)
-
-__host__ __device__ constexpr uint power(const uint x, const uint y) {
-  uint result = 1;
-  for (uint i = 0; i < y; i++) {
-    result = result * x;
-  }
-  return result;
-}
+#pragma once
 
 union AllTypes {
   int i;
@@ -29,12 +12,11 @@ union AllTypes {
 
   __host__ __device__
   AllTypes() {}
-  AllTypes(float f) : f(f) {}
-  AllTypes(long l) : l(l) {}
-  AllTypes(int i) : i(i) {}
+  AllTypes(float f)  : f(f) {}
+  AllTypes(long l)   : l(l) {}
+  AllTypes(int i)    : i(i) {}
   AllTypes(double d) : d(d) {}
 
-  // template<typename T> T get() {return (T)0.0f;}
   __device__
   float get(float p) {return f;}
   __device__
@@ -111,7 +93,7 @@ struct FusedParams {
   
   FusedParams(const uint RowsC, const uint ColsC, const uint ColsA, const uint TileSizeColsA,
               const uint KronRows[NumFusedKerns], const uint KronCols[NumFusedKerns]) {
-    KronColsPower = power(KronCols[0], NumFusedKerns);
+    KronColsPower = (uint)std::pow((double)KronCols[0], (double)NumFusedKerns);
     UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
     ColsCByKronColsPower = ColsC/KronColsPower;
   }
@@ -168,18 +150,6 @@ struct DistributedParams {
     perGPUKByKronRows = PerGPUK_/KronRows_[LocalKrons_-1];
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
     ColsAByKronRows = ColsA_/KronRows_[LocalKrons_-1];
-    // if (gc == 0) {
-    //   std::cout << "KronCols_ " << KronCols_ << " ColsC_ " << ColsC_ << std::endl
-    //           << "KronRowsPower " << KronRowsPower << std::endl
-    //           << " UVAColsRatioKronRowsSquare " << UVAColsRatioKronRowsSquare << std::endl
-    //           << " perGPUKByNumGPUs " << perGPUKByNumGPUs << std::endl
-    //           << " perGPUKByKronRows " << perGPUKByKronRows << std::endl
-    //           << " perGPUNByNumGPUs " << perGPUNByNumGPUs << std::endl
-    //           << " perGPUNByKronRows " << perGPUNByKronRows << std::endl
-    //           << " ColsAByKronRows " << ColsAByKronRows << std::endl
-    //           << " ColsCByKronRowsPower " << ColsCByKronRowsPower << std::endl
-    //           << " ColsCByKronCols " << ColsCByKronCols << std::endl;
-    // }
   }
 
   void updateGPUResults(void** gpuResults_) {
@@ -215,5 +185,3 @@ struct DistributedParams {
     }
   }
 };
-
-#endif

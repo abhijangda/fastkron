@@ -208,29 +208,6 @@ static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, T* kpM
   return;
 }
 
-
-template<typename T>
-static T* kronGEMMOutOfCore(fastKronHandle handle, const uint NUM_KP_MATS, T* x, T* kpMats[],
-            uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], cudaStream_t stream[]) {
-  T* result;
-  if (std::is_same<T, float>::value) {
-    CUDACHECK(kronSGEMMOutofCoreX(handle, NUM_KP_MATS,
-                                  (float*)x, (float**)kpMats, (float**)&result,
-                                  M, N, K, KP_MAT_N, KP_MAT_K, stream));
-  } else if (std::is_same<T, int>::value) {
-    CUDACHECK(kronIGEMMOutofCoreX(handle, NUM_KP_MATS,
-                                  (int*)x, (int**)kpMats, (int**)&result,
-                                  M, N, K, KP_MAT_N, KP_MAT_K, stream));
-  } else if (std::is_same<T, double>::value) {
-    result = NULL;
-  } else {
-    printf("Invalid type\n");
-    return NULL;
-  }
-
-  return result;
-}
-
 template<typename T>
 static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x[], T* kpMats[], T* result[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], 

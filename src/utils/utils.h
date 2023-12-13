@@ -12,19 +12,31 @@
   }                                                 \
 } while (0)                                         \
 
+#define CUDA_CHECK(cmd) do {                        \
+  cudaError_t e = cmd;                              \
+  if(e != cudaSuccess and                           \
+     e != cudaErrorPeerAccessAlreadyEnabled) {      \
+    printf("Failed: Cuda error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)                                          \
+
+
 #define NCCLCHECK(cmd) do {                         \
   ncclResult_t r = cmd;                             \
   if (r!= ncclSuccess) {                            \
-    printf("Failed, NCCL error %s:%d '%s'\n",             \
+    printf("Failed, NCCL error %s:%d '%s'\n",       \
         __FILE__,__LINE__,ncclGetErrorString(r));   \
     exit(EXIT_FAILURE);                             \
   }                                                 \
 } while(0)
 
-#define PTHREAD_BARRIER_CHECK(x) do {                        \
-  if (x != 0 && x != PTHREAD_BARRIER_SERIAL_THREAD) {                           \
-    printf("Failed: pthread barrier error %s:%d\n",       \
-        __FILE__,__LINE__);   \
+#define PTHREAD_BARRIER_CHECK(x) do {               \
+  if (x != 0 &&                                     \
+      x != PTHREAD_BARRIER_SERIAL_THREAD) {         \
+    printf("Failed: pthread barrier error %s:%d\n", \
+        __FILE__,__LINE__);                         \
     exit(EXIT_FAILURE);                             \
   }                                                 \
 } while (0)                                         \

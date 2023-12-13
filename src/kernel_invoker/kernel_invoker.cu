@@ -60,7 +60,6 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                         epilogueParams, grid, block, stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
-  CUDA_CHECK(cudaDeviceSynchronize());
   return status;
 }
 
