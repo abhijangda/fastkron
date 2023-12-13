@@ -338,7 +338,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   }
 
   end:
-  std::cout << cudaGetErrorString(status) << std::endl;
   thArgs->threadResult = {status, (void*)innerPrevResult};
 }
 

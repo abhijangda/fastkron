@@ -155,8 +155,9 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
 
   std::unordered_map<SlicedMulShape, std::pair<KernelInfo, float>> bestKernels;
 
+  CUDA_CHECK(cudaSetDevice(0));
+
   if (!fastKron.isDistributed_) {
-    CUDA_CHECK(cudaSetDevice(0));
     //Use temporary as input/output matrix
     auto tmpProblem = KMMProblem(problem, temp1_[0], Fs, temp2_[0]);
 
@@ -174,7 +175,6 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
       return cudaErrorInvalidValue;
 
     //In distributed case run every LocalKron series on a single GPU    
-    CUDA_CHECK(cudaSetDevice(0));
     minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
     fastKron.getDistributedSizes(problem.m, problem.k, gpuM, gpuK);
