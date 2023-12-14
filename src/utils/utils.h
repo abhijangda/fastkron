@@ -41,11 +41,11 @@
   }                                                 \
 } while (0)                                         \
 
-#define MIN(x,y) (((x) < (y)) ? (x) : (y))
-#define MAX(x,y) (((x) > (y)) ? (x) : (y))
-#define DIVUP(x,y) (((x) + (y) - 1)/((y)))
-#define ROUNDUP(x,y) (DIVUP(x,y)*(y))
-#define CUDA_WARP_SIZE 32
+#define MIN(x,y)       (((x) < (y)) ? (x) : (y))
+#define MAX(x,y)       (((x) > (y)) ? (x) : (y))
+#define DIVUP(x,y)     (((x) + (y) - 1)/((y)))
+#define ROUNDUP(x,y)   (DIVUP(x,y)*(y))
+#define CUDA_WARP_SIZE 32U
 
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
@@ -70,12 +70,10 @@ static double getCurrTime() {
   return convertTimeValToDouble(getTimeOfDay());
 }
 
-static int ilog2(uint x)
-{
+static int ilog2(uint x) {
   return sizeof(uint32_t) * CHAR_BIT - __builtin_clz(x) - 1;
 }
 
-static bool isPowerOf2(uint x)
-{
+static bool isPowerOf2(uint x) {
     return (x & (x - 1)) == 0;
 }

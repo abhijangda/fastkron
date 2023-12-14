@@ -221,9 +221,9 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
       
       KernelInfo selectedKernel = kernel.kernel;
       assert(rstart == kernel.end);
-      err = this->kernelInvoker.fusedSlicedMatmul(selectedKernel, rstart, 
-                                                  problem, epilogueParams,
-                                                  stream);
+      err = this->kernelInvoker.invokeKernel(selectedKernel, rstart, 
+                                             problem, epilogueParams,
+                                             stream);
     
       CUDA_CHECK(err);
       kernelSeriesIter++;
@@ -268,6 +268,21 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   *resultSize = gpuM * resultCols;
 
   return e;
+}
+
+static bool isValidKernel(KernelInfo& kernelInfo) {
+  const uint NumThreads = kernelInfo.NumThreads;
+  const uint CRegRows = kernelInfo.CRegRows;
+  const uint CRegCols = kernelInfo.CRegCols;
+  const Factor tiledFactor = kernelInfo.tiledFactor;
+
+  const uint ValidThreads = ((kernelInfo.tiledInput.N/tiledFactor.P)/CRegRows) * (tiledFactor.Q/CRegCols);
+  if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
+    std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
+    return false;
+  }
+
+  return true;
 }
 
 FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
@@ -375,6 +390,7 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
+    if (!isValidKernel(info)) abort();
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
     auto iter = compiledKernels.find(info.factor);
     if (iter == compiledKernels.end()) {

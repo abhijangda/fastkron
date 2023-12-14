@@ -234,8 +234,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         cudaError_t status;
         KMMProblem subProblem(gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
                               (void**)krons, (void*)innerCurrResult, prevTempN, currTempN);
-        status = handle.kernelInvoker.fusedDistributedSlicedMatmul(kernel.kernel, kernel.end, subProblem, distParams, 
-                                              EpilogueParams::create<float>(), stream[g]);
+        status = handle.kernelInvoker.invokeP2PStoreKernel(kernel.kernel, kernel.end, subProblem, distParams, 
+                                                           EpilogueParams::create<float>(), stream[g]);
         assert(status == cudaSuccess);        
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         
