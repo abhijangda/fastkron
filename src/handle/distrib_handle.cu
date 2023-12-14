@@ -188,7 +188,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       bool ncclRecvInResult = false;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
-        const uint NumFusedKerns = kernel.kernel.tiledShape.NumFusedKerns;
+        const uint NumFusedKerns = kernel.kernel.NumFusedKerns_;
         
         void* krons[NumFusedKerns];
         uint kronCols[NumFusedKerns];

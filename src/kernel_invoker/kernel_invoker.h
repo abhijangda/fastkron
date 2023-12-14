@@ -1,3 +1,4 @@
+#include "kmm/kmmalgo.h"
 #include "device/kernel_info.h"
 #include "device/params.h"
 

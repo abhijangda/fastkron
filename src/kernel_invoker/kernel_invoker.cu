@@ -3,11 +3,11 @@
 
 static bool isValidKernel(KernelInfo& kernelInfo) {
   const uint NumThreads = kernelInfo.NumThreads;
-  const SlicedMulShape tiledShape = kernelInfo.tiledShape;
   const uint CRegRows = kernelInfo.CRegRows;
   const uint CRegCols = kernelInfo.CRegCols;
+  const Factor tiledFactor = kernelInfo.tiledFactor;
 
-  const uint ValidThreads = ((tiledShape.K/tiledShape.P)/CRegRows) * (tiledShape.Q/CRegCols);
+  const uint ValidThreads = ((kernelInfo.tiledInput.N/tiledFactor.P)/CRegRows) * (tiledFactor.Q/CRegCols);
   if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
     std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
     return false;
@@ -23,33 +23,20 @@ cudaError_t generalSlicedMatmul(KernelInfo& kernelInfo, const uint kronIndex,
                                 EpilogueParams epilogueParams,
                                 cudaStream_t stream) {
   cudaError_t status;
-  
+
+  //TODO: Do this when loading kernels
   if (!isValidKernel(kernelInfo)) abort();
 
-  const SlicedMulShape tiledShape = kernelInfo.tiledShape;
-
   //Create the grid and thread block
-  dim3 grid;
-  dim3 block;
-  grid = {
-          (problem.k/tiledShape.K) * DIVUP(problem.qs[0], tiledShape.Q),
-          DIVUP(problem.m, tiledShape.M),
-          1
-         };
-  block = {
-            kernelInfo.NumThreads, 
-            1, 
-            1
-          };
-
   KernelParams<NumFusedKerns> params (problem, kronIndex);
-  FusedParams<NumFusedKerns> fusedParams (problem, tiledShape.K);
+  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.N);
   // std::cout << "Invoking " << kernelInfo << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, DistributedParams(), 
-                                        epilogueParams, grid, block, stream);
+                                        epilogueParams, kernelInfo.grid(problem), 
+                                        kernelInfo.block(), stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;
@@ -88,33 +75,20 @@ static cudaError_t generalDistributedSlicedMatmul(KernelInfo& kernelInfo, const 
                                                   DistributedParams distParams, EpilogueParams epilogueParams,
                                                   cudaStream_t stream) {
   cudaError_t status;
-  const SlicedMulShape tiledShape = kernelInfo.tiledShape;
-
+  
+  //Do this when loading kernel
   if (!isValidKernel(kernelInfo)) abort();
 
-  //Create the grid and thread block
-  dim3 grid;
-  dim3 block;
-  grid = {
-          (problem.k/tiledShape.K) * DIVUP(problem.qs[0], tiledShape.Q),
-          DIVUP(problem.m, tiledShape.M),
-          1
-         };
-  block = {
-            kernelInfo.NumThreads, 
-            1,
-            1
-          };
-
   KernelParams<NumFusedKerns> params (problem, kronIndex);
-  FusedParams<NumFusedKerns> fusedParams (problem, tiledShape.K);
+  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.N);
 
   //Call kernel
   //TODO: No need to have Type template (T) as part of Kernelparams and DistributedParams
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, epilogueParams, 
-                                        grid, block, stream);
+                                        kernelInfo.grid(problem), 
+                                        kernelInfo.block(), stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;

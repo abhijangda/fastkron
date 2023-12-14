@@ -1,6 +1,7 @@
 #include <functional>
 #include <cassert>
 #include <stdio.h>
+#include <iostream>
 
 #pragma once
 
@@ -141,6 +142,16 @@ struct KMMProblem {
       }
     }
     return eq;
+  }
+
+  friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
+    out << problem.m << "* (";
+    for (int i = 0; i < problem.n; i++) {
+      out << problem.ps[i] << "x" << problem.qs[i];
+      if (i < problem.n - 1) out << "(x)";
+    }
+    out << ")";
+    return out;
   }
 };
 

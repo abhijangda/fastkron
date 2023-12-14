@@ -215,12 +215,11 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
 
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(problem, temps, Y,
-    [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.tiledShape.NumFusedKerns;},
+    [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns_;},
     [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, int rstart, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;
-      const uint NumFusedKerns = kernel.kernel.tiledShape.NumFusedKerns;
       assert(rstart == kernel.end);
       err = this->kernelInvoker.fusedSlicedMatmul(selectedKernel, rstart, 
                                                   problem, epilogueParams,

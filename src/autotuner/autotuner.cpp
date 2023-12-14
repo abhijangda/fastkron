@@ -73,11 +73,14 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
       float minTime = std::numeric_limits<float>::max();
       const uint runs = 5;
       const uint warmups = 2;
-      std::cout << "Tuning for shape "  << shape << std::endl;
+      std::cout << "Tuning for shape "  << problem << std::endl;
       for (auto shapeAndKernels : fastKron.compiledKernels) {
         if (shapeAndKernels.first != factor) continue;
         for (auto kernel : shapeAndKernels.second) {
-          if (!kernel.canCompute(shape)) continue;
+          if (!kernel.canCompute(secondPart, distP2PStore)) {
+            // std::cout << "81 " << secondPart << " " << kernel << std::endl;
+            continue;
+          }
           CUDA_CHECK(cudaStreamSynchronize(stream));
           cudaError_t status;
           for (int r = 0; r < warmups + runs; r++) {
@@ -110,7 +113,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
 
       if (minTime < std::numeric_limits<float>::max()) {
         std::cout << std::fixed << std::setprecision(2) <<
-                    "Best kernel for " << shape << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
+                    "Best kernel for " << problem << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
         tunedKernelsMap.add(secondPart, distP2PStore, bestKernel, minTime/runs);
       }
     }
