@@ -1,17 +1,5 @@
-#include <cstdlib>
 #include <cassert>
-#include <cstdio>
-#include <type_traits>
-#include <thread>
-
-#include <vector>
 #include <iostream>
-#include <sstream>
-#include <limits>
-#include <iomanip>
-#include <cstring>
-#include <functional>
-#include <algorithm>
 
 #include "utils/utils.h"
 #include "utils/thread_pool.h"
@@ -161,8 +149,8 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
       KernelInfo selectedKernel = kernel.kernel;
       assert(rstart == kernel.end);
       err = this->kerneldb.invokeKernel(selectedKernel, rstart, 
-                                             problem, epilogueParams,
-                                             stream);
+                                        problem, epilogueParams,
+                                        stream);
     
       CUDA_CHECK(err);
       kernelSeriesIter++;

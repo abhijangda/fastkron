@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 #include "kmmalgo.h"
 
 std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& shape) const {
@@ -11,13 +9,10 @@ std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& shape) const {
 }
 
 bool checkDistributedKronSizes(const uint NumKronMats, 
-                                      const uint M, const uint N, const uint K, 
-                                      const uint KronMatCols[], const uint KronMatRows[],
-                                      const uint LocalKrons, const uint gpusInK) {
+                               const uint M, const uint N, const uint K, 
+                               const uint KronMatCols[], const uint KronMatRows[],
+                               const uint LocalKrons, const uint gpusInK) {
   uint prevTempN = K;
-  
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-    return false;
   
   if (prevTempN % gpusInK != 0) return false;
     
@@ -35,7 +30,8 @@ bool checkDistributedKronSizes(const uint NumKronMats,
   return true;
 }
 
-bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN, const uint gpusInK) {
+bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
+                               const uint gpusInK) {
   bool correct = true;
   
   //Cannot do more than N local slicedmuls
