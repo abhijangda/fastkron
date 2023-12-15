@@ -105,8 +105,7 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
 }
 */
 
-cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[], 
-                                   void* X, void* Fs[], void* Y, void* temp1, void* temp2,
+cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
                                    EpilogueParams epilogueParams, cudaStream_t stream) {
   TunedKernelsSeries kernelSeries;
   if (tunedKernelSeries.size() > 0) {
@@ -118,38 +117,39 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
   //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   // }
 
-  if (Y == nullptr) return cudaErrorInvalidValue;
-  if (temp1 == nullptr) return cudaErrorInvalidValue;
+  if (problem.y == nullptr) return cudaErrorInvalidValue;
+  if (temp1     == nullptr) return cudaErrorInvalidValue;
 
   void* temps[2] = {temp1, temp2};
-  void* input = X;
+  void* input = problem.x;
   void* output = temps[0];
 
   if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
-      temps[0] = Y;
+      temps[0] = problem.x;
       temps[1] = temp1;
     } else {
       temps[0] = temp1;
-      temps[1] = Y;
+      temps[1] = problem.y;
     }
 
     output = temps[0];
-    input = X;
+    input = problem.x;
   }
 
-  KMMProblem problem(M, N, Ps, Qs, input, Fs, output);
+  KMMProblem tmpProblem(problem.m, problem.n, problem.ps, problem.qs,
+                        input, problem.fs, output);
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err = executeGeKMM(problem, temps, Y,
+  cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns_;},
-    [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem problem, int rstart, void* temps[2], void* result) {
+    [&kernelSeriesIter, &err, epilogueParams, stream, this](const KMMProblem subProblem, int rstart, void* temps[2], void* result) {
       auto kernel = *kernelSeriesIter;
       
       KernelInfo selectedKernel = kernel.kernel;
       assert(rstart == kernel.end);
       err = this->kerneldb.invokeKernel(selectedKernel, rstart, 
-                                        problem, epilogueParams,
+                                        subProblem, epilogueParams,
                                         stream);
     
       CUDA_CHECK(err);
@@ -182,11 +182,12 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
                      
   auto e = executeGeKMM(problem, nullptr, nullptr,
     [](const KMMProblem kmm) {return 1;},
-    [&maxTempN, &resultCols](const KMMProblem kmm, int rstart, void* temps[2], void* result) {
-                            maxTempN = std::max(maxTempN, std::max(kmm.k, kmm.l));
-                            resultCols = kmm.l;
-                            return cudaSuccess;
-                          });
+    [&maxTempN, &resultCols]
+    (const KMMProblem kmm, int rstart, void* temps[2], void* result) {
+      maxTempN = std::max(maxTempN, std::max(kmm.k, kmm.l));
+      resultCols = kmm.l;
+      return cudaSuccess;
+    });
 
   *tempSize   = gpuM * maxTempN;
   if (isDistributed_ and distComm_ == DistComm::NCCL)

@@ -32,20 +32,20 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint
 
 cudaError_t sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, float* Fs[], float* Y,
                     float alpha, float beta, float *Z, float* temp1, float* temp2, cudaStream_t stream) {
-  return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
-                        (void*)temp1, (void*)temp2, 
+  KMMProblem problem(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y);
+  return handle->xgekmm(problem, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z), stream);
 }
 cudaError_t igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, int* Fs[], int* Y,
                    int alpha, int beta, int *Z, int* temp1, int* temp2, cudaStream_t stream) {
-  return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
-                        (void*)temp1, (void*)temp2, 
+  KMMProblem problem(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y);
+  return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z), stream);
 }
 cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, double* Fs[], double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2, cudaStream_t stream) {
-  return handle->xgekmm(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y,
-                        (void*)temp1, (void*)temp2, 
+  KMMProblem problem(M, N, Ps, Qs, (void*)X, (void**)Fs, (void*)Y);
+  return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<double>(alpha, beta, Z), stream);
 }
 

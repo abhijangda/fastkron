@@ -24,9 +24,8 @@ struct KMMProblem {
   void * y;
 
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs, 
-             void* x, void ** fs, void* y,
-             const int k, const int l) : m(m), n(n),
-             x(x), y(y), k(k), l(l) {
+             void* x, void* const* fs, void* y, const int k, 
+             const int l) : m(m), n(n), x(x), y(y), k(k), l(l) {
     assert (n < MaxN);
     for (int i = 0; i < n; i++) {
       this->ps[i] = ps[i];
@@ -44,7 +43,7 @@ struct KMMProblem {
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
-             void* x, void ** fs, void * y) :
+             void* x, void* const* fs, void * y) :
     KMMProblem(m, n, ps, qs, x, fs, y, 1, 1) {
     k = 1;
     l = 1;
