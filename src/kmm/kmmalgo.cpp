@@ -10,23 +10,6 @@ std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& shape) const {
   return h;
 }
 
-//Check N and K is a multiplication of KronMatCols and KronMatRows
-bool checkKronMatrixSizes(const uint NumKronMats, 
-                          const uint M, const uint N, const uint K, 
-                          const uint KronMatCols[], const uint KronMatRows[]) {
-  uint n=1,k=1;
-  for (uint i = 0; i < NumKronMats; i++) {
-    k *= KronMatRows[i];
-    n *= KronMatCols[i];
-  }
-  if (n != N || k != K) {
-    printf("Invalid Kron product sizes %d != %d, %d != %d\n", n, N, k, K);
-    return false;
-  }
-
-  return true;
-}
-
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                       const uint M, const uint N, const uint K, 
                                       const uint KronMatCols[], const uint KronMatRows[],

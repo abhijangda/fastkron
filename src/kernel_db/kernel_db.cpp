@@ -151,10 +151,10 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
         if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
         if (distP2PStore) {
           status = invokeP2PStoreKernel(kernel, factorIdx, problem,
-                                                distParams, EpilogueParams::create<float>(), stream);
+                                        distParams, EpilogueParams::create<float>(), stream);
         } else {
           status = invokeKernel(kernel, factorIdx, problem,
-                                        EpilogueParams::create<float>(), stream);
+                                EpilogueParams::create<float>(), stream);
         }
       }
       CUDA_CHECK(status);

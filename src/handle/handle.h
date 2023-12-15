@@ -100,9 +100,3 @@ struct FastKronHandle {
   //                                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
   //                                    bool distributedKernel);
 };
-
-//TODO: Combine all arguments in SlicedMulShape
-bool checkDistributedKronSizes(const uint NumKronMats, 
-                               const uint M, const uint N, const uint K, 
-                               const uint KronMatCols[], const uint KronMatRows[],
-                               const uint LocalKrons, const uint gpusInK);
