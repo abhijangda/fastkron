@@ -30,10 +30,8 @@ struct KMMProblem {
     for (int i = 0; i < n; i++) {
       this->ps[i] = ps[i];
       this->qs[i] = qs[i];
-      if (fs)
-        this->fs[i] = fs[i];
-      else
-        this->fs[i] = nullptr;
+      if (fs) this->fs[i] = fs[i];
+      else    this->fs[i] = nullptr;
     }
 
     for (int i = n; i < MaxN; i++) {
