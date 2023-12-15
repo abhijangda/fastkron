@@ -1,3 +1,5 @@
+#include <climits>
+
 #include <sys/time.h>
 #include <time.h>
 

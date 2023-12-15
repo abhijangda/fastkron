@@ -1,6 +1,8 @@
-#include <vector>
 #include <nccl.h>
+#include <cuda_runtime.h>
+#include <cuda.h>
 
+#include <vector>
 #include <unordered_map>
 
 #include "fastkron.h"
@@ -103,6 +105,4 @@ struct FastKronHandle {
 bool checkDistributedKronSizes(const uint NumKronMats, 
                                const uint M, const uint N, const uint K, 
                                const uint KronMatCols[], const uint KronMatRows[],
-                               const uint LocalKrons, const uint gpusInK);
-bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);

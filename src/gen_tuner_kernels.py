@@ -233,7 +233,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       f.write(kernel_file_template)
 
   #declare KernelInfo for each config
-  host_decls = '#include "../device_functions.cuh"\n'
+  host_decls = ''
   for config in combinedConfigs:
     host_decls += config.hostFuncDecl() + ";\n"
   host_decls += "\n"

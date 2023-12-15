@@ -61,18 +61,15 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
     for (int endP = rstart; endP < problem.n; endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
       bool distP2PStore = isDistributed && rstart == 0;
-      SlicedMulShape shape = SlicedMulShape{secondPart.qs[0], secondPart.ps[0], 
-                                            secondPart.k, secondPart.m, secondPart.n, distP2PStore};
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n > 1) continue;
-      
       auto bestKernelWithTime = fastKron.kerneldb.tuneKernelForSize(secondPart, distP2PStore, rstart, distParams, stream);
       if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
         tunedKernelsMap.add(secondPart, distP2PStore,
                             bestKernelWithTime);
       }
     }
-    
+
     return cudaSuccess;
   });
 

@@ -1,3 +1,6 @@
+#include <cuda_runtime.h>
+#include <cuda.h>
+
 #include "kmm/kmmalgo.h"
 #include "device/kernel_info.h"
 #include "device/params.h"

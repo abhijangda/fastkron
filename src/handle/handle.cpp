@@ -16,7 +16,6 @@
 #include "utils/utils.h"
 #include "utils/thread_pool.h"
 #include "handle/handle.h"
-#include "device/otherkernels.cuh"
 #include "env/env.h"
 #include "autotuner/autotuner.h"
 #include "kmm/kmmalgo.h"
@@ -26,65 +25,6 @@
  2. Debug message environment flag*/
 
 /**Library entry points to launch cuda kernels**/
-//Check N and K is a multiplication of KronMatCols and KronMatRows
-bool checkKronMatrixSizes(const uint NumKronMats, 
-                          const uint M, const uint N, const uint K, 
-                          const uint KronMatCols[], const uint KronMatRows[]) {
-  uint n=1,k=1;
-  for (uint i = 0; i < NumKronMats; i++) {
-    k *= KronMatRows[i];
-    n *= KronMatCols[i];
-  }
-  if (n != N || k != K) {
-    printf("Invalid Kron product sizes %d != %d, %d != %d\n", n, N, k, K);
-    return false;
-  }
-
-  return true;
-}
-
-bool checkDistributedKronSizes(const uint NumKronMats, 
-                                      const uint M, const uint N, const uint K, 
-                                      const uint KronMatCols[], const uint KronMatRows[],
-                                      const uint LocalKrons, const uint gpusInK) {
-  uint prevTempN = K;
-  
-  if (!checkKronMatrixSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows))
-    return false;
-  
-  if (prevTempN % gpusInK != 0) return false;
-    
-  for (uint i = 0; i < NumKronMats; i += LocalKrons) {
-    const uint kronMat = NumKronMats - i - 1;
-    uint currTempN = prevTempN;
-    for (int k = 0; k < min(LocalKrons, NumKronMats - i); k++) {
-      currTempN = (currTempN/KronMatRows[kronMat - k])*KronMatCols[kronMat - k];
-    }
-  
-    if (currTempN % gpusInK != 0) return false;
-    prevTempN = currTempN;
-  }
-
-  return true;
-}
-
-bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN, const uint gpusInK) {
-  bool correct = true;
-  
-  //Cannot do more than N local slicedmuls
-  if (LocalN > problem.n) correct = false;
-
-  //If Row is divided among then local slicedmuls has to be less than N 
-  if (gpusInK > 1 and LocalN >= problem.n) correct = false;
-
-  executeGeKMM(problem, nullptr, nullptr,
-    [](const KMMProblem kmm) {return 1;},
-    [&correct, gpusInK](const KMMProblem kmm, int, void* t1, void* t2) {
-      correct = correct && (kmm.l % gpusInK == 0);
-      return cudaSuccess;
-    });
-  return correct;
-}
 
 /*
 SlicedMulShape FastKronHandle::maxCompiledColsA(SlicedMulShape shape) {

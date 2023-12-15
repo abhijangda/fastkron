@@ -1,7 +1,9 @@
 #include <functional>
 #include <cassert>
-#include <stdio.h>
 #include <iostream>
+
+#include <cuda_runtime.h>
+#include <cuda.h>
 
 #pragma once
 
@@ -168,3 +170,5 @@ cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
                                 void* result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<cudaError_t (const KMMProblem, int, void*[2], void*)> func);
+bool checkDistributedKronSizes(const KMMProblem problem,
+                               const uint LocalKrons, const uint gpusInK);

@@ -55,12 +55,12 @@ set(HEADER_FILES ${SRC}/env/env.h
                  ${SRC}/device/sliced_mul_shape.h
                  ${SRC}/utils/thread_pool.h ${SRC}/utils/utils.h)
 
-set(SOURCES ${SRC}/fastkron.cu 
+set(SOURCES ${SRC}/fastkron.cpp
             ${SRC}/env/env.cpp
             ${SRC}/autotuner/autotuner.cpp 
-            ${SRC}/handle/handle.cu ${SRC}/handle/distrib_handle.cu
-            ${SRC}/kernel_db/kernel_db.cu 
-            ${SRC}/kmm/kmmalgo.cu
+            ${SRC}/handle/handle.cpp ${SRC}/handle/distrib_handle.cu
+            ${SRC}/kernel_db/kernel_db.cpp 
+            ${SRC}/kmm/kmmalgo.cpp
             ${SRC}/device/sliced_mul_shape.cpp)
 
 cuda_add_library(FastKron SHARED
@@ -75,6 +75,7 @@ cuda_add_library(FastKron SHARED
 target_include_directories(FastKron 
                            PRIVATE 
                               ${SRC}/
+                              ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
