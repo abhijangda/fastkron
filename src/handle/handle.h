@@ -25,7 +25,8 @@ struct TunedKernelFromStart {
     kernel(kernel_), start(start_), end(end_), K(K_), time(time_), distShare(false) {}
 
   friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
-    out << "[" << k.start << ", " << k.end << "] = " << k.K << " " << k.kernel << " runs for " << k.time << " ms";
+    out << "[" << k.start << ", " << k.end << "] = " << k.K << " " 
+        << k.kernel << " runs for " << k.time << " ms";
     return out;
   }
 };

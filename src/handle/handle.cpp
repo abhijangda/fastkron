@@ -143,15 +143,16 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns_;},
-    [&kernelSeriesIter, &err, epilogueParams, stream, this]
+    [&kernelSeriesIter, epilogueParams, stream, this]
       (const KMMProblem subProblem, int rstart, void* temps[2], void* result) {
+        cudaError_t err;
         auto kernel = *kernelSeriesIter;
 
         KernelInfo selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
         err = kerneldb.invokeKernel(selectedKernel, rstart, 
-                                          subProblem, epilogueParams,
-                                          stream);
+                                    subProblem, epilogueParams,
+                                    stream);
       
         CUDA_CHECK(err);
         kernelSeriesIter++;
