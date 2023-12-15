@@ -16,7 +16,6 @@
 #include "utils/utils.h"
 #include "utils/thread_pool.h"
 #include "handle/handle.h"
-#include "handle/kernel_defs.cuh"
 #include "device/otherkernels.cuh"
 #include "env/env.h"
 #include "autotuner/autotuner.h"
@@ -221,7 +220,7 @@ cudaError_t FastKronHandle::xgekmm(uint M, uint N, uint Ps[], uint Qs[],
       
       KernelInfo selectedKernel = kernel.kernel;
       assert(rstart == kernel.end);
-      err = this->kernelInvoker.invokeKernel(selectedKernel, rstart, 
+      err = this->kerneldb.invokeKernel(selectedKernel, rstart, 
                                              problem, epilogueParams,
                                              stream);
     
@@ -268,21 +267,6 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   *resultSize = gpuM * resultCols;
 
   return e;
-}
-
-static bool isValidKernel(KernelInfo& kernelInfo) {
-  const uint NumThreads = kernelInfo.NumThreads;
-  const uint CRegRows = kernelInfo.CRegRows;
-  const uint CRegCols = kernelInfo.CRegCols;
-  const Factor tiledFactor = kernelInfo.tiledFactor;
-
-  const uint ValidThreads = ((kernelInfo.tiledInput.N/tiledFactor.P)/CRegRows) * (tiledFactor.Q/CRegCols);
-  if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
-    std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
-    return false;
-  }
-
-  return true;
 }
 
 FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
@@ -385,33 +369,6 @@ FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons)
       int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
       PTHREAD_BARRIER_CHECK(s);
     }
-  }
-
-  //Load kernels into compiledKernels map
-  for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
-    KernelInfo& info = KronGemmKernels[i];
-    if (!isValidKernel(info)) abort();
-    //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-    auto iter = compiledKernels.find(info.factor);
-    if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(info.factor, std::vector<KernelInfo>()));
-    }
-    compiledKernels.at(info.factor).push_back(info);
-  }
-  
-  //TODO: Check that if distP2PStore is needed then there is a kernel that can 
-  //do it
-  //TODO: Add if debug
-  if (false) {
-    uint numKernels = 0;
-    std::cout << "Loading compiled kernels" << std::endl;
-    for (auto iter : compiledKernels) {
-      for (auto kernel : iter.second) {
-        // std::cout << kernel << std::endl;
-      }
-      numKernels += iter.second.size();
-    }
-    std::cout << "Number of kernels loaded: " << numKernels << std::endl;
   }  
 }
 
@@ -430,7 +387,8 @@ void FastKronHandle::free() {
         ncclCommDestroy(ncclComms[i]);
     }
   }
-  compiledKernels.clear();
+
+  kerneldb.free();
 }
 
 void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {

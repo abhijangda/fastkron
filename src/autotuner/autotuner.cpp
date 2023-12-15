@@ -52,9 +52,6 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  cudaEvent_t start, end;
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&end));
   std::cout << "Fusion enabled?  " << this->fastKron.getUseFusion() << std::endl;
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
@@ -63,58 +60,16 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
     for (int endP = rstart; endP < problem.n; endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
-      Factor factor(secondPart.qs[0], secondPart.ps[0]);
       bool distP2PStore = isDistributed && rstart == 0;
       SlicedMulShape shape = SlicedMulShape{secondPart.qs[0], secondPart.ps[0], 
                                             secondPart.k, secondPart.m, secondPart.n, distP2PStore};
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n > 1) continue;
-      KernelInfo bestKernel;
-      float minTime = std::numeric_limits<float>::max();
-      const uint runs = 5;
-      const uint warmups = 2;
-      std::cout << "Tuning for shape "  << problem << std::endl;
-      for (auto shapeAndKernels : fastKron.compiledKernels) {
-        if (shapeAndKernels.first != factor) continue;
-        for (auto kernel : shapeAndKernels.second) {
-          if (!kernel.canCompute(secondPart, distP2PStore)) {
-            // std::cout << "81 " << secondPart << " " << kernel << std::endl;
-            continue;
-          }
-          CUDA_CHECK(cudaStreamSynchronize(stream));
-          cudaError_t status;
-          for (int r = 0; r < warmups + runs; r++) {
-            if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
-            auto& invoker = fastKron.kernelInvoker;
-            if (distP2PStore) {
-              status = invoker.invokeP2PStoreKernel(kernel, rstart, secondPart,
-                                                    distParams, EpilogueParams::create<float>(), stream);
-            } else {
-              status = invoker.invokeKernel(kernel, rstart, secondPart,
-                                            EpilogueParams::create<float>(), stream);
-            }
-          }
-          CUDA_CHECK(cudaEventRecord(end, stream));
-          CUDA_CHECK(cudaEventSynchronize(end));
-          
-          if (status != cudaSuccess)
-            std::cout << "Error: " << cudaGetErrorString(status) << " for " << kernel << " K " << secondPart.k << std::endl;
-          float kernelTime;
-          CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
-          std::cout << std::fixed << std::setprecision(2) << 
-                      kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
-          if (kernelTime < minTime) {
-            bestKernel = kernel;
-            minTime = kernelTime;
-          }
-          if (status != cudaSuccess) return status;
-        }
-      }
-
-      if (minTime < std::numeric_limits<float>::max()) {
-        std::cout << std::fixed << std::setprecision(2) <<
-                    "Best kernel for " << problem << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
-        tunedKernelsMap.add(secondPart, distP2PStore, bestKernel, minTime/runs);
+      
+      auto bestKernelWithTime = fastKron.kerneldb.tuneKernelForSize(secondPart, distP2PStore, rstart, distParams, stream);
+      if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
+        tunedKernelsMap.add(secondPart, distP2PStore,
+                            bestKernelWithTime);
       }
     }
     

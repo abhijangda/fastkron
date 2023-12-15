@@ -16,11 +16,11 @@ class TunedKernelsMap {
 public:
   TunedKernelsMap() {}
 
-  void add(const KMMProblem& problem, bool p2p, KernelInfo kernel, float time) {
+  void add(const KMMProblem& problem, bool p2p, std::pair<KernelInfo, float> kernelAndtime) {
     if (p2p) {
-      p2pKernels.emplace(std::make_pair(problem, std::make_pair(kernel, time)));
+      p2pKernels.emplace(std::make_pair(problem, kernelAndtime));
     } else {
-      kernels.emplace(std::make_pair(problem, std::make_pair(kernel, time)));
+      kernels.emplace(std::make_pair(problem, kernelAndtime));
     }
   }
 

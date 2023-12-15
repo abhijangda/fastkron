@@ -5,7 +5,7 @@
 
 #include "fastkron.h"
 #include "utils/thread_pool.h"
-#include "kernel_invoker/kernel_invoker.h"
+#include "kernel_db/kernel_db.h"
 #include "env/env.h"
 #include "kmm/kmmalgo.h"
 
@@ -48,7 +48,7 @@ struct FastKronHandle {
   uint perGPUKronBatch_;
   bool isDistributed_;
   DistComm distComm_;
-  KernelInvoker kernelInvoker;
+  KernelDatabase kerneldb;
   //Map from Factor size and Number of factors to KernelInfos
 
   pthread_barrier_t* barriers_;
