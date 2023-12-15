@@ -5,6 +5,9 @@
 #pragma once
 
 class KernelInvoker {
+private:
+    std::unordered_map<Factor, std::vector<KernelInfo>> compiledKernels;
+
 public:
   cudaError_t invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
                            KMMProblem problem,

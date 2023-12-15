@@ -50,7 +50,6 @@ struct FastKronHandle {
   DistComm distComm_;
   KernelInvoker kernelInvoker;
   //Map from Factor size and Number of factors to KernelInfos
-  std::unordered_map<Factor, std::vector<KernelInfo>> compiledKernels;
 
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;

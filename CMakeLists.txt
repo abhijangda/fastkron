@@ -50,7 +50,7 @@ set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc ${DEVICE}/device_
 set(HEADER_FILES ${SRC}/env/env.h 
                  ${SRC}/autotuner/autotuner.h
                  ${SRC}/handle/handle.h ${SRC}/handle/kernel_defs.cuh
-                 ${SRC}/kernel_invoker/kernel_invoker.h 
+                 ${SRC}/kernel_db/kernel_db.h 
                  ${SRC}/kmm/kmmalgo.h
                  ${SRC}/device/sliced_mul_shape.h
                  ${SRC}/utils/thread_pool.h ${SRC}/utils/utils.h)
@@ -59,7 +59,7 @@ set(SOURCES ${SRC}/fastkron.cu
             ${SRC}/env/env.cpp
             ${SRC}/autotuner/autotuner.cpp 
             ${SRC}/handle/handle.cu ${SRC}/handle/distrib_handle.cu
-            ${SRC}/kernel_invoker/kernel_invoker.cu 
+            ${SRC}/kernel_db/kernel_db.cu 
             ${SRC}/kmm/kmmalgo.cu
             ${SRC}/device/sliced_mul_shape.cpp)
 
