@@ -126,7 +126,7 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
 
   if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
-      temps[0] = problem.x;
+      temps[0] = problem.y;
       temps[1] = temp1;
     } else {
       temps[0] = temp1;
