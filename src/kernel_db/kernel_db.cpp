@@ -4,7 +4,7 @@
 #include "utils/utils.h"
 
 #include "kernel_db/kernel_db.h"
-#include "kernel_db/kernel_defs.cuh"
+#include "kernel_db/kernel_defs.h"
 
 static bool isValidKernel(KernelInfo& kernelInfo) {
   const uint NumThreads = kernelInfo.NumThreads;

@@ -50,7 +50,7 @@ set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc ${DEVICE}/device_
 set(HEADER_FILES ${SRC}/env/env.h 
                  ${SRC}/autotuner/autotuner.h
                  ${SRC}/handle/handle.h 
-                 ${SRC}/kernel_db/kernel_defs.cuh ${SRC}/kernel_db/kernel_db.h 
+                 ${SRC}/kernel_db/kernel_defs.h ${SRC}/kernel_db/kernel_db.h 
                  ${SRC}/kmm/kmmalgo.h
                  ${SRC}/device/sliced_mul_shape.h
                  ${SRC}/utils/thread_pool.h ${SRC}/utils/utils.h)
