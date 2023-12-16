@@ -154,7 +154,7 @@ struct KMMProblem {
   }
 
   friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
-    out << problem.m << "* (";
+    out << problem.m << "*(";
     if (problem.sameFactorShapes()) 
       out << problem.ps[0] << "x" << problem.qs[0] << "^" << problem.n;
     else
