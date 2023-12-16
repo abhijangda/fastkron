@@ -150,6 +150,7 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
 
         KernelInfo selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
+
         err = kerneldb.invokeKernel(selectedKernel, rstart, 
                                     subProblem, epilogueParams,
                                     stream);

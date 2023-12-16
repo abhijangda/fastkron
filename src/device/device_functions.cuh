@@ -80,7 +80,7 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
   // if (threadIdx.x == 0) printf("TileSizeRowsA %d\n", TileSizeRowsA);
   const int VecTNumElems = sizeof(VecT)/sizeof(ElemT);
 
-  for (uint rowA = 0; rowA < (RowsCModTileIsZero ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
+  for (uint rowA = 0; rowA < (TileSizeRowsA == 1 ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
     const ElemT* glRowAddr  = &glA[(rowA + tileRowA) * colsA];
     const size_t firstElems = 0; //nonAlignedElems(glRowAddr, VecTNumElems);
     const size_t lastElems  = 0; //TileSizeColsA % VecTNumElems;

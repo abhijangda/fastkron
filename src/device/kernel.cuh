@@ -13,7 +13,7 @@ enum RowParallelismTy {
 template<typename ElemT, typename Vec2T, typename Vec4T, uint NumThreads, RowParallelismTy RowParallelism, 
          uint MaxQ, uint MaxP, uint TileQ, uint TileK,
          uint TileM, uint NumFusedKerns, bool DistributeToGPUs, uint CRegRows, uint CRegCols,
-         bool RowsCModTileIsZero, uint KPK_EQUALS_VAR, uint SharedTileP, 
+         uint KPK_EQUALS_VAR, uint SharedTileP, 
          int AAlignment, int KronAlignment>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
@@ -89,7 +89,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   
   for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileP) {
     //Loop iterates only once when NumFusedKerns == 1
-    storeAgToAsh<ElemT, AVecT, 0>(RowsCModTileIsZero, TileM, TileSizeColsA, 
+    storeAgToAsh<ElemT, AVecT, 0>(0, TileM, TileSizeColsA, 
                                             MaxP, TileP, TileK, NumThreads, CRegRows, params.m,
                                             kronRows, colsA, tid, 
                                             tileKronRow, tileRowA, 
@@ -136,7 +136,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
         #pragma unroll
         for (uint rowA = 0; rowA < TileM; rowA++) {
-        if (RowsCModTileIsZero || (TileM > 1 && rowA < params.m - tileRowA)) {
+        if (TileM == 1 || rowA < params.m - tileRowA) {
           #pragma unroll
           for (uint rowC = 0; rowC < CRegRows; rowC++) {
             uint shACol = tileColA + rowC;
@@ -160,7 +160,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         //Matrix Multiply Accumulate
         #pragma unroll
         for (uint rowA = 0; rowA < TileM; rowA++)
-        if (RowsCModTileIsZero || (TileM > 1 && rowA < params.m - tileRowA)) {
+        if (TileM == 1 || rowA < params.m - tileRowA) {
           #pragma unroll
           for (uint i = 0;    i < CRegRows;         i++)
           #pragma unroll
@@ -178,7 +178,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
       if (isThreadValid && NumFusedKerns > 1 && fusedFac < NumFusedKerns - 1) {
       //Store C to shared memory using shift method
       for (int rowA = 0; rowA < TileM; rowA++) {
-      if (RowsCModTileIsZero || (TileM > 1 && rowA < params.m - tileRowA)) {
+      if (TileM == 1 || rowA < params.m - tileRowA) {
         #pragma unroll
         for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
         for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
@@ -196,7 +196,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
   if (NumFusedKerns > 1) {
     for (uint rowShC = 0; rowShC < TileM; rowShC++) {
-    if (RowsCModTileIsZero || (TileM > 1 && rowShC < params.m - tileRowA)) {
+    if (TileM == 1 || rowShC < params.m - tileRowA) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
       // #ifdef KPK_EQUALS_VAR
@@ -261,7 +261,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   }} else {
   #pragma unroll
   for (int rowA = 0; rowA < TileM; rowA++) {
-  if (RowsCModTileIsZero || (TileM > 1 && rowA < params.m - tileRowA)) {
+  if (TileM == 1 || rowA < params.m - tileRowA) {
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     //Three least significant bits of CRegRows can be either 4, 2, or 1
@@ -329,8 +329,6 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         // }
       } else {
         cIdx = cRow * colsC + cCol;
-      //  if (threadIdx.x == 0)
-      //   printf("363 cCol %d\n", cCol);
         outputArray = (ElemT*)params.y;
       //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
       }
