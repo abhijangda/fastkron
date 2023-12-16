@@ -114,7 +114,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       if (handle.tunedKernelSeries.size() > 0) {
         for (auto tunedKernel : handle.tunedKernelSeries) {
-          if (tunedKernel.start >= endKron  and tunedKernel.end < endKron + KronMulBatchSize) {
+          if (tunedKernel.start >= endKron and tunedKernel.end < endKron + KronMulBatchSize) {
             kernelSeries.insert(kernelSeries.begin(), tunedKernel);
           }
         }

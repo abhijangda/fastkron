@@ -14,6 +14,7 @@
 #pragma once
 
 struct TunedKernelFromStart {
+  //TODO: Cannot improve unless distributed code is refactored 
   KernelInfo kernel;
   uint start, end;
   uint K;
