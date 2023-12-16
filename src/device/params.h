@@ -68,38 +68,37 @@ struct EpilogueParams {
   const ElemT* getD()     {return (const ElemT*)glD;}
 };
 
-template<uint NumFusedKerns>
+template<uint Fused>
 struct KernelParams {
   const uint m;
   const uint l;
   const uint k;
-  uint ps[NumFusedKerns];
-  uint qs[NumFusedKerns];
+  uint ps[Fused];
+  uint qs[Fused];
   const void * __restrict__ x;
-  const void * __restrict__ fs[NumFusedKerns];
+  const void * __restrict__ fs[Fused];
   void       * __restrict__ y;
   const uint kp_idx;
 
   KernelParams(KMMProblem problem, uint kp_idx) :
                m(problem.m), l(problem.l), k(problem.k),
                x(problem.x), y(problem.y), kp_idx(kp_idx) {
-    for (int i = 0; i < NumFusedKerns; i++) {
-      ps[NumFusedKerns - 1 - i] = problem.ps[i];
-      qs[NumFusedKerns - 1 - i] = problem.ps[i];
-      fs[NumFusedKerns - 1 - i] = problem.fs[i];
+    for (int i = 0; i < Fused; i++) {
+      ps[Fused - 1 - i] = problem.ps[i];
+      qs[Fused - 1 - i] = problem.ps[i];
+      fs[Fused - 1 - i] = problem.fs[i];
     }
   }
 };
 
-
-template<uint NumFusedKerns>
+template<uint Fused>
 struct FusedParams {
   uint KronColsPower;
   uint UVAColsRatioKronColsSquare;
   uint ColsCByKronColsPower;
   
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
-    KronColsPower = (uint)std::pow((double)problem.qs[0], (double)NumFusedKerns);
+    KronColsPower = (uint)std::pow((double)problem.qs[0], (double)Fused);
     UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
     ColsCByKronColsPower = problem.l/KronColsPower;
   }
@@ -145,8 +144,8 @@ struct DistributedParams {
     
     const uint KronRowsPower = std::reduce(KronRows_, KronRows_ + LocalKrons_, 1, std::multiplies<uint>());
     const uint KronColsPower = std::reduce(KronCols_, KronCols_ + LocalKrons_, 1, std::multiplies<uint>());
-    UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower; //
-    perGPUKByNumGPUs = PerGPUK_/gpusInK_; //
+    UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower;
+    perGPUKByNumGPUs = PerGPUK_/gpusInK_;
     perGPUNByNumGPUs = PerGPUN_/gpusInK_;
     perGPUNByKronCols = PerGPUN_/KronCols_[LocalKrons_-1];
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;

@@ -133,47 +133,48 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
   KernelInfo bestKernel;
   cudaEvent_t start, end;
   float minTime;
+  bool foundProblem = false;
 
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
   minTime = std::numeric_limits<float>::max();
-  
-  std::cout << "Tuning for shape "  << problem << std::endl;
-  Factor factor(problem.qs[0], problem.ps[0]);
 
-  for (auto shapeAndKernels : compiledKernels) {
-    if (shapeAndKernels.first != factor) continue;
-    for (auto kernel : shapeAndKernels.second) {
-      if (!kernel.canCompute(problem, distP2PStore)) continue;
-      CUDA_CHECK(cudaStreamSynchronize(stream));
-      cudaError_t status;
-      for (int r = 0; r < warmups + runs; r++) {
-        if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
-        if (distP2PStore) {
-          status = invokeP2PStoreKernel(kernel, factorIdx, problem,
-                                        distParams, EpilogueParams::create<float>(), stream);
-        } else {
-          status = invokeKernel(kernel, factorIdx, problem,
-                                EpilogueParams::create<float>(), stream);
-        }
-      }
-      CUDA_CHECK(status);
-      CUDA_CHECK(cudaEventRecord(end, stream));
-      CUDA_CHECK(cudaEventSynchronize(end));
-      
-      if (status != cudaSuccess)
-        std::cout << "Error: " << cudaGetErrorString(status) << " for " 
-                  << kernel << " K " << problem.k << std::endl;
-      float kernelTime;
-      CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
-      std::cout << std::fixed << std::setprecision(2) << 
-                  kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
-      if (kernelTime < minTime) {
-        bestKernel = kernel;
-        minTime = kernelTime;
+  Factor factor(problem.qs[0], problem.ps[0]);
+  if (compiledKernels.find(factor) != compiledKernels.end()) {
+  for (auto kernel : compiledKernels.at(factor)) {
+    if (!kernel.canCompute(problem, distP2PStore)) continue;
+    if (!foundProblem) {
+      std::cout << "Tuning for shape "  << problem << std::endl;
+      foundProblem = true;
+    }
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+    cudaError_t status;
+    for (int r = 0; r < warmups + runs; r++) {
+      if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
+      if (distP2PStore) {
+        status = invokeP2PStoreKernel(kernel, factorIdx, problem,
+                                      distParams, EpilogueParams::create<float>(), stream);
+      } else {
+        status = invokeKernel(kernel, factorIdx, problem,
+                              EpilogueParams::create<float>(), stream);
       }
     }
-  }
+    CUDA_CHECK(status);
+    CUDA_CHECK(cudaEventRecord(end, stream));
+    CUDA_CHECK(cudaEventSynchronize(end));
+    
+    if (status != cudaSuccess)
+      std::cout << "Error: " << cudaGetErrorString(status) << " for " 
+                << kernel << " K " << problem.k << std::endl;
+    float kernelTime;
+    CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
+    std::cout << std::fixed << std::setprecision(2) << 
+                kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
+    if (kernelTime < minTime) {
+      bestKernel = kernel;
+      minTime = kernelTime;
+    }
+  }}
 
   CUDA_CHECK(cudaEventDestroy(start));
   CUDA_CHECK(cudaEventDestroy(end));
