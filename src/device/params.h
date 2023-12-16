@@ -71,7 +71,7 @@ struct EpilogueParams {
 template<uint NumFusedKerns>
 struct KernelParams {
   const uint m;
-  const uint l; //TODO: Change to LocalColsC
+  const uint l;
   const uint k;
   uint ps[NumFusedKerns];
   uint qs[NumFusedKerns];

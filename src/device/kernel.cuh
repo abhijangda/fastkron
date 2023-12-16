@@ -28,12 +28,12 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                 "Alignment of A should be 1, 2 or 4");
   static_assert(KronAlignment == 1 || KronAlignment == 2 || KronAlignment == 4,
                 "Alignment of A should be 1, 2 or 4");
-  using AVecT    = typename std::conditional<AAlignment == 1, ElemT, 
+  using XVecT    = typename std::conditional<AAlignment == 1, ElemT, 
                    typename std::conditional<AAlignment == 2, Vec2T, 
-                            Vec4T>::type>::type;
-  using KronVecT = typename std::conditional<KronAlignment == 1, ElemT, 
+                                             Vec4T>::type>::type;
+  using FVecT = typename std::conditional<KronAlignment == 1, ElemT, 
                    typename std::conditional<KronAlignment == 2, Vec2T, 
-                            Vec4T>::type>::type;
+                                             Vec4T>::type>::type;
 
   const uint TileP    = MIN(SharedTileP,  MaxP);
   const uint TileSizeColsA = TileK/(MaxP/TileP);
@@ -42,7 +42,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   static_assert(NumFusedKerns == 1 || 
                 (NumFusedKerns > 1 && TileP >= MaxP && TileQ >= MaxQ),
                 "Invalid tile size params for fusion");
-  static_assert(TileK % MaxP == 0, "TileK is not a multiple of MaxP");
+  static_assert(TileK % MaxP          == 0, "TileK is not a multiple of MaxP");
   static_assert((TileK/MaxP)%CRegRows == 0, "CRegRows not a multiple of MaxCols/MaxP");
 
   register   ElemT regC[TileM][CRegRows][CRegCols] = {0};
@@ -89,12 +89,12 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   
   for (uint tileKronRow = 0; tileKronRow < kronRows; tileKronRow += TileP) {
     //Loop iterates only once when NumFusedKerns == 1
-    storeAgToAsh<ElemT, AVecT, 0>(0, TileM, TileSizeColsA, 
-                                            MaxP, TileP, TileK, NumThreads, CRegRows, params.m,
-                                            kronRows, colsA, tid, 
-                                            tileKronRow, tileRowA, 
-                                            tile_k, external_tile_kp_k, 
-                                            glA, &shA[0][0]);
+    storeAgToAsh<ElemT, XVecT, 0>(0, TileM, TileSizeColsA, 
+                                  MaxP, TileP, TileK, NumThreads, CRegRows, params.m,
+                                  kronRows, colsA, tid, 
+                                  tileKronRow, tileRowA, 
+                                  tile_k, external_tile_kp_k, 
+                                  glA, &shA[0][0]);
 
     #pragma unroll
     for (int fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
@@ -111,12 +111,12 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
       const ElemT* __restrict__ glKronMat = (ElemT*)params.fs[fusedFac];
       if (TileQ == MaxQ && TileP == MaxP) {
         //Optimized to load full factor matrix
-        fullDirectFglToFsh<ElemT, KronVecT>(MaxP, MaxQ,
+        fullDirectFglToFsh<ElemT, FVecT>(MaxP, MaxQ,
                                             TileP, TileQ, 
                                             NumThreads, kronRows, 
                                             kronCols, tid, glKronMat, &shKronMats[0][0]);
       } else if (!(TileQ == MaxQ && TileP == MaxP)) {
-        tiledDirectFglToFsh<ElemT, KronVecT>(MaxP, MaxQ,
+        tiledDirectFglToFsh<ElemT, FVecT>(MaxP, MaxQ,
                                              TileP, TileQ, 
                                              NumThreads, external_tile_kp_n,
                                              external_tile_kp_k, tileKronRow, 
@@ -332,10 +332,6 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         outputArray = (ElemT*)params.y;
       //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
       }
-      // assert(tid == cCol);
-      // if (kp_idx == 0&& cRow == 0 && cCol < 64)
-      //   printf("tid %d cCol %d outerTileKronCol %d tileColA %d reg_i %d reg_j %d\n", tid, cCol, outerTileKronCol, tileColA, reg_i, reg_j);
-      //if (cCol < colsC) 
 
       if (params.kp_idx == 0) {
         for (int i = 0; i < vecTyNumElems; i++) {
@@ -343,31 +339,30 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
           regC[rowA][reg_i + i][reg_j] = epilogueParams.getAlpha<ElemT>() * regC[rowA][reg_i + i][reg_j] + d;
         }
       }
-      {
-        switch (vecTyNumElems) {
-          case 4: {
-            globalStore4Elems(&outputArray[cIdx], 
-                              regC[rowA][reg_i][reg_j], 
-                              regC[rowA][reg_i+1][reg_j],
-                              regC[rowA][reg_i+2][reg_j], 
-                              regC[rowA][reg_i+3][reg_j]);
-            break;
-          }
-          case 2: {
-            globalStore2Elems(&outputArray[cIdx],
-                              regC[rowA][reg_i][reg_j],
-                              regC[rowA][reg_i+1][reg_j]);
-            break;
-          }
-          case 1: {
-            globalStore1Elems(&outputArray[cIdx], regC[rowA][reg_i][reg_j]);
-            // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
-            // if (params.kp_idx == 3 and blockIdx.y == 0 and cCol >= 4096) { //params.glC[cIdx] != 8.0f
-            //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
-            //          params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, tileColC, outerTileKronCol, threadIdx.x);
-            // }
-            break;
-          }
+      
+      switch (vecTyNumElems) {
+        case 4: {
+          globalStore4Elems(&outputArray[cIdx], 
+                            regC[rowA][reg_i][reg_j], 
+                            regC[rowA][reg_i+1][reg_j],
+                            regC[rowA][reg_i+2][reg_j], 
+                            regC[rowA][reg_i+3][reg_j]);
+          break;
+        }
+        case 2: {
+          globalStore2Elems(&outputArray[cIdx],
+                            regC[rowA][reg_i][reg_j],
+                            regC[rowA][reg_i+1][reg_j]);
+          break;
+        }
+        case 1: {
+          globalStore1Elems(&outputArray[cIdx], regC[rowA][reg_i][reg_j]);
+          // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
+          // if (params.kp_idx == 3 and blockIdx.y == 0 and cCol >= 4096) { //params.glC[cIdx] != 8.0f
+          //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d colsC %d MaxColsC %d tileColC %d outerTileKronCol %d\n",
+          //          params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, colsC, MaxColsC, tileColC, outerTileKronCol, threadIdx.x);
+          // }
+          break;
         }
       }
     }}}

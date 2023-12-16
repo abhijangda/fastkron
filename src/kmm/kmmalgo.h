@@ -143,12 +143,25 @@ struct KMMProblem {
     return eq;
   }
 
+  bool sameFactorShapes() const {
+    bool eq = true;
+    for (int i = 1; i < n; i++) {
+      eq = eq && ps[i - 1] == ps[i] && 
+                 qs[i - 1] == qs[i];      
+    }
+
+    return eq;
+  }
+
   friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
     out << problem.m << "* (";
-    for (int i = 0; i < problem.n; i++) {
-      out << problem.ps[i] << "x" << problem.qs[i];
-      if (i < problem.n - 1) out << "(x)";
-    }
+    if (problem.sameFactorShapes()) 
+      out << problem.ps[0] << "x" << problem.qs[0] << "^" << problem.n;
+    else
+      for (int i = 0; i < problem.n; i++) {
+        out << problem.ps[i] << "x" << problem.qs[i];
+        if (i < problem.n - 1) out << "(x)";
+      }
     out << ")";
     return out;
   }
