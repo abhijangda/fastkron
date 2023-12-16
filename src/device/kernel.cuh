@@ -6,13 +6,13 @@
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads, 
          uint MaxQ, uint MaxP, uint TileQ, uint TileK,
-         uint TileM, uint NumFusedKerns, bool DistributeToGPUs, 
+         uint TileM, uint FusedMuls, bool DistributeToGPUs, 
          uint CRegRows, uint CRegCols,
          uint KPK_EQUALS_VAR, uint TileP, 
          int AAlignment, int KronAlignment>
 __launch_bounds__(NumThreads)
-__global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
-                               FusedParams<NumFusedKerns> fusedParams,
+__global__ void kronGemmKernel(KernelParams<FusedMuls> params,
+                               FusedParams<FusedMuls> fusedParams,
                                DistributedParams distParams,
                                EpilogueParams epilogueParams) {  
   static_assert(AAlignment == 1    || AAlignment == 2    || AAlignment == 4,
@@ -26,8 +26,8 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                   typename std::conditional<KronAlignment == 2, Vec2T, 
                                             Vec4T>::type>::type;
   static_assert(0 < TileQ && TileQ <= MaxQ, "");
-  static_assert(NumFusedKerns == 1 ||
-                (NumFusedKerns > 1 && TileP >= MaxP && TileQ >= MaxQ),
+  static_assert(FusedMuls == 1 ||
+                (FusedMuls > 1 && TileP >= MaxP && TileQ >= MaxQ),
                 "Invalid tile size params for fusion");
   static_assert(TileK % MaxP          == 0, "TileK is not a multiple of MaxP");
   static_assert((TileK/MaxP)%CRegRows == 0, "CRegRows not a multiple of MaxCols/MaxP");
@@ -73,7 +73,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   uint tile_k = get_tile_k<MaxQ, TileQ>();
   
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
-    //Loop iterates only once when NumFusedKerns == 1
+    //Loop iterates only once when FusedMuls == 1
     storeAgToAsh<ElemT, XVecT, 0>(0, TileM, ShTileK, 
                                   MaxP, ShTileP, TileK, NumThreads, CRegRows, params.m,
                                   P, K, tid, 
@@ -82,8 +82,8 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
                                   Xgl, &Xsh[0][0]);
 
     #pragma unroll
-    for (int fusedFac = 0; fusedFac < NumFusedKerns; fusedFac++) {
-      if (NumFusedKerns > 1) {
+    for (int fusedFac = 0; fusedFac < FusedMuls; fusedFac++) {
+      if (FusedMuls > 1) {
         #pragma unroll
         for (uint r = 0; r < TileM   ; r++) {
         #pragma unroll
@@ -160,7 +160,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
       }
 
       __syncthreads();
-      if (isThreadValid && NumFusedKerns > 1 && fusedFac < NumFusedKerns - 1) {
+      if (isThreadValid && FusedMuls > 1 && fusedFac < FusedMuls - 1) {
       //Store C to shared memory using shift method
       for (int rowA = 0; rowA < TileM; rowA++) {
       if (TileM == 1 || rowA < params.m - tileRowA) {
@@ -179,15 +179,15 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
   if (!isThreadValid) return;
 
-  if (NumFusedKerns > 1) {
+  if (FusedMuls > 1) {
     for (uint rowShC = 0; rowShC < TileM; rowShC++) {
     if (TileM == 1 || rowShC < params.m - tileRowA) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
       // #ifdef KPK_EQUALS_VAR
-      // const uint KronRowsPower = iconstpower<P, NumFusedKerns>();
+      // const uint KronRowsPower = iconstpower<P, FusedMuls>();
       // #else
-      // const uint KronRowsPower = power(P, NumFusedKerns);
+      // const uint KronRowsPower = power(P, FusedMuls);
       // #endif
       uint UVAColsRatioKronColsSquare = fusedParams.UVAColsRatioKronColsSquare; //(ShTileK/KronRowsPower);
       const uint ColsCByKronColsPower = fusedParams.ColsCByKronColsPower; //L/KronRowsPower;//(L/(ShTileK/UVAColsRatioKronRowsSquare));
