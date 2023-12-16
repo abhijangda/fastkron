@@ -85,7 +85,7 @@ class KernelConfig:
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.rowModTileIsZero}, {self.kEqVar}, {self.aalign}, {self.kalign}"
+    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.rowModTileIsZero}, {self.aalign}, {self.kalign}"
 
   def kernelname(self):
     return repr(self).replace(", ", "_")
@@ -100,7 +100,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float2, float4, {self.threads()}, RowParallelismTy::Low, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.rowModTileIsZero}, {self.kEqVar}, 1, {self.tileP}, {self.aalign}, {self.kalign}"
+    return f"float, float2, float4, {self.threads()}, RowParallelismTy::Low, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.rowModTileIsZero}, 1, {self.tileP}, {self.aalign}, {self.kalign}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"

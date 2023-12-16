@@ -27,19 +27,18 @@ struct KernelInfo {
   uint CRegCols;
   ElementType elemType;
   bool RowModTileIsZero;
-  bool KEqVar;
   uint AAlignment;
   uint KronAlignment;
   KernelInfo() {}
   KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileQ,
              uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
-             uint CRegRows_, uint CRegCols_, ElementType elemType_, bool RowModTileIsZero_, bool KEqVar_,
+             uint CRegRows_, uint CRegCols_, ElementType elemType_, bool RowModTileIsZero_,
              uint AAlignment_, uint KronAlignment_) :
              kernel(kernel_), NumThreads(NumThreads_), factor(Q, P), tiledFactor(tileQ, P),
              tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_), 
-             RowModTileIsZero(RowModTileIsZero_), KEqVar(KEqVar_),
+             RowModTileIsZero(RowModTileIsZero_),
              AAlignment(AAlignment_), KronAlignment(KronAlignment_) {}
 
   bool isValid() {return kernel != nullptr;}
@@ -48,8 +47,7 @@ struct KernelInfo {
           info.NumFusedKerns_ << "_"<< info.DistributeToGPUs_
           << "_" <<
            info.CRegRows << "x" << info.CRegCols << "_" <<
-           info.RowModTileIsZero << "_" << 
-           info.KEqVar << "_" << 
+           info.RowModTileIsZero << "_" <<
            info.AAlignment << "_" << info.KronAlignment;
       
     return out;
