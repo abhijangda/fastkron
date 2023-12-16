@@ -52,7 +52,7 @@ WARP_SIZE=32
 class KernelConfig:  
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int, 
-               rowModTileIsZero : int, cRegRows: int, cRegCols: int, kEqVar: int,
+               rowModTileIsZero : int, cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
                allPowersOf2):
     self.shape = shape
@@ -65,7 +65,6 @@ class KernelConfig:
     self.rowModTileIsZero = rowModTileIsZero
     self.cRegRows = cRegRows
     self.cRegCols = cRegCols
-    self.kEqVar = kEqVar
     self.fused_kernels = FusedKernel
     assert self.fused_kernels > 0
     self.dist = dist
@@ -121,7 +120,7 @@ class KernelConfig:
            self.cRegRows in [1, 2, 4] and \
            (self.rowModTileIsZero == 1 or (self.rowModTileIsZero == 0 and self.tileM > 1)) and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
-           self.kEqVar in [0, 1] and self.dist in [0, 1] 
+           self.dist in [0, 1] 
           #  and "128, 64, 64, 64, 2, 4096, 2, 16, 1, float, 1, 0" in repr(self)
 
   def __hash__(self):
@@ -181,7 +180,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
                         for dist in distKernels: 
                           __configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
                                                                      p, q, tQ, tP, tM, 
-                                        rowModTileIsZero, regRows, regCols, kEqVar,
+                                        rowModTileIsZero, regRows, regCols,
                                         numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes)]
       configs[shape] += __configs
 
