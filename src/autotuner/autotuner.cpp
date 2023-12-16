@@ -17,26 +17,26 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 
   reverseExecuteGeKMM(nextSeries, nullptr, nullptr, 
                [](const KMMProblem p){return 1;},
-    [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
-      const int subn = rstart + 1;
-      auto tunedProblem = problem.sub(startKron, subn);
-      bool isP2P = isDistributed && startKron == 0;
-      if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
-        TunedKernelsSeries epilogueKernels;
-        float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
-        float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
-                                                 isDistributed, 
-                                                 epilogueKernels, tunedKernelsMap);
-        if (minTime > kernelTime + epilogueTime) {
-          minTime = kernelTime + epilogueTime;
-          minEpilogueKernels = epilogueKernels;
-          minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(tunedProblem, isP2P),
-                                                   startKron, startKron + rstart, firstPart.k, kernelTime);
-        }
+  [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
+    const int subn = rstart + 1;
+    auto tunedProblem = problem.sub(startKron, subn);
+    bool isP2P = isDistributed && startKron == 0;
+    if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
+      TunedKernelsSeries epilogueKernels;
+      float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
+      float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
+                                               isDistributed, 
+                                               epilogueKernels, tunedKernelsMap);
+      if (minTime > kernelTime + epilogueTime) {
+        minTime = kernelTime + epilogueTime;
+        minEpilogueKernels = epilogueKernels;
+        minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(tunedProblem, isP2P),
+                                                 startKron, startKron + rstart, firstPart.k, kernelTime);
       }
+    }
 
-      return cudaSuccess;
-    });
+    return cudaSuccess;
+  });
 
   tunedKernels = minEpilogueKernels;
   tunedKernels.push_back(minPrologueKernel);
