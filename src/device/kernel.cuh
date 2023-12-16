@@ -54,18 +54,18 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
     kronCols = MaxKronCols;
     kronRows = MaxKronRows;
   } else {
-    kronCols = params.KronCols[0];
-    kronRows = params.KronRows[0];
+    kronCols = params.qs[0];
+    kronRows = params.ps[0];
   }
 
   if (K_EQUALS_VAR) {
     colsA = MaxColsA;
   } else {
-    colsA = params.ColsA;
+    colsA = params.k;
   }
   
-  colsC = params.ColsC;
-  const ElemT* __restrict__ glA = (const ElemT*) params.glA;
+  colsC = params.l;
+  const ElemT* __restrict__ glA = (const ElemT*) params.x;
 
   const uint RegTileSizeACols = MIN(8, TileSizeKronCols);
   
@@ -88,7 +88,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
     //Loop iterates only once when NumFusedKerns == 1
     uint tile_k = get_tile_k<MaxKronCols, TileSizeKronCols>();
     storeAgToAsh<ElemT, AVecT, K_EQUALS_VAR>(RowsCModTileIsZero, TileSizeRowsA, TileSizeColsA, 
-                                            MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, params.RowsC,
+                                            MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, params.m,
                                             kronRows, colsA, tid, 
                                             tileKronRow, tileRowA, 
                                             tile_k, external_tile_kp_k, 
@@ -106,7 +106,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
           regC[r][i][j] = 0;
         }}}
       }
-      const ElemT* __restrict__ glKronMat = (ElemT*)params.glKronMats[fusedFac];
+      const ElemT* __restrict__ glKronMat = (ElemT*)params.fs[fusedFac];
       if (TileSizeKronCols == MaxKronCols && TileSizeKronRows == MaxKronRows) {
         //Optimized to load full factor matrix
         fullDirectFglToFsh<ElemT, KronVecT>(MaxKronRows, MaxKronCols,
@@ -134,7 +134,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
         #pragma unroll
         for (uint rowA = 0; rowA < TileSizeRowsA; rowA++) {
-        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.m - tileRowA)) {
           #pragma unroll
           for (uint rowC = 0; rowC < CRegRows; rowC++) {
             uint shACol = tileColA + rowC;
@@ -167,7 +167,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
         //Matrix Multiply Accumulate
         #pragma unroll
         for (uint rowA = 0; rowA < TileSizeRowsA; rowA++)
-        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+        if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.m - tileRowA)) {
           #pragma unroll
           for (uint i = 0;    i < CRegRows;         i++)
           #pragma unroll
@@ -189,7 +189,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
       if (isThreadValid && NumFusedKerns > 1 && fusedFac < NumFusedKerns - 1) {
       //Store C to shared memory using shift method
       for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
-      if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+      if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.m - tileRowA)) {
         #pragma unroll
         for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
         for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
@@ -207,7 +207,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
   if (NumFusedKerns > 1) {
     for (uint rowShC = 0; rowShC < TileSizeRowsA; rowShC++) {
-    if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowShC < params.RowsC - tileRowA)) {
+    if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowShC < params.m - tileRowA)) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
       // #ifdef KPK_EQUALS_VAR
@@ -263,7 +263,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
           outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));
         } else {
           cIdx = rowC * colsC + cCol;
-          outputArray = (ElemT*)params.glC;
+          outputArray = (ElemT*)params.y;
         }
 
         if (params.kp_idx == 0) {
@@ -276,7 +276,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
   }} else {
   #pragma unroll
   for (int rowA = 0; rowA < TileSizeRowsA; rowA++) {
-  if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.RowsC - tileRowA)) {
+  if (RowsCModTileIsZero || (TileSizeRowsA > 1 && rowA < params.m - tileRowA)) {
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     //Three least significant bits of CRegRows can be either 4, 2, or 1
@@ -314,7 +314,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
 
           const uint cIdx = cRow * colsC + cCol;
           if (cCol < colsC) {
-            ((ElemT*)params.glC)[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
+            ((ElemT*)params.y)[cIdx] = shA[0][(tid/wSz)*wSz*vecTyNumElems + shVecI];
           }
         }
         __syncwarp();
@@ -383,7 +383,7 @@ __global__ void kronGemmKernel(KernelParams<NumFusedKerns> params,
          cIdx = cRow * colsC + cCol;
         //  if (threadIdx.x == 0)
         //   printf("363 cCol %d\n", cCol);
-         outputArray = (ElemT*)params.glC;
+         outputArray = (ElemT*)params.y;
         //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
         }
         // assert(tid == cCol);

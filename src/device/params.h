@@ -13,18 +13,18 @@ union AllTypes {
   double d;
 
   __host__ __device__
-  AllTypes() {}
+  AllTypes()                {}
   AllTypes(float f)  : f(f) {}
   AllTypes(long l)   : l(l) {}
   AllTypes(int i)    : i(i) {}
   AllTypes(double d) : d(d) {}
 
   __device__
-  float get(float p) {return f;}
+  float  get(float  p) {return f;}
   __device__
-  long get(long p) {return l;}
+  long   get(long   p) {return l;}
   __device__
-  int get(int p) {return i;}
+  int    get(int    p) {return i;}
   __device__
   double get(double p) {return d;}
 };
@@ -41,45 +41,52 @@ struct EpilogueParams {
 
   template<typename ElemT>
   static EpilogueParams create() {
-    return EpilogueParams(AllTypes((ElemT)1.0f), AllTypes(((ElemT)0.0f)), nullptr);
+    return EpilogueParams(AllTypes((ElemT)1.0f), 
+                          AllTypes((ElemT)0.0f),
+                          nullptr);
   }
 
   template<typename ElemT>
-  static EpilogueParams create(const ElemT alpha, const ElemT beta, const ElemT* glD) {
-    return EpilogueParams(AllTypes(alpha), AllTypes(beta), (const void*)glD);
+  static EpilogueParams create(const ElemT alpha, 
+                               const ElemT beta,
+                               const ElemT* glD) {
+    return EpilogueParams(AllTypes(alpha),
+                          AllTypes(beta),
+                          (const void*)glD);
   }
 
   template<typename ElemT>
   __device__
-  ElemT getAlpha() {return alpha.get((ElemT)0);}
+  ElemT        getAlpha() {return alpha.get((ElemT)0);}
   
   template<typename ElemT>
   __device__
-  ElemT getBeta() {return beta.get((ElemT)0);}
+  ElemT        getBeta()  {return beta.get((ElemT)0);}
   
   template<typename ElemT>
   __device__
-  const ElemT* getD() {return (const ElemT*)glD;}
+  const ElemT* getD()     {return (const ElemT*)glD;}
 };
 
 template<uint NumFusedKerns>
 struct KernelParams {
-  const uint RowsC;
-  const uint ColsC; //TODO: Change to LocalColsC
-  const uint ColsA;
-  uint KronRows[NumFusedKerns];
-  uint KronCols[NumFusedKerns];
-  const void * __restrict__ glA;
-  const void * __restrict__ glKronMats[NumFusedKerns];
-  void       * __restrict__ glC;
+  const uint m;
+  const uint l; //TODO: Change to LocalColsC
+  const uint k;
+  uint ps[NumFusedKerns];
+  uint qs[NumFusedKerns];
+  const void * __restrict__ x;
+  const void * __restrict__ fs[NumFusedKerns];
+  void       * __restrict__ y;
   const uint kp_idx;
 
   KernelParams(KMMProblem problem, uint kp_idx) :
-               RowsC(problem.m), ColsC(problem.l), ColsA(problem.k), glA(problem.x), glC(problem.y), kp_idx(kp_idx) {
+               m(problem.m), l(problem.l), k(problem.k),
+               x(problem.x), y(problem.y), kp_idx(kp_idx) {
     for (int i = 0; i < NumFusedKerns; i++) {
-      this->KronRows[NumFusedKerns - 1 - i] = problem.ps[i];
-      this->KronCols[NumFusedKerns - 1 - i] = problem.ps[i];
-      this->glKronMats[NumFusedKerns - 1 - i] = problem.fs[i];
+      ps[NumFusedKerns - 1 - i] = problem.ps[i];
+      qs[NumFusedKerns - 1 - i] = problem.ps[i];
+      fs[NumFusedKerns - 1 - i] = problem.fs[i];
     }
   }
 };

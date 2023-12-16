@@ -6,8 +6,8 @@
 
 #pragma once
 
-#define MIN(x,y) (((x) < (y)) ? (x) : (y))
-#define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#define MIN(x,y)    (((x) < (y)) ? (x) : (y))
+#define MAX(x,y)    (((x) > (y)) ? (x) : (y))
 #define DIVUP(x, y) (((x) + (y) - 1)/((y)))
 
 __host__ __device__ constexpr uint power(const uint x, const uint y) {
@@ -18,8 +18,10 @@ __host__ __device__ constexpr uint power(const uint x, const uint y) {
   return result;
 }
 
-template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ __forceinline__ uint get_tile_k() {return blockIdx.x/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
-template<uint MaxKronCols, uint MaxTileSizeKronCols> __device__ __forceinline__ uint get_external_tile_kp_n() {return blockIdx.x%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols>
+__device__ __forceinline__ uint get_tile_k() {return blockIdx.x/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
+template<uint MaxKronCols, uint MaxTileSizeKronCols>
+__device__ __forceinline__ uint get_external_tile_kp_n() {return blockIdx.x%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
 
 __device__ __forceinline__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
 
