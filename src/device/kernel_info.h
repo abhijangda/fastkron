@@ -33,7 +33,7 @@ struct KernelInfo {
              uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
              uint CRegRows_, uint CRegCols_, ElementType elemType_,
              uint AAlignment_, uint KronAlignment_) :
-             kernel(kernel_), NumThreads(NumThreads_), factor(Q, P), tiledFactor(tileQ, P),
+             kernel(kernel_), NumThreads(NumThreads_), factor(P, Q), tiledFactor(P, tileQ),
              tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_),
@@ -51,16 +51,16 @@ struct KernelInfo {
   }
 
   bool canCompute(KMMProblem problem, bool p2p) {
-    return tiledFactor == Matrix(problem.qs[0], problem.ps[0]) &&
-           problem.k % tiledInput.N == 0 &&
+    return tiledFactor == Matrix(problem.ps[0], problem.qs[0]) &&
+           problem.k % tiledInput.n() == 0 &&
            problem.n == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;
   }
 
   dim3 grid(KMMProblem problem) {
     return dim3 {
-                  problem.k/tiledInput.N * DIVUP(problem.qs[0], tiledFactor.N),
-                  DIVUP(problem.m, tiledInput.M),
+                  problem.k/tiledInput.n() * DIVUP(problem.qs[0], tiledFactor.n()),
+                  DIVUP(problem.m, tiledInput.m()),
                   1
                 };
   }

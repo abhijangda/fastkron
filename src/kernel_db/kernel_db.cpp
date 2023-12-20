@@ -12,7 +12,7 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
   const uint CRegCols = kernelInfo.CRegCols;
   const Matrix tiledFactor = kernelInfo.tiledFactor;
 
-  const uint ValidThreads = ((kernelInfo.tiledInput.N/tiledFactor.M)/CRegRows) * (tiledFactor.N/CRegCols);
+  const uint ValidThreads = ((kernelInfo.tiledInput.n()/tiledFactor.m())/CRegRows) * (tiledFactor.n()/CRegCols);
   if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
     std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
     return false;
@@ -61,7 +61,7 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
 
   //Create the grid and thread block
   KernelParams<NumFusedKerns> params (problem, kronIndex);
-  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.N);
+  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.n());
 
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
@@ -139,7 +139,7 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
   CUDA_CHECK(cudaEventCreate(&end));
   minTime = std::numeric_limits<float>::max();
 
-  Matrix factor(problem.qs[0], problem.ps[0]);
+  Matrix factor(problem.ps[0], problem.qs[0]);
   if (compiledKernels.find(factor) != compiledKernels.end()) {
   for (auto kernel : compiledKernels.at(factor)) {
     if (!kernel.canCompute(problem, distP2PStore)) continue;

@@ -2,19 +2,30 @@
 
 #pragma once
 
-struct Matrix {
-  uint M;
-  uint N;
+class Matrix {
+  uint32_t rows;
+  uint32_t cols;
   void* data;
 
-  Matrix() : M(0), N(0), data(nullptr) {}
+public:
+  Matrix() : rows(0), cols(0), data(nullptr) {}
 
-  Matrix(uint M, uint N) : M(M), N(N), data(nullptr) {}
+  Matrix(uint32_t rows, uint32_t cols) : 
+    rows(rows), cols(cols), data(nullptr)
+  {}
 
-  Matrix(uint M, uint N, void* data) : M(M), N(N), data(data) {}
+  Matrix(uint32_t rows, uint32_t cols, uint32_t* data) : 
+    rows(rows), cols(cols), data(data)
+  {}
 
+  uint32_t m() const {return rows;}
+  uint32_t n() const {return cols;}
+
+  uint32_t rowSize() const {return cols;}
+  uint32_t colSize() const {return rows;}
+  
   bool operator==(const Matrix& other) const {
-    return M == other.M && N == other.N;
+    return m() == other.m() && n() == other.n();
   }
 
   bool operator!=(const Matrix& other) const {
@@ -22,11 +33,9 @@ struct Matrix {
   }
   
   friend std::ostream& operator<<(std::ostream &out, const Matrix& matrix) {
-    out << matrix.M << "x" << matrix.N;
+    out << matrix.m() << "x" << matrix.n();
     return out;
   }
-
-  Matrix(const Matrix& m) : M(m.M), N(m.N), data(m.data) {}
 };
 
 
