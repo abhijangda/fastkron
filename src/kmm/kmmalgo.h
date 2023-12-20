@@ -11,28 +11,24 @@
 #pragma once
 
 struct KMMProblem {
+private:
   static const int MaxN = 64;
   
   Matrix x;
   Matrix y;
-  StackArray<Matrix, MaxN> fs;
+  MatrixArray fs;
   int n;
 
+  KMMProblem(Matrix x, int n, MatrixArray fs, Matrix y) :
+    x(x), n(n), fs(fs), y(y) {}
+
+public:
   KMMProblem(Matrix x, int n, Matrix* fs, Matrix y) :
     x(x), n(n), fs(fs, n), y(y) {}
 
-  KMMProblem(const uint m, const int n, const uint *ps, const uint *qs, 
+  KMMProblem(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
              void* xptr, void* const* fsptr, void* yptr, const int k, 
-             const int l) : x(m, k, xptr), y(m, l, yptr), n(n) {
-    assert (n < MaxN);
-    for (int i = 0; i < n; i++) {
-      fs[i] = Matrix(ps[i], qs[i], 
-                     (fsptr) ? fsptr[i] : nullptr);
-    }
-
-    for (int i = n; i < MaxN; i++) {
-      this->fs[i] = Matrix();
-    }
+             const int l) : x(m, k, xptr), y(m, l, yptr), n(n), fs(n, ps, qs, fsptr) {
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
@@ -52,83 +48,61 @@ struct KMMProblem {
   // KMMProblem(KMMProblem problem, void* x, void** fs, void* y) :
   //   KMMProblem(problem.m, problem.n, problem.ps, problem.qs, x, fs, y) {}
 
-  KMMProblem rsub(int rstart, int subn) const {
-    uint ps[n];
-    uint qs[n];
-    void* fs[n];
-    
-    int subk = k, subl = l;
+  KMMProblem rsub(int rstart, int subn) const {    
+    int subk = x.n(), subl = y.n();
     for (int i = 0; i <= rstart - subn; i++) {
-      subl = (subl/this->qs[i])*this->ps[i];
+      subl = (subl/fs[i].n())*fs[i].m();
     }
     for (int i = n - 1; i > rstart; i--) {
-      subk = (subk/this->ps[i])*this->qs[i];
+      subk = (subk/fs[i].m())*fs[i].n();
     }
 
     assert (rstart >= 0);
     assert (subn <= n);
     assert (rstart - (subn - 1) >= 0);
-    for (int i = 0; i < subn; i++) {
-      ps[i]  = this->ps[rstart - (subn - 1) + i];
-      qs[i]  = this->qs[rstart - (subn - 1) + i];
-    }
 
-    for (int i = 0; i < subn; i++) {
-      fs[i] = this->fs[rstart  - (subn - 1) + i];
-    }
-
-    return KMMProblem(m, subn, ps, qs,
-                      x, fs, y, subk, subl);
+    return KMMProblem(Matrix(x.m(), subk), subn,
+                      fs.sub(rstart - (subn - 1), subn),
+                      Matrix(y.m(), subl));
   }
 
   KMMProblem sub(int start, int subn) const {
-    uint ps[n];
-    uint qs[n];
-    void* fs[n];
-    
-    int subk = k, subl = l;
+    int subk = x.n(), subl = y.n();
     
     for (int i = 0; i < start; i++) {
-      subl = (subl/this->qs[i])*this->ps[i];
+      subl = (subl/fs[i].n())*fs[i].m();
     }
     for (int i = n - 1; i >= start + subn; i--) {
-      subk = (subk/this->ps[i])*this->qs[i];
+      subk = (subk/fs[i].m())*fs[i].n();
     }
 
     assert (start >= 0);
     assert (subn <= n);
     assert (start + (subn - 1) <= n);
-    for (int i = 0; i < subn; i++) {
-      ps[i]  = this->ps[start + i];
-      qs[i]  = this->qs[start + i];
-    }
-
-    for (int i = 0; i < subn; i++) {
-      fs[i] = this->fs[start + i];
-    }
-
-    return KMMProblem(m, subn, ps, qs,
-                      x, fs, y, subk, subl);
+    return KMMProblem(Matrix(x.m(), subk), subn,
+                      fs.sub(start, subn),
+                      Matrix(y.m(), subl));
   }
 
   void swap(void* temp1, void* temp2) {
-    void* x1 = y;
-    void* y1;
-    if (x1 == temp1) {        
-      y1 = temp2;
-    } else if (x1 == temp2) {
-      y1 = temp1;
-    }
+    assert(false);
+    // void* x1 = y;
+    // void* y1;
+    // if (x1 == temp1) {        
+    //   y1 = temp2;
+    // } else if (x1 == temp2) {
+    //   y1 = temp1;
+    // }
 
-    x = x1;
-    y = y1;
+    // x = x1;
+    // y = y1;
   }
   
   bool operator==(const KMMProblem& other) const {
-    bool eq = m == other.m && n == other.n;
+    bool eq = x == other.x && n == other.n && y == other.y;
     if (eq) {
       for (int i = 0; i < n; i++) {
-        eq = eq && ps[i] == other.ps[i] && qs[i] == other.qs[i];
+        eq = eq && fs[i] == other.fs[i];
       }
     }
     return eq;
@@ -137,20 +111,20 @@ struct KMMProblem {
   bool sameFactorShapes() const {
     bool eq = true;
     for (int i = 1; i < n; i++) {
-      eq = eq && ps[i - 1] == ps[i] && 
-                 qs[i - 1] == qs[i];      
+      eq = eq && fs[i-1].m() == fs[i].m() &&
+                 fs[i-1].n() == fs[i].n();
     }
 
     return eq;
   }
 
   friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
-    out << problem.m << "*(";
+    out << problem.x.m() << "*(";
     if (problem.sameFactorShapes()) 
-      out << problem.ps[0] << "x" << problem.qs[0] << "^" << problem.n;
+      out << problem.fs[0] << "^" << problem.n;
     else
       for (int i = 0; i < problem.n; i++) {
-        out << problem.ps[i] << "x" << problem.qs[i];
+        out << problem.fs[i];
         if (i < problem.n - 1) out << "(x)";
       }
     out << ")";
