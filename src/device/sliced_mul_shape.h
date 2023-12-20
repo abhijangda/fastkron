@@ -83,7 +83,7 @@ public:
   }
 
   StackArray<T, MaxSize> sub(uint32_t start, uint32_t len) const {
-    assert(len < n);
+    assert(len <= n);
     T ptrs[len];
     for (uint32_t i = 0; i < len; i++) {
       ptrs[i] = array[i + start];
@@ -101,11 +101,7 @@ class MatrixArray : public StackArray<Matrix, 64> {
   static const uint32_t MaxSize = 64;
   using Base = StackArray<Matrix, 64>;
 
-  MatrixArray(StackArray<Matrix, MaxSize> arr) : Base(arr) {
-    // for (uint32_t i = 0; i < n; i++) {
-    //   Base::array[i] = arr[i];
-    // }
-  }
+  MatrixArray(StackArray<Matrix, MaxSize> arr) : Base(arr) {}
 
 public:
   MatrixArray(uint32_t n, const uint32_t* ms, const uint32_t* ns, void* const* ptrs) : 

@@ -83,6 +83,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   void* Fs[problem.n * fastKron.numGPUs_];
   size_t resultSize = 0, tempSize = 0;
   fastKron.gekmmSizes(problem, &resultSize, &tempSize);
+  std::cout << "86: "<< resultSize << " " << tempSize << std::endl;
   for (int g = 0; g < fastKron.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(float)));
@@ -103,12 +104,12 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
 
   if (!fastKron.isDistributed_) {
     //Use temporary as input/output matrix
-    //TODO: fix this 
+    //TODO: fix this
     uint32_t arr1[problem.n];
     uint32_t arr2[problem.n];
     auto tmpProblem = KMMProblem(problem.m(), problem.n, problem.ps(arr1), problem.qs(arr2), 
                                  temp1_[0], Fs, temp2_[0]);
-
+    std::cout << "112: " << tmpProblem.x.ptr() << " " << temp1_[0] << std::endl;
     tuneSlicedMulSeries(tmpProblem, false, DistributedParams(), stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;

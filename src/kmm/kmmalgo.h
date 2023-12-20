@@ -61,9 +61,9 @@ public:
     assert (subn <= n);
     assert (rstart - (subn - 1) >= 0);
 
-    return KMMProblem(Matrix(x.m(), subk), subn,
+    return KMMProblem(Matrix(x.m(), subk, x.data), subn,
                       fs.sub(rstart - (subn - 1), subn),
-                      Matrix(y.m(), subl));
+                      Matrix(y.m(), subl, y.data));
   }
 
   KMMProblem sub(int start, int subn) const {
@@ -79,9 +79,10 @@ public:
     assert (start >= 0);
     assert (subn <= n);
     assert (start + (subn - 1) <= n);
-    return KMMProblem(Matrix(x.m(), subk), subn,
+    //TODO: make Matrix::data a function
+    return KMMProblem(Matrix(x.m(), subk, x.data), subn,
                       fs.sub(start, subn),
-                      Matrix(y.m(), subl));
+                      Matrix(y.m(), subl, y.data));
   }
 
   uint32_t* ps(uint32_t *array) {
