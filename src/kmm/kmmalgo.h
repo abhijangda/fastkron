@@ -19,7 +19,6 @@ public:
   MatrixArray fs;
   int n;
 
-private:
   KMMProblem(Matrix x, int n, MatrixArray fs, Matrix y) :
     x(x), n(n), fs(fs), y(y) {}
 
@@ -33,7 +32,7 @@ public:
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
-             void* x, void* const* fs, void * y) :
+             void* x, void* const* fs, void* y) :
     KMMProblem(m, n, ps, qs, x, fs, y, 
                std::reduce(ps, ps+n, 1, std::multiplies<uint>()),
                std::reduce(qs, qs+n, 1, std::multiplies<uint>()))
@@ -85,18 +84,31 @@ public:
                       Matrix(y.m(), subl));
   }
 
-  void swap(void* temp1, void* temp2) {
-    assert(false);
-    // void* x1 = y;
-    // void* y1;
-    // if (x1 == temp1) {        
-    //   y1 = temp2;
-    // } else if (x1 == temp2) {
-    //   y1 = temp1;
-    // }
+  uint32_t* ps(uint32_t *array) {
+    for (uint32_t i = 0; i < n; i++) {
+      array[i] = fs[i].m();
+    }
+    return array;
+  }
 
-    // x = x1;
-    // y = y1;
+  uint32_t* qs(uint32_t *array) {
+    for (uint32_t i = 0; i < n; i++) {
+      array[i] = fs[i].n();
+    }
+    return array;
+  }
+
+  void swap(void* temp1, void* temp2) {
+    void* x1 = y.ptr();
+    void* y1;
+    if (x1 == temp1) {        
+      y1 = temp2;
+    } else if (x1 == temp2) {
+      y1 = temp1;
+    }
+
+    x.data = x1;
+    y.data = y1;
   }
   
   uint32_t k() const {return x.n();}

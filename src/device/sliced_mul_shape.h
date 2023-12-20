@@ -7,6 +7,7 @@
 class Matrix {
   uint32_t rows;
   uint32_t cols;
+public:
   void* data;
 
 public:
@@ -59,9 +60,11 @@ protected:
   }
 
 public:
-  StackArray(T* ptrs, uint32_t n) : n(n) {
-    for (uint32_t i = 0; i < n; i++) {
-      array[i] = ptrs[i];
+  StackArray(const T* ptrs, uint32_t n) : n(n) {
+    if (ptrs) {
+      for (uint32_t i = 0; i < n; i++) {
+        array[i] = ptrs[i];
+      }
     }
 
     for (uint32_t i = n; i < MaxSize; i++) {
@@ -88,23 +91,28 @@ public:
 
     return StackArray<T, MaxSize>(ptrs, len);
   }
+
+  uint32_t len() const {return n;}
+
+  StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
 };
 
 class MatrixArray : public StackArray<Matrix, 64> {
   static const uint32_t MaxSize = 64;
   using Base = StackArray<Matrix, 64>;
 
-  MatrixArray(StackArray<Matrix, MaxSize> arr) {
-    for (uint32_t i = 0; i < n; i++) {
-      Base::array[i] = arr[i];
-    }
+  MatrixArray(StackArray<Matrix, MaxSize> arr) : Base(arr) {
+    // for (uint32_t i = 0; i < n; i++) {
+    //   Base::array[i] = arr[i];
+    // }
   }
 
 public:
-  MatrixArray(uint32_t n, const uint32_t* ms, const uint32_t* ns, void* const* ptrs) {
+  MatrixArray(uint32_t n, const uint32_t* ms, const uint32_t* ns, void* const* ptrs) : 
+    Base(nullptr, n) {
     assert (n < MaxSize);
     for (uint32_t i = 0; i < n; i++) {
-      Base::array[i] = Matrix(ms[i], ns[i], ptrs[i]);
+      Base::array[i] = Matrix(ms[i], ns[i], ptrs ? ptrs[i] : nullptr);
     }
   }
 

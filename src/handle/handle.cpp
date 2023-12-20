@@ -121,7 +121,6 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   if (temp1     == nullptr) return cudaErrorInvalidValue;
   //TODO: Fix these 
   void* temps[2] = {temp1, temp2};
-  void* input = problem.x.ptr();
   void* output = temps[0];
 
   if (temp2 == nullptr) {
@@ -136,11 +135,10 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
     output = temps[0];
   }
 
-  KMMProblem tmpProblem(problem.m, problem.n, problem.ps, problem.qs,
-                        input, problem.fs, output);
+  KMMProblem tmpProblem(problem.x, problem.n, problem.fs, Matrix(problem.m(), problem.l(), output));
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y,
+  cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y.ptr(),
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns_;},
     [&kernelSeriesIter, epilogueParams, stream, this]
       (const KMMProblem subProblem, int rstart, void* temps[2], void* result) {

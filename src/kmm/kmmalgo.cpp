@@ -57,7 +57,6 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
   size_t l = k;
   int nextF = 1;
   cudaError_t err;
-
   for (int i = problem.n - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
