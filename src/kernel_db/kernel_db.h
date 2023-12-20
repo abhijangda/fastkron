@@ -9,7 +9,7 @@
 
 class KernelDatabase {
 private:
-    std::unordered_map<Factor, std::vector<KernelInfo>> compiledKernels;
+    std::unordered_map<Matrix, std::vector<KernelInfo>> compiledKernels;
 
 public:
   KernelDatabase();

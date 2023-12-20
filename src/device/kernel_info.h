@@ -16,8 +16,8 @@ struct KernelInfo {
   void* kernel;
   uint NumThreads;
   
-  Factor factor;
-  Factor tiledFactor;
+  Matrix factor;
+  Matrix tiledFactor;
   Matrix tiledInput;
   
   uint NumFusedKerns_;
@@ -51,7 +51,7 @@ struct KernelInfo {
   }
 
   bool canCompute(KMMProblem problem, bool p2p) {
-    return tiledFactor == Factor(problem.qs[0], problem.ps[0]) &&
+    return tiledFactor == Matrix(problem.qs[0], problem.ps[0]) &&
            problem.k % tiledInput.N == 0 &&
            problem.n == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;
@@ -59,7 +59,7 @@ struct KernelInfo {
 
   dim3 grid(KMMProblem problem) {
     return dim3 {
-                  problem.k/tiledInput.N * DIVUP(problem.qs[0], tiledFactor.Q),
+                  problem.k/tiledInput.N * DIVUP(problem.qs[0], tiledFactor.N),
                   DIVUP(problem.m, tiledInput.M),
                   1
                 };

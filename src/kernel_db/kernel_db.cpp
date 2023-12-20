@@ -10,9 +10,9 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
   const uint NumThreads = kernelInfo.NumThreads;
   const uint CRegRows = kernelInfo.CRegRows;
   const uint CRegCols = kernelInfo.CRegCols;
-  const Factor tiledFactor = kernelInfo.tiledFactor;
+  const Matrix tiledFactor = kernelInfo.tiledFactor;
 
-  const uint ValidThreads = ((kernelInfo.tiledInput.N/tiledFactor.P)/CRegRows) * (tiledFactor.Q/CRegCols);
+  const uint ValidThreads = ((kernelInfo.tiledInput.N/tiledFactor.M)/CRegRows) * (tiledFactor.N/CRegCols);
   if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
     std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
     return false;
@@ -139,7 +139,7 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
   CUDA_CHECK(cudaEventCreate(&end));
   minTime = std::numeric_limits<float>::max();
 
-  Factor factor(problem.qs[0], problem.ps[0]);
+  Matrix factor(problem.qs[0], problem.ps[0]);
   if (compiledKernels.find(factor) != compiledKernels.end()) {
   for (auto kernel : compiledKernels.at(factor)) {
     if (!kernel.canCompute(problem, distP2PStore)) continue;
