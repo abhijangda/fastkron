@@ -51,16 +51,16 @@ struct KernelInfo {
   }
 
   bool canCompute(KMMProblem problem, bool p2p) {
-    return tiledFactor == Matrix(problem.ps[0], problem.qs[0]) &&
-           problem.k % tiledInput.n() == 0 &&
+    return tiledFactor == problem.fs[0] &&
+           problem.k() % tiledInput.n() == 0 &&
            problem.n == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;
   }
 
   dim3 grid(KMMProblem problem) {
     return dim3 {
-                  problem.k/tiledInput.n() * DIVUP(problem.qs[0], tiledFactor.n()),
-                  DIVUP(problem.m, tiledInput.m()),
+                  problem.k()/tiledInput.n() * DIVUP(problem.fs[0].n(), tiledFactor.n()),
+                  DIVUP(problem.m(), tiledInput.m()),
                   1
                 };
   }

@@ -117,24 +117,23 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   // }
 
-  if (problem.y == nullptr) return cudaErrorInvalidValue;
+  if (problem.y.ptr() == nullptr) return cudaErrorInvalidValue;
   if (temp1     == nullptr) return cudaErrorInvalidValue;
-
+  //TODO: Fix these 
   void* temps[2] = {temp1, temp2};
-  void* input = problem.x;
+  void* input = problem.x.ptr();
   void* output = temps[0];
 
   if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
-      temps[0] = problem.y;
+      temps[0] = problem.y.ptr();
       temps[1] = temp1;
     } else {
       temps[0] = temp1;
-      temps[1] = problem.y;
+      temps[1] = problem.y.ptr();
     }
 
     output = temps[0];
-    input = problem.x;
   }
 
   KMMProblem tmpProblem(problem.m, problem.n, problem.ps, problem.qs,
@@ -173,22 +172,22 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   if (isDistributed_) {
     if (!checkDistributedKronSizes(problem, perGPUKronBatch_, gpusInK_))
       return cudaErrorInvalidValue;
-    gpuM = problem.m/gpusInM_;
-    gpuK = problem.k/gpusInK_;
+    gpuM = problem.m()/gpusInM_;
+    gpuK = problem.k()/gpusInK_;
   } else {
-    gpuM = problem.m;
-    gpuK = problem.k;
+    gpuM = problem.m();
+    gpuK = problem.k();
   }
 
-  int maxTempN = 0;
-  int resultCols = 0;
+  uint32_t maxTempN = 0;
+  uint32_t resultCols = 0;
                      
   auto e = executeGeKMM(problem, nullptr, nullptr,
     [](const KMMProblem kmm) {return 1;},
     [&maxTempN, &resultCols]
     (const KMMProblem kmm, int rstart, void* temps[2], void* result) {
-      maxTempN = std::max(maxTempN, std::max(kmm.k, kmm.l));
-      resultCols = kmm.l;
+      maxTempN = std::max(maxTempN, std::max(kmm.k(), kmm.l()));
+      resultCols = kmm.l();
       return cudaSuccess;
     });
 

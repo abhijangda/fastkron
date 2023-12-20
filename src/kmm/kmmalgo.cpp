@@ -1,9 +1,9 @@
 #include "kmmalgo.h"
 
 std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& shape) const {
-  std::size_t h = hash<uint>()(shape.k) ^ hash<uint>()(shape.n);
+  std::size_t h = hash<uint>()(shape.k()) ^ hash<uint>()(shape.n);
   for (int i = 0; i < shape.n; i++) {
-    h = h ^ hash<uint>()(shape.ps[i]) ^ hash<uint>()(shape.qs[i]);
+    h = h ^ shape.fs[i].hash();
   }
   return h;
 }
@@ -43,7 +43,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
   executeGeKMM(problem, nullptr, nullptr,
     [](const KMMProblem kmm) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, int, void* t1, void* t2) {
-      correct = correct && (kmm.l % gpusInK == 0);
+      correct = correct && (kmm.l() % gpusInK == 0);
       return cudaSuccess;
     });
   return correct;
@@ -53,7 +53,7 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
                          void* result,
                          std::function<uint (const KMMProblem)> next,
                          std::function<cudaError_t (const KMMProblem, int rstart, void*[2], void*)> func) {
-  uint k = problem.k;
+  uint k = problem.k();
   size_t l = k;
   int nextF = 1;
   cudaError_t err;
@@ -62,7 +62,8 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
     if (i < nextF) {
-      problem.y = result;
+      //TODO: pass result as Matrix
+      problem.y = Matrix(problem.m(), problem.l(), result);
     }
     auto subProblem = problem.rsub(i, nextF);
     err = func(subProblem, i, temps, result);
@@ -85,7 +86,8 @@ cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* temps[2],
   for (int i = 0; i < problem.n; i = i + nextF) {
     nextF = next(problem);
     if (i < nextF) {
-      problem.y = result;
+      //TODO: pass result as Matrix
+      problem.y = Matrix(problem.m(), problem.l(), result);
     }
     auto subProblem = problem.sub(i, nextF);
     err = func(subProblem, i, temps, result);

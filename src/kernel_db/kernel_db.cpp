@@ -139,9 +139,8 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
   CUDA_CHECK(cudaEventCreate(&end));
   minTime = std::numeric_limits<float>::max();
 
-  Matrix factor(problem.ps[0], problem.qs[0]);
-  if (compiledKernels.find(factor) != compiledKernels.end()) {
-  for (auto kernel : compiledKernels.at(factor)) {
+  if (compiledKernels.find(problem.fs[0]) != compiledKernels.end()) {
+  for (auto kernel : compiledKernels.at(problem.fs[0])) {
     if (!kernel.canCompute(problem, distP2PStore)) continue;
     if (!foundProblem) {
       std::cout << "Tuning for shape "  << problem << std::endl;
@@ -165,7 +164,7 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
     
     if (status != cudaSuccess)
       std::cout << "Error: " << cudaGetErrorString(status) << " for " 
-                << kernel << " K " << problem.k << std::endl;
+                << kernel << " K " << problem.k() << std::endl;
     float kernelTime;
     CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
     std::cout << std::fixed << std::setprecision(2) << 

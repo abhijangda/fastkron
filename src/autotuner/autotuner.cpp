@@ -31,7 +31,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
         minTime = kernelTime + epilogueTime;
         minEpilogueKernels = epilogueKernels;
         minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(tunedProblem, isP2P),
-                                                 startKron, startKron + rstart, firstPart.k, kernelTime);
+                                                 startKron, startKron + rstart, firstPart.k(), kernelTime);
       }
     }
 
@@ -92,7 +92,8 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     CUDA_CHECK(cudaMemset(temp2_[g], 1, tempSize * sizeof(float)));
 
     for (int f = 0; f < problem.n; f++) {
-      auto sz = problem.ps[f] * problem.qs[f] * sizeof(float);
+      //TODO: call Matrix::numel()
+      auto sz = problem.fs[f].m() * problem.fs[f].n() * sizeof(float);
       CUDA_CHECK(cudaMalloc(&Fs[g * problem.n + f], sz));
       CUDA_CHECK(cudaMemset(Fs[g * problem.n + f], 1, sz));
     }
@@ -119,7 +120,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     //In distributed case run every LocalKron series on a single GPU    
     minTime = std::numeric_limits<float>::max();
     uint gpuM, gpuK;
-    fastKron.getDistributedSizes(problem.m, problem.k, gpuM, gpuK);
+    fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
     uint bestMaxLocalKrons = 1;
     TunedKernelsSeries minKernelSeries;
     //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
@@ -197,7 +198,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
         ((problem.n - iter->start) % fastKron.perGPUKronBatch_ == 0 or 
         iter->start == 0)) {
       uint gpuM, gpuK;
-      fastKron.getDistributedSizes(problem.m, problem.k, gpuM, gpuK);
+      fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
       std::cout << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
                    "[GM, " << fastKron.gpusInK_ << "] using " << fastKron.distComm_ << std::endl;
     }

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cassert>
+#include <functional>
 
 #pragma once
 
@@ -23,7 +25,9 @@ public:
 
   uint32_t rowSize() const {return cols;}
   uint32_t colSize() const {return rows;}
-  
+
+  void* ptr() const {return data;}
+
   bool operator==(const Matrix& other) const {
     return m() == other.m() && n() == other.n();
   }
@@ -35,6 +39,10 @@ public:
   friend std::ostream& operator<<(std::ostream &out, const Matrix& matrix) {
     out << matrix.m() << "x" << matrix.n();
     return out;
+  }
+
+  uint32_t hash() {
+    return std::hash<uint>()(m()) ^ std::hash<uint>()(n());
   }
 };
 

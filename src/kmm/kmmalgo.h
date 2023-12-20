@@ -11,7 +11,7 @@
 #pragma once
 
 struct KMMProblem {
-private:
+public:
   static const int MaxN = 64;
   
   Matrix x;
@@ -19,6 +19,7 @@ private:
   MatrixArray fs;
   int n;
 
+private:
   KMMProblem(Matrix x, int n, MatrixArray fs, Matrix y) :
     x(x), n(n), fs(fs), y(y) {}
 
@@ -98,6 +99,10 @@ public:
     // y = y1;
   }
   
+  uint32_t k() const {return x.n();}
+  uint32_t l() const {return y.n();}
+  uint32_t m() const {return x.m();}
+
   bool operator==(const KMMProblem& other) const {
     bool eq = x == other.x && n == other.n && y == other.y;
     if (eq) {
