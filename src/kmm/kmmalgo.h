@@ -1,65 +1,56 @@
 #include <functional>
 #include <cassert>
 #include <iostream>
+#include <numeric>
 
 #include <cuda_runtime.h>
 #include <cuda.h>
 
+#include "device/sliced_mul_shape.h"
+
 #pragma once
 
 struct KMMProblem {
-  int k;
-  int l;
-
-  uint m;
-  int n;
-  
   static const int MaxN = 64;
   
-  uint qs[MaxN];
-  uint ps[MaxN];
-  
-  void * x;
-  void * fs[MaxN];
-  void * y;
+  Matrix x;
+  Matrix y;
+  StackArray<Matrix, MaxN> fs;
+  int n;
+
+  KMMProblem(Matrix x, int n, Matrix* fs, Matrix y) :
+    x(x), n(n), fs(fs, n), y(y) {}
 
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs, 
-             void* x, void* const* fs, void* y, const int k, 
-             const int l) : m(m), n(n), x(x), y(y), k(k), l(l) {
+             void* xptr, void* const* fsptr, void* yptr, const int k, 
+             const int l) : x(m, k, xptr), y(m, l, yptr), n(n) {
     assert (n < MaxN);
     for (int i = 0; i < n; i++) {
-      this->ps[i] = ps[i];
-      this->qs[i] = qs[i];
-      if (fs) this->fs[i] = fs[i];
-      else    this->fs[i] = nullptr;
+      fs[i] = Matrix(ps[i], qs[i], 
+                     (fsptr) ? fsptr[i] : nullptr);
     }
 
     for (int i = n; i < MaxN; i++) {
-      this->ps[i] = this->qs[i] = 0;
-      this->fs[i] = nullptr;
+      this->fs[i] = Matrix();
     }
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
              void* x, void* const* fs, void * y) :
-    KMMProblem(m, n, ps, qs, x, fs, y, 1, 1) {
-    k = 1;
-    l = 1;
-    for (int i = 0; i < n; i++) {
-      k *= ps[i];
-      l *= qs[i];
-    }
-  }
+    KMMProblem(m, n, ps, qs, x, fs, y, 
+               std::reduce(ps, ps+n, 1, std::multiplies<uint>()),
+               std::reduce(qs, qs+n, 1, std::multiplies<uint>()))
+    {}
 
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs) :
     KMMProblem(m, n, ps, qs, nullptr, nullptr, nullptr) {}
 
-  KMMProblem(KMMProblem problem, const int k, const int l) :
-    KMMProblem(problem.m, problem.n, problem.ps, problem.qs, 
-               problem.x, problem.fs, problem.y, k, l) {}
+  // KMMProblem(KMMProblem prob, const int k, const int l) :
+  //   KMMProblem(prob.x, prob.n, prob.ps, prob.qs, 
+  //              prob.x, prob.fs, prob.y, k, l) {}
 
-  KMMProblem(KMMProblem problem, void* x, void** fs, void* y) :
-    KMMProblem(problem.m, problem.n, problem.ps, problem.qs, x, fs, y) {}
+  // KMMProblem(KMMProblem problem, void* x, void** fs, void* y) :
+  //   KMMProblem(problem.m, problem.n, problem.ps, problem.qs, x, fs, y) {}
 
   KMMProblem rsub(int rstart, int subn) const {
     uint ps[n];

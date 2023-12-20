@@ -14,7 +14,7 @@ public:
     rows(rows), cols(cols), data(nullptr)
   {}
 
-  Matrix(uint32_t rows, uint32_t cols, uint32_t* data) : 
+  Matrix(uint32_t rows, uint32_t cols, void* data) : 
     rows(rows), cols(cols), data(data)
   {}
 
@@ -38,6 +38,32 @@ public:
   }
 };
 
+template<typename T, uint32_t MaxSize>
+class StackArray {
+  T array[MaxSize];
+  uint32_t n;
+
+public:
+  StackArray(T* ptrs, uint32_t n) : n(n) {
+    for (uint32_t i = 0; i < n; i++) {
+      array[i] = ptrs[i];
+    }
+
+    for (uint32_t i = n; i < MaxSize; i++) {
+      array[i] = T();
+    }
+  }
+
+  T& operator[](int index) {
+    assert (index < n && index >= 0);
+    return array[index];
+  }
+
+  T& operator[](uint32_t index) {
+    assert (index < n);
+    return array[index];
+  }
+};
 
 template<>
 struct std::hash<Matrix> {
