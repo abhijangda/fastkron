@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 #include <cuda.h>
 
-#include "device/sliced_mul_shape.h"
+#include "kmm/matrix.h"
 
 #pragma once
 

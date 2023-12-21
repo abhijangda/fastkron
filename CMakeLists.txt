@@ -51,8 +51,7 @@ set(HEADER_FILES ${SRC}/env/env.h
                  ${SRC}/autotuner/autotuner.h
                  ${SRC}/handle/handle.h 
                  ${SRC}/kernel_db/kernel_defs.h ${SRC}/kernel_db/kernel_db.h 
-                 ${SRC}/kmm/kmmalgo.h
-                 ${SRC}/device/sliced_mul_shape.h
+                 ${SRC}/kmm/kmmalgo.h ${SRC}/kmm/matrix.h
                  ${SRC}/utils/thread_pool.h ${SRC}/utils/utils.h)
 
 set(SOURCES ${SRC}/fastkron.cpp
@@ -60,8 +59,7 @@ set(SOURCES ${SRC}/fastkron.cpp
             ${SRC}/autotuner/autotuner.cpp 
             ${SRC}/handle/handle.cpp ${SRC}/handle/distrib_handle.cu
             ${SRC}/kernel_db/kernel_db.cpp 
-            ${SRC}/kmm/kmmalgo.cpp
-            ${SRC}/device/sliced_mul_shape.cpp)
+            ${SRC}/kmm/kmmalgo.cpp ${SRC}/kmm/matrix.cpp)
 
 cuda_add_library(FastKron SHARED
     ${SOURCES}

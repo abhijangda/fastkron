@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "sliced_mul_shape.h"
+#include "kmm/matrix.h"
 #include "utils/utils.h"
 
 #pragma once
