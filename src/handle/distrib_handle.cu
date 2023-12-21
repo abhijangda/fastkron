@@ -181,9 +181,13 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
+      Matrix localFactors[KronMulBatchSize];
+      for (int ii = 0; ii < KronMulBatchSize; ii++) {
+        localFactors[ii] = Matrix(LocalKronRows[ii], LocalKronCols[ii]);
+      }
       DistributedParams distParams(gr, gc, handle.gpusInK_, 
                                    prevFullK, currFullN,
-                                   prevTempN, currTempN, LocalKronCols, LocalKronRows, KronMulBatchSize);
+                                   prevTempN, currTempN, localFactors, KronMulBatchSize);
       uint slicedMuls = 0;
       bool ncclRecvInResult = false;
       for (auto kernel : kernelSeries) {

@@ -49,7 +49,7 @@ public:
 
 template<typename T, uint32_t MaxSize>
 class StackArray {
-protected:
+public:
   T array[MaxSize];
   uint32_t n;
 

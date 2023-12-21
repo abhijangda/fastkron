@@ -133,28 +133,33 @@ struct DistributedParams {
   uint ColsCByKronRowsPower;
   uint ColsCByKronColsPower;
 
+
   DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {} 
   
   DistributedParams(const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
                     const uint PerGPUK_, const uint PerGPUN_, 
-                    const uint KronCols_[], const uint KronRows_[], const uint LocalKrons_) :
+                    const Matrix* Factors, const uint LocalKrons_) :
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
     
-    const uint KronRowsPower = std::reduce(KronRows_, KronRows_ + LocalKrons_, 1, std::multiplies<uint>());
-    const uint KronColsPower = std::reduce(KronCols_, KronCols_ + LocalKrons_, 1, std::multiplies<uint>());
+    const Matrix factorPower = std::reduce(Factors, Factors + LocalKrons_, Matrix(1,1), [](Matrix prev, Matrix factor) {
+      return Matrix(prev.m() * factor.m(), prev.n() * factor.n());
+    });
+    const uint KronColsPower = factorPower.m();
+    const uint KronRowsPower = factorPower.n();
+
     UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower;
     perGPUKByNumGPUs = PerGPUK_/gpusInK_;
     perGPUNByNumGPUs = PerGPUN_/gpusInK_;
-    perGPUNByKronCols = PerGPUN_/KronCols_[LocalKrons_-1];
+    perGPUNByKronCols = PerGPUN_/Factors[LocalKrons_-1].n();
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
-    ColsCByKronCols = ColsC_/KronCols_[LocalKrons_-1];
+    ColsCByKronCols = ColsC_/Factors[LocalKrons_-1].n();
     ColsCByKronColsPower = ColsC_/KronColsPower;
-    perGPUNByKronRows = PerGPUN_/KronRows_[LocalKrons_-1];
-    perGPUKByKronRows = PerGPUK_/KronRows_[LocalKrons_-1];
+    perGPUNByKronRows = PerGPUN_/Factors[LocalKrons_-1].m();
+    perGPUKByKronRows = PerGPUK_/Factors[LocalKrons_-1].m();
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
-    ColsAByKronRows = ColsA_/KronRows_[LocalKrons_-1];
+    ColsAByKronRows = ColsA_/Factors[LocalKrons_-1].m();
   }
 
   void updateGPUResults(void** gpuResults_) {
