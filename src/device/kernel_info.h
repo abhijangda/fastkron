@@ -16,8 +16,8 @@ struct KernelInfo {
   void* kernel;
   uint NumThreads;
   
-  Matrix factor;
-  Matrix tiledFactor;
+  Factor factor;
+  Factor tiledFactor;
   Matrix tiledInput;
   
   uint NumFusedKerns_;
@@ -59,7 +59,7 @@ struct KernelInfo {
 
   dim3 grid(KMMProblem problem) {
     return dim3 {
-                  problem.k()/tiledInput.n() * DIVUP(problem.fs[0].n(), tiledFactor.n()),
+                  problem.k()/tiledInput.n() * DIVUP(problem.fs[0].q(), tiledFactor.q()),
                   DIVUP(problem.m(), tiledInput.m()),
                   1
                 };

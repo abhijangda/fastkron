@@ -84,8 +84,8 @@ struct KernelParams {
                m(problem.m()), l(problem.l()), k(problem.k()),
                x(problem.x.ptr()), y(problem.y.ptr()), kp_idx(kp_idx) {
     for (int i = 0; i < Fused; i++) {
-      ps[Fused - 1 - i] = problem.fs[i].m();
-      qs[Fused - 1 - i] = problem.fs[i].n();
+      ps[Fused - 1 - i] = problem.fs[i].p();
+      qs[Fused - 1 - i] = problem.fs[i].q();
       fs[Fused - 1 - i] = problem.fs[i].ptr();
     }
   }
@@ -98,7 +98,7 @@ struct FusedParams {
   uint ColsCByKronColsPower;
   
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
-    KronColsPower = (uint)std::pow((double)problem.fs[0].n(), (double)Fused);
+    KronColsPower = (uint)std::pow((double)problem.fs[0].q(), (double)Fused);
     UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
     ColsCByKronColsPower = problem.l()/KronColsPower;
   }
@@ -139,27 +139,27 @@ struct DistributedParams {
   DistributedParams(const uint gr_, const uint gc_, const uint gpusInK_,   
                     const uint ColsA_, const uint ColsC_, 
                     const uint PerGPUK_, const uint PerGPUN_, 
-                    const Matrix* Factors, const uint LocalKrons_) :
+                    const Factor* Factors, const uint LocalKrons_) :
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
     
-    const Matrix factorPower = std::reduce(Factors, Factors + LocalKrons_, Matrix(1,1), [](Matrix prev, Matrix factor) {
-      return Matrix(prev.m() * factor.m(), prev.n() * factor.n());
+    const Factor factorPower = std::reduce(Factors, Factors + LocalKrons_, Factor(1,1), [](Factor prev, Factor curr) {
+      return Factor(prev.p() * curr.p(), prev.q() * curr.q());
     });
-    const uint KronColsPower = factorPower.n();
-    const uint KronRowsPower = factorPower.m();
+    const uint KronColsPower = factorPower.q();
+    const uint KronRowsPower = factorPower.p();
 
     UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower;
     perGPUKByNumGPUs = PerGPUK_/gpusInK_;
     perGPUNByNumGPUs = PerGPUN_/gpusInK_;
-    perGPUNByKronCols = PerGPUN_/Factors[LocalKrons_-1].n();
+    perGPUNByKronCols = PerGPUN_/Factors[LocalKrons_-1].q();
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
-    ColsCByKronCols = ColsC_/Factors[LocalKrons_-1].n();
+    ColsCByKronCols = ColsC_/Factors[LocalKrons_-1].q();
     ColsCByKronColsPower = ColsC_/KronColsPower;
-    perGPUNByKronRows = PerGPUN_/Factors[LocalKrons_-1].m();
-    perGPUKByKronRows = PerGPUK_/Factors[LocalKrons_-1].m();
+    perGPUNByKronRows = PerGPUN_/Factors[LocalKrons_-1].p();
+    perGPUKByKronRows = PerGPUK_/Factors[LocalKrons_-1].p();
     ColsCByKronRowsPower = ColsC_/KronRowsPower;
-    ColsAByKronRows = ColsA_/Factors[LocalKrons_-1].m();
+    ColsAByKronRows = ColsA_/Factors[LocalKrons_-1].p();
   }
 
   void updateGPUResults(void** gpuResults_) {

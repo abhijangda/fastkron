@@ -10,9 +10,9 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
   const uint NumThreads = kernelInfo.NumThreads;
   const uint CRegRows = kernelInfo.CRegRows;
   const uint CRegCols = kernelInfo.CRegCols;
-  const Matrix tiledFactor = kernelInfo.tiledFactor;
+  const Factor& tiledFactor = kernelInfo.tiledFactor;
 
-  const uint ValidThreads = ((kernelInfo.tiledInput.n()/tiledFactor.m())/CRegRows) * (tiledFactor.n()/CRegCols);
+  const uint ValidThreads = ((kernelInfo.tiledInput.n()/tiledFactor.p())/CRegRows) * (tiledFactor.q()/CRegCols);
   if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
     std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
     return false;

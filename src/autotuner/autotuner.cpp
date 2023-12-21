@@ -94,7 +94,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
 
     for (int f = 0; f < problem.n; f++) {
       //TODO: call Matrix::numel()
-      auto sz = problem.fs[f].m() * problem.fs[f].n() * sizeof(float);
+      auto sz = problem.fs[f].p() * problem.fs[f].q() * sizeof(float);
       CUDA_CHECK(cudaMalloc(&Fs[g * problem.n + f], sz));
       CUDA_CHECK(cudaMemset(Fs[g * problem.n + f], 1, sz));
     }

@@ -47,6 +47,19 @@ public:
   }
 };
 
+class Factor : public Matrix {
+public:
+  Factor() : Matrix() {}
+  Factor(uint32_t rows, uint32_t cols) : Matrix(rows, cols) {}
+  Factor(uint32_t rows, uint32_t cols, void* data) : Matrix(rows, cols, data) {}
+
+  uint32_t p() const {return Matrix::m();}
+  uint32_t q() const {return Matrix::n();}
+
+  uint32_t m() = delete;
+  uint32_t n() = delete;
+};
+
 template<typename T, uint32_t MaxSize>
 class StackArray {
 public:
@@ -97,35 +110,35 @@ public:
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
 };
 
-class MatrixArray : public StackArray<Matrix, 64> {
+class FactorArray : public StackArray<Factor, 64> {
   static const uint32_t MaxSize = 64;
-  using Base = StackArray<Matrix, 64>;
+  using Base = StackArray<Factor, 64>;
 
-  MatrixArray(StackArray<Matrix, MaxSize> arr) : Base(arr) {}
+  FactorArray(StackArray<Factor, MaxSize> arr) : Base(arr) {}
 
 public:
-  MatrixArray(uint32_t n, const uint32_t* ms, const uint32_t* ns, void* const* ptrs) : 
+  FactorArray(uint32_t n, const uint32_t* ps, const uint32_t* qs, void* const* ptrs) : 
     Base(nullptr, n) {
     assert (n < MaxSize);
     for (uint32_t i = 0; i < n; i++) {
-      Base::array[i] = Matrix(ms[i], ns[i], ptrs ? ptrs[i] : nullptr);
+      Base::array[i] = Factor(ps[i], qs[i], ptrs ? ptrs[i] : nullptr);
     }
   }
 
-  MatrixArray(Matrix* matrices, uint32_t n) : Base(matrices, n) {}
+  FactorArray(Factor* factors, uint32_t n) : Base(factors, n) {}
 
-  Matrix& operator[](int index) {
+  Factor& operator[](int index) {
     assert (index < Base::n && index >= 0);
     return Base::array[index];
   }
 
-  Matrix operator[] (int index) const {
+  Factor operator[](int index) const {
     assert (index < Base::n && index >= 0);
     return Base::array[index];
   }
 
-  MatrixArray sub(uint32_t start, uint32_t len) const {
-    return MatrixArray(Base::sub(start, len));
+  FactorArray sub(uint32_t start, uint32_t len) const {
+    return FactorArray(Base::sub(start, len));
   }
 
   // Matrix& operator[](uint32_t index) {
@@ -135,6 +148,6 @@ public:
 };
 
 template<>
-struct std::hash<Matrix> {
-  std::size_t operator()(const Matrix& m) const;
+struct std::hash<Factor> {
+  std::size_t operator()(const Factor& m) const;
 };

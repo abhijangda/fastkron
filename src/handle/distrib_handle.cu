@@ -181,9 +181,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
       int prevFullK = prevTempN * handle.gpusInK_;
       int currFullN = currTempN * handle.gpusInK_;
-      Matrix localFactors[KronMulBatchSize];
+      Factor localFactors[KronMulBatchSize];
       for (int ii = 0; ii < KronMulBatchSize; ii++) {
-        localFactors[ii] = Matrix(LocalKronRows[ii], LocalKronCols[ii]);
+        localFactors[ii] = Factor(LocalKronRows[ii], LocalKronCols[ii]);
       }
       DistributedParams distParams(gr, gc, handle.gpusInK_, 
                                    prevFullK, currFullN,

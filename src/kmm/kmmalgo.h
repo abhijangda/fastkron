@@ -16,14 +16,14 @@ public:
   
   Matrix x;
   Matrix y;
-  MatrixArray fs;
+  FactorArray fs;
   int n;
 
-  KMMProblem(Matrix x, int n, MatrixArray fs, Matrix y) :
+  KMMProblem(Matrix x, int n, FactorArray fs, Matrix y) :
     x(x), n(n), fs(fs), y(y) {}
 
 public:
-  KMMProblem(Matrix x, int n, Matrix* fs, Matrix y) :
+  KMMProblem(Matrix x, int n, Factor* fs, Matrix y) :
     x(x), n(n), fs(fs, n), y(y) {}
 
   KMMProblem(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
@@ -51,10 +51,10 @@ public:
   KMMProblem rsub(int rstart, int subn) const {    
     int subk = x.n(), subl = y.n();
     for (int i = 0; i <= rstart - subn; i++) {
-      subl = (subl/fs[i].n())*fs[i].m();
+      subl = (subl/fs[i].q())*fs[i].p();
     }
     for (int i = n - 1; i > rstart; i--) {
-      subk = (subk/fs[i].m())*fs[i].n();
+      subk = (subk/fs[i].p())*fs[i].q();
     }
 
     assert (rstart >= 0);
@@ -70,10 +70,10 @@ public:
     int subk = x.n(), subl = y.n();
     
     for (int i = 0; i < start; i++) {
-      subl = (subl/fs[i].n())*fs[i].m();
+      subl = (subl/fs[i].q())*fs[i].p();
     }
     for (int i = n - 1; i >= start + subn; i--) {
-      subk = (subk/fs[i].m())*fs[i].n();
+      subk = (subk/fs[i].p())*fs[i].q();
     }
 
     assert (start >= 0);
@@ -87,14 +87,14 @@ public:
 
   uint32_t* ps(uint32_t *array) {
     for (uint32_t i = 0; i < n; i++) {
-      array[i] = fs[i].m();
+      array[i] = fs[i].p();
     }
     return array;
   }
 
   uint32_t* qs(uint32_t *array) {
     for (uint32_t i = 0; i < n; i++) {
-      array[i] = fs[i].n();
+      array[i] = fs[i].q();
     }
     return array;
   }
@@ -129,8 +129,8 @@ public:
   bool sameFactorShapes() const {
     bool eq = true;
     for (int i = 1; i < n; i++) {
-      eq = eq && fs[i-1].m() == fs[i].m() &&
-                 fs[i-1].n() == fs[i].n();
+      eq = eq && fs[i-1].p() == fs[i].p() &&
+                 fs[i-1].q() == fs[i].q();
     }
 
     return eq;
