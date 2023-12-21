@@ -146,8 +146,8 @@ struct DistributedParams {
     const Matrix factorPower = std::reduce(Factors, Factors + LocalKrons_, Matrix(1,1), [](Matrix prev, Matrix factor) {
       return Matrix(prev.m() * factor.m(), prev.n() * factor.n());
     });
-    const uint KronColsPower = factorPower.m();
-    const uint KronRowsPower = factorPower.n();
+    const uint KronColsPower = factorPower.n();
+    const uint KronRowsPower = factorPower.m();
 
     UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower;
     perGPUKByNumGPUs = PerGPUK_/gpusInK_;
