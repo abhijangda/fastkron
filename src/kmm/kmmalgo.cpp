@@ -60,7 +60,7 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
     if (i < nextF) {
-      problem.y = result;
+      problem.out = result;
     }
     auto subProblem = problem.rsub(i, nextF);
     err = func(subProblem, i, temps, result);
@@ -82,7 +82,7 @@ cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* temps[2],
   for (int i = 0; i < problem.n; i = i + nextF) {
     nextF = next(problem);
     if (i < nextF) {
-      problem.y = result;
+      problem.out = result;
     }
     auto subProblem = problem.sub(i, nextF);
     err = func(subProblem, i, temps, result);

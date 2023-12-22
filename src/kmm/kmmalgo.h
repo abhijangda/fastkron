@@ -14,21 +14,23 @@ struct KMMProblem {
 public:
   static const int MaxN = 64;
   
-  Matrix x;
-  Matrix y;
+  Matrix in;
+  Matrix out;
+
+  KMMProblem(Matrix x, int n, FactorArray fs, Matrix y) :
+    in(x), n(n), fs(fs), out(y) {}
+
+public:
+
   FactorArray fs;
   int n;
 
-  KMMProblem(Matrix x, int n, FactorArray fs, Matrix y) :
-    x(x), n(n), fs(fs), y(y) {}
-
-public:
   KMMProblem(Matrix x, int n, Factor* fs, Matrix y) :
-    x(x), n(n), fs(fs, n), y(y) {}
+    in(x), n(n), fs(fs, n), out(y) {}
 
   KMMProblem(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
              void* xptr, void* const* fsptr, void* yptr, const int k, 
-             const int l) : x(m, k, xptr), y(m, l, yptr), n(n), fs(n, ps, qs, fsptr) {
+             const int l) : in(m, k, xptr), out(m, l, yptr), n(n), fs(n, ps, qs, fsptr) {
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
@@ -41,15 +43,11 @@ public:
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs) :
     KMMProblem(m, n, ps, qs, nullptr, nullptr, nullptr) {}
 
-  // KMMProblem(KMMProblem prob, const int k, const int l) :
-  //   KMMProblem(prob.x, prob.n, prob.ps, prob.qs, 
-  //              prob.x, prob.fs, prob.y, k, l) {}
-
-  // KMMProblem(KMMProblem problem, void* x, void** fs, void* y) :
-  //   KMMProblem(problem.m, problem.n, problem.ps, problem.qs, x, fs, y) {}
+  const Matrix& x() const {return in;}
+  const Matrix& y() const {return out;}
 
   KMMProblem rsub(int rstart, int subn) const {    
-    int subk = x.n(), subl = y.n();
+    int subk = x().n(), subl = y().n();
     for (int i = 0; i <= rstart - subn; i++) {
       subl = (subl/fs[i].q())*fs[i].p();
     }
@@ -61,13 +59,13 @@ public:
     assert (subn <= n);
     assert (rstart - (subn - 1) >= 0);
 
-    return KMMProblem(Matrix(x.m(), subk, x.data()), subn,
+    return KMMProblem(Matrix(x().m(), subk, x().data()), subn,
                       fs.sub(rstart - (subn - 1), subn),
-                      Matrix(y.m(), subl, y.data()));
+                      Matrix(y().m(), subl, y().data()));
   }
 
   KMMProblem sub(int start, int subn) const {
-    int subk = x.n(), subl = y.n();
+    int subk = x().n(), subl = y().n();
     
     for (int i = 0; i < start; i++) {
       subl = (subl/fs[i].q())*fs[i].p();
@@ -80,9 +78,9 @@ public:
     assert (subn <= n);
     assert (start + (subn - 1) <= n);
     //TODO: make Matrix::data a function
-    return KMMProblem(Matrix(x.m(), subk, x.data()), subn,
+    return KMMProblem(Matrix(x().m(), subk, x().data()), subn,
                       fs.sub(start, subn),
-                      Matrix(y.m(), subl, y.data()));
+                      Matrix(y().m(), subl, y().data()));
   }
 
   uint32_t* ps(uint32_t *array) {
@@ -100,7 +98,7 @@ public:
   }
 
   void swap(void* temp1, void* temp2) {
-    void* x1 = y.data();
+    void* x1 = y().data();
     void* y1;
     if (x1 == temp1) {        
       y1 = temp2;
@@ -108,16 +106,16 @@ public:
       y1 = temp1;
     }
 
-    x = Matrix(x.m(), x.n(), x1);
-    y = Matrix(y.m(), y.n(), y1);
+    in = Matrix(x().m(), x().n(), x1);
+    out = Matrix(y().m(), y().n(), y1);
   }
   
-  uint32_t k() const {return x.n();}
-  uint32_t l() const {return y.n();}
-  uint32_t m() const {return x.m();}
+  uint32_t k() const {return x().n();}
+  uint32_t l() const {return y().n();}
+  uint32_t m() const {return x().m();}
 
   bool operator==(const KMMProblem& other) const {
-    bool eq = x == other.x && n == other.n && y == other.y;
+    bool eq = x() == other.x() && n == other.n && y() == other.y();
     if (eq) {
       for (int i = 0; i < n; i++) {
         eq = eq && fs[i] == other.fs[i];
@@ -137,7 +135,7 @@ public:
   }
 
   friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
-    out << problem.x.m() << "*(";
+    out << problem.x().m() << "*(";
     if (problem.sameFactorShapes()) 
       out << problem.fs[0] << "^" << problem.n;
     else

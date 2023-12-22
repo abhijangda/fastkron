@@ -82,7 +82,7 @@ struct KernelParams {
 
   KernelParams(KMMProblem problem, uint kp_idx) :
                m(problem.m()), l(problem.l()), k(problem.k()),
-               x(problem.x.data()), y(problem.y.data()), kp_idx(kp_idx) {
+               x(problem.x().data()), y(problem.y().data()), kp_idx(kp_idx) {
     for (int i = 0; i < Fused; i++) {
       ps[Fused - 1 - i] = problem.fs[i].p();
       qs[Fused - 1 - i] = problem.fs[i].q();

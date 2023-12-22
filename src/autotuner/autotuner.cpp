@@ -83,7 +83,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   void* Fs[problem.n * fastKron.numGPUs_];
   size_t resultSize = 0, tempSize = 0;
   fastKron.gekmmSizes(problem, &resultSize, &tempSize);
-  std::cout << "86: "<< resultSize << " " << tempSize << std::endl;
+
   for (int g = 0; g < fastKron.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(float)));
@@ -94,7 +94,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
 
     for (int f = 0; f < problem.n; f++) {
       //TODO: call Matrix::numel()
-      auto sz = problem.fs[f].p() * problem.fs[f].q() * sizeof(float);
+      auto sz = problem.fs[f].numel() * sizeof(float);
       CUDA_CHECK(cudaMalloc(&Fs[g * problem.n + f], sz));
       CUDA_CHECK(cudaMemset(Fs[g * problem.n + f], 1, sz));
     }

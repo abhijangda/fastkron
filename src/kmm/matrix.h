@@ -22,6 +22,7 @@ public:
 
   uint32_t m() const {return rows;}
   uint32_t n() const {return cols;}
+  uint32_t numel() const {return rows * cols;}
 
   uint32_t rowSize() const {return cols;}
   uint32_t colSize() const {return rows;}
