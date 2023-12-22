@@ -51,7 +51,7 @@ struct KernelInfo {
   }
 
   bool canCompute(KMMProblem problem, bool p2p) {
-    return tiledFactor == problem.fs[0] &&
+    return tiledFactor == problem.f(0) &&
            problem.k() % tiledInput.n() == 0 &&
            problem.n() == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;
@@ -59,7 +59,7 @@ struct KernelInfo {
 
   dim3 grid(KMMProblem problem) {
     return dim3 {
-                  problem.k()/tiledInput.n() * DIVUP(problem.fs[0].q(), tiledFactor.q()),
+                  problem.k()/tiledInput.n() * DIVUP(problem.f(0).q(), tiledFactor.q()),
                   DIVUP(problem.m(), tiledInput.m()),
                   1
                 };

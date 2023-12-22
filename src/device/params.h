@@ -84,9 +84,9 @@ struct KernelParams {
                m(problem.m()), l(problem.l()), k(problem.k()),
                x(problem.x().data()), y(problem.y().data()), kp_idx(kp_idx) {
     for (int i = 0; i < Fused; i++) {
-      ps[Fused - 1 - i] = problem.fs[i].p();
-      qs[Fused - 1 - i] = problem.fs[i].q();
-      fs[Fused - 1 - i] = problem.fs[i].data();
+      ps[Fused - 1 - i] = problem.f(i).p();
+      qs[Fused - 1 - i] = problem.f(i).q();
+      fs[Fused - 1 - i] = problem.f(i).data();
     }
   }
 };
@@ -98,7 +98,7 @@ struct FusedParams {
   uint ColsCByKronColsPower;
   
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
-    KronColsPower = (uint)std::pow((double)problem.fs[0].q(), (double)Fused);
+    KronColsPower = (uint)std::pow((double)problem.f(0).q(), (double)Fused);
     UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
     ColsCByKronColsPower = problem.l()/KronColsPower;
   }

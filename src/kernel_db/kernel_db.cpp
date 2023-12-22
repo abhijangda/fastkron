@@ -139,8 +139,8 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
   CUDA_CHECK(cudaEventCreate(&end));
   minTime = std::numeric_limits<float>::max();
 
-  if (compiledKernels.find(problem.fs[0]) != compiledKernels.end()) {
-  for (auto kernel : compiledKernels.at(problem.fs[0])) {
+  if (compiledKernels.find(problem.f(0)) != compiledKernels.end()) {
+  for (auto kernel : compiledKernels.at(problem.f(0))) {
     if (!kernel.canCompute(problem, distP2PStore)) continue;
     if (!foundProblem) {
       std::cout << "Tuning for shape "  << problem << std::endl;

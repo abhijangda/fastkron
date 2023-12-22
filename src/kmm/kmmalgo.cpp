@@ -3,7 +3,7 @@
 std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& problem) const {
   std::size_t h = hash<uint>()(problem.k()) ^ hash<uint>()(problem.n());
   for (int i = 0; i < problem.n(); i++) {
-    h = h ^ problem.fs[i].hash();
+    h = h ^ problem.f(i).hash();
   }
   return h;
 }
@@ -61,13 +61,11 @@ cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2],
 
   if (tmps != nullptr) {
     if (tmps[1] == nullptr) {
-      void* tmp1 = tmps[0];
-      void* tmp2 = tmps[1];
       if (swaps % 2 == 1) {
+        tmps[1] = tmps[0];
         tmps[0] = problem.y().data();
-        tmps[1] = tmp1;
       } else {
-        tmps[0] = tmp1;
+        tmps[0] = tmps[0];
         tmps[1] = problem.y().data();
       }
     }
@@ -77,17 +75,14 @@ cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2],
   }
 
   Matrix result = problem.y();
-  problem = KMMProblem(problem.x(), problem.fs, 
+  problem = KMMProblem(problem.x(), problem.n(), problem.fs(),
                        Matrix(problem.m(), problem.l(), firstIterOut));
   cudaError_t err;
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
-    if (i < nextF) {
-      problem.out = result;
-    }
-    auto subProblem = problem.rsub(i, nextF);
-    err = func(subProblem, i, tmps, result);
+    if (i < nextF) problem = KMMProblem(problem.x(), problem.n(), problem.fs(), result);
+    err = func(problem.rsub(i, nextF), i, tmps, result);
     if (err != cudaSuccess) break;
     if (tmps != nullptr)
       problem.swap(tmps[0], tmps[1]);
@@ -105,11 +100,8 @@ cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* tmps[2],
   cudaError_t err;
   for (int i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
-    if (i < nextF) {
-      problem.out = result;
-    }
-    auto subProblem = problem.sub(i, nextF);
-    err = func(subProblem, i, tmps, result);
+    if (i < nextF) problem = KMMProblem(problem.x(), problem.n(), problem.fs(), result);
+    err = func(problem.rsub(i, nextF), i, tmps, result);
     if (err != cudaSuccess) break;
     if (tmps != nullptr)
       problem.swap(tmps[0], tmps[1]);

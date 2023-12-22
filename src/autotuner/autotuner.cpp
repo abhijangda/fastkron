@@ -94,7 +94,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
 
     for (int f = 0; f < problem.n(); f++) {
       //TODO: call Matrix::numel()
-      auto sz = problem.fs[f].numel() * sizeof(float);
+      auto sz = problem.f(f).numel() * sizeof(float);
       CUDA_CHECK(cudaMalloc(&Fs[g * problem.n() + f], sz));
       CUDA_CHECK(cudaMemset(Fs[g * problem.n() + f], 1, sz));
     }
@@ -165,7 +165,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
       void** gpuResults = (void**)temp2_;
       
       DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k() * fastKron.gpusInK_, subproblem.l() * fastKron.gpusInK_, 
-                                   subproblem.k(), subproblem.l(), &subproblem.fs.array[0], 
+                                   subproblem.k(), subproblem.l(), subproblem.fs(), 
                                    subproblem.n());
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;

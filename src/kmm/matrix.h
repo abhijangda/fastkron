@@ -125,7 +125,7 @@ public:
     }
   }
 
-  FactorArray(Factor* factors, uint32_t n) : Base(factors, n) {}
+  FactorArray(const Factor* factors, uint32_t n) : Base(factors, n) {}
 
   Factor& operator[](int index) {
     assert (index < Base::n && index >= 0);

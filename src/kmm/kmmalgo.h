@@ -11,25 +11,22 @@
 #pragma once
 
 struct KMMProblem {
-public:
+private:
   static const int MaxN = 64;
-  
+  FactorArray factors;
   Matrix in;
   Matrix out;
 
-  KMMProblem(Matrix x, FactorArray fs, Matrix y) :
-    in(x), fs(fs), out(y) {}
-
 public:
+  KMMProblem(Matrix x, FactorArray fs, Matrix y) :
+    in(x), factors(fs), out(y) {}
 
-  FactorArray fs;
-
-  KMMProblem(Matrix x, int n, Factor* fs, Matrix y) :
-    in(x), fs(fs, n), out(y) {}
+  KMMProblem(Matrix x, int n, const Factor* fs, Matrix y) :
+    in(x), factors(fs, n), out(y) {}
 
   KMMProblem(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
              void* xptr, void* const* fsptr, void* yptr, const int k, 
-             const int l) : in(m, k, xptr), out(m, l, yptr), fs(n, ps, qs, fsptr) {
+             const int l) : in(m, k, xptr), out(m, l, yptr), factors(n, ps, qs, fsptr) {
   }
   
   KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
@@ -45,10 +42,10 @@ public:
   KMMProblem rsub(int rstart, int subn) const {    
     int subk = x().n(), subl = y().n();
     for (int i = 0; i <= rstart - subn; i++) {
-      subl = (subl/fs[i].q())*fs[i].p();
+      subl = (subl/factors[i].q())*factors[i].p();
     }
     for (int i = n() - 1; i > rstart; i--) {
-      subk = (subk/fs[i].p())*fs[i].q();
+      subk = (subk/factors[i].p())*factors[i].q();
     }
 
     assert (rstart >= 0);
@@ -56,7 +53,7 @@ public:
     assert (rstart - (subn - 1) >= 0);
 
     return KMMProblem(Matrix(x().m(), subk, x().data()),
-                      fs.sub(rstart - (subn - 1), subn),
+                      factors.sub(rstart - (subn - 1), subn),
                       Matrix(y().m(), subl, y().data()));
   }
 
@@ -64,31 +61,31 @@ public:
     int subk = x().n(), subl = y().n();
     
     for (int i = 0; i < start; i++) {
-      subl = (subl/fs[i].q())*fs[i].p();
+      subl = (subl/factors[i].q())*factors[i].p();
     }
     for (int i = n() - 1; i >= start + subn; i--) {
-      subk = (subk/fs[i].p())*fs[i].q();
+      subk = (subk/factors[i].p())*factors[i].q();
     }
 
     assert (start >= 0);
     assert (subn <= n());
     assert (start + (subn - 1) <= n());
-    //TODO: make Matrix::data a function
+
     return KMMProblem(Matrix(x().m(), subk, x().data()),
-                      fs.sub(start, subn),
+                      factors.sub(start, subn),
                       Matrix(y().m(), subl, y().data()));
   }
 
   uint32_t* ps(uint32_t *array) {
     for (uint32_t i = 0; i < n(); i++) {
-      array[i] = fs[i].p();
+      array[i] = factors[i].p();
     }
     return array;
   }
 
   uint32_t* qs(uint32_t *array) {
     for (uint32_t i = 0; i < n(); i++) {
-      array[i] = fs[i].q();
+      array[i] = factors[i].q();
     }
     return array;
   }
@@ -108,16 +105,18 @@ public:
 
   const Matrix& x() const {return in;}
   const Matrix& y() const {return out;}  
+  const Factor& f(int i) const {return factors[i];}
+  const Factor* fs() const {return &factors.array[0];}
   uint32_t k() const {return x().n();}
   uint32_t l() const {return y().n();}
   uint32_t m() const {return x().m();}
-  uint32_t n() const {return fs.len();}
-
+  uint32_t n() const {return factors.len();}
+  
   bool operator==(const KMMProblem& other) const {
     bool eq = x() == other.x() && n() == other.n() && y() == other.y();
     if (eq) {
       for (int i = 0; i < n(); i++) {
-        eq = eq && fs[i] == other.fs[i];
+        eq = eq && factors[i] == other.factors[i];
       }
     }
     return eq;
@@ -126,8 +125,8 @@ public:
   bool sameFactorShapes() const {
     bool eq = true;
     for (int i = 1; i < n(); i++) {
-      eq = eq && fs[i-1].p() == fs[i].p() &&
-                 fs[i-1].q() == fs[i].q();
+      eq = eq && factors[i-1].p() == factors[i].p() &&
+                 factors[i-1].q() == factors[i].q();
     }
 
     return eq;
@@ -136,10 +135,10 @@ public:
   friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
     out << problem.x().m() << "*(";
     if (problem.sameFactorShapes()) 
-      out << problem.fs[0] << "^" << problem.n();
+      out << problem.factors[0] << "^" << problem.n();
     else
       for (int i = 0; i < problem.n(); i++) {
-        out << problem.fs[i];
+        out << problem.factors[i];
         if (i < problem.n() - 1) out << "(x)";
       }
     out << ")";
