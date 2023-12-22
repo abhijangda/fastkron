@@ -156,12 +156,12 @@ struct std::hash<KMMProblem> {
 };
 
 cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
-                         void* result,
+                         Matrix result,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<cudaError_t (const KMMProblem, int, void*[2], void*)> func);
+                         std::function<cudaError_t (const KMMProblem, int, void*[2], Matrix)> func);
 cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
-                                void* result,
+                                Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<cudaError_t (const KMMProblem, int, void*[2], void*)> func);
+                                std::function<cudaError_t (const KMMProblem, int, void*[2], Matrix)> func);
 bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);

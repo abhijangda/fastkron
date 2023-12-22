@@ -306,7 +306,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (tune) {
     CUDACHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, stream[0]));
   }
-  printf("resultSize %ld\n", resultSize);
     
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));

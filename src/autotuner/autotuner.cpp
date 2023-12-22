@@ -15,9 +15,9 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   TunedKernelFromStart minPrologueKernel;
   auto nextSeries = problem.sub(startKron, problem.n - startKron);
 
-  reverseExecuteGeKMM(nextSeries, nullptr, nullptr, 
+  reverseExecuteGeKMM(nextSeries, nullptr, Matrix(), 
                [](const KMMProblem p){return 1;},
-  [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
+  [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix result) {
     const int subn = rstart + 1;
     auto tunedProblem = problem.sub(startKron, subn);
     bool isP2P = isDistributed && startKron == 0;
@@ -55,9 +55,9 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
   std::cout << "Fusion enabled?  " << this->fastKron.getUseFusion() << std::endl;
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
-  auto err = reverseExecuteGeKMM(problem, nullptr, nullptr, 
+  auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
                [](const KMMProblem p){return 1;},
-  [&](const KMMProblem firstPart, int rstart, void* temps[2], void* r) {
+  [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix r) {
     for (int endP = rstart; endP < problem.n; endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
       bool distP2PStore = isDistributed && rstart == 0;

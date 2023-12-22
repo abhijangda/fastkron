@@ -40,9 +40,9 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
   //If Row is divided among then local slicedmuls has to be less than N 
   if (gpusInK > 1 and LocalN >= problem.n) correct = false;
 
-  executeGeKMM(problem, nullptr, nullptr,
+  executeGeKMM(problem, nullptr, Matrix(),
     [](const KMMProblem kmm) {return 1;},
-    [&correct, gpusInK](const KMMProblem kmm, int, void* t1, void* t2) {
+    [&correct, gpusInK](const KMMProblem kmm, int, void* t1, Matrix result) {
       correct = correct && (kmm.l() % gpusInK == 0);
       return cudaSuccess;
     });
@@ -50,9 +50,9 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
 }
 
 cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
-                         void* result,
+                         Matrix result,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<cudaError_t (const KMMProblem, int rstart, void*[2], void*)> func) {
+                         std::function<cudaError_t (const KMMProblem, int rstart, void*[2], Matrix)> func) {
   uint k = problem.k();
   size_t l = k;
   int nextF = 1;
@@ -61,8 +61,7 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
     if (i < nextF) {
-      //TODO: pass result as Matrix
-      problem.y = Matrix(problem.m(), problem.l(), result);
+      problem.y = result;
     }
     auto subProblem = problem.rsub(i, nextF);
     err = func(subProblem, i, temps, result);
@@ -76,17 +75,16 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
 }
 
 cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* temps[2],
-                                void* result,
+                                Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<cudaError_t (const KMMProblem, int start, void*[2], void*)> func) {
+                                std::function<cudaError_t (const KMMProblem, int start, void*[2], Matrix)> func) {
   int nextF = 1;
   cudaError_t err;
   
   for (int i = 0; i < problem.n; i = i + nextF) {
     nextF = next(problem);
     if (i < nextF) {
-      //TODO: pass result as Matrix
-      problem.y = Matrix(problem.m(), problem.l(), result);
+      problem.y = result;
     }
     auto subProblem = problem.sub(i, nextF);
     err = func(subProblem, i, temps, result);

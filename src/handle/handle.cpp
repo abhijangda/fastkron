@@ -116,7 +116,7 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   //   const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
   //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   // }
-
+  std::cout << "119 " << problem.y.ptr() << " " << temp1 << std::endl;
   if (problem.y.ptr() == nullptr) return cudaErrorInvalidValue;
   if (temp1     == nullptr) return cudaErrorInvalidValue;
   //TODO: Fix these 
@@ -138,10 +138,10 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   KMMProblem tmpProblem(problem.x, problem.n, problem.fs, Matrix(problem.m(), problem.l(), output));
 
   auto kernelSeriesIter = kernelSeries.begin();
-  cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y.ptr(),
+  cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y,
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns_;},
     [&kernelSeriesIter, epilogueParams, stream, this]
-      (const KMMProblem subProblem, int rstart, void* temps[2], void* result) {
+      (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
         cudaError_t err;
         auto kernel = *kernelSeriesIter;
 
@@ -179,11 +179,10 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
 
   uint32_t maxTempN = 0;
   uint32_t resultCols = 0;
-                     
-  auto e = executeGeKMM(problem, nullptr, nullptr,
+  auto e = executeGeKMM(problem, nullptr, problem.y,
     [](const KMMProblem kmm) {return 1;},
     [&maxTempN, &resultCols]
-    (const KMMProblem kmm, int rstart, void* temps[2], void* result) {
+    (const KMMProblem kmm, int rstart, void* temps[2], Matrix result) {
       maxTempN = std::max(maxTempN, std::max(kmm.k(), kmm.l()));
       resultCols = kmm.l();
       return cudaSuccess;
@@ -194,7 +193,7 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
     //Include size of send and recv buffers 
     *tempSize = (*tempSize) * 2;
   *resultSize = gpuM * resultCols;
-
+  
   return e;
 }
 
