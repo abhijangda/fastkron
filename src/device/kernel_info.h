@@ -53,7 +53,7 @@ struct KernelInfo {
   bool canCompute(KMMProblem problem, bool p2p) {
     return tiledFactor == problem.fs[0] &&
            problem.k() % tiledInput.n() == 0 &&
-           problem.n == NumFusedKerns_ &&
+           problem.n() == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;
   }
 

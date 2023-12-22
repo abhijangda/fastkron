@@ -79,7 +79,7 @@ cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernelInfo, const uint kron
                                              cudaStream_t stream) {
   DistributedParams distParams;
 
-  switch(problem.n) {
+  switch(problem.n()) {
     case 1:
       return invoke<1>(kernelInfo, kronIndex, problem,
                        distParams, epilogueParams, stream);
@@ -106,7 +106,7 @@ cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint 
                                                 KMMProblem problem, DistributedParams distParams, 
                                                 EpilogueParams epilogueParams,
                                                 cudaStream_t stream) {
-  switch (problem.n) {
+  switch (problem.n()) {
     case 1:
       return invoke<1>(kernel, kronIndex, problem, 
                        distParams, epilogueParams, stream);

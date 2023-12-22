@@ -1,9 +1,9 @@
 #include "kmmalgo.h"
 
-std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& shape) const {
-  std::size_t h = hash<uint>()(shape.k()) ^ hash<uint>()(shape.n);
-  for (int i = 0; i < shape.n; i++) {
-    h = h ^ shape.fs[i].hash();
+std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& problem) const {
+  std::size_t h = hash<uint>()(problem.k()) ^ hash<uint>()(problem.n());
+  for (int i = 0; i < problem.n(); i++) {
+    h = h ^ problem.fs[i].hash();
   }
   return h;
 }
@@ -32,13 +32,13 @@ bool checkDistributedKronSizes(const uint NumKronMats,
 
 bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
                                const uint gpusInK) {
-  bool correct = true;
-  
   //Cannot do more than N local slicedmuls
-  if (LocalN > problem.n) correct = false;
+  if (LocalN > problem.n()) return false;
 
   //If Row is divided among then local slicedmuls has to be less than N 
-  if (gpusInK > 1 and LocalN >= problem.n) correct = false;
+  if (gpusInK > 1 and LocalN >= problem.n()) return false;
+  
+  bool correct = true;
 
   executeGeKMM(problem, nullptr, 0,
     [](const KMMProblem kmm) {return 1;},
@@ -46,6 +46,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
       correct = correct && (kmm.l() % gpusInK == 0);
       return cudaSuccess;
     });
+
   return correct;
 }
 
@@ -76,10 +77,10 @@ cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2],
   }
 
   Matrix result = problem.y();
-  problem = KMMProblem(problem.x(), problem.n, problem.fs, 
+  problem = KMMProblem(problem.x(), problem.fs, 
                        Matrix(problem.m(), problem.l(), firstIterOut));
   cudaError_t err;
-  for (int i = problem.n - 1; i >= 0; i = i - nextF) {
+  for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
     if (i < nextF) {
@@ -102,7 +103,7 @@ cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* tmps[2],
                                 std::function<cudaError_t (const KMMProblem, int start, void*[2], Matrix)> func) {
   int nextF = 1;
   cudaError_t err;
-  for (int i = 0; i < problem.n; i = i + nextF) {
+  for (int i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
     if (i < nextF) {
       problem.out = result;
