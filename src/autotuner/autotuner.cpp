@@ -86,11 +86,11 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
 
   for (int g = 0; g < fastKron.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
-    CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize));
+    CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize));
 
-    CUDA_CHECK(cudaMemset(temp1_[g], 1, tempSize * sizeof(float)));
-    CUDA_CHECK(cudaMemset(temp2_[g], 1, tempSize * sizeof(float)));
+    CUDA_CHECK(cudaMemset(temp1_[g], 1, tempSize));
+    CUDA_CHECK(cudaMemset(temp2_[g], 1, tempSize));
 
     for (int f = 0; f < problem.n; f++) {
       //TODO: call Matrix::numel()

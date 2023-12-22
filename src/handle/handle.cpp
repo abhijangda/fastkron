@@ -171,11 +171,16 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
       return cudaSuccess;
     });
 
-  *tempSize   = gpuM * maxTempN;
-  if (isDistributed_ and distComm_ == DistComm::NCCL)
-    //Include size of send and recv buffers 
-    *tempSize = (*tempSize) * 2;
-  *resultSize = gpuM * resultCols;
+  if (e == cudaSuccess) {
+    *tempSize   = gpuM * maxTempN;
+    if (isDistributed_ and distComm_ == DistComm::NCCL)
+      //Include size of send and recv buffers 
+      *tempSize = (*tempSize) * 2;
+    *resultSize = gpuM * resultCols;
+
+    *tempSize   = *tempSize   * sizeof(float);
+    *resultSize = *resultSize * sizeof(float);
+  }
   
   return e;
 }
