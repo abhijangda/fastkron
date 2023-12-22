@@ -49,12 +49,11 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
   return correct;
 }
 
+//TODO: Change to backwardGeKMM
 cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
                          Matrix result,
                          std::function<uint (const KMMProblem)> next,
                          std::function<cudaError_t (const KMMProblem, int rstart, void*[2], Matrix)> func) {
-  uint k = problem.k();
-  size_t l = k;
   int nextF = 1;
   cudaError_t err;
   for (int i = problem.n - 1; i >= 0; i = i - nextF) {
@@ -66,7 +65,6 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
     auto subProblem = problem.rsub(i, nextF);
     err = func(subProblem, i, temps, result);
     if (err != cudaSuccess) break;
-    k = l;
     if (temps != nullptr)
       problem.swap(temps[0], temps[1]);
   }
@@ -74,13 +72,13 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
   return cudaSuccess;
 }
 
+//TODO: Change to forwardGeKMM
 cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* temps[2],
                                 Matrix result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<cudaError_t (const KMMProblem, int start, void*[2], Matrix)> func) {
   int nextF = 1;
   cudaError_t err;
-  
   for (int i = 0; i < problem.n; i = i + nextF) {
     nextF = next(problem);
     if (i < nextF) {

@@ -116,26 +116,26 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   //   const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
   //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   // }
-  std::cout << "119 " << problem.y.ptr() << " " << temp1 << std::endl;
-  if (problem.y.ptr() == nullptr) return cudaErrorInvalidValue;
-  if (temp1     == nullptr) return cudaErrorInvalidValue;
-  //TODO: Fix these 
+  if (problem.y.data() == nullptr) return cudaErrorInvalidValue;
+  if (temp1           == nullptr) return cudaErrorInvalidValue;
+
   void* temps[2] = {temp1, temp2};
-  void* output = temps[0];
+  void* firstIterOut = temps[0];
 
   if (temp2 == nullptr) {
     if (kernelSeries.size() % 2 == 1) {
-      temps[0] = problem.y.ptr();
+      temps[0] = problem.y.data();
       temps[1] = temp1;
     } else {
       temps[0] = temp1;
-      temps[1] = problem.y.ptr();
+      temps[1] = problem.y.data();
     }
 
-    output = temps[0];
+    firstIterOut = temps[0];
   }
 
-  KMMProblem tmpProblem(problem.x, problem.n, problem.fs, Matrix(problem.m(), problem.l(), output));
+  KMMProblem tmpProblem(problem.x, problem.n, problem.fs,
+                        Matrix(problem.m(), problem.l(), firstIterOut));
 
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(tmpProblem, temps, problem.y,
@@ -151,7 +151,6 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
         err = kerneldb.invokeKernel(selectedKernel, rstart, 
                                     subProblem, epilogueParams,
                                     stream);
-      
         CUDA_CHECK(err);
         kernelSeriesIter++;
 

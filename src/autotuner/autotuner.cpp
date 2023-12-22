@@ -109,7 +109,6 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     uint32_t arr2[problem.n];
     auto tmpProblem = KMMProblem(problem.m(), problem.n, problem.ps(arr1), problem.qs(arr2), 
                                  temp1_[0], Fs, temp2_[0]);
-    std::cout << "112: " << tmpProblem.x.ptr() << " " << temp1_[0] << std::endl;
     tuneSlicedMulSeries(tmpProblem, false, DistributedParams(), stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;

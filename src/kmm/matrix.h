@@ -7,18 +7,17 @@
 class Matrix {
   uint32_t rows;
   uint32_t cols;
-public:
-  void* data;
+  void* ptr;
 
 public:
-  Matrix() : rows(0), cols(0), data(nullptr) {}
+  Matrix() : rows(0), cols(0), ptr(nullptr) {}
 
   Matrix(uint32_t rows, uint32_t cols) : 
-    rows(rows), cols(cols), data(nullptr)
+    rows(rows), cols(cols), ptr(nullptr)
   {}
 
   Matrix(uint32_t rows, uint32_t cols, void* data) : 
-    rows(rows), cols(cols), data(data)
+    rows(rows), cols(cols), ptr(data)
   {}
 
   uint32_t m() const {return rows;}
@@ -27,7 +26,7 @@ public:
   uint32_t rowSize() const {return cols;}
   uint32_t colSize() const {return rows;}
 
-  void* ptr() const {return data;}
+  void* data() const {return ptr;}
 
   bool operator==(const Matrix& other) const {
     return m() == other.m() && n() == other.n();
@@ -42,7 +41,7 @@ public:
     return out;
   }
 
-  uint32_t hash() {
+  uint32_t hash() const {
     return std::hash<uint>()(m()) ^ std::hash<uint>()(n());
   }
 };
@@ -132,7 +131,7 @@ public:
     return Base::array[index];
   }
 
-  Factor operator[](int index) const {
+  const Factor& operator[](int index) const {
     assert (index < Base::n && index >= 0);
     return Base::array[index];
   }
@@ -140,11 +139,6 @@ public:
   FactorArray sub(uint32_t start, uint32_t len) const {
     return FactorArray(Base::sub(start, len));
   }
-
-  // Matrix& operator[](uint32_t index) {
-  //   assert (index < Base::n);
-  //   return Base::array[index];
-  // }
 };
 
 template<>
