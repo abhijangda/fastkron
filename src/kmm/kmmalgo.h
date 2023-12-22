@@ -154,7 +154,7 @@ struct std::hash<KMMProblem> {
 };
 
 cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
-                         Matrix result,
+                         uint32_t swaps,
                          std::function<uint (const KMMProblem)> next,
                          std::function<cudaError_t (const KMMProblem, int, void*[2], Matrix)> func);
 cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],

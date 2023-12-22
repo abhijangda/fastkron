@@ -40,7 +40,7 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
   //If Row is divided among then local slicedmuls has to be less than N 
   if (gpusInK > 1 and LocalN >= problem.n) correct = false;
 
-  executeGeKMM(problem, nullptr, Matrix(),
+  executeGeKMM(problem, nullptr, 0,
     [](const KMMProblem kmm) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, int, void* t1, Matrix result) {
       correct = correct && (kmm.l() % gpusInK == 0);
@@ -50,11 +50,34 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
 }
 
 //TODO: Change to backwardGeKMM
-cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
-                         Matrix result,
+cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2],
+                         uint32_t swaps,
                          std::function<uint (const KMMProblem)> next,
                          std::function<cudaError_t (const KMMProblem, int rstart, void*[2], Matrix)> func) {
   int nextF = 1;
+
+  void* firstIterOut;
+
+  if (tmps != nullptr) {
+    if (tmps[1] == nullptr) {
+      void* tmp1 = tmps[0];
+      void* tmp2 = tmps[1];
+      if (swaps % 2 == 1) {
+        tmps[0] = problem.y().data();
+        tmps[1] = tmp1;
+      } else {
+        tmps[0] = tmp1;
+        tmps[1] = problem.y().data();
+      }
+    }
+    firstIterOut = tmps[0];
+  } else {
+    firstIterOut = problem.y().data();
+  }
+
+  Matrix result = problem.y();
+  problem = KMMProblem(problem.x(), problem.n, problem.fs, 
+                       Matrix(problem.m(), problem.l(), firstIterOut));
   cudaError_t err;
   for (int i = problem.n - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
@@ -63,17 +86,17 @@ cudaError_t executeGeKMM(KMMProblem problem, void* temps[2],
       problem.out = result;
     }
     auto subProblem = problem.rsub(i, nextF);
-    err = func(subProblem, i, temps, result);
+    err = func(subProblem, i, tmps, result);
     if (err != cudaSuccess) break;
-    if (temps != nullptr)
-      problem.swap(temps[0], temps[1]);
+    if (tmps != nullptr)
+      problem.swap(tmps[0], tmps[1]);
   }
 
   return cudaSuccess;
 }
 
 //TODO: Change to forwardGeKMM
-cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* temps[2],
+cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* tmps[2],
                                 Matrix result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<cudaError_t (const KMMProblem, int start, void*[2], Matrix)> func) {
@@ -85,10 +108,10 @@ cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* temps[2],
       problem.out = result;
     }
     auto subProblem = problem.sub(i, nextF);
-    err = func(subProblem, i, temps, result);
+    err = func(subProblem, i, tmps, result);
     if (err != cudaSuccess) break;
-    if (temps != nullptr)
-      problem.swap(temps[0], temps[1]);
+    if (tmps != nullptr)
+      problem.swap(tmps[0], tmps[1]);
   }
 
   return cudaSuccess;
