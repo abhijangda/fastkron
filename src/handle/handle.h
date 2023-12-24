@@ -85,18 +85,6 @@ struct FastKronHandle {
   cudaError_t distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                   cudaStream_t streams[]);
-  cudaError_t fusedDistributedSlicedMatmul(const uint NumFusedKerns, KernelInfo& kernel, const uint kronIndex, 
-                                void* x, void** kronMat, void* kronGemmResult,
-                                const uint M, const uint N, const uint K, 
-                                const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                                DistributedParams distParams, EpilogueParams epilogueParams,
-                                cudaStream_t stream);
-  cudaError_t fusedSlicedMatmul(uint NumFusedKerns, KernelInfo& kernelInfo, const uint kronIndex, 
-                              void* x, void** krons, void* kronGemmResult,
-                              const uint M, const uint N, const uint K, 
-                              const uint* FusedKronMatCols, const uint* FusedKronMatRows,
-                              EpilogueParams epilogueParams,
-                              cudaStream_t stream);
   cudaError_t gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
   //TunedKernelsSeries selectKernelSeries(const uint NumKronMats,
   //                                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],

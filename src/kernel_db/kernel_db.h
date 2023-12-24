@@ -7,6 +7,7 @@
 
 #pragma once
 
+//TODO: Change name to Executor?
 class KernelDatabase {
 private:
     std::unordered_map<Factor, std::vector<KernelInfo>> compiledKernels;
@@ -25,5 +26,6 @@ public:
                                    KMMProblem problem, DistributedParams distParams, 
                                    EpilogueParams epilogueParams,
                                    cudaStream_t stream);
-  std::pair<KernelInfo, float> tuneKernelForSize(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams, cudaStream_t stream);
+  std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams, cudaStream_t stream);
+  cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
 };

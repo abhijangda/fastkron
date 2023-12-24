@@ -44,9 +44,9 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   return minTime;
 }
 
-cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
-                                           bool isDistributed, DistributedParams distParams,
-                                           cudaStream_t stream) {
+cudaError_t Autotuner::tune(KMMProblem problem,
+                            bool isDistributed, DistributedParams distParams,
+                            cudaStream_t stream) {
   //Only row major layout of all matrics is supported.
   //For performance eval we do not need these to contain any value
   
@@ -63,7 +63,7 @@ cudaError_t Autotuner::tuneSlicedMulSeries(KMMProblem problem,
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
-      auto bestKernelWithTime = fastKron.kerneldb.tuneKernelForSize(secondPart, distP2PStore, rstart, distParams, stream);
+      auto bestKernelWithTime = fastKron.kerneldb.tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams, stream);
       if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
         tunedKernelsMap.add(secondPart, distP2PStore,
                             bestKernelWithTime);
@@ -84,20 +84,17 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   size_t resultSize = 0, tempSize = 0;
   fastKron.gekmmSizes(problem, &resultSize, &tempSize);
 
-  for (int g = 0; g < fastKron.numGPUs_; g++) {
-    CUDA_CHECK(cudaSetDevice(g));
-    CUDA_CHECK(cudaMalloc(&temp1_[g], tempSize));
-    CUDA_CHECK(cudaMalloc(&temp2_[g], tempSize));
-
-    CUDA_CHECK(cudaMemset(temp1_[g], 1, tempSize));
-    CUDA_CHECK(cudaMemset(temp2_[g], 1, tempSize));
-
+  for (uint32_t p = 0; p < fastKron.numGPUs_; p++) {
+    fastKron.kerneldb.procMalloc(p, tempSize, temp1_[p]);
+    fastKron.kerneldb.procMalloc(p, tempSize, temp2_[p]);
     for (int f = 0; f < problem.n(); f++) {
-      //TODO: call Matrix::numel()
       auto sz = problem.f(f).numel() * sizeof(float);
-      CUDA_CHECK(cudaMalloc(&Fs[g * problem.n() + f], sz));
-      CUDA_CHECK(cudaMemset(Fs[g * problem.n() + f], 1, sz));
-    }
+      fastKron.kerneldb.procMalloc(p, sz, Fs[p * problem.n() + f]);
+    }  
+  }
+
+  for (int g = 0; g < fastKron.numGPUs_; g++) {
+    
   }
 
   CUDA_CHECK(cudaSetDevice(0));
@@ -109,7 +106,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     uint32_t arr2[problem.n()];
     auto tmpProblem = KMMProblem(problem.m(), problem.n(), problem.ps(arr1), problem.qs(arr2), 
                                  temp1_[0], Fs, temp2_[0]);
-    tuneSlicedMulSeries(tmpProblem, false, DistributedParams(), stream);
+    tune(tmpProblem, false, DistributedParams(), stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(problem, 0, false,
@@ -169,8 +166,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
                                    subproblem.n());
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
-      tuneSlicedMulSeries(subproblem, distP2PStore, 
-                          distParams, stream);
+      tune(subproblem, distP2PStore, distParams, stream);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
                                         tunedKernels, tunedKernelsMap);

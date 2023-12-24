@@ -75,8 +75,8 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
 }
 
 cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
-                                             KMMProblem problem, EpilogueParams epilogueParams,
-                                             cudaStream_t stream) {
+                                         KMMProblem problem, EpilogueParams epilogueParams,
+                                         cudaStream_t stream) {
   DistributedParams distParams;
 
   switch(problem.n()) {
@@ -97,15 +97,15 @@ cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernelInfo, const uint kron
                        distParams, epilogueParams, stream);
       break;
     default:
-        std::cout << "Invalid number of fused kernels" << std::endl;
+      std::cout << "Invalid number of fused kernels" << std::endl;
       return cudaErrorInvalidValue;
   }
 }
 
 cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint kronIndex, 
-                                                KMMProblem problem, DistributedParams distParams, 
-                                                EpilogueParams epilogueParams,
-                                                cudaStream_t stream) {
+                                                 KMMProblem problem, DistributedParams distParams, 
+                                                 EpilogueParams epilogueParams,
+                                                 cudaStream_t stream) {
   switch (problem.n()) {
     case 1:
       return invoke<1>(kernel, kronIndex, problem, 
@@ -122,12 +122,15 @@ cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint 
     case 5:
       return invoke<5>(kernel, kronIndex, problem, 
                        distParams, epilogueParams, stream);
+    default:
+      std::cout << "Invalid number of fused kernels" << std::endl;
   }
 
   return cudaErrorInvalidValue;
 }
 
-std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams, cudaStream_t stream) {
+std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
+    uint factorIdx, DistributedParams distParams, cudaStream_t stream) {
   const uint runs = 5;
   const uint warmups = 2;
   KernelInfo bestKernel;
@@ -185,4 +188,12 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForSize(KMMProblem proble
   }
 
   return std::make_pair(bestKernel, minTime);
+}
+
+cudaError_t KernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
+  CUDA_CHECK(cudaSetDevice(proc));
+  CUDA_CHECK(cudaMalloc(&ptr, size));
+  CUDA_CHECK(cudaMemset(ptr, 1, size));
+  
+  return cudaSuccess;
 }

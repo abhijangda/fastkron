@@ -26,17 +26,17 @@ public:
 
   bool hasKernel(const KMMProblem& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem) != p2pKernels.end():
-                   getKernel(kernels, problem) != kernels.end();
+                   getKernel(kernels,    problem) != kernels.end();
   }
 
   KernelInfo getKernel(const KMMProblem& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem)->second.first :
-                   getKernel(kernels, problem)->second.first;    
+                   getKernel(kernels,    problem)->second.first;    
   }
 
   float getKernelTime(const KMMProblem& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem)->second.second :
-                   getKernel(kernels, problem)->second.second;    
+                   getKernel(kernels,    problem)->second.second;    
   }
 };
 
@@ -44,13 +44,12 @@ class Autotuner {
   FastKronHandle& fastKron;
   TunedKernelsMap tunedKernelsMap;
 
-  cudaError_t tuneSlicedMulSeries(KMMProblem problem,
-                                  bool isDistributed, DistributedParams distParams,
-                                  cudaStream_t stream);
+  cudaError_t tune(KMMProblem problem,
+                   bool isDistributed, DistributedParams distParams,
+                   cudaStream_t stream);
 public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
   {}
 
   cudaError_t tune(KMMProblem problem, cudaStream_t stream);
-
 };

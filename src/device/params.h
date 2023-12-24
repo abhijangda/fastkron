@@ -14,9 +14,9 @@ union AllTypes {
 
   __host__ __device__
   AllTypes()                {}
-  AllTypes(float f)  : f(f) {}
-  AllTypes(long l)   : l(l) {}
-  AllTypes(int i)    : i(i) {}
+  AllTypes(float  f) : f(f) {}
+  AllTypes(long   l) : l(l) {}
+  AllTypes(int    i) : i(i) {}
   AllTypes(double d) : d(d) {}
 
   __device__
