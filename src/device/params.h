@@ -70,25 +70,11 @@ struct EpilogueParams {
 
 template<uint Fused>
 struct KernelParams {
-  const uint m;
-  const uint l;
-  const uint k;
-  uint ps[Fused];
-  uint qs[Fused];
-  const void * __restrict__ x;
-  const void * __restrict__ fs[Fused];
-  void       * __restrict__ y;
+  KMMProblemT<Fused> problem;
   const uint kp_idx;
 
-  KernelParams(KMMProblem problem, uint kp_idx) :
-               m(problem.m()), l(problem.l()), k(problem.k()),
-               x(problem.x().data()), y(problem.y().data()), kp_idx(kp_idx) {
-    for (int i = 0; i < Fused; i++) {
-      ps[Fused - 1 - i] = problem.f(i).p();
-      qs[Fused - 1 - i] = problem.f(i).q();
-      fs[Fused - 1 - i] = problem.f(i).data();
-    }
-  }
+  KernelParams(KMMProblem problem_, uint kp_idx) :
+               problem(problem_), kp_idx(kp_idx) {}
 };
 
 template<uint Fused>

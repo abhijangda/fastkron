@@ -7,39 +7,42 @@
 #include <cuda.h>
 
 #include "kmm/matrix.h"
+#include "config.h"
 
 #pragma once
 
-struct KMMProblem {
+template<uint32_t MaxFactorsT>
+struct KMMProblemT {
+  static const uint32_t MaxFactors = MaxFactorsT;
+public:
+  using Factors = FactorArray<MaxFactors>;
+
 private:
-  static const int MaxN = 64;
-  FactorArray factors;
+  Factors factors;
   Matrix in;
   Matrix out;
 
 public:
-  KMMProblem(Matrix x, FactorArray fs, Matrix y) :
+  KMMProblemT(Matrix x, Factors fs, Matrix y) :
     in(x), factors(fs), out(y) {}
 
-  KMMProblem(Matrix x, int n, const Factor* fs, Matrix y) :
+  KMMProblemT(Matrix x, int n, const Factor* fs, Matrix y) :
     in(x), factors(fs, n), out(y) {}
 
-  KMMProblem(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
-             void* xptr, void* const* fsptr, void* yptr, const int k, 
-             const int l) : in(m, k, xptr), out(m, l, yptr), factors(n, ps, qs, fsptr) {
-  }
+  KMMProblemT(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
+             void* xptr, void* const* fsptr, void* yptr, const int k, const int l) : 
+             in(m, k, xptr), out(m, l, yptr), factors(n, ps, qs, fsptr) {}
   
-  KMMProblem(const uint m, const int n, const uint *ps, const uint *qs,
+  KMMProblemT(const uint m, const int n, const uint *ps, const uint *qs,
              void* x, void* const* fs, void* y) :
-    KMMProblem(m, n, ps, qs, x, fs, y,
+    KMMProblemT(m, n, ps, qs, x, fs, y,
                std::reduce(ps, ps+n, 1, std::multiplies<uint>()),
-               std::reduce(qs, qs+n, 1, std::multiplies<uint>()))
-    {}
+               std::reduce(qs, qs+n, 1, std::multiplies<uint>())) {}
 
-  KMMProblem(const uint m, const int n, const uint *ps, const uint *qs) :
-    KMMProblem(m, n, ps, qs, nullptr, nullptr, nullptr) {}
+  KMMProblemT(const uint m, const int n, const uint *ps, const uint *qs) :
+    KMMProblemT(m, n, ps, qs, nullptr, nullptr, nullptr) {}
 
-  KMMProblem rsub(int rstart, int subn) const {    
+  KMMProblemT rsub(int rstart, int subn) const {    
     int subk = x().n(), subl = y().n();
     for (int i = 0; i <= rstart - subn; i++) {
       subl = (subl/factors[i].q())*factors[i].p();
@@ -52,12 +55,12 @@ public:
     assert (subn <= n());
     assert (rstart - (subn - 1) >= 0);
 
-    return KMMProblem(Matrix(x().m(), subk, x().data()),
+    return KMMProblemT(Matrix(x().m(), subk, x().data()),
                       factors.sub(rstart - (subn - 1), subn),
                       Matrix(y().m(), subl, y().data()));
   }
 
-  KMMProblem sub(int start, int subn) const {
+  KMMProblemT sub(int start, int subn) const {
     int subk = x().n(), subl = y().n();
     
     for (int i = 0; i < start; i++) {
@@ -71,9 +74,15 @@ public:
     assert (subn <= n());
     assert (start + (subn - 1) <= n());
 
-    return KMMProblem(Matrix(x().m(), subk, x().data()),
+    return KMMProblemT(Matrix(x().m(), subk, x().data()),
                       factors.sub(start, subn),
                       Matrix(y().m(), subl, y().data()));
+  }
+
+  template<uint32_t OtherMaxFactors>
+  KMMProblemT(const KMMProblemT<OtherMaxFactors>& other) : 
+    in(other.x()), out(other.y()), factors(other.fs(), other.n()) {
+
   }
 
   uint32_t* ps(uint32_t *array) {
@@ -103,16 +112,25 @@ public:
     out = Matrix(y().m(), y().n(), y1);
   }
 
+  CUDA_DEVICE_HOST
   const Matrix& x() const {return in;}
+  CUDA_DEVICE_HOST
   const Matrix& y() const {return out;}  
+  CUDA_DEVICE_HOST
   const Factor& f(int i) const {return factors[i];}
+  CUDA_DEVICE_HOST
   const Factor* fs() const {return &factors.array[0];}
+  
+  CUDA_DEVICE_HOST
   uint32_t k() const {return x().n();}
+  CUDA_DEVICE_HOST
   uint32_t l() const {return y().n();}
+  CUDA_DEVICE_HOST
   uint32_t m() const {return x().m();}
+  CUDA_DEVICE_HOST
   uint32_t n() const {return factors.len();}
   
-  bool operator==(const KMMProblem& other) const {
+  bool operator==(const KMMProblemT& other) const {
     bool eq = x() == other.x() && n() == other.n() && y() == other.y();
     if (eq) {
       for (int i = 0; i < n(); i++) {
@@ -132,7 +150,7 @@ public:
     return eq;
   }
 
-  friend std::ostream& operator<<(std::ostream &out, const KMMProblem &problem) {
+  friend std::ostream& operator<<(std::ostream &out, const KMMProblemT &problem) {
     out << problem.x().m() << "*(";
     if (problem.sameFactorShapes()) 
       out << problem.factors[0] << "^" << problem.n();
@@ -145,6 +163,8 @@ public:
     return out;
   }
 };
+
+using KMMProblem = KMMProblemT<64>;
 
 template<>
 struct std::hash<KMMProblem> {

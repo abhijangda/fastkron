@@ -2,6 +2,8 @@
 #include <cassert>
 #include <functional>
 
+#include "config.h"
+
 #pragma once
 
 class Matrix {
@@ -21,13 +23,17 @@ public:
     rows(rows), cols(cols), ptr(data)
   {}
 
+  CUDA_DEVICE_HOST
   uint32_t m() const {return rows;}
+  CUDA_DEVICE_HOST
   uint32_t n() const {return cols;}
+  CUDA_DEVICE_HOST
   uint32_t numel() const {return rows * cols;}
 
   uint32_t rowSize() const {return cols;}
   uint32_t colSize() const {return rows;}
-
+  
+  CUDA_DEVICE_HOST
   void* data() const {return ptr;}
 
   bool operator==(const Matrix& other) const {
@@ -54,7 +60,9 @@ public:
   Factor(uint32_t rows, uint32_t cols) : Matrix(rows, cols) {}
   Factor(uint32_t rows, uint32_t cols, void* data) : Matrix(rows, cols, data) {}
 
+  CUDA_DEVICE_HOST
   uint32_t p() const {return Matrix::m();}
+  CUDA_DEVICE_HOST
   uint32_t q() const {return Matrix::n();}
 
   uint32_t m() = delete;
@@ -86,11 +94,13 @@ public:
     }
   }
 
+  CUDA_DEVICE_HOST
   T& operator[](int index) {
     assert (index < n && index >= 0);
     return array[index];
   }
 
+  CUDA_DEVICE_HOST
   T& operator[](uint32_t index) {
     assert (index < n);
     return array[index];
@@ -106,15 +116,15 @@ public:
     return StackArray<T, MaxSize>(ptrs, len);
   }
 
+  CUDA_DEVICE_HOST
   uint32_t len() const {return n;}
 
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
 };
 
-class FactorArray : public StackArray<Factor, 64> {
-  static const uint32_t MaxSize = 64;
-  using Base = StackArray<Factor, 64>;
-
+template<uint32_t MaxSize>
+class FactorArray : public StackArray<Factor, MaxSize> {
+  using Base = StackArray<Factor, MaxSize>;
   FactorArray(StackArray<Factor, MaxSize> arr) : Base(arr) {}
 
 public:
@@ -128,11 +138,13 @@ public:
 
   FactorArray(const Factor* factors, uint32_t n) : Base(factors, n) {}
 
+  CUDA_DEVICE_HOST
   Factor& operator[](int index) {
     assert (index < Base::n && index >= 0);
     return Base::array[index];
   }
 
+  CUDA_DEVICE_HOST
   const Factor& operator[](int index) const {
     assert (index < Base::n && index >= 0);
     return Base::array[index];

@@ -139,7 +139,7 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
         kernelSeriesIter++;
 
         return err;
-      });
+    });
 
   return err;
 }
