@@ -140,13 +140,19 @@ public:
 
   CUDA_DEVICE_HOST
   Factor& operator[](int index) {
+  #if defined(__NVCC__) || defined(__CUDACC__)
+  #else
     assert (index < Base::n && index >= 0);
+  #endif
     return Base::array[index];
   }
 
   CUDA_DEVICE_HOST
   const Factor& operator[](int index) const {
+  #if defined(__NVCC__) || defined(__CUDACC__)
+  #else
     assert (index < Base::n && index >= 0);
+  #endif
     return Base::array[index];
   }
 
