@@ -197,3 +197,24 @@ cudaError_t KernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
   
   return cudaSuccess;
 }
+
+cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
+  void* ptr;
+  cudaError_t e = procMalloc(proc, m.numel() * sizeof(float), ptr);
+
+  if (e == cudaSuccess) {
+    m.ptr = ptr;
+  }
+
+  return e;
+}
+
+cudaError_t KernelDatabase::procFree(uint32_t proc, void* ptr) {
+  CUDA_CHECK(cudaSetDevice(proc));
+  CUDA_CHECK(cudaFree(ptr));
+  return cudaSuccess;
+}
+
+cudaError_t KernelDatabase::procFree(uint32_t proc, Matrix m) {
+  return procFree(proc, m.data());
+}

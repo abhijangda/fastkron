@@ -28,4 +28,8 @@ public:
                                    cudaStream_t stream);
   std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams, cudaStream_t stream);
   cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
+  cudaError_t procMalloc(uint32_t proc, Matrix& m);
+  cudaError_t procFree(uint32_t proc, Matrix m);
+  cudaError_t procFree(uint32_t proc, void* ptr); 
+
 };

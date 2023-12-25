@@ -7,6 +7,7 @@
 class Matrix {
   uint32_t rows;
   uint32_t cols;
+public:
   void* ptr;
 
 public:

@@ -86,6 +86,8 @@ struct FastKronHandle {
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                   cudaStream_t streams[]);
   cudaError_t gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
+  cudaError_t gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp);
+
   //TunedKernelsSeries selectKernelSeries(const uint NumKronMats,
   //                                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
   //                                    bool distributedKernel);

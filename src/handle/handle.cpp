@@ -144,44 +144,56 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   return err;
 }
 
+cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp) {
+  if (isDistributed_) {
+    if (!checkDistributedKronSizes(problem, perGPUKronBatch_, gpusInK_))
+      return cudaErrorInvalidValue;
+  }
+
+  uint32_t tempCols = 0;
+  uint32_t resultCols = 0;
+  auto e = executeGeKMM(problem, nullptr, 0,
+    [](const KMMProblem kmm) {return 1;},
+    [&tempCols, &resultCols]
+    (const KMMProblem kmm, int rstart, void* temps[2], Matrix result) {
+      tempCols = std::max(tempCols, std::max(kmm.k(), kmm.l()));
+      resultCols = kmm.l();
+      return cudaSuccess;
+    });
+  
+  uint gpuM;
+
+  if (isDistributed_) {
+    getDistributedSizes(problem.m(), tempCols,   gpuM, tempCols);
+    getDistributedSizes(problem.m(), resultCols, gpuM, resultCols);
+  } else {
+    gpuM = problem.m();
+  }
+
+  result = Matrix(gpuM, resultCols);
+  temp = Matrix(gpuM, tempCols);
+  return e;
+}
+
 cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize) {
   if (resultSize == nullptr) return cudaErrorInvalidValue;
   if (tempSize   == nullptr) return cudaErrorInvalidValue;
 
-  uint gpuM, gpuK;
+  Matrix result, temp;
 
-  if (isDistributed_) {
-    if (!checkDistributedKronSizes(problem, perGPUKronBatch_, gpusInK_))
-      return cudaErrorInvalidValue;
-    gpuM = problem.m()/gpusInM_;
-    gpuK = problem.k()/gpusInK_;
-  } else {
-    gpuM = problem.m();
-    gpuK = problem.k();
-  }
-
-  uint32_t maxTempN = 0;
-  uint32_t resultCols = 0;
-  auto e = executeGeKMM(problem, nullptr, 0,
-    [](const KMMProblem kmm) {return 1;},
-    [&maxTempN, &resultCols]
-    (const KMMProblem kmm, int rstart, void* temps[2], Matrix result) {
-      maxTempN = std::max(maxTempN, std::max(kmm.k(), kmm.l()));
-      resultCols = kmm.l();
-      return cudaSuccess;
-    });
+  cudaError_t e = gekmmResultTemp(problem, result, temp);
 
   if (e == cudaSuccess) {
-    *tempSize   = gpuM * maxTempN;
+    *tempSize   = temp.numel();
     if (isDistributed_ and distComm_ == DistComm::NCCL)
       //Include size of send and recv buffers 
       *tempSize = (*tempSize) * 2;
-    *resultSize = gpuM * resultCols;
+    *resultSize = result.numel();
 
     *tempSize   = *tempSize   * sizeof(float);
     *resultSize = *resultSize * sizeof(float);
   }
-  
+
   return e;
 }
 
