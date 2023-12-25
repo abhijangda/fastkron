@@ -115,75 +115,74 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     fastKron.tunedKernelSeries = tunedKernels;
 
   } else {
-    // if (!checkDistributedKronSizes(problem,
-    //                                fastKron.perGPUKronBatch_, fastKron.gpusInK_))
-    //   return cudaErrorInvalidValue;
+    if (!checkDistributedKronSizes(problem,
+                                   fastKron.perGPUKronBatch_, fastKron.gpusInK_))
+      return cudaErrorInvalidValue;
 
-    // //In distributed case run every LocalKron series on a single GPU    
-    // minTime = std::numeric_limits<float>::max();
-    // uint gpuM, gpuK;
-    // fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
-    // uint bestMaxLocalKrons = 1;
-    // TunedKernelsSeries minKernelSeries;
-    // //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
-    // int MaxLocalKrons;
-    // if (fastKron.distComm_ == DistComm::P2P) {
-    //   MaxLocalKrons = 1;
-    // } else if (fastKron.distComm_ == DistComm::NCCL) {
-    //   if (fastKron.perGPUKronBatch_ > 1)
-    //     MaxLocalKrons = problem.n() - 1;
-    //   else
-    //     MaxLocalKrons = 1;
-    // }
+    //In distributed case run every LocalKron series on a single GPU    
+    minTime = std::numeric_limits<float>::max();
+    uint gpuM, gpuK;
+    fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
+    uint bestMaxLocalKrons = 1;
+    TunedKernelsSeries minKernelSeries;
+    //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
+    int MaxLocalKrons;
+    if (fastKron.distComm_ == DistComm::P2P) {
+      MaxLocalKrons = 1;
+    } else if (fastKron.distComm_ == DistComm::NCCL) {
+      if (fastKron.perGPUKronBatch_ > 1)
+        MaxLocalKrons = problem.n() - 1;
+      else
+        MaxLocalKrons = 1;
+    }
 
-    // uint UpperLocalKrons = problem.n();
-    // if (fastKron.distComm_ == DistComm::NCCL && fastKron.perGPUKronBatch_ == 1)
-    //   UpperLocalKrons = 2;
+    uint UpperLocalKrons = problem.n();
+    if (fastKron.distComm_ == DistComm::NCCL && fastKron.perGPUKronBatch_ == 1)
+      UpperLocalKrons = 2;
     
-    // if (fastKron.gpusInK_ == 1) {
-    //   UpperLocalKrons = problem.n() + 1;
-    //   MaxLocalKrons = problem.n();
-    // }
+    if (fastKron.gpusInK_ == 1) {
+      UpperLocalKrons = problem.n() + 1;
+      MaxLocalKrons = problem.n();
+    }
 
-    // //TODO: consider only valid krons 
-    // for (; MaxLocalKrons < UpperLocalKrons; MaxLocalKrons += 1) {
-    // float seriesTime = 0;
-    // TunedKernelsSeries tunedKernelSeries;
+    //TODO: consider only valid krons 
+    for (; MaxLocalKrons < UpperLocalKrons; MaxLocalKrons += 1) {
+    float seriesTime = 0;
+    TunedKernelsSeries tunedKernelSeries;
 
-    // uint32_t arr1[problem.n()];
-    // uint32_t arr2[problem.n()];
-    // auto tmpProblem = KMMProblem(gpuM, problem.n(), problem.ps(arr1), problem.qs(arr2), 
-    //                              temp1_[0], Fs, temp2_[0], gpuK, problem.l()/fastKron.gpusInK_);
+    auto tmpProblem = KMMProblem(Matrix(gpuM, gpuK, temp1[0].data()), 
+                                 problem.n(), &Fs[0][0],
+                                 Matrix(gpuM, problem.y().n()/fastKron.gpusInK_, temp2[0].data()));
 
-    // for (int i = problem.n() - 1; i >= 0; i -= MaxLocalKrons) {
-    //   const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
-    //   //TODO: any way to avoid declaring ps, qs, and fs on stack
-    //   //set max value of N as 64
-    //   auto subproblem = tmpProblem.rsub(i, LocalKrons);
-    //   void** gpuResults = (void**)temp2_;
-      
-    //   DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k() * fastKron.gpusInK_, subproblem.l() * fastKron.gpusInK_, 
-    //                                subproblem.k(), subproblem.l(), subproblem.fs(), 
-    //                                subproblem.n());
-    //   distParams.updateGPUResults((void**)gpuResults);
-    //   bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
-    //   tune(subproblem, distP2PStore, distParams, stream);
-    //   TunedKernelsSeries tunedKernels;
-    //   seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
-    //                                     tunedKernels, tunedKernelsMap);
-    //   for (auto tunedKernel : tunedKernels) {
-    //     tunedKernel.start += i + 1 - LocalKrons;
-    //     tunedKernel.end   += i + 1 - LocalKrons;
-    //     tunedKernelSeries.insert(tunedKernelSeries.begin(), tunedKernel);
-    //   }
-    // }
+    for (int i = problem.n() - 1; i >= 0; i -= MaxLocalKrons) {
+      const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
+      //TODO: any way to avoid declaring ps, qs, and fs on stack
+      //set max value of N as 64
+      auto subproblem = tmpProblem.rsub(i, LocalKrons);
+      void* gpuResults[fastKron.numGPUs_] = {nullptr};
+      std::transform(temp2, temp2 + fastKron.numGPUs_, &gpuResults[0], [](Matrix m) {return m.data();});
+      DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k() * fastKron.gpusInK_, subproblem.l() * fastKron.gpusInK_, 
+                                   subproblem.k(), subproblem.l(), subproblem.fs(), 
+                                   subproblem.n());
+      distParams.updateGPUResults((void**)gpuResults);
+      bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
+      tune(subproblem, distP2PStore, distParams, stream);
+      TunedKernelsSeries tunedKernels;
+      seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
+                                        tunedKernels, tunedKernelsMap);
+      for (auto tunedKernel : tunedKernels) {
+        tunedKernel.start += i + 1 - LocalKrons;
+        tunedKernel.end   += i + 1 - LocalKrons;
+        tunedKernelSeries.insert(tunedKernelSeries.begin(), tunedKernel);
+      }
+    }
     
-    // if (seriesTime < minTime) {
-    //   minTime = seriesTime;
-    //   fastKron.tunedKernelSeries = tunedKernelSeries;
-    //   fastKron.perGPUKronBatch_ = MaxLocalKrons;
-    // }
-    // }
+    if (seriesTime < minTime) {
+      minTime = seriesTime;
+      fastKron.tunedKernelSeries = tunedKernelSeries;
+      fastKron.perGPUKronBatch_ = MaxLocalKrons;
+    }
+    }
   }
 
   for (int p = 0; p < fastKron.numGPUs_; p++) {
