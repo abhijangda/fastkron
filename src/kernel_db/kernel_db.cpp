@@ -199,7 +199,7 @@ cudaError_t KernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
 }
 
 cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
-  void* ptr;
+  void* ptr = nullptr;
   cudaError_t e = procMalloc(proc, m.numel() * sizeof(float), ptr);
 
   if (e == cudaSuccess) {

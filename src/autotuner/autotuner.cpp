@@ -90,10 +90,9 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   for (uint32_t p = 0; p < fastKron.numGPUs_; p++) {
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
-
     fastKron.kerneldb.procMalloc(p, temp1[p]);
     fastKron.kerneldb.procMalloc(p, temp2[p]);
-
+    
     for (int f = 0; f < problem.n(); f++) {
       Fs[p][f] = problem.f(f);
       fastKron.kerneldb.procMalloc(p, Fs[p][f]);
@@ -105,7 +104,9 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   if (!fastKron.isDistributed_) {
     //Use temporary as input/output matrix
     //TODO: fix this
-    auto tmpProblem = KMMProblem(temp1[0], problem.n(), &Fs[0][0], temp2[0]);
+    auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
+                                 problem.n(), &Fs[0][0], 
+                                 Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
     tune(tmpProblem, false, DistributedParams(), stream);
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
