@@ -1,37 +1,6 @@
-#include <stdio.h>
-#include <type_traits>
-
-#include "params.h"
 #include "memory-transfer.cuh"
 
-#pragma once
-
-#define MIN(x,y)    (((x) < (y)) ? (x) : (y))
-#define MAX(x,y)    (((x) > (y)) ? (x) : (y))
-#define DIVUP(x, y) (((x) + (y) - 1)/((y)))
-
-__host__ __device__ constexpr uint power(const uint x, const uint y) {
-  uint result = 1;
-  for (uint i = 0; i < y; i++) {
-    result = result * x;
-  }
-  return result;
-}
-
-template<uint MaxKronCols, uint MaxTileSizeKronCols>
-__device__ __forceinline__ uint get_tile_k() {return blockIdx.x/DIVUP(MaxKronCols, MaxTileSizeKronCols);}
-template<uint MaxKronCols, uint MaxTileSizeKronCols>
-__device__ __forceinline__ uint get_external_tile_kp_n() {return blockIdx.x%DIVUP(MaxKronCols, MaxTileSizeKronCols);}
-
-__device__ __forceinline__ bool isfirstIdx(dim3 idx) {return idx.x == 0 && idx.y == 0 & idx.z == 0;}
-
-template<typename ElemT>
-__device__ __forceinline__
-size_t nonAlignedElems(const ElemT* ptr, uint vecElems) {
-  return (reinterpret_cast<size_t>(ptr)/sizeof(ElemT)) % vecElems;
-}
-
-template<typename ElemT, typename VecT, bool K_EQUALS_VAR, uint VecTNumElems>
+template<typename ElemT, typename VecT, uint VecTNumElems>
 __device__ __forceinline__ 
 void shiftAgToAsh(const uint TileSizeColsA, const uint MaxKronRows,
                   const uint TileSizeKronRows, const uint MaxColsA,
@@ -46,9 +15,9 @@ void shiftAgToAsh(const uint TileSizeColsA, const uint MaxKronRows,
   ElemT elems[VecTNumElems];
 
   if (TileSizeKronRows == MaxKronRows) {
-    addrA = &glRowAddr[(K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + a_col];
+    addrA = &glRowAddr[tile_k*MaxColsA + a_col];
   } else {
-    addrA = &glRowAddr[(K_EQUALS_VAR ? 0 : tile_k*MaxColsA) + \
+    addrA = &glRowAddr[tile_k*MaxColsA + \
                   (a_col/TileSizeKronRows)*kronRows + external_tile_kp_k * TileSizeKronRows + tileKronRow + a_col % TileSizeKronRows];
   }
 
@@ -67,7 +36,7 @@ void shiftAgToAsh(const uint TileSizeColsA, const uint MaxKronRows,
 }
  
 
-template<typename ElemT, typename VecT, bool K_EQUALS_VAR>
+template<typename ElemT, typename VecT>
 __device__ __forceinline__ 
 void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA, 
                   const uint TileSizeColsA, const uint MaxKronRows,
@@ -86,15 +55,15 @@ void storeAgToAsh(const bool RowsCModTileIsZero, const uint TileSizeRowsA,
     const size_t lastElems  = 0; //TileSizeColsA % VecTNumElems;
 
     for (int a_col = tid; a_col < firstElems; a_col += NumThreads) {
-      shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
+      shiftAgToAsh<ElemT, ElemT, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
 
     for (int a_col = firstElems + tid*VecTNumElems; a_col < TileSizeColsA - lastElems; a_col += NumThreads*VecTNumElems) {
-      shiftAgToAsh<ElemT, VecT, K_EQUALS_VAR, VecTNumElems>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
+      shiftAgToAsh<ElemT, VecT, VecTNumElems>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
 
     for (int a_col = TileSizeColsA - lastElems + tid; a_col < TileSizeColsA; a_col += NumThreads) {
-      shiftAgToAsh<ElemT, ElemT, K_EQUALS_VAR, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
+      shiftAgToAsh<ElemT, ElemT, 1>(TileSizeColsA, MaxKronRows, TileSizeKronRows, MaxColsA, NumThreads, CRegRows, kronRows, colsA, tid, tileKronRow, rowA, a_col, tile_k, external_tile_kp_k, glRowAddr, shA);
     }
   }
 }

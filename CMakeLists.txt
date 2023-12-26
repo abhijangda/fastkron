@@ -44,7 +44,7 @@ set(DEVICE ${SRC}/device)
 
 ##### FastKron ################
 include(${DEVICE}/kron-kernels/kernels.cmake)
-set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc ${DEVICE}/device_functions.cuh 
+set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc ${DEVICE}/utils.cuh ${DEVICE}/shared_cache.cuh
                         ${DEVICE}/kernel_info.h ${DEVICE}/kernel.cuh ${DEVICE}/otherkernels.cuh
                         ${DEVICE}/params.h)
 set(HEADER_FILES ${SRC}/env/env.h 

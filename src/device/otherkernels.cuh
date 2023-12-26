@@ -1,6 +1,6 @@
 #include "params.h"
 
-#include "device_functions.cuh"
+#include "device/utils.cuh"
 
 template<typename ElemT, typename VecT, uint NumGPUs, uint PerGPUK, uint TileK, uint NumThreads>
 __launch_bounds__(NumThreads)

@@ -1,4 +1,6 @@
-#include "device_functions.cuh"
+#include "device/utils.cuh"
+#include "device/shared_cache.cuh"
+#include "device/params.h"
 
 #include <type_traits>
 #include <typeinfo>
@@ -74,12 +76,12 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
     //Loop iterates only once when FusedMuls == 1
-    storeAgToAsh<ElemT, XVecT, 0>(0, TileM, ShTileK, 
-                                  MaxP, ShTileP, TileK, NumThreads, CRegRows, params.problem.m(),
-                                  P, K, tid, 
-                                  tileKronRow, tileRowA, 
-                                  tile_k, external_tile_kp_k, 
-                                  Xgl, &Xsh[0][0]);
+    storeAgToAsh<ElemT, XVecT>(0, TileM, ShTileK, 
+                                MaxP, ShTileP, TileK, NumThreads, CRegRows, params.problem.m(),
+                                P, K, tid, 
+                                tileKronRow, tileRowA, 
+                                tile_k, external_tile_kp_k, 
+                                Xgl, &Xsh[0][0]);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
