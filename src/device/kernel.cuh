@@ -59,9 +59,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
   const ElemT* __restrict__ Xgl = (const ElemT*) params.problem.x().data();
 
-  const uint RegTileP = MIN(8, ShTileP);
-  
-  const uint external_tile_kp_k = blockIdx.z;
+  const uint RegTileP = MIN(8, ShTileP);  
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxQ, TileQ>();
   const uint MaxL = (TileK/MaxP)*MaxQ;
   constexpr uint wSz = (TileK/MaxP)/CRegRows;
@@ -82,7 +80,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                                 MaxP, ShTileP, TileK, NumThreads, CRegRows, params.problem.m(),
                                 P, K, tid, 
                                 tileKronRow, tileRowA, 
-                                tile_k, external_tile_kp_k, 
+                                tile_k, 
                                 Xgl, &Xsh[0][0]);
 
     #pragma unroll
@@ -108,7 +106,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         tiledDirectFglToFsh<ElemT, FVecT>(MaxP, MaxQ,
                                           ShTileP, TileQ, 
                                           NumThreads, external_tile_kp_n,
-                                          external_tile_kp_k, tileKronRow, 
+                                          tileKronRow, 
                                           P, Q, tid, Fgl,
                                           &Fsh[0][0]);
       } else {
