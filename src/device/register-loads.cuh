@@ -3,34 +3,29 @@
 #pragma once
 
 /***float loads***/
-CUDA_DEVICE void ldGlobalVec(const float4* addr, float regs[4]) {
-  float4 vec;
-  asm ("ld.ca.global.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(vec.x), "=f"(vec.y), "=f"(vec.z), "=f"(vec.w) : "l"(addr));
-  regs[0] = vec.x;
-  regs[1] = vec.y;
-  regs[2] = vec.z;
-  regs[3] = vec.w;
+CUDA_DEVICE void ldGlobalVec(const float4* ptr, float regs[4]) {
+  asm volatile ("ld.ca.global.v4.f32 {%0, %1, %2, %3}, [%4];" :
+                "=f"(regs[0]), "=f"(regs[1]), "=f"(regs[2]), "=f"(regs[3]) : "l"(ptr));
 }
 
-CUDA_DEVICE void ldGlobalVec(const float2* addr, float regs[2]) {
-  float2 vec;
-  asm ("ld.ca.global.v2.f32 {%0, %1}, [%2];" : "=f"(vec.x), "=f"(vec.y) : "l"(addr));
-  regs[0] = vec.x;
-  regs[1] = vec.y;
+CUDA_DEVICE void ldGlobalVec(const float2* ptr, float regs[2]) {
+  asm volatile ("ld.ca.global.v2.f32 {%0, %1}, [%2];" :
+                 "=f"(regs[0]), "=f"(regs[1]) : "l"(ptr));
 }
 
-CUDA_DEVICE void ldGlobalVec(const float* addr, float regs[1]) {
-  asm ("ld.ca.global.f32 {%0}, [%1];" : "=f"(regs[0]) : "l"(addr));
+CUDA_DEVICE void ldGlobalVec(const float* ptr, float regs[1]) {
+  asm volatile ("ld.ca.global.f32 {%0}, [%1];" :
+                "=f"(regs[0]) : "l"(ptr));
 }
 
 //int loads
-CUDA_DEVICE void ldGlobalVec(const int* addr, int4& vec) {
-  vec = *(int4*)addr;
+CUDA_DEVICE void ldGlobalVec(const int* ptr, int4& vec) {
+  vec = *(int4*)ptr;
 }
 
 //double loads
-CUDA_DEVICE void ldGlobalVec(const double* addr, double4& vec) {
-  vec = *(double4*)addr;
+CUDA_DEVICE void ldGlobalVec(const double* ptr, double4& vec) {
+  vec = *(double4*)ptr;
 }
 
 //Store PTX instructions for each vector type
@@ -84,4 +79,8 @@ CUDA_DEVICE void globalStore2Elems(double* addr, double elem1, double elem2) {
 template<typename ElemT>
 CUDA_DEVICE void globalStore1Elems(ElemT* addr, ElemT elem1) {
   *addr = elem1;
+}
+
+CUDA_DEVICE void sharedStore(float* ptr, float val) {
+  asm volatile ("st.shared.f32 [%0], {%1};\n" :: "l"(ptr), "f"(val));
 }

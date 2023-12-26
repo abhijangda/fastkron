@@ -18,14 +18,14 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                                FusedParams<FusedMuls> fusedParams,
                                DistributedParams distParams,
                                EpilogueParams epilogueParams) {
-  static_assert(AAlignment == 1    || AAlignment == 2    || AAlignment == 4,
+  static_assert(AAlignment    == 1 || AAlignment    == 2 || AAlignment    == 4,
                 "Alignment of A should be 1, 2 or 4");
   static_assert(KronAlignment == 1 || KronAlignment == 2 || KronAlignment == 4,
                 "Alignment of A should be 1, 2 or 4");
   using XVecT = typename std::conditional<AAlignment == 1, ElemT, 
                 typename std::conditional<AAlignment == 2, Vec2T, 
                                           Vec4T>::type>::type;
-  using FVecT = typename std::conditional<TileP >= MaxP && TileQ >= MaxQ, Vec4T, //Load full factor using 4 elems
+  using FVecT = typename std::conditional<TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0, Vec4T, //Load full factor using 4 elems
                 typename std::conditional<KronAlignment == 1, ElemT, //
                 typename std::conditional<KronAlignment == 2, Vec2T, //
                                           Vec4T>::type>::type>::type;//
