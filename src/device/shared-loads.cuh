@@ -1,4 +1,4 @@
-#include "memory-transfer.cuh"
+#include "device/register-loads.cuh"
 
 template<typename ElemT, typename VecT, uint VecTNumElems>
 __device__ __forceinline__ 

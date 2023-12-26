@@ -1,5 +1,6 @@
 #include "device/utils.cuh"
-#include "device/shared_cache.cuh"
+#include "device/register-loads.cuh"
+#include "device/shared-loads.cuh"
 #include "device/params.h"
 
 #include <type_traits>
@@ -16,7 +17,7 @@ __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                                FusedParams<FusedMuls> fusedParams,
                                DistributedParams distParams,
-                               EpilogueParams epilogueParams) {  
+                               EpilogueParams epilogueParams) {
   static_assert(AAlignment == 1    || AAlignment == 2    || AAlignment == 4,
                 "Alignment of A should be 1, 2 or 4");
   static_assert(KronAlignment == 1 || KronAlignment == 2 || KronAlignment == 4,
