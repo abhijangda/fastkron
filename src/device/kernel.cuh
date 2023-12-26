@@ -23,11 +23,12 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   static_assert(KronAlignment == 1 || KronAlignment == 2 || KronAlignment == 4,
                 "Alignment of A should be 1, 2 or 4");
   using XVecT = typename std::conditional<AAlignment == 1, ElemT, 
-                  typename std::conditional<AAlignment == 2, Vec2T, 
-                                            Vec4T>::type>::type;
-  using FVecT = typename std::conditional<KronAlignment == 1, ElemT, 
-                  typename std::conditional<KronAlignment == 2, Vec2T, 
-                                            Vec4T>::type>::type;
+                typename std::conditional<AAlignment == 2, Vec2T, 
+                                          Vec4T>::type>::type;
+  using FVecT = typename std::conditional<TileP >= MaxP && TileQ >= MaxQ, Vec4T, //Load full factor using 4 elems
+                typename std::conditional<KronAlignment == 1, ElemT, //
+                typename std::conditional<KronAlignment == 2, Vec2T, //
+                                          Vec4T>::type>::type>::type;//
   static_assert(0 < TileQ && TileQ <= MaxQ, "");
   static_assert(FusedMuls == 1 ||
                 (FusedMuls > 1 && TileP >= MaxP && TileQ >= MaxQ),
@@ -100,16 +101,16 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       if (TileQ == MaxQ && ShTileP == MaxP) {
         //Optimized to load full factor matrix
         fullDirectFglToFsh<ElemT, FVecT>(MaxP, MaxQ,
-                                            ShTileP, TileQ, 
-                                            NumThreads, P, 
-                                            Q, tid, Fgl, &Fsh[0][0]);
+                                         ShTileP, TileQ, 
+                                         NumThreads, P, 
+                                         Q, tid, Fgl, &Fsh[0][0]);
       } else if (!(TileQ == MaxQ && ShTileP == MaxP)) {
         tiledDirectFglToFsh<ElemT, FVecT>(MaxP, MaxQ,
-                                             ShTileP, TileQ, 
-                                             NumThreads, external_tile_kp_n,
-                                             external_tile_kp_k, tileKronRow, 
-                                             P, Q, tid, Fgl,
-                                             &Fsh[0][0]);
+                                          ShTileP, TileQ, 
+                                          NumThreads, external_tile_kp_n,
+                                          external_tile_kp_k, tileKronRow, 
+                                          P, Q, tid, Fgl,
+                                          &Fsh[0][0]);
       } else {
       }
       __syncthreads();
