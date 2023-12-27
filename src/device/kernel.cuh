@@ -25,7 +25,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   using XVecT = typename std::conditional<AAlignment == 1, ElemT, 
                 typename std::conditional<AAlignment == 2, Vec2T, 
                                           Vec4T>::type>::type;
-  using FVecT = typename std::conditional<TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0, Vec4T, //Load full factor using 4 elems
+  using FVecT = typename std::conditional<TileP >= MaxP && TileQ >= MaxQ, Vec4T, //Load full factor using 4 elems
                 typename std::conditional<KronAlignment == 1, ElemT, //
                 typename std::conditional<KronAlignment == 2, Vec2T, //
                                           Vec4T>::type>::type>::type;//

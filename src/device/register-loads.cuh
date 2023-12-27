@@ -4,8 +4,13 @@
 
 /***float loads***/
 CUDA_DEVICE void ldGlobalVec(const float4* ptr, float regs[4]) {
+  float4 vec;
   asm volatile ("ld.ca.global.v4.f32 {%0, %1, %2, %3}, [%4];" :
-                "=f"(regs[0]), "=f"(regs[1]), "=f"(regs[2]), "=f"(regs[3]) : "l"(ptr));
+                "=f"(vec.x), "=f"(vec.y), "=f"(vec.z), "=f"(vec.w) : "l"(ptr));
+  regs[0] = vec.x;
+  regs[1] = vec.y;
+  regs[2] = vec.z;
+  regs[3] = vec.w;
 }
 
 CUDA_DEVICE void ldGlobalVec(const float2* ptr, float regs[2]) {
