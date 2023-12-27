@@ -1,3 +1,4 @@
+#include "kmm/matrix.h"
 #include "device/register-loads.cuh"
 
 template<typename ElemT, typename VecT, uint VecTLen>
@@ -34,22 +35,19 @@ void shiftAgToAsh(const uint TileK, const uint MaxP,
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void storeAgToAsh(const uint TileSizeRowsA, 
-                  const uint TileK, const uint MaxP,
+void storeAgToAsh(const uint TileM, const uint TileK, const uint MaxP,
                   const uint TileP, const uint MaxK,
                   const uint NumThreads, const uint CRegRows,
-                  const uint RowsC, const uint P, const uint K,
-                  const uint tid, const uint tileP, const uint tileRowA,
-                  const uint tileK,
-                  const ElemT* __restrict__ glA, ElemT* __restrict__ shA) {
-  // if (threadIdx.x == 0) printf("TileSizeRowsA %d\n", TileSizeRowsA);
+                  const uint P, const uint tid, const uint tileP, const uint tileM, const uint tileK,
+                  const Matrix matrix, ElemT* __restrict__ shA) {
+  // if (threadIdx.x == 0) printf("TileM %d\n", TileM);
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 
-  for (uint rowA = 0; rowA < (TileSizeRowsA == 1 ? TileSizeRowsA : MIN(TileSizeRowsA, RowsC - tileRowA)); rowA += 1) {
-    const ElemT* glRow  = &glA[(rowA + tileRowA) * K];
+  for (uint rowA = 0; rowA < (TileM == 1 ? TileM : MIN(TileM, matrix.m() - tileM)); rowA += 1) {
+    const ElemT* glRow  = matrix.data<ElemT>((rowA + tileM) * matrix.n());
 
     for (uint k = tid*VecTLen; k < TileK; k += NumThreads*VecTLen) {
-      shiftAgToAsh<ElemT, VecT, VecTLen>(TileK, MaxP, TileP, MaxK, NumThreads, CRegRows, P, K, tid, tileP, rowA, k, tileK, glRow, shA);
+      shiftAgToAsh<ElemT, VecT, VecTLen>(TileK, MaxP, TileP, MaxK, NumThreads, CRegRows, P, matrix.n(), tid, tileP, rowA, k, tileK, glRow, shA);
     }
   }
 }

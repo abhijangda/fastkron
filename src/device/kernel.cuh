@@ -57,7 +57,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     P = params.problem.f(0).p();
   }
 
-  const ElemT* __restrict__ Xgl = (const ElemT*) params.problem.x().data();
+  const Matrix X = params.problem.x();
 
   const uint RegTileP = MIN(8, ShTileP);  
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxQ, TileQ>();
@@ -76,12 +76,12 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
     //Loop iterates only once when FusedMuls == 1
-    storeAgToAsh<ElemT, XVecT>(TileM, ShTileK, 
-                               MaxP, ShTileP, TileK, NumThreads, CRegRows, params.problem.m(),
-                               P, K, tid, 
+    storeAgToAsh<ElemT, XVecT>(TileM, ShTileK,
+                               MaxP, ShTileP, TileK, NumThreads, CRegRows,
+                               P, tid,
                                tileKronRow, tileRowA, 
                                tileK, 
-                               Xgl, &Xsh[0][0]);
+                               X, &Xsh[0][0]);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
