@@ -5,11 +5,11 @@ CUDA_DEVICE
 void shiftAgToAsh(const uint TileK, const uint MaxP,
                   const uint TileP, const uint MaxK,
                   const uint NumThreads, const uint CRegRows,
-                  const uint kronRows, const uint K,
-                  const uint tid, const uint tileKronRow, const uint rowA,
-                  const uint a_col,
-                  const uint tile_k,
-                  const ElemT* __restrict__ glRowAddr, ElemT* __restrict__ shA) {
+                  const uint P, const uint K,
+                  const uint tid, const uint tileP, const uint rowA,
+                  const uint k,
+                  const uint tileK,
+                  const ElemT* __restrict__ glRow, ElemT* __restrict__ Xsh) {
   const ElemT* addrA;
   ElemT regs[VecTLen];
 
@@ -27,7 +27,7 @@ void shiftAgToAsh(const uint TileK, const uint MaxP,
     uint shk = k + i;
     uint shTileK = (shk/TileP)/CRegRows;
     uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
-    shA[rowA * TileK + finalShK] = regs[i];
+    Xsh[rowA * TileK + finalShK] = regs[i];
   }
 }
  

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import os
+import shutil
 import subprocess
 
 def execute(command):
@@ -24,6 +25,9 @@ gen_test_kernels = {
                   }
 
 sorted_keys = sorted(list(gen_test_kernels.keys()))
+
+if os.path.exists("build/"):
+    shutil.rmtree("build/")
 
 if not os.path.exists("build/"):
     os.mkdir("build/")
