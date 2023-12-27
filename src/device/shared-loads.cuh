@@ -3,17 +3,17 @@
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void storeAgToAsh(const uint TileM, const uint TileK, const uint MaxP,
+void storeAgToAsh(const uint MaxP,
                   const uint TileP, const uint MaxK,
                   const uint NumThreads, const uint CRegRows,
                   const uint P, const uint tid, const uint tileP, const uint tileM, const uint tileK,
-                  const Matrix matrix, ElemT* __restrict__ Xsh) {
+                  const Matrix matrix, Matrix& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 
-  for (uint rowIdx = 0; rowIdx < (TileM == 1 ? TileM : MIN(TileM, matrix.m() - tileM)); rowIdx += 1) {
+  for (uint rowIdx = 0; rowIdx < (Xsh.m() == 1 ? 1 : MIN(Xsh.m(), matrix.m() - tileM)); rowIdx += 1) {
     const Matrix row = matrix.row<ElemT>(rowIdx + tileM);
     //Use NumThreads in loop adder instead of blockDim.x for better perf
-    for (uint k = tid*VecTLen; k < TileK; k += NumThreads*VecTLen) {
+    for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       const ElemT* elemPtr;
       ElemT regs[VecTLen];
 
@@ -30,7 +30,7 @@ void storeAgToAsh(const uint TileM, const uint TileK, const uint MaxP,
         uint shk = k + i;
         uint shTileK = (shk/TileP)/CRegRows;
         uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
-        Xsh[rowIdx * TileK + finalShK] = regs[i];
+        Xsh.set<ElemT>(rowIdx, finalShK, regs[i]);
       }
     }
   }
@@ -75,7 +75,6 @@ void fullDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
                         const uint NumThreads, const uint P, const uint kronCols, 
                         const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  const size_t sz = P * kronCols;
   const int lastLoads = 0; //sz % loadInstr;
 
   //Use blockDim in loop adder instead of NumThreads for better perf 

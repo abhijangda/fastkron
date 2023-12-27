@@ -42,6 +42,16 @@ public:
   template<typename T>
   CUDA_DEVICE_HOST
   T* data(uint32_t idx) const {return ((T*)ptr) + idx;}
+  template<typename T>
+  CUDA_DEVICE_HOST
+  void set(uint32_t row, uint32_t col, T val) {
+    *(data<T>(row * n() + col)) = val;
+  }
+  template<typename T>
+  CUDA_DEVICE_HOST
+  T at(uint32_t row, uint32_t col) {
+    return *(data<T>(row * n() + col));
+  }
 
   bool operator==(const Matrix& other) const {
     return m() == other.m() && n() == other.n();

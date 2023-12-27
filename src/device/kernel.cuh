@@ -41,7 +41,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const uint ShTileK = TileK/(MaxP/ShTileP);
 
   register   ElemT regC[TileM][CRegRows][CRegCols] = {0};
-  __shared__ ElemT Xsh[TileM][ShTileK];
+  __shared__ ElemT ptrXsh[TileM][ShTileK];
   __shared__ ElemT Fsh[ShTileP][TileQ];
 
   uint Q;
@@ -58,6 +58,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   }
 
   const Matrix X = params.problem.x();
+  Matrix Xsh(TileM, ShTileK, &ptrXsh[0][0]);
 
   const uint RegTileP = MIN(8, ShTileP);  
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxQ, TileQ>();
@@ -76,12 +77,11 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
     //Loop iterates only once when FusedMuls == 1
-    storeAgToAsh<ElemT, XVecT>(TileM, ShTileK,
-                               MaxP, ShTileP, TileK, NumThreads, CRegRows,
+    storeAgToAsh<ElemT, XVecT>(MaxP, ShTileP, TileK, NumThreads, CRegRows,
                                P, tid,
                                tileKronRow, tileRowA, 
                                tileK, 
-                               X, &Xsh[0][0]);
+                               X, Xsh);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
@@ -129,7 +129,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
             uint shACol = tileColA + rowC;
             #pragma unroll
             for (uint colC = 0; colC < RegTileP; colC++) {
-              ElemT temp = Xsh[rowA][shACol * ShTileP + (regTileACol + colC + round_start)%ShTileP];
+              ElemT temp = Xsh.at<ElemT>(rowA, shACol * ShTileP + (regTileACol + colC + round_start)%ShTileP);
               Xr[rowA][rowC][colC] = temp;
             }
         }}}
@@ -173,7 +173,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           uint tileColC = (cCol/ShTileP)/CRegRows;
           
           cCol = (cCol/ShTileP)*ShTileP + (tileColC + cCol%ShTileP)%ShTileP;
-          Xsh[rowA][cCol] = regC[rowA][reg_i][reg_j];
+          Xsh.set<ElemT>(rowA, cCol, regC[rowA][reg_i][reg_j]);
       }}}}}
       __syncthreads();
     }
