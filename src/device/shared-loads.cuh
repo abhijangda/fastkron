@@ -1,20 +1,6 @@
 #include "kmm/matrix.h"
 #include "device/register-loads.cuh"
 
-template<typename ElemT, typename VecT, uint VecTLen>
-CUDA_DEVICE 
-void shiftAgToAsh(const uint TileK, const uint MaxP,
-                  const uint TileP, const uint MaxK,
-                  const uint NumThreads, const uint CRegRows,
-                  const uint P,
-                  const uint tid, const uint tileP,
-                  const uint k,
-                  const uint tileK,
-                  const Matrix row, ElemT* __restrict__ Xsh) {
-  
-}
- 
-
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
 void storeAgToAsh(const uint TileM, const uint TileK, const uint MaxP,
@@ -92,7 +78,8 @@ void fullDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
   const size_t sz = P * kronCols;
   const int lastLoads = 0; //sz % loadInstr;
 
-  for (uint eIdx = tid*VecTLen; eIdx < P*kronCols - lastLoads; eIdx += NumThreads*VecTLen) {
+  //Use blockDim in loop adder instead of NumThreads because it generates better code 
+  for (uint eIdx = tid*VecTLen; eIdx < P*kronCols - lastLoads; eIdx += blockDim.x*VecTLen) {
     ElemT regs[VecTLen];
 
     ldGlobalVec((VecT*)&Fgl[eIdx], regs);
@@ -104,9 +91,9 @@ void fullDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
     }
   }
 
-  for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += NumThreads) {
-    ElemT regElem;
-    regElem = Fgl[eIdx];
-    Fsh[(eIdx/MaxKronCols) * TileQ + eIdx%MaxKronCols] = regElem; 
-  }
+  // for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += NumThreads) {
+  //   ElemT regElem;
+  //   regElem = Fgl[eIdx];
+  //   Fsh[(eIdx/MaxKronCols) * TileQ + eIdx%MaxKronCols] = regElem; 
+  // }
 }
