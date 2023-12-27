@@ -6,30 +6,12 @@ CUDA_DEVICE
 void shiftAgToAsh(const uint TileK, const uint MaxP,
                   const uint TileP, const uint MaxK,
                   const uint NumThreads, const uint CRegRows,
-                  const uint P, const uint K,
-                  const uint tid, const uint tileP, const uint rowA,
+                  const uint P,
+                  const uint tid, const uint tileP,
                   const uint k,
                   const uint tileK,
-                  const ElemT* __restrict__ glRow, ElemT* __restrict__ Xsh) {
-  const ElemT* addrA;
-  ElemT regs[VecTLen];
-
-  if (TileP == MaxP) {
-    addrA = &glRow[tileK*MaxK + k];
-  } else {
-    addrA = &glRow[tileK*MaxK + (k/TileP)*P + tileP + k%TileP];
-  }
-
-  ldGlobalVec((VecT*)(addrA), regs);
+                  const Matrix row, ElemT* __restrict__ Xsh) {
   
-  #pragma unroll
-  for (uint i = 0; i < VecTLen; i++) {
-    //TODO: refactor based on paper
-    uint shk = k + i;
-    uint shTileK = (shk/TileP)/CRegRows;
-    uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
-    Xsh[rowA * TileK + finalShK] = regs[i];
-  }
 }
  
 
@@ -39,15 +21,31 @@ void storeAgToAsh(const uint TileM, const uint TileK, const uint MaxP,
                   const uint TileP, const uint MaxK,
                   const uint NumThreads, const uint CRegRows,
                   const uint P, const uint tid, const uint tileP, const uint tileM, const uint tileK,
-                  const Matrix matrix, ElemT* __restrict__ shA) {
-  // if (threadIdx.x == 0) printf("TileM %d\n", TileM);
+                  const Matrix matrix, ElemT* __restrict__ Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 
-  for (uint rowA = 0; rowA < (TileM == 1 ? TileM : MIN(TileM, matrix.m() - tileM)); rowA += 1) {
-    const ElemT* glRow  = matrix.data<ElemT>((rowA + tileM) * matrix.n());
+  for (uint rowIdx = 0; rowIdx < (TileM == 1 ? TileM : MIN(TileM, matrix.m() - tileM)); rowIdx += 1) {
+    const Matrix row = matrix.row<ElemT>(rowIdx + tileM);
 
     for (uint k = tid*VecTLen; k < TileK; k += NumThreads*VecTLen) {
-      shiftAgToAsh<ElemT, VecT, VecTLen>(TileK, MaxP, TileP, MaxK, NumThreads, CRegRows, P, matrix.n(), tid, tileP, rowA, k, tileK, glRow, shA);
+      const ElemT* elemPtr;
+      ElemT regs[VecTLen];
+
+      if (TileP == MaxP)
+        elemPtr = row.data<ElemT>(tileK*MaxK + k);
+      else
+        elemPtr = row.data<ElemT>(tileK*MaxK + (k/TileP)*P + tileP + k%TileP);
+
+      ldGlobalVec((VecT*)(elemPtr), regs);
+      
+      #pragma unroll
+      for (uint i = 0; i < VecTLen; i++) {
+        //TODO: refactor based on paper
+        uint shk = k + i;
+        uint shTileK = (shk/TileP)/CRegRows;
+        uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
+        Xsh[rowIdx * TileK + finalShK] = regs[i];
+      }
     }
   }
 }

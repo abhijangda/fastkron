@@ -16,12 +16,11 @@ public:
   Matrix() : rows(0), cols(0), ptr(nullptr) {}
 
   Matrix(uint32_t rows, uint32_t cols) : 
-    rows(rows), cols(cols), ptr(nullptr)
-  {}
+    rows(rows), cols(cols), ptr(nullptr) {}
 
+  CUDA_DEVICE_HOST
   Matrix(uint32_t rows, uint32_t cols, void* data) : 
-    rows(rows), cols(cols), ptr(data)
-  {}
+    rows(rows), cols(cols), ptr(data) {}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return rows;}
@@ -35,6 +34,11 @@ public:
   
   CUDA_DEVICE_HOST
   void* data() const {return ptr;}
+  template<typename T>
+  CUDA_DEVICE_HOST
+  Matrix row(uint32_t row) const {
+    return Matrix(1, n(), data<T>(row * n()));
+  }
   template<typename T>
   CUDA_DEVICE_HOST
   T* data(uint32_t idx) const {return ((T*)ptr) + idx;}
