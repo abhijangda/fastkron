@@ -104,9 +104,9 @@ void fullDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
     }
   }
 
-  // for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += NumThreads) {
-  //   ElemT regElem;
-  //   regElem = Fgl[eIdx];
-  //   Fsh[(eIdx/MaxKronCols) * TileQ + eIdx%MaxKronCols] = regElem; 
-  // }
+  for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += NumThreads) {
+    ElemT regElem;
+    regElem = Fgl[eIdx];
+    Fsh[(eIdx/MaxKronCols) * TileQ + eIdx%MaxKronCols] = regElem; 
+  }
 }
