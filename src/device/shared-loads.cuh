@@ -12,7 +12,7 @@ void storeAgToAsh(const uint TileM, const uint TileK, const uint MaxP,
 
   for (uint rowIdx = 0; rowIdx < (TileM == 1 ? TileM : MIN(TileM, matrix.m() - tileM)); rowIdx += 1) {
     const Matrix row = matrix.row<ElemT>(rowIdx + tileM);
-
+    //Use NumThreads in loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < TileK; k += NumThreads*VecTLen) {
       const ElemT* elemPtr;
       ElemT regs[VecTLen];
@@ -49,7 +49,7 @@ void tiledDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
   for (uint swid = tid/(TileQ/VecTLen); swid < TileP; swid += subWarps) {
     ElemT regs[VecTLen];
 
-    for (uint elem = tid%(TileQ/VecTLen); elem < TileQ/VecTLen; elem += NumThreads/subWarps) {
+    for (uint elem = tid%(TileQ/VecTLen); elem < TileQ/VecTLen; elem += blockDim.x/subWarps) {
       const uint col = external_tile_kp_n*TileQ + elem*VecTLen;
       const uint row = swid;
 
@@ -78,7 +78,7 @@ void fullDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
   const size_t sz = P * kronCols;
   const int lastLoads = 0; //sz % loadInstr;
 
-  //Use blockDim in loop adder instead of NumThreads because it generates better code 
+  //Use blockDim in loop adder instead of NumThreads for better perf 
   for (uint eIdx = tid*VecTLen; eIdx < P*kronCols - lastLoads; eIdx += blockDim.x*VecTLen) {
     ElemT regs[VecTLen];
 
