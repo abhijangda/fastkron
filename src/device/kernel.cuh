@@ -72,16 +72,16 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const uint tileColC         = a_col_start_ ;
 
   bool isThreadValid = (kp_col_start_ + CRegCols <= TileQ);
-  uint tile_k = get_tile_k<MaxQ, TileQ>();
+  uint tileK = get_tile_k<MaxQ, TileQ>();
   
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
     //Loop iterates only once when FusedMuls == 1
-    storeAgToAsh<ElemT, XVecT>(0, TileM, ShTileK, 
-                                MaxP, ShTileP, TileK, NumThreads, CRegRows, params.problem.m(),
-                                P, K, tid, 
-                                tileKronRow, tileRowA, 
-                                tile_k, 
-                                Xgl, &Xsh[0][0]);
+    storeAgToAsh<ElemT, XVecT>(TileM, ShTileK, 
+                               MaxP, ShTileP, TileK, NumThreads, CRegRows, params.problem.m(),
+                               P, K, tid, 
+                               tileKronRow, tileRowA, 
+                               tileK, 
+                               Xgl, &Xsh[0][0]);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
@@ -199,7 +199,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
         uint colShC = outerTileKronCol*(TileK/MaxP) + reg_j*(TileK/MaxP) + tileColC + reg_i;
         const uint rowC = rowShC + tileRowA;
-        uint withinP5 = tile_k * UVAColsRatioKronColsSquare +
+        uint withinP5 = tileK * UVAColsRatioKronColsSquare +
                         ((colShC%TileSizeColsAByKronCols)/UVAColsRatioKronColsSquare)*ColsCByKronColsPower + 
                         colShC%UVAColsRatioKronColsSquare;
         
@@ -261,7 +261,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                   tileColC +
                   reg_i;
       {
-        cCol = tile_k * (MaxL/Q) +
+        cCol = tileK * (MaxL/Q) +
                 (cCol/(MaxL/Q)) * (L/Q) +
                 cCol%(MaxL/Q);
       }
