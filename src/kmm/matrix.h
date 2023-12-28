@@ -88,20 +88,26 @@ public:
   }
 };
 
-class Slice : public Matrix {
-  const Matrix& parent;
+template<typename T>
+class Slice {
+  const Matrix parent;
+  //TODO: Create Coord2D
   uint32_t startrow;
   uint32_t startcol;
+  uint32_t rows;
+  uint32_t cols;
+  T* ptr;
 
 public:
   CUDA_DEVICE_HOST
-  Slice(uint32_t startrow, uint32_t startcol, uint32_t numrows, uint32_t numcols, const Matrix& parent) :
-    startrow(startrow), startcol(startcol), parent(parent), Matrix(numrows, numcols, nullptr) {}
-  
-  template<typename T>
+  Slice(uint32_t startrow, uint32_t startcol, uint32_t rows, uint32_t cols,
+        Matrix parent) :
+    startrow(startrow), startcol(startcol),
+    rows(rows), cols(cols), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
+
   CUDA_DEVICE_HOST
   const T* data(uint32_t row, uint32_t col) const {
-    return parent.data<T>(startrow + row, startcol + col);
+    return &ptr[row * parent.n() + col];
   }
 };
 
