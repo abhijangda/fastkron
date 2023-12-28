@@ -41,17 +41,34 @@ public:
   }
   template<typename T>
   CUDA_DEVICE_HOST
-  T* data(uint32_t idx) const {return ((T*)ptr) + idx;}
+  T* data(uint32_t idx) const {
+    return ((T*)ptr) + idx;
+  }
+  template<typename T>
+  CUDA_DEVICE_HOST
+  T* data(uint32_t row, uint32_t col) const {
+    return data<T>((row * n() + col));
+  }
+
   template<typename T>
   CUDA_DEVICE_HOST
   void set(uint32_t row, uint32_t col, T val) {
-    *(data<T>(row * n() + col)) = val;
+    *(data<T>(row, col)) = val;
   }
   template<typename T>
   CUDA_DEVICE_HOST
   T at(uint32_t row, uint32_t col) {
-    return *(data<T>(row * n() + col));
+    return *(data<T>(row, col));
   }
+
+  // template<typename T>
+  // CUDA_DEVICE_HOST
+  // Slice slice(uint32_t row, uint32_t numrows, uint32_t col, uint32_t numcols) const {
+  //   //TODO: fix CUDA asserts 
+  //   //assert(0 <= row && row + numrows < m()); 
+  //   //assert(0 <= col && col + numcols < n()); 
+  //   return Slice(row, col, numrows, numcols, *this);
+  // }
 
   bool operator==(const Matrix& other) const {
     return m() == other.m() && n() == other.n();
@@ -68,6 +85,23 @@ public:
 
   uint32_t hash() const {
     return std::hash<uint>()(m()) ^ std::hash<uint>()(n());
+  }
+};
+
+class Slice : public Matrix {
+  const Matrix& parent;
+  uint32_t startrow;
+  uint32_t startcol;
+
+public:
+  CUDA_DEVICE_HOST
+  Slice(uint32_t startrow, uint32_t startcol, uint32_t numrows, uint32_t numcols, const Matrix& parent) :
+    startrow(startrow), startcol(startcol), parent(parent), Matrix(numrows, numcols, nullptr) {}
+  
+  template<typename T>
+  CUDA_DEVICE_HOST
+  const T* data(uint32_t row, uint32_t col) const {
+    return parent.data<T>(startrow + row, startcol + col);
   }
 };
 

@@ -75,13 +75,15 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   bool isThreadValid = (kp_col_start_ + CRegCols <= TileQ);
   uint tileK = get_tile_k<MaxQ, TileQ>();
   
+  Slice XTile = Slice(tileRowA, tileK * TileK, TileM, TileK, X);
+
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
     //Loop iterates only once when FusedMuls == 1
     storeAgToAsh<ElemT, XVecT>(MaxP, ShTileP, TileK, NumThreads, CRegRows,
                                P, tid,
                                tileKronRow, tileRowA, 
                                tileK, 
-                               X, Xsh);
+                               XTile, X, Xsh);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {

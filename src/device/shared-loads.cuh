@@ -7,7 +7,7 @@ void storeAgToAsh(const uint MaxP,
                   const uint TileP, const uint MaxK,
                   const uint NumThreads, const uint CRegRows,
                   const uint P, const uint tid, const uint tileP, const uint tileM, const uint tileK,
-                  const Matrix matrix, Matrix& Xsh) {
+                  const Slice XTile, const Matrix matrix, Matrix& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 
   for (uint rowIdx = 0; rowIdx < (Xsh.m() == 1 ? 1 : MIN(Xsh.m(), matrix.m() - tileM)); rowIdx += 1) {
@@ -18,9 +18,9 @@ void storeAgToAsh(const uint MaxP,
       ElemT regs[VecTLen];
 
       if (TileP == MaxP)
-        elemPtr = row.data<ElemT>(tileK*MaxK + k);
+        elemPtr = XTile.data<ElemT>(rowIdx, k);
       else
-        elemPtr = row.data<ElemT>(tileK*MaxK + (k/TileP)*P + tileP + k%TileP);
+        elemPtr = XTile.data<ElemT>(rowIdx, (k/TileP)*P + tileP + k%TileP);
 
       ldGlobalVec((VecT*)(elemPtr), regs);
       
