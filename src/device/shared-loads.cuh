@@ -20,40 +20,34 @@ void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void tiledDirectFglToFsh(const uint MaxP, const uint MaxKronCols, 
-                         const uint TileP, const uint TileQ,
+void tiledDirectFglToFsh(const Factor& FTile,
                          const uint NumThreads, const uint external_tile_kp_n,
                          const uint tileP, const uint P, const uint kronCols, const uint tid, 
-                         const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+                         const Factor& F, DirectShared& Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  //Create kronCols subwarps and each subwarp loads 0 to TileP elements
-  const uint subWarps = MAX(1, NumThreads/(TileQ/VecTLen));
-  for (uint swid = tid/(TileQ/VecTLen); swid < TileP; swid += subWarps) {
+  //Create F.q() subwarps and each subwarp loads 0 to TileP elements
+  const uint subWarps = MAX(1, NumThreads/(FTile.q()/VecTLen));
+  for (uint swid = tid/(FTile.q()/VecTLen); swid < FTile.p(); swid += subWarps) {
     ElemT regs[VecTLen];
 
-    for (uint elem = tid%(TileQ/VecTLen); elem < TileQ/VecTLen; elem += blockDim.x/subWarps) {
-      const uint col = external_tile_kp_n*TileQ + elem*VecTLen;
+    for (uint elem = tid%(FTile.q()/VecTLen); elem < FTile.q()/VecTLen; elem += blockDim.x/subWarps) {
+      const uint col = external_tile_kp_n*FTile.q() + elem*VecTLen;
       const uint row = swid;
 
-      VecT* addr = (VecT*)&Fgl[(tileP + row) * kronCols + col];
+      VecT* addr = (VecT*)F.data<ElemT>((tileP + row), col);
       ldGlobalVec(addr, regs);
 
-      #pragma unroll
-      for (uint e = 0; e < VecTLen; e++) {
-        uint linearIdx = elem*VecTLen + e;
-        Fsh[row * TileQ + linearIdx] = regs[e];
-      }
+      Fsh.store<ElemT, VecTLen>(row, elem * VecTLen, regs);
 
       //This condition avoids generating the loop giving better performance
-      if (TileQ/VecTLen == NumThreads/subWarps) break;
+      if (FTile.q()/VecTLen == NumThreads/subWarps) break;
     }
   }
 }
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void fullDirectFglToFsh(const uint TileP, const uint TileQ,
-                        const uint NumThreads, 
+void fullDirectFglToFsh(const uint NumThreads, 
                         const uint tid, const Factor& F, DirectShared& Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 

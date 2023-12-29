@@ -14,7 +14,8 @@ public:
 
 public:
   Matrix() : rows(0), cols(0), ptr(nullptr) {}
-
+  
+  CUDA_DEVICE_HOST
   Matrix(uint32_t rows, uint32_t cols) : 
     rows(rows), cols(cols), ptr(nullptr) {}
 
@@ -167,13 +168,26 @@ public:
       set<T>(idx/n(), idx%n(), elems[ve]);
     }
   }
+
+  template<typename T, uint32_t N>
+  CUDA_DEVICE_HOST
+  void store(uint32_t row, uint32_t col, T elems[N]) {
+    #pragma unroll
+    for (uint ve = 0; ve < N; ve++) {
+      set<T>(row, col + ve, elems[ve]);
+    }
+  }
 };
 
 class Factor : public Matrix {
 public:
   Factor() : Matrix() {}
-  Factor(uint32_t rows, uint32_t cols) : Matrix(rows, cols) {}
-  Factor(uint32_t rows, uint32_t cols, void* data) : Matrix(rows, cols, data) {}
+  CUDA_DEVICE_HOST
+  Factor(uint32_t rows, uint32_t cols) :
+    Matrix(rows, cols) {}
+  CUDA_DEVICE_HOST
+  Factor(uint32_t rows, uint32_t cols, void* data) : 
+    Matrix(rows, cols, data) {}
 
   CUDA_DEVICE_HOST
   uint32_t p() const {return Matrix::m();}
