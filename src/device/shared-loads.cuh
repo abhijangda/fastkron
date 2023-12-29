@@ -3,21 +3,19 @@
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void storeAgToAsh(const uint TileP, const uint MaxK,
-                  const uint NumThreads, const uint CRegRows,
-                  const uint P, const uint tid, const uint tileP, const uint tileM, const uint tileK,
-                  const Slice<ElemT> XTile, const Matrix matrix, Matrix& Xsh) {
+void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
+                  const uint tid, const Slice<ElemT> XTile, const Matrix matrix,
+                  Matrix& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-
   for (uint row = 0; row < Xsh.m(); row += 1) {
     //Use NumThreads in loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       const ElemT* elemPtr;
       ElemT regs[VecTLen];
 
-      elemPtr = XTile.data(row, k, tileP);
+      elemPtr = XTile.data(row, k);
       ldGlobalVec((VecT*)(elemPtr), regs);
-      
+
       #pragma unroll
       for (uint i = 0; i < VecTLen; i++) {
         //TODO: refactor based on paper

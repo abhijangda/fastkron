@@ -101,14 +101,15 @@ class Slice {
   T* ptr;
 
 public:
+  uint32_t tileP;
   CUDA_DEVICE_HOST
   Slice(uint32_t startrow, uint32_t startcol, uint32_t rows, uint32_t cols,
         uint32_t P, uint32_t TileP, Matrix parent) :
     startrow(startrow), startcol(startcol), rows(rows), cols(cols),
-    P(P), TileP(TileP), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
+    P(P), TileP(TileP), tileP(0), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
 
   CUDA_DEVICE_HOST
-  const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
+  const T* data(uint32_t row, uint32_t col) const {
     uint32_t idx = row * parent.n();
     if (TileP == P) {
       idx += col;
@@ -120,6 +121,14 @@ public:
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return rows;}
+  CUDA_DEVICE_HOST
+  void nextTileP() {
+    tileP += TileP;
+  }
+  CUDA_DEVICE_HOST
+  bool valid() const {
+    return tileP < P;
+  }
 };
 
 class Factor : public Matrix {
