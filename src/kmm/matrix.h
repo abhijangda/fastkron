@@ -121,6 +121,7 @@ public:
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return rows;}
+
   CUDA_DEVICE_HOST
   void nextTileP() {
     tileP += TileP;
@@ -128,6 +129,26 @@ public:
   CUDA_DEVICE_HOST
   bool valid() const {
     return tileP < P;
+  }
+};
+
+class XShared : public Matrix {
+public:
+  CUDA_DEVICE_HOST
+  XShared(uint32_t rows, uint32_t cols, void* ptr) :
+    Matrix(rows, cols, ptr) {}
+
+  template<typename T, uint32_t N>
+  CUDA_DEVICE_HOST
+  void shiftStore(uint32_t row, uint32_t col, uint32_t TileP, uint32_t CRegRows, T elems[N]) {
+    #pragma unroll
+    for (uint i = 0; i < N; i++) {
+      //TODO: refactor based on paper
+      uint shk = col + i;
+      uint shTileK = (shk/TileP)/CRegRows;
+      uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
+      set<T>(row, finalShK, elems[i]);
+    }
   }
 };
 

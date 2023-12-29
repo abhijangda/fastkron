@@ -76,7 +76,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   Slice<ElemT> XTile(tileRowA, tileK * TileK, 
                      (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
                      TileK, P, TileP, X);
-  Matrix Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
+  XShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
 
   for ( ; XTile.valid(); XTile.nextTileP()) {
     //Loop iterates only once when FusedMuls == 1
