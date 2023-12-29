@@ -54,7 +54,7 @@ template<typename ElemT, typename VecT>
 CUDA_DEVICE
 void fullDirectFglToFsh(const uint TileP, const uint TileQ,
                         const uint NumThreads, 
-                        const uint tid, const Factor& F, ElemT* Fsh) {
+                        const uint tid, const Factor& F, DirectShared& Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 
   //Use blockDim in loop adder instead of NumThreads for better perf 
@@ -63,11 +63,7 @@ void fullDirectFglToFsh(const uint TileP, const uint TileQ,
 
     ldGlobalVec((VecT*)F.data<ElemT>(eIdx), regs);
 
-    #pragma unroll
-    for (uint ve = 0; ve < VecTLen; ve++) {
-      uint idx = eIdx + ve;
-      Fsh[(idx/TileQ) * TileQ + idx%TileQ] = regs[ve];
-    }
+    Fsh.store<ElemT, VecTLen>(eIdx, regs);
   }
 
   // for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += NumThreads) {

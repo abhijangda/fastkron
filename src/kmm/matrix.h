@@ -152,6 +152,23 @@ public:
   }
 };
 
+class DirectShared : public Matrix {
+public:
+  CUDA_DEVICE_HOST
+  DirectShared(uint32_t rows, uint32_t cols, void* ptr) :
+    Matrix(rows, cols, ptr) {}
+
+  template<typename T, uint32_t N>
+  CUDA_DEVICE_HOST
+  void store(uint32_t eIdx, T elems[N]) {
+    #pragma unroll
+    for (uint ve = 0; ve < N; ve++) {
+      uint idx = eIdx + ve;
+      set<T>(idx/n(), idx%n(), elems[ve]);
+    }
+  }
+};
+
 class Factor : public Matrix {
 public:
   Factor() : Matrix() {}
