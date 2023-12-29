@@ -96,19 +96,30 @@ class Slice {
   uint32_t startcol;
   uint32_t rows;
   uint32_t cols;
+  uint32_t P;
+  uint32_t TileP;
   T* ptr;
 
 public:
   CUDA_DEVICE_HOST
   Slice(uint32_t startrow, uint32_t startcol, uint32_t rows, uint32_t cols,
-        Matrix parent) :
-    startrow(startrow), startcol(startcol),
-    rows(rows), cols(cols), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
+        uint32_t P, uint32_t TileP, Matrix parent) :
+    startrow(startrow), startcol(startcol), rows(rows), cols(cols),
+    P(P), TileP(TileP), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
 
   CUDA_DEVICE_HOST
-  const T* data(uint32_t row, uint32_t col) const {
-    return &ptr[row * parent.n() + col];
+  const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
+    uint32_t idx = row * parent.n();
+    if (TileP == P) {
+      idx += col;
+    } else {
+      idx += (col/TileP)*P + tileP + col%TileP;
+    }
+    return &ptr[idx];
   }
+
+  CUDA_DEVICE_HOST
+  uint32_t m() const {return rows;}
 };
 
 class Factor : public Matrix {

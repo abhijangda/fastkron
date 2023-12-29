@@ -58,7 +58,6 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   }
 
   const Matrix X = params.problem.x();
-  Matrix Xsh(TileM, ShTileK, &ptrXsh[0][0]);
 
   const uint RegTileP = MIN(8, ShTileP);  
   const uint external_tile_kp_n = get_external_tile_kp_n<MaxQ, TileQ>();
@@ -74,15 +73,16 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
   bool isThreadValid = (kp_col_start_ + CRegCols <= TileQ);
   uint tileK = get_tile_k<MaxQ, TileQ>();
-  
-  Slice<ElemT> XTile = Slice<ElemT>(tileRowA, tileK * TileK, TileM, TileK, X);
+
+  Slice<ElemT> XTile(tileRowA, tileK * TileK, 
+                     (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
+                     TileK, P, ShTileP, X);
+  Matrix Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
 
   for (uint tileKronRow = 0; tileKronRow < P; tileKronRow += ShTileP) {
     //Loop iterates only once when FusedMuls == 1
-    storeAgToAsh<ElemT, XVecT>(MaxP, ShTileP, TileK, NumThreads, CRegRows,
-                               P, tid,
-                               tileKronRow, tileRowA, 
-                               tileK, 
+    storeAgToAsh<ElemT, XVecT>(ShTileP, TileK, NumThreads, CRegRows,
+                               P, tid, tileKronRow, tileRowA, tileK, 
                                XTile, X, Xsh);
 
     #pragma unroll
