@@ -132,15 +132,15 @@ public:
   }
 };
 
-class XShared : public Matrix {
+class ShiftShared : public Matrix {
 public:
   CUDA_DEVICE_HOST
-  XShared(uint32_t rows, uint32_t cols, void* ptr) :
+  ShiftShared(uint32_t rows, uint32_t cols, void* ptr) :
     Matrix(rows, cols, ptr) {}
 
   template<typename T, uint32_t N>
   CUDA_DEVICE_HOST
-  void shiftStore(uint32_t row, uint32_t col, uint32_t TileP, uint32_t CRegRows, T elems[N]) {
+  void store(uint32_t row, uint32_t col, uint32_t TileP, uint32_t CRegRows, T elems[N]) {
     #pragma unroll
     for (uint i = 0; i < N; i++) {
       //TODO: refactor based on paper

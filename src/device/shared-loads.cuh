@@ -5,7 +5,7 @@ template<typename ElemT, typename VecT>
 CUDA_DEVICE
 void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
                   const uint tid, const Slice<ElemT> XTile, const Matrix matrix,
-                  XShared& Xsh) {
+                  ShiftShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   for (uint row = 0; row < Xsh.m(); row += 1) {
     //Use NumThreads in loop adder instead of blockDim.x for better perf
@@ -13,7 +13,7 @@ void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
       ElemT regs[VecTLen];
 
       ldGlobalVec((VecT*)XTile.data(row, k), regs);
-      Xsh.shiftStore<ElemT, VecTLen>(row, k, TileP, CRegRows, regs);
+      Xsh.store<ElemT, VecTLen>(row, k, TileP, CRegRows, regs);
     }
   }
 }
@@ -52,23 +52,21 @@ void tiledDirectFglToFsh(const uint MaxP, const uint MaxKronCols,
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void fullDirectFglToFsh(const uint MaxP, const uint MaxKronCols, 
-                        const uint TileP, const uint TileQ,
-                        const uint NumThreads, const uint P, const uint kronCols, 
-                        const uint tid, const ElemT* __restrict__ Fgl, ElemT* Fsh) {
+void fullDirectFglToFsh(const uint TileP, const uint TileQ,
+                        const uint NumThreads, 
+                        const uint tid, const Factor& F, ElemT* Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  const int lastLoads = 0; //sz % loadInstr;
 
   //Use blockDim in loop adder instead of NumThreads for better perf 
-  for (uint eIdx = tid*VecTLen; eIdx < P*kronCols - lastLoads; eIdx += blockDim.x*VecTLen) {
+  for (uint eIdx = tid*VecTLen; eIdx < F.numel(); eIdx += blockDim.x*VecTLen) {
     ElemT regs[VecTLen];
 
-    ldGlobalVec((VecT*)&Fgl[eIdx], regs);
+    ldGlobalVec((VecT*)F.data<ElemT>(eIdx), regs);
 
     #pragma unroll
     for (uint ve = 0; ve < VecTLen; ve++) {
       uint idx = eIdx + ve;
-      Fsh[(idx/MaxKronCols) * TileQ + idx%MaxKronCols] = regs[ve];
+      Fsh[(idx/TileQ) * TileQ + idx%TileQ] = regs[ve];
     }
   }
 
