@@ -22,24 +22,24 @@ template<typename ElemT, typename VecT>
 CUDA_DEVICE
 void tiledDirectFglToFsh(const uint NumThreads,
                          const uint tileP, const uint tid, 
-                         const Factor& F, DirectShared& Fsh) {
+                         const Factor& F, DirectShared<Factor, ElemT>& Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   //Create F.q() subwarps and each subwarp loads 0 to TileP elements
-  const uint subWarps = MAX(1, NumThreads/(Fsh.n()/VecTLen));
-  for (uint swid = tid/(Fsh.n()/VecTLen); swid < Fsh.m(); swid += subWarps) {
+  const uint subWarps = MAX(1, NumThreads/(Fsh.q()/VecTLen));
+  for (uint swid = tid/(Fsh.q()/VecTLen); swid < Fsh.p(); swid += subWarps) {
     ElemT regs[VecTLen];
 
-    for (uint elem = tid%(Fsh.n()/VecTLen); elem < Fsh.n()/VecTLen; elem += blockDim.x/subWarps) {
-      const uint col = Fsh.tilecol*Fsh.n() + elem*VecTLen;
+    for (uint elem = tid%(Fsh.q()/VecTLen); elem < Fsh.q()/VecTLen; elem += blockDim.x/subWarps) {
+      const uint col = Fsh.tilecol*Fsh.q() + elem*VecTLen;
       const uint row = swid;
 
       VecT* addr = (VecT*)F.data<ElemT>((tileP + row), col);
       ldGlobalVec(addr, regs);
 
-      Fsh.store<ElemT, VecTLen>(row, elem * VecTLen, regs);
+      Fsh.store(row, elem * VecTLen, VecTLen, regs);
 
       //This condition avoids generating the loop giving better performance
-      if (Fsh.n()/VecTLen == NumThreads/subWarps) break;
+      if (Fsh.q()/VecTLen == NumThreads/subWarps) break;
     }
   }
 }
@@ -47,7 +47,7 @@ void tiledDirectFglToFsh(const uint NumThreads,
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
 void fullDirectFglToFsh(const uint NumThreads, const uint tid,
-                        const Factor& F, DirectShared& Fsh) {
+                        const Factor& F, DirectShared<Factor, ElemT>& Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
 
   //Use blockDim in loop adder instead of NumThreads for better perf 
@@ -56,7 +56,7 @@ void fullDirectFglToFsh(const uint NumThreads, const uint tid,
 
     ldGlobalVec((VecT*)F.data<ElemT>(eIdx), regs);
 
-    Fsh.store<ElemT, VecTLen>(eIdx, regs);
+    Fsh.store(eIdx, VecTLen, regs);
   }
 
   // for (uint eIdx = sz - lastLoads + tid; eIdx < sz; eIdx += NumThreads) {

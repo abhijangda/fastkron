@@ -153,36 +153,6 @@ public:
   }
 };
 
-class DirectShared : public Matrix {
-public:
-  //TODO: Coord2D
-  uint32_t tilerow, tilecol;
-
-  CUDA_DEVICE_HOST
-  DirectShared(uint32_t TileP, uint32_t TileQ, void* ptr, 
-               uint32_t tilerow, uint32_t tilecol) :
-    Matrix(TileP, TileQ, ptr), tilerow(tilerow), tilecol(tilecol) {}
-
-  template<typename T, uint32_t N>
-  CUDA_DEVICE_HOST
-  void store(uint32_t eIdx, T elems[N]) {
-    #pragma unroll
-    for (uint ve = 0; ve < N; ve++) {
-      uint idx = eIdx + ve;
-      set<T>(idx/n(), idx%n(), elems[ve]);
-    }
-  }
-
-  template<typename T, uint32_t N>
-  CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t col, T elems[N]) {
-    #pragma unroll
-    for (uint ve = 0; ve < N; ve++) {
-      set<T>(row, col + ve, elems[ve]);
-    }
-  }
-};
-
 class Factor : public Matrix {
 public:
   Factor() : Matrix() {}
@@ -198,8 +168,40 @@ public:
   CUDA_DEVICE_HOST
   uint32_t q() const {return Matrix::n();}
 
-  uint32_t m() = delete;
-  uint32_t n() = delete;
+protected:
+  CUDA_DEVICE_HOST
+  uint32_t m() {return Matrix::m();}
+  CUDA_DEVICE_HOST
+  uint32_t n() {return Matrix::n();}
+};
+
+template<class Base, typename T>
+class DirectShared : public Base {
+public:
+  //TODO: Coord2D
+  uint32_t tilerow, tilecol;
+
+  CUDA_DEVICE_HOST
+  DirectShared(uint32_t TileP, uint32_t TileQ, void* ptr, 
+               uint32_t tilerow, uint32_t tilecol) :
+    Base(TileP, TileQ, ptr), tilerow(tilerow), tilecol(tilecol) {}
+
+  CUDA_DEVICE_HOST
+  void store(uint32_t eIdx, uint32_t num, const T* elems) {
+    #pragma unroll
+    for (uint ve = 0; ve < num; ve++) {
+      uint idx = eIdx + ve;
+      Base::template set<T>(idx/Base::n(), idx%Base::n(), elems[ve]);
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
+    #pragma unroll
+    for (uint ve = 0; ve < num; ve++) {
+      Base::template set<T>(row, col + ve, elems[ve]);
+    }
+  }
 };
 
 template<typename T, uint32_t MaxSize>

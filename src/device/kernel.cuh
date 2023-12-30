@@ -77,7 +77,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                             (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
                             TileK, P, TileP, X);
   ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
-  DirectShared Fsh(TileP, TileQ, &ptrFsh[0][0], 0, external_tile_kp_n);
+  DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, external_tile_kp_n);
 
   for ( ; XTile.valid(); XTile.nextTileP()) {
     //Loop iterates only once when FusedMuls == 1
