@@ -74,11 +74,10 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   uint tileK = get_tile_k<MaxQ, TileQ>();
 
   Slice<ElemT> XTile(tileRowA, tileK * TileK, 
-                     (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
-                     TileK, P, TileP, X);
+                            (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
+                            TileK, P, TileP, X);
   ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
-  DirectShared Fsh(TileP, TileQ, &ptrFsh[0][0]);
-  const Factor FTile(TileP, TileQ);
+  DirectShared Fsh(TileP, TileQ, &ptrFsh[0][0], 0, external_tile_kp_n);
 
   for ( ; XTile.valid(); XTile.nextTileP()) {
     //Loop iterates only once when FusedMuls == 1
@@ -97,6 +96,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           regC[r][i][j] = 0;
         }}}
       }
+
       const ElemT* __restrict__ Fgl = (ElemT*)params.problem.f(fusedFac).data();
       const Factor F(P, Q, params.problem.f(fusedFac).data());
 
@@ -104,8 +104,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         //Optimized to load full factor matrix
         fullDirectFglToFsh<ElemT, FVecT>(NumThreads, tid, F, Fsh);
       } else {
-        tiledDirectFglToFsh<ElemT, FVecT>(FTile, NumThreads, external_tile_kp_n,
-                                          XTile.tileP, P, Q, tid, F, Fsh);
+        tiledDirectFglToFsh<ElemT, FVecT>(NumThreads,
+                                          XTile.tileP, tid, F, Fsh);
       }
       __syncthreads();
 

@@ -155,9 +155,13 @@ public:
 
 class DirectShared : public Matrix {
 public:
+  //TODO: Coord2D
+  uint32_t tilerow, tilecol;
+
   CUDA_DEVICE_HOST
-  DirectShared(uint32_t rows, uint32_t cols, void* ptr) :
-    Matrix(rows, cols, ptr) {}
+  DirectShared(uint32_t TileP, uint32_t TileQ, void* ptr, 
+               uint32_t tilerow, uint32_t tilecol) :
+    Matrix(TileP, TileQ, ptr), tilerow(tilerow), tilecol(tilecol) {}
 
   template<typename T, uint32_t N>
   CUDA_DEVICE_HOST
