@@ -88,7 +88,9 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
       if (FusedMuls > 1) {
-        yReg.clear();
+        #pragma unroll
+        for (uint r = 0; r < TileM; r++)      for (uint i = 0; i < CRegRows; i++)
+        for (uint j = 0; j < CRegCols; j++)   regC[r][i][j] = (ElemT)0;
       }
 
       const ElemT* __restrict__ Fgl = (ElemT*)params.problem.f(fusedFac).data();
@@ -135,11 +137,12 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           #pragma unroll
           for (uint i = 0;    i < CRegRows;         i++)
           #pragma unroll
-          for (uint j = 0;    j < CRegCols;         j++)
-          #pragma unroll
-          for (uint k = 0;    k < RegTileP; k++) {
-            if (k < TileP - regTileACol)
-              yReg.add(rowA, i, j, Xr[rowA][i][k] * Fr[k][j]);
+          for (uint j = 0;    j < CRegCols;         j++) {
+            #pragma unroll
+            for (uint k = 0;    k < RegTileP; k++) {
+              if (k < TileP - regTileACol)
+                regC[rowA][i][j] += Xr[rowA][i][k] * Fr[k][j];
+            }
           }
         }
       }

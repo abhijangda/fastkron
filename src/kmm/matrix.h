@@ -267,11 +267,12 @@ template<typename T>
 class YRegisters : public Matrix {
   uint32_t TileM;
   //TODO: change names based on paper
+  T* regs;
 
 public:
   CUDA_DEVICE_HOST
-  YRegisters(uint32_t TileM, uint32_t SliceM, uint32_t SliceN, void* regs) :
-    TileM(TileM), Matrix(SliceM, SliceN, regs) {}
+  YRegisters(uint32_t TileM, uint32_t SliceM, uint32_t SliceN, T* regs) :
+    TileM(TileM), Matrix(SliceM, SliceN), regs(regs) {}
   
   CUDA_DEVICE_HOST
   void clear() {
@@ -281,13 +282,13 @@ public:
     for (uint i = 0; i < m(); i++) {
     #pragma unroll
     for (uint j = 0; j < n(); j++) {
-      set<T>(r*m() + i, j, (T)0);
+      regs[(r*m() + i)*n() + j] = (T)0;
     }}}
   }
 
   CUDA_DEVICE_HOST
   void add(uint32_t r, uint32_t i, uint32_t j, T val) {
-    *data<T>(r*m() + i, j) += val;
+    regs[(r*m() + i)*n() + j] += val;
   }
 };
 
