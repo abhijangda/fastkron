@@ -61,6 +61,11 @@ public:
   T at(uint32_t row, uint32_t col) {
     return *(data<T>(row, col));
   }
+  template<typename T>
+  CUDA_DEVICE_HOST
+  void add(uint32_t row, uint32_t col, T val) {
+    *(data<T>(row, col)) += val;
+  }
 
   // template<typename T>
   // CUDA_DEVICE_HOST
@@ -146,7 +151,7 @@ public:
     for (uint i = 0; i < N; i++) {
       //TODO: refactor based on paper
       uint shk = col + i;
-      uint shTileK = (shk/TileP)/CRegRows;
+      uint shTileK = (shk/TileP)/CRegRows; //TODO:
       uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
       set<T>(row, finalShK, elems[i]);
     }
@@ -255,6 +260,35 @@ public:
   uint32_t len() const {return n;}
 
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
+};
+
+//Make this Tensor3D
+template<typename T>
+class YRegisters : public Matrix {
+  uint32_t TileM;
+  //TODO: change names based on paper
+
+public:
+  CUDA_DEVICE_HOST
+  YRegisters(uint32_t TileM, uint32_t SliceM, uint32_t SliceN, void* regs) :
+    TileM(TileM), Matrix(SliceM, SliceN, regs) {}
+  
+  CUDA_DEVICE_HOST
+  void clear() {
+    #pragma unroll
+    for (uint r = 0; r < TileM; r++) {
+    #pragma unroll
+    for (uint i = 0; i < m(); i++) {
+    #pragma unroll
+    for (uint j = 0; j < n(); j++) {
+      set<T>(r*m() + i, j, (T)0);
+    }}}
+  }
+
+  CUDA_DEVICE_HOST
+  void add(uint32_t r, uint32_t i, uint32_t j, T val) {
+    *data<T>(r*m() + i, j) += val;
+  }
 };
 
 template<uint32_t MaxSize>

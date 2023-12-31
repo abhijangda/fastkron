@@ -59,7 +59,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const Matrix X = params.problem.x();
 
   const uint RegTileP = MIN(8, TileP);  
-  const uint external_tile_kp_n = get_external_tile_kp_n<MaxQ, TileQ>();
+  const uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
   const uint MaxL = (TileK/MaxP)*MaxQ;
   constexpr uint wSz = (TileK/MaxP)/CRegRows;
 
@@ -77,36 +77,24 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                             (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
                             TileK, P, TileP, X);
   ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
-  DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, external_tile_kp_n);
+  DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
+  YRegisters<ElemT> yReg(TileM, CRegRows, CRegCols, &regC[0][0][0]);  
 
   for ( ; XTile.valid(); XTile.nextTileP()) {
     //Loop iterates only once when FusedMuls == 1
     storeAgToAsh<ElemT, XVecT>(TileP, NumThreads, CRegRows,
-                               tid, XTile, X, Xsh);
+                               tid, XTile, Xsh);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
       if (FusedMuls > 1) {
-        #pragma unroll
-        for (uint r = 0; r < TileM   ; r++) {
-        #pragma unroll
-        for (uint i = 0; i < CRegRows; i++) {
-        #pragma unroll
-        for (uint j = 0; j < CRegCols; j++) {
-          regC[r][i][j] = 0;
-        }}}
+        yReg.clear();
       }
 
       const ElemT* __restrict__ Fgl = (ElemT*)params.problem.f(fusedFac).data();
       const Factor F(P, Q, params.problem.f(fusedFac).data());
 
-      if (TileQ == Q && TileP == P) {
-        //Optimized to load full factor matrix
-        fullDirectFglToFsh<ElemT, FVecT>(NumThreads, tid, F, Fsh);
-      } else {
-        tiledDirectFglToFsh<ElemT, FVecT>(NumThreads,
-                                          XTile.tileP, tid, F, Fsh);
-      }
+      directFglToFsh<ElemT, FVecT>(NumThreads, tid, XTile.tileP, F, Fsh);
       __syncthreads();
 
       if (isThreadValid) {
@@ -136,7 +124,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           #pragma unroll
           for (uint elem = 0; elem < RegTileP; elem++) {
             if (regTileACol + elem < TileP)
-              Fr[elem][colC] = ptrFsh[regTileACol + elem][shKronCol];
+              Fr[elem][colC] = Fsh.template at<ElemT>(regTileACol + elem, shKronCol);
           }
         }
 
@@ -151,7 +139,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           #pragma unroll
           for (uint k = 0;    k < RegTileP; k++) {
             if (k < TileP - regTileACol)
-              regC[rowA][i][j] += Xr[rowA][i][k] * Fr[k][j];
+              yReg.add(rowA, i, j, Xr[rowA][i][k] * Fr[k][j]);
           }
         }
       }
@@ -262,8 +250,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                 cCol%(MaxL/Q);
       }
       if (TileQ != MaxQ) {
-        uint external_tile_kp_n = get_external_tile_kp_n<MaxQ, TileQ>();
-        cCol += external_tile_kp_n*(L/(MaxQ/TileQ)); 
+        uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
+        cCol += tileQ*(L/(MaxQ/TileQ)); 
       }
 
       uint cIdx;
