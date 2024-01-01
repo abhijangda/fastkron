@@ -296,6 +296,46 @@ public:
   }
 };
 
+template<typename T, uint32_t TileM, uint32_t CRegRows, uint32_t RegTileP>
+class XRegisters {
+public:
+  T regs[TileM][CRegRows][RegTileP];
+
+public:
+  CUDA_DEVICE_HOST
+  XRegisters() {} 
+
+  CUDA_DEVICE_HOST
+  void set(uint32_t r, uint32_t i, uint32_t j, T val) {
+    regs[r][i][j] = val;
+  }
+
+  CUDA_DEVICE_HOST
+  T at(uint32_t r, uint32_t i, uint32_t j) {
+    return regs[r][i][j];
+  }
+};
+
+template<typename T, uint32_t RegTileP, uint32_t CRegCols>
+class FRegisters {
+public:
+  T regs[RegTileP][CRegCols];
+
+public:
+  CUDA_DEVICE_HOST
+  FRegisters() {}
+
+  CUDA_DEVICE_HOST
+  void set(uint32_t i, uint32_t j, T val) {
+    regs[i][j] = val;
+  }
+
+  CUDA_DEVICE_HOST
+  T at(uint32_t i, uint32_t j) {
+    return regs[i][j];
+  }
+};
+
 template<uint32_t MaxSize>
 class FactorArray : public StackArray<Factor, MaxSize> {
   using Base = StackArray<Factor, MaxSize>;

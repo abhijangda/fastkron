@@ -103,8 +103,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       if (isThreadValid) {
       //Load RegTileP elements at a time to limit the register usage
       for (uint regTileACol = 0; regTileACol < TileP; regTileACol += RegTileP) {
-        register ElemT Xr[TileM][CRegRows][RegTileP];
-        register ElemT Fr[RegTileP][CRegCols];
+        register XRegisters<ElemT, TileM, CRegRows, RegTileP> Xr;
+        register FRegisters<ElemT, RegTileP, CRegCols> Fr;
         const uint tileColA = (tileColC);// * TileK)/MaxL;
         uint round_start = (tileColA / CRegRows)%TileP;
 
@@ -117,7 +117,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
             #pragma unroll
             for (uint colC = 0; colC < RegTileP; colC++) {
               ElemT temp = Xsh.at<ElemT>(rowA, shACol * TileP + (regTileACol + colC + round_start)%TileP);
-              Xr[rowA][rowC][colC] = temp;
+              Xr.set(rowA, rowC, colC, temp);
             }
         }}}
         
@@ -127,7 +127,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           #pragma unroll
           for (uint elem = 0; elem < RegTileP; elem++) {
             if (regTileACol + elem < TileP)
-              Fr[elem][colC] = Fsh.template at<ElemT>(regTileACol + elem, shKronCol);
+              Fr.set(elem, colC, Fsh.template at<ElemT>(regTileACol + elem, shKronCol));
           }
         }
 
@@ -142,7 +142,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
             #pragma unroll
             for (uint k = 0;    k < RegTileP; k++) {
               if (k < TileP - regTileACol)
-                yReg.add(rowA, i, j, Xr[rowA][i][k] * Fr[k][j]);
+                yReg.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
             }
           }
         }
@@ -319,7 +319,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       switch (vecTyNumElems) {
         case 4: {
           globalStore4Elems(&outputArray[cIdx], 
-                            yReg.at(rowA, reg_i, reg_j), 
+                            yReg.at(rowA, reg_i , reg_j), 
                             yReg.at(rowA, reg_i+1, reg_j),
                             yReg.at(rowA, reg_i+2, reg_j), 
                             yReg.at(rowA, reg_i+3, reg_j));
