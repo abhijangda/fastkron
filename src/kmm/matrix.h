@@ -263,32 +263,36 @@ public:
 };
 
 //Make this Tensor3D
-template<typename T>
+template<typename T, uint32_t TileM, uint32_t SliceM, uint32_t SliceN>
 class YRegisters : public Matrix {
-  uint32_t TileM;
+public:
   //TODO: change names based on paper
-  T* regs;
+  T regs[TileM][SliceM][SliceN];
 
 public:
   CUDA_DEVICE_HOST
-  YRegisters(uint32_t TileM, uint32_t SliceM, uint32_t SliceN, T* regs) :
-    TileM(TileM), Matrix(SliceM, SliceN), regs(regs) {}
+  YRegisters() : Matrix(SliceM, SliceN) {clear();}
   
   CUDA_DEVICE_HOST
   void clear() {
     #pragma unroll
     for (uint r = 0; r < TileM; r++) {
     #pragma unroll
-    for (uint i = 0; i < m(); i++) {
+    for (uint i = 0; i < SliceM; i++) {
     #pragma unroll
-    for (uint j = 0; j < n(); j++) {
-      regs[(r*m() + i)*n() + j] = (T)0;
+    for (uint j = 0; j < SliceN; j++) {
+      regs[r][i][j] = (T)0;
     }}}
   }
 
   CUDA_DEVICE_HOST
   void add(uint32_t r, uint32_t i, uint32_t j, T val) {
-    regs[(r*m() + i)*n() + j] += val;
+    regs[r][i][j] += val;
+  }
+
+  CUDA_DEVICE_HOST
+  T at(uint32_t r, uint32_t i, uint32_t j) {
+    return regs[r][i][j];
   }
 };
 

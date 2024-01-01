@@ -39,7 +39,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const uint tid     = threadIdx.x;
   const uint ShTileK = TileK/(MaxP/TileP);
 
-  register   ElemT regC[TileM][CRegRows][CRegCols] = {0};
+  // register   ElemT regC[TileM][CRegRows][CRegCols] = {0};
   __shared__ ElemT ptrXsh[TileM][ShTileK];
   __shared__ ElemT ptrFsh[TileP][TileQ];
 
@@ -78,7 +78,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                             TileK, P, TileP, X);
   ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
   DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
-  YRegisters<ElemT> yReg(TileM, CRegRows, CRegCols, &regC[0][0][0]);  
+  register YRegisters<ElemT, TileM, CRegRows, CRegCols> yReg;
 
   for ( ; XTile.valid(); XTile.nextTileP()) {
     //Loop iterates only once when FusedMuls == 1
@@ -88,9 +88,10 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
       if (FusedMuls > 1) {
-        #pragma unroll
-        for (uint r = 0; r < TileM; r++)      for (uint i = 0; i < CRegRows; i++)
-        for (uint j = 0; j < CRegCols; j++)   regC[r][i][j] = (ElemT)0;
+        // #pragma unroll
+        // for (uint r = 0; r < TileM; r++)      for (uint i = 0; i < CRegRows; i++)
+        // for (uint j = 0; j < CRegCols; j++)   regC[r][i][j] = (ElemT)0;
+        yReg.clear();
       }
 
       const ElemT* __restrict__ Fgl = (ElemT*)params.problem.f(fusedFac).data();
@@ -141,7 +142,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
             #pragma unroll
             for (uint k = 0;    k < RegTileP; k++) {
               if (k < TileP - regTileACol)
-                regC[rowA][i][j] += Xr[rowA][i][k] * Fr[k][j];
+                yReg.add(rowA, i, j, Xr[rowA][i][k] * Fr[k][j]);
             }
           }
         }
@@ -160,7 +161,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           uint tileColC = (cCol/TileP)/CRegRows;
           
           cCol = (cCol/TileP)*TileP + (tileColC + cCol%TileP)%TileP;
-          Xsh.set<ElemT>(rowA, cCol, regC[rowA][reg_i][reg_j]);
+          Xsh.set<ElemT>(rowA, cCol, yReg.at(rowA, reg_i, reg_j));
       }}}}}
       __syncthreads();
     }
@@ -227,9 +228,9 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
         if (params.kp_idx == 0) {
           ElemT d = (epilogueParams.getD<ElemT>()) ? epilogueParams.getBeta<ElemT>() * epilogueParams.getD<ElemT>()[cIdx] : 0;
-          outputArray[cIdx] = epilogueParams.getAlpha<ElemT>() * regC[rowShC][reg_i][reg_j] + d;
+          outputArray[cIdx] = epilogueParams.getAlpha<ElemT>() * yReg.regs[rowShC][reg_i][reg_j] + d;
         } else {
-          outputArray[cIdx] = regC[rowShC][reg_i][reg_j];
+          outputArray[cIdx] = yReg.at(rowShC, reg_i, reg_j);
         }
     }}}
   }} else {
@@ -310,27 +311,28 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       if (params.kp_idx == 0) {
         for (int i = 0; i < vecTyNumElems; i++) {
           ElemT d = epilogueParams.getBeta<ElemT>() * ((epilogueParams.getD<ElemT>() != nullptr) ? epilogueParams.getD<ElemT>()[cIdx + i] : 0);
-          regC[rowA][reg_i + i][reg_j] = epilogueParams.getAlpha<ElemT>() * regC[rowA][reg_i + i][reg_j] + d;
+          //TODO: single method for alpha * Y + d
+          yReg.regs[rowA][reg_i+i][reg_j] = epilogueParams.getAlpha<ElemT>() * yReg.at(rowA,reg_i+i,reg_j) + d;
         }
       }
       
       switch (vecTyNumElems) {
         case 4: {
           globalStore4Elems(&outputArray[cIdx], 
-                            regC[rowA][reg_i][reg_j], 
-                            regC[rowA][reg_i+1][reg_j],
-                            regC[rowA][reg_i+2][reg_j], 
-                            regC[rowA][reg_i+3][reg_j]);
+                            yReg.at(rowA, reg_i, reg_j), 
+                            yReg.at(rowA, reg_i+1, reg_j),
+                            yReg.at(rowA, reg_i+2, reg_j), 
+                            yReg.at(rowA, reg_i+3, reg_j));
           break;
         }
         case 2: {
           globalStore2Elems(&outputArray[cIdx],
-                            regC[rowA][reg_i][reg_j],
-                            regC[rowA][reg_i+1][reg_j]);
+                            yReg.at(rowA, reg_i, reg_j),
+                            yReg.at(rowA, reg_i+1, reg_j));
           break;
         }
         case 1: {
-          globalStore1Elems(&outputArray[cIdx], regC[rowA][reg_i][reg_j]);
+          globalStore1Elems(&outputArray[cIdx], yReg.at(rowA, reg_i, reg_j));
           // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
           // if (params.kp_idx == 3 and blockIdx.y == 0 and cCol >= 4096) { //params.glC[cIdx] != 8.0f
           //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d L %d MaxL %d tileColC %d outerTileKronCol %d\n",
