@@ -58,7 +58,6 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
   const Matrix X = params.problem.x();
 
-  const uint RegTileP = TileP;  
   const uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
   const uint MaxL = (TileK/MaxP)*MaxQ;
   constexpr uint wSz = (TileK/MaxP)/CRegRows;
@@ -101,10 +100,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       __syncthreads();
 
       if (isThreadValid) {
-      //Load RegTileP elements at a time to limit the register usage
-      for (uint regTileACol = 0; regTileACol < TileP; regTileACol += RegTileP) {
-        register XRegisters<ElemT, TileM, CRegRows, RegTileP> Xr;
-        register FRegisters<ElemT, RegTileP, CRegCols> Fr;
+        register XRegisters<ElemT, TileM, CRegRows, TileP> Xr;
+        register FRegisters<ElemT, TileP, CRegCols> Fr;
         const uint tileColA = (tileColC);// * TileK)/MaxL;
         uint round_start = (tileColA / CRegRows)%TileP;
 
@@ -115,8 +112,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           for (uint rowC = 0; rowC < CRegRows; rowC++) {
             uint shACol = tileColA + rowC;
             #pragma unroll
-            for (uint colC = 0; colC < RegTileP; colC++) {
-              ElemT temp = Xsh.at<ElemT>(rowA, shACol * TileP + (regTileACol + colC + round_start)%TileP);
+            for (uint colC = 0; colC < TileP; colC++) {
+              ElemT temp = Xsh.at<ElemT>(rowA, shACol * TileP + (colC + round_start)%TileP);
               Xr.set(rowA, rowC, colC, temp);
             }
         }}}
@@ -125,9 +122,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         for (uint colC = 0; colC < CRegCols; colC++) {
           uint shKronCol = outerTileKronCol + colC;
           #pragma unroll
-          for (uint elem = 0; elem < RegTileP; elem++) {
-            if (regTileACol + elem < TileP)
-              Fr.set(elem, colC, Fsh.template at<ElemT>(regTileACol + elem, shKronCol));
+          for (uint elem = 0; elem < TileP; elem++) {
+            Fr.set(elem, colC, Fsh.template at<ElemT>(elem, shKronCol));
           }
         }
 
@@ -140,13 +136,11 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           #pragma unroll
           for (uint j = 0;    j < CRegCols;         j++) {
             #pragma unroll
-            for (uint k = 0;    k < RegTileP; k++) {
-              if (k < TileP - regTileACol)
-                yReg.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
+            for (uint k = 0;    k < TileP; k++) {
+              yReg.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
             }
           }
         }
-      }
       }
 
       __syncthreads();
