@@ -58,7 +58,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
   const Matrix X = params.problem.x();
 
-  const uint RegTileP = MIN(8, TileP);  
+  const uint RegTileP = TileP;  
   const uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
   const uint MaxL = (TileK/MaxP)*MaxQ;
   constexpr uint wSz = (TileK/MaxP)/CRegRows;
