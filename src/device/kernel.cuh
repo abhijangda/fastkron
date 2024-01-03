@@ -101,37 +101,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       __syncthreads();
 
       if (isThreadValid) {
-        register XRegisters<ElemT, TileM, CRegRows, TileP> Xr;
-        register FRegisters<ElemT, TileP, CRegCols> Fr;
-        const uint tileColA = (tileColC);// * TileK)/MaxL;
-        uint round_start = (tileColA / CRegRows)%TileP;
-
-        #pragma unroll
-        for (uint rowA = 0; rowA < yReg.TileM(); rowA++) {
-        if (rowA < XTile.m()) {
-          #pragma unroll
-          for (uint rowC = 0; rowC < CRegRows; rowC++) {
-            uint shACol = tileColA + rowC;
-            #pragma unroll
-            for (uint colC = 0; colC < TileP; colC++) {
-              ElemT temp = Xsh.at<ElemT>(rowA, shACol * TileP + (colC + round_start)%TileP);
-              Xr.set(rowA, rowC, colC, temp);
-            }
-        }}}
-        
-        #pragma unroll
-        for (uint colC = 0; colC < CRegCols; colC++) {
-          uint shKronCol = outerTileKronCol + colC;
-          #pragma unroll
-          for (uint elem = 0; elem < TileP; elem++) {
-            Fr.set(elem, colC, Fsh.template at<ElemT>(elem, shKronCol));
-          }
-        }
-
-        #pragma unroll
-        for (uint rowA = 0; rowA < yReg.TileM(); rowA++)
-          if (rowA < XTile.m())
-            slicedMMA(rowA, Xr, Fr, yReg);
+        mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), TileM, CRegRows, CRegCols, TileP>
+          (tileColC, outerTileKronCol, Xsh, Fsh, yReg);
       }
 
       __syncthreads();

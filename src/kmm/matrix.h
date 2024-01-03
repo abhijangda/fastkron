@@ -302,12 +302,14 @@ public:
   }
 };
 
-template<typename T, uint32_t TileM, uint32_t CRegRows, uint32_t TileP_>
+template<typename T, uint32_t TileM, uint32_t CRegRows_, uint32_t TileP_>
 class XRegisters {
 public:
-  T regs[TileM][CRegRows][TileP_];
+  T regs[TileM][CRegRows_][TileP_];
   CUDA_DEVICE_HOST
   uint32_t TileP(){return TileP_;}
+  CUDA_DEVICE_HOST
+  uint32_t CRegRows() {return CRegRows_;}
 public:
   CUDA_DEVICE_HOST
   XRegisters() {} 
