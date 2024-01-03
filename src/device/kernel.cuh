@@ -69,7 +69,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const uint tileRowA         = blockIdx.y * TileM;
   const uint outerTileKronCol = kp_col_start_;
   const uint tileColC         = a_col_start_ ;
-
+  
   bool isThreadValid = (kp_col_start_ + CRegCols <= TileQ);
   uint tileK = get_tile_k<MaxQ, TileQ>();
 
@@ -107,8 +107,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         uint round_start = (tileColA / CRegRows)%TileP;
 
         #pragma unroll
-        for (uint rowA = 0; rowA < TileM; rowA++) {
-        if (TileM == 1 || rowA < params.problem.m() - tileRowA) {
+        for (uint rowA = 0; rowA < yReg.TileM(); rowA++) {
+        if (rowA < XTile.m()) {
           #pragma unroll
           for (uint rowC = 0; rowC < CRegRows; rowC++) {
             uint shACol = tileColA + rowC;
@@ -128,24 +128,9 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           }
         }
 
-        //Matrix Multiply Accumulate
-        // #pragma unroll
-        // for (uint rowA = 0; rowA < TileM; rowA++)
-        // if (TileM == 1 || rowA < params.problem.m() - tileRowA) {
-        //   #pragma unroll
-        //   for (uint i = 0;    i < CRegRows;         i++)
-        //   #pragma unroll
-        //   for (uint j = 0;    j < CRegCols;         j++) {
-        //     #pragma unroll
-        //     for (uint k = 0;    k < TileP; k++) {
-        //       yReg.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
-        //     }
-        //   }
-        // }
-
         #pragma unroll
         for (uint rowA = 0; rowA < yReg.TileM(); rowA++)
-          if (yReg.TileM() == 1 || rowA < params.problem.m() - tileRowA)
+          if (rowA < XTile.m())
             slicedMMA(rowA, Xr, Fr, yReg);
       }
 
@@ -153,8 +138,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
       if (isThreadValid && FusedMuls > 1 && fusedFac > 0) {
       //Store C to shared memory using shift method
-      for (int rowA = 0; rowA < TileM; rowA++) {
-      if (TileM == 1 || rowA < params.problem.m() - tileRowA) {
+      for (int rowA = 0; rowA < yReg.TileM(); rowA++) {
+      if (rowA < XTile.m()) {
         #pragma unroll
         for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
         for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
@@ -171,8 +156,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   if (!isThreadValid) return;
 
   if (FusedMuls > 1) {
-    for (uint rowShC = 0; rowShC < TileM; rowShC++) {
-    if (TileM == 1 || rowShC < params.problem.m() - tileRowA) {
+    for (uint rowShC = 0; rowShC < yReg.TileM(); rowShC++) {
+    if (rowShC < XTile.m()) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
       // #ifdef KPK_EQUALS_VAR
@@ -236,8 +221,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     }}}
   }} else {
   #pragma unroll
-  for (int rowA = 0; rowA < TileM; rowA++) {
-  if (TileM == 1 || rowA < params.problem.m() - tileRowA) {
+  for (int rowA = 0; rowA < yReg.TileM(); rowA++) {
+  if (rowA < XTile.m()) {
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     //Three least significant bits of CRegRows can be either 4, 2, or 1
