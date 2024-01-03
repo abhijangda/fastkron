@@ -2,6 +2,7 @@
 #include "device/register-loads.cuh"
 #include "device/shared-loads.cuh"
 #include "device/params.h"
+#include "device/mma.cuh"
 
 #include <type_traits>
 #include <typeinfo>
@@ -73,8 +74,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   uint tileK = get_tile_k<MaxQ, TileQ>();
 
   Slice<ElemT> XTile(tileRowA, tileK * TileK, 
-                            (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
-                            TileK, P, TileP, X);
+                     (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
+                     TileK, P, TileP, X);
   ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
   DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
   register YRegisters<ElemT, TileM, CRegRows, CRegCols> yReg;
@@ -128,22 +129,28 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         }
 
         //Matrix Multiply Accumulate
+        // #pragma unroll
+        // for (uint rowA = 0; rowA < TileM; rowA++)
+        // if (TileM == 1 || rowA < params.problem.m() - tileRowA) {
+        //   #pragma unroll
+        //   for (uint i = 0;    i < CRegRows;         i++)
+        //   #pragma unroll
+        //   for (uint j = 0;    j < CRegCols;         j++) {
+        //     #pragma unroll
+        //     for (uint k = 0;    k < TileP; k++) {
+        //       yReg.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
+        //     }
+        //   }
+        // }
+
         #pragma unroll
-        for (uint rowA = 0; rowA < TileM; rowA++)
-        if (TileM == 1 || rowA < params.problem.m() - tileRowA) {
-          #pragma unroll
-          for (uint i = 0;    i < CRegRows;         i++)
-          #pragma unroll
-          for (uint j = 0;    j < CRegCols;         j++) {
-            #pragma unroll
-            for (uint k = 0;    k < TileP; k++) {
-              yReg.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
-            }
-          }
-        }
+        for (uint rowA = 0; rowA < yReg.TileM(); rowA++)
+          if (yReg.TileM() == 1 || rowA < params.problem.m() - tileRowA)
+            slicedMMA(rowA, Xr, Fr, yReg);
       }
 
       __syncthreads();
+
       if (isThreadValid && FusedMuls > 1 && fusedFac > 0) {
       //Store C to shared memory using shift method
       for (int rowA = 0; rowA < TileM; rowA++) {

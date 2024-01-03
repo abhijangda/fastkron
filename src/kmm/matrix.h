@@ -263,24 +263,30 @@ public:
 };
 
 //Make this Tensor3D
-template<typename T, uint32_t TileM, uint32_t SliceM, uint32_t SliceN>
+template<typename T, uint32_t TileM_, uint32_t SliceM_, uint32_t SliceN_>
 class YRegisters : public Matrix {
 public:
   //TODO: change names based on paper
-  T regs[TileM][SliceM][SliceN];
+  T regs[TileM_][SliceM_][SliceN_];
+  CUDA_DEVICE_HOST
+  uint32_t TileM()  {return TileM_;}
+  CUDA_DEVICE_HOST
+  uint32_t SliceM() {return SliceM_;}
+  CUDA_DEVICE_HOST
+  uint32_t SliceN() {return SliceN_;}
 
 public:
   CUDA_DEVICE_HOST
-  YRegisters() : Matrix(SliceM, SliceN) {clear();}
+  YRegisters() : Matrix(SliceM_, SliceN_) {clear();}
   
   CUDA_DEVICE_HOST
   void clear() {
     #pragma unroll
-    for (uint r = 0; r < TileM; r++) {
+    for (uint r = 0; r < TileM_; r++) {
     #pragma unroll
-    for (uint i = 0; i < SliceM; i++) {
+    for (uint i = 0; i < SliceM_; i++) {
     #pragma unroll
-    for (uint j = 0; j < SliceN; j++) {
+    for (uint j = 0; j < SliceN_; j++) {
       regs[r][i][j] = (T)0;
     }}}
   }
@@ -296,11 +302,12 @@ public:
   }
 };
 
-template<typename T, uint32_t TileM, uint32_t CRegRows, uint32_t RegTileP>
+template<typename T, uint32_t TileM, uint32_t CRegRows, uint32_t TileP_>
 class XRegisters {
 public:
-  T regs[TileM][CRegRows][RegTileP];
-
+  T regs[TileM][CRegRows][TileP_];
+  CUDA_DEVICE_HOST
+  uint32_t TileP(){return TileP_;}
 public:
   CUDA_DEVICE_HOST
   XRegisters() {} 
@@ -316,10 +323,10 @@ public:
   }
 };
 
-template<typename T, uint32_t RegTileP, uint32_t CRegCols>
+template<typename T, uint32_t TileP, uint32_t CRegCols>
 class FRegisters {
 public:
-  T regs[RegTileP][CRegCols];
+  T regs[TileP][CRegCols];
 
 public:
   CUDA_DEVICE_HOST
