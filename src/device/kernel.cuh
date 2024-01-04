@@ -88,9 +88,6 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
       if (FusedMuls > 1) {
-        // #pragma unroll
-        // for (uint r = 0; r < TileM; r++)      for (uint i = 0; i < CRegRows; i++)
-        // for (uint j = 0; j < CRegCols; j++)   regC[r][i][j] = (ElemT)0;
         yReg.clear();
       }
 
@@ -108,18 +105,9 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       __syncthreads();
 
       if (isThreadValid && FusedMuls > 1 && fusedFac > 0) {
-      //Store C to shared memory using shift method
-      for (int rowA = 0; rowA < yReg.TileM(); rowA++) {
-      if (rowA < XTile.m()) {
-        #pragma unroll
-        for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-        for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
-          uint cCol = outerTileKronCol*(TileK/MaxP) + reg_j*(TileK/MaxP) + tileColC + reg_i;
-          uint tileColC = (cCol/TileP)/CRegRows;
-          
-          cCol = (cCol/TileP)*TileP + (tileColC + cCol%TileP)%TileP;
-          Xsh.set<ElemT>(rowA, cCol, yReg.at(rowA, reg_i, reg_j));
-      }}}}}
+        //Store C to shared memory using shift method
+        fusionYrToXSh<ElemT, decltype(Xsh), decltype(yReg), TileP>(outerTileKronCol, tileColC, F, Xsh, yReg);
+      }
       __syncthreads();
     }
   }
