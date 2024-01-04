@@ -121,53 +121,17 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     if (rowShC < XTile.m()) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
-      // #ifdef KPK_EQUALS_VAR
-      // const uint KronRowsPower = iconstpower<P, FusedMuls>();
-      // #else
-      // const uint KronRowsPower = power(P, FusedMuls);
-      // #endif
-      uint UVAColsRatioKronColsSquare = fusedParams.UVAColsRatioKronColsSquare; //(ShTileK/KronRowsPower);
-      const uint ColsCByKronColsPower = fusedParams.ColsCByKronColsPower; //L/KronRowsPower;//(L/(ShTileK/UVAColsRatioKronRowsSquare));
-      const uint TileSizeColsAByKronCols = ShTileK/Q; //params.TileSizeColsAByKronRows;
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
       for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
         uint colShC = outerTileKronCol*(TileK/MaxP) + reg_j*(TileK/MaxP) + tileColC + reg_i;
         const uint rowC = rowShC + tileRowA;
-        uint withinP5 = tileK * UVAColsRatioKronColsSquare +
-                        ((colShC%TileSizeColsAByKronCols)/UVAColsRatioKronColsSquare)*ColsCByKronColsPower + 
-                        colShC%UVAColsRatioKronColsSquare;
         
-        uint p5Index = (colShC/TileSizeColsAByKronCols)*(L/Q);
-        uint cCol = p5Index + withinP5;
-        
-        uint cIdx;
-        ElemT* __restrict__ outputArray;
-
+        uint cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, colShC);
+        ElemT* outputArray;
+        uint32_t cIdx;
         if (DistributeToGPUs) {
-          /// uint batchedKronMuls = distParams.LocalKrons;
-          // uint KronRowsPower = (batchedKronMuls == 3) ? P*P*P : P;//power(P, batchedKronMuls);
-          //TODO: Remove distParams. members that are not accessed here?
-          uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
-          const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
-          const uint perGPUNByKronCols = distParams.perGPUNByKronCols;
-          const uint ColsCByKronCols = distParams.ColsCByKronCols;
-          const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
-          const uint ColsCByKronColsPower = distParams.ColsCByKronColsPower;
-          
-          const uint nextGc = cCol/perGPUNByNumGPUs;
-          // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
-          
-          const uint perGPUN = L;
-          uint srcElem = cCol;
-          uint withinP5 = gcMulUVAColsRatioKronRowsSquare +
-                          ((srcElem%perGPUNByKronCols)/UVAColsRatioKronRowsSquare)*ColsCByKronColsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
-                          srcElem % UVAColsRatioKronRowsSquare;
-          uint p5Index = (srcElem/perGPUNByKronCols)*ColsCByKronCols;
-          int newcCol = p5Index + withinP5;
-          int gpuCol = newcCol - nextGc * perGPUN;
-          cIdx = rowC * perGPUN + gpuCol;
-          outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));
+          p2pStoreAddress(distParams, Y, rowC, cCol, outputArray, cIdx);
         } else {
           cIdx = rowC * L + cCol;
           outputArray = (ElemT*)params.problem.y().data();
