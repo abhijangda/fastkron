@@ -166,7 +166,7 @@ struct DistributedParams {
       thisResults = nullptr;
   }
 
-  __device__ __forceinline__ void* getLocalGPUResult(uint gc) {
+  __device__ __forceinline__ void* getLocalGPUResult(uint gc) const {
     switch(gc) {
       case 0: return gpuResults0;
       case 1: return gpuResults1;

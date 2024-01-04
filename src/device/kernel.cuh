@@ -3,6 +3,7 @@
 #include "device/shared-loads.cuh"
 #include "device/params.h"
 #include "device/mma.cuh"
+#include "device/global-store.cuh"
 
 #include <type_traits>
 #include <typeinfo>
@@ -58,6 +59,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   }
 
   const Matrix X = params.problem.x();
+  const Matrix Y = params.problem.y();
 
   const uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
   const uint MaxL = (TileK/MaxP)*MaxQ;
@@ -204,49 +206,10 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       }
 
       uint cIdx;
-      ElemT* __restrict__ outputArray;
+      ElemT* outputArray;
 
       if (DistributeToGPUs) {
-        // uint batchedKronMuls = distParams.LocalKrons;
-        // uint KronRowsPower = (batchedKronMuls == 3) ? P*P*P : P;//power(P, batchedKronMuls);
-        //TODO: Remove distParams. members that are not accessed here?
-        uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
-        const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
-        const uint perGPUNByKronCols = distParams.perGPUNByKronCols;
-        const uint ColsCByKronCols = distParams.ColsCByKronCols;
-        const uint gcMulUVAColsRatioKronRowsSquare = distParams.gcMulUVAColsRatioKronRowsSquare;
-        const uint ColsCByKronColsPower = distParams.ColsCByKronColsPower;
-        
-        uint nextGc = cCol/perGPUNByNumGPUs;
-        // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.x == 0) printf("batchedKronMuls %d\n", batchedKronMuls);
-        
-        const uint perGPUN = L;
-        uint srcElem = cCol;
-        uint withinP5 = gcMulUVAColsRatioKronRowsSquare +
-                        ((srcElem%perGPUNByKronCols)/UVAColsRatioKronRowsSquare)*ColsCByKronColsPower + //(perGPUK/UVAColsRatioKronRowsSquare)
-                        srcElem % UVAColsRatioKronRowsSquare;
-        uint p5Index = (srcElem/perGPUNByKronCols)*ColsCByKronCols;
-        int newcCol = p5Index + withinP5;
-        int gpuCol = newcCol - nextGc * perGPUN;
-        cIdx = cRow * perGPUN + gpuCol;
-        outputArray = (ElemT*)(distParams.getLocalGPUResult(nextGc));//(nextGc == 0) ? distParams.gpuResults1 : distParams.gpuResults2;
-
-        // if (params.kp_idx == 0 && blockIdx.y == 0) {//(gpuCol >= perGPUN || gpuCol < 0) {
-        //   printf("344 outputArray %p nextGc %d cIdx %d perGPUN %d\n", outputArray, nextGc, cIdx, perGPUN);
-        // }
-        
-        // printf("outputArray %p\n", outputArray);
-        // if (batchedKronMuls == 3 and regC[rowA][reg_i][reg_j] != )
-        // if (threadIdx.x == 0) //((gpuCol >= perGPUK or gpuCol < 0)) 
-        // printf("gpuCol %d nextGc %d perGPUK %d newcCol %d gc %d K %d cIdx %d outputArray %p\n",
-        //         gpuCol, nextGc, perGPUK, newcCol, distParams.gc, distParams.K, cIdx, outputArray);
-        // outputArray = distParams.gpuResults[nextGc];
-
-        // if (threadIdx.x == 0 && blockIdx.x == 0 & blockIdx.y == 0) {
-        //   uint nextGc = (distParams.gc == 0) ? 1 : 0;
-        //   printf("Writing from %d to %d at %p\n", distParams.gc, nextGc, &distParams.gpuResults[nextGc]);
-        //   distParams.gpuResults[nextGc][0] = 0;
-        // }
+        p2pStoreAddress(distParams, Y, cRow, cCol, outputArray, cIdx);
       } else {
         cIdx = cRow * L + cCol;
         outputArray = (ElemT*)params.problem.y().data();
