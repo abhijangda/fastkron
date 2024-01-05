@@ -116,103 +116,75 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
   if (!isThreadValid) return;
 
-  if (FusedMuls > 1) {
-    for (uint rowShC = 0; rowShC < yReg.TileM(); rowShC++) {
-    if (rowShC < XTile.m()) {
+  #pragma unroll
+  for (uint rowA = 0; rowA < yReg.TileM(); rowA++) {
+    if (rowA < XTile.m()) {
       //TODO: Improve below code like in the paper
       //TODO: Can be provided when compiling kernel.
+      constexpr uint vecTyNumElems = (FusedMuls == 1) ? MIN(AAlignment, MIN(CRegRows, 4) & (8 - 1)) : 1;
+      assert(vecTyNumElems == 4 || vecTyNumElems == 2 || vecTyNumElems == 1);
       #pragma unroll
       for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-      for (uint reg_i = 0; reg_i < CRegRows; reg_i++) {
-        uint colShC = outerTileKronCol*(TileK/MaxP) + reg_j*(TileK/MaxP) + tileColC + reg_i;
-        const uint rowC = rowShC + tileRowA;
-        
-        uint cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, colShC);
-        ElemT* outputArray;
-        uint32_t cIdx;
-        if (DistributeToGPUs) {
-          p2pStoreAddress(distParams, Y, rowC, cCol, outputArray, cIdx);
-        } else {
-          cIdx = rowC * L + cCol;
-          outputArray = (ElemT*)params.problem.y().data();
-        }
-
-        if (params.kp_idx == 0) {
-          ElemT d = (epilogueParams.getD<ElemT>()) ? epilogueParams.getBeta<ElemT>() * epilogueParams.getD<ElemT>()[cIdx] : 0;
-          outputArray[cIdx] = epilogueParams.getAlpha<ElemT>() * yReg.regs[rowShC][reg_i][reg_j] + d;
-        } else {
-          outputArray[cIdx] = yReg.at(rowShC, reg_i, reg_j);
-        }
-    }}}
-  }} else {
-  #pragma unroll
-  for (int rowA = 0; rowA < yReg.TileM(); rowA++) {
-  if (rowA < XTile.m()) {
-    #pragma unroll
-    for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
-    //Three least significant bits of CRegRows can be either 4, 2, or 1
-    constexpr uint vecTyNumElems = MIN(AAlignment, MIN(CRegRows, 4) & (8 - 1));
-    assert(vecTyNumElems == 4 || vecTyNumElems == 2 || vecTyNumElems == 1);
-    for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
-      const uint cRow = (rowA + tileRowA);
-      uint cCol = outerTileKronCol*(TileK/MaxP) +
+      #pragma unroll
+      for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
+        const uint cRow = (rowA + tileRowA);
+        uint shCol = outerTileKronCol*(TileK/MaxP) +
                   reg_j*(TileK/MaxP) +
                   tileColC +
                   reg_i;
-      {
-        cCol = tileK * (MaxL/Q) +
-                (cCol/(MaxL/Q)) * (L/Q) +
-                cCol%(MaxL/Q);
-      }
-      if (TileQ != MaxQ) {
-        uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
-        cCol += tileQ*(L/(MaxQ/TileQ)); 
-      }
+        uint cCol = 0;
+        ElemT* outputArray;
+        uint32_t cIdx;
 
-      uint cIdx;
-      ElemT* outputArray;
+        if (FusedMuls > 1) {
+          cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, shCol);
+        } else {
+          cCol = tileK * (MaxL/Q) +
+                (shCol/(MaxL/Q)) * (L/Q) +
+                shCol%(MaxL/Q);
+        }
 
-      if (DistributeToGPUs) {
-        p2pStoreAddress(distParams, Y, cRow, cCol, outputArray, cIdx);
-      } else {
-        cIdx = cRow * L + cCol;
-        outputArray = (ElemT*)params.problem.y().data();
-      //  if (threadIdx.x == 0) printf("317: outputArray %p cIdx %d\n", outputArray, cIdx);
-      }
+        if (TileQ != MaxQ) {
+          uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
+          cCol += tileQ*(L/(MaxQ/TileQ)); 
+        }
 
-      if (params.kp_idx == 0) {
-        for (int i = 0; i < vecTyNumElems; i++) {
-          ElemT d = epilogueParams.getBeta<ElemT>() * ((epilogueParams.getD<ElemT>() != nullptr) ? epilogueParams.getD<ElemT>()[cIdx + i] : 0);
-          //TODO: single method for alpha * Y + d
-          yReg.regs[rowA][reg_i+i][reg_j] = epilogueParams.getAlpha<ElemT>() * yReg.at(rowA,reg_i+i,reg_j) + d;
+        if (DistributeToGPUs) {
+          p2pStoreAddress(distParams, Y, cRow, cCol, outputArray, cIdx);
+        } else {
+          cIdx = cRow * L + cCol;
+          outputArray = (ElemT*)params.problem.y().data();
         }
-      }
-      
-      switch (vecTyNumElems) {
-        case 4: {
-          globalStore4Elems(&outputArray[cIdx], 
-                            yReg.at(rowA, reg_i , reg_j), 
-                            yReg.at(rowA, reg_i+1, reg_j),
-                            yReg.at(rowA, reg_i+2, reg_j), 
-                            yReg.at(rowA, reg_i+3, reg_j));
-          break;
+
+
+        if (params.kp_idx == 0) {
+          for (int i = 0; i < vecTyNumElems; i++) {
+            ElemT d = epilogueParams.getBeta<ElemT>() * ((epilogueParams.getD<ElemT>() != nullptr) ? epilogueParams.getD<ElemT>()[cIdx + i] : 0);
+            //TODO: single method for alpha * Y + d
+            yReg.regs[rowA][reg_i+i][reg_j] = epilogueParams.getAlpha<ElemT>() * yReg.at(rowA,reg_i+i,reg_j) + d;
+          }
         }
-        case 2: {
-          globalStore2Elems(&outputArray[cIdx],
-                            yReg.at(rowA, reg_i, reg_j),
-                            yReg.at(rowA, reg_i+1, reg_j));
-          break;
-        }
-        case 1: {
-          globalStore1Elems(&outputArray[cIdx], yReg.at(rowA, reg_i, reg_j));
-          // if (params.kp_idx == 2 && params.glC[cIdx] != 8.0f) {
-          // if (params.kp_idx == 3 and blockIdx.y == 0 and cCol >= 4096) { //params.glC[cIdx] != 8.0f
-          //   printf("kp_idx %d glC[%d] %f cRow %d cCol %d L %d MaxL %d tileColC %d outerTileKronCol %d\n",
-          //          params.kp_idx, cIdx, params.glC[cIdx], cRow, cCol, L, MaxL, tileColC, outerTileKronCol, threadIdx.x);
-          // }
-          break;
-        }
-      }
-    }}}
-  }}
+
+        switch (vecTyNumElems) {
+          case 4: {
+            globalStore4Elems(&outputArray[cIdx], 
+                              yReg.at(rowA, reg_i , reg_j), 
+                              yReg.at(rowA, reg_i+1, reg_j),
+                              yReg.at(rowA, reg_i+2, reg_j), 
+                              yReg.at(rowA, reg_i+3, reg_j));
+            break;
+          }
+          case 2: {
+            globalStore2Elems(&outputArray[cIdx],
+                              yReg.at(rowA, reg_i, reg_j),
+                              yReg.at(rowA, reg_i+1, reg_j));
+            break;
+          }
+          case 1: {
+            globalStore1Elems(&outputArray[cIdx], yReg.at(rowA, reg_i, reg_j));
+            break;
+          }
+       }}}
+    }
+  }
 }
