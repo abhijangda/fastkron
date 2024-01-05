@@ -128,10 +128,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       #pragma unroll
       for (uint reg_i = 0; reg_i < CRegRows; reg_i += vecTyNumElems) {
         const uint cRow = (rowA + tileRowA);
-        uint shCol = outerTileKronCol*(TileK/MaxP) +
-                  reg_j*(TileK/MaxP) +
-                  tileColC +
-                  reg_i;
+        uint shCol = outerTileKronCol*(TileK/MaxP) + reg_j*(TileK/MaxP) + tileColC + reg_i;
         uint cCol = 0;
         ElemT* outputArray;
         uint32_t cIdx;
@@ -139,9 +136,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         if (FusedMuls > 1) {
           cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, shCol);
         } else {
-          cCol = tileK * (MaxL/Q) +
-                (shCol/(MaxL/Q)) * (L/Q) +
-                shCol%(MaxL/Q);
+          cCol = tileK * (MaxL/Q) + (shCol/(MaxL/Q)) * (L/Q) + shCol%(MaxL/Q);
         }
 
         if (TileQ != MaxQ) {
@@ -158,33 +153,21 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
 
         if (params.kp_idx == 0) {
+          #pragma unroll
           for (int i = 0; i < vecTyNumElems; i++) {
-            ElemT d = epilogueParams.getBeta<ElemT>() * ((epilogueParams.getD<ElemT>() != nullptr) ? epilogueParams.getD<ElemT>()[cIdx + i] : 0);
-            //TODO: single method for alpha * Y + d
-            yReg.regs[rowA][reg_i+i][reg_j] = epilogueParams.getAlpha<ElemT>() * yReg.at(rowA,reg_i+i,reg_j) + d;
+            yReg.regs[rowA][reg_i+i][reg_j] =
+              epilogue(epilogueParams, cIdx + i, yReg.at(rowA,reg_i+i,reg_j));
           }
         }
 
-        switch (vecTyNumElems) {
-          case 4: {
-            globalStore4Elems(&outputArray[cIdx], 
-                              yReg.at(rowA, reg_i , reg_j), 
-                              yReg.at(rowA, reg_i+1, reg_j),
-                              yReg.at(rowA, reg_i+2, reg_j), 
-                              yReg.at(rowA, reg_i+3, reg_j));
-            break;
-          }
-          case 2: {
-            globalStore2Elems(&outputArray[cIdx],
-                              yReg.at(rowA, reg_i, reg_j),
-                              yReg.at(rowA, reg_i+1, reg_j));
-            break;
-          }
-          case 1: {
-            globalStore1Elems(&outputArray[cIdx], yReg.at(rowA, reg_i, reg_j));
-            break;
-          }
-       }}}
+        register ElemT storeValues[vecTyNumElems];
+        #pragma unroll
+        for (int v = 0; v < vecTyNumElems; v++) {
+          storeValues[v] = yReg.at(rowA, reg_i+v, reg_j);
+        }
+
+        stGlobalVec(&outputArray[cIdx], vecTyNumElems, storeValues);
+      }
     }
   }
-}
+}}

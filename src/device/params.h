@@ -20,13 +20,13 @@ union AllTypes {
   AllTypes(double d) : d(d) {}
 
   __device__
-  float  get(float  p) {return f;}
+  float  get(float  p) const {return f;}
   __device__
-  long   get(long   p) {return l;}
+  long   get(long   p) const {return l;}
   __device__
-  int    get(int    p) {return i;}
+  int    get(int    p) const {return i;}
   __device__
-  double get(double p) {return d;}
+  double get(double p) const {return d;}
 };
 
 struct EpilogueParams {
@@ -57,15 +57,15 @@ struct EpilogueParams {
 
   template<typename ElemT>
   __device__
-  ElemT        getAlpha() {return alpha.get((ElemT)0);}
+  ElemT        getAlpha() const {return alpha.get((ElemT)0);}
   
   template<typename ElemT>
   __device__
-  ElemT        getBeta()  {return beta.get((ElemT)0);}
+  ElemT        getBeta()  const {return beta.get((ElemT)0);}
   
   template<typename ElemT>
   __device__
-  const ElemT* getD()     {return (const ElemT*)glD;}
+  const ElemT* getD()     const {return (const ElemT*)glD;}
 };
 
 template<uint Fused>

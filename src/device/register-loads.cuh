@@ -28,59 +28,6 @@ CUDA_DEVICE void ldGlobalVec(const double* ptr, double4& vec) {
   vec = *(double4*)ptr;
 }
 
-//Store PTX instructions for each vector type
-template<typename ElemT>
-CUDA_DEVICE void globalStore4Elems(ElemT* addr, ElemT elem1, ElemT elem2, ElemT elem3, ElemT elem4) {
-}
-
-template<>
-CUDA_DEVICE void globalStore4Elems(float* addr, float elem1, float elem2, float elem3, float elem4) {
-  // asm ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(addr), "=f"(elem1), "=f"(elem2), "=f"(elem3), "=f"(elem4));
-  float4 vec = {elem1, elem2, elem3, elem4};
-  *(float4*)addr = vec;
-}
-
-template<>
-CUDA_DEVICE void globalStore4Elems(int* addr, int elem1, int elem2, int elem3, int elem4) {
-  // asm ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(addr), "=f"(elem1), "=f"(elem2), "=f"(elem3), "=f"(elem4));
-  int4 vec = {elem1, elem2, elem3, elem4};
-  *(int4*)addr = vec;
-}
-
-template<>
-CUDA_DEVICE void globalStore4Elems(double* addr, double elem1, double elem2, double elem3, double elem4) {
-  // asm ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(addr), "=f"(elem1), "=f"(elem2), "=f"(elem3), "=f"(elem4));
-  double4 vec = {elem1, elem2, elem3, elem4};
-  *(double4*)addr = vec;
-}
-
-template<typename ElemT>
-CUDA_DEVICE void globalStore2Elems(ElemT* addr, ElemT elem1, ElemT elem2) {
-}
-
-template<>
-CUDA_DEVICE void globalStore2Elems(float* addr, float elem1, float elem2) {
-  float2 vec = {elem1, elem2};
-  *(float2*)addr = vec;
-}
-
-template<>
-CUDA_DEVICE void globalStore2Elems(int* addr, int elem1, int elem2) {
-  int2 vec = {elem1, elem2};
-  *(int2*)addr = vec;
-}
-
-template<>
-CUDA_DEVICE void globalStore2Elems(double* addr, double elem1, double elem2) {
-  double2 vec = {elem1, elem2};
-  *(double2*)addr = vec;
-}
-
-template<typename ElemT>
-CUDA_DEVICE void globalStore1Elems(ElemT* addr, ElemT elem1) {
-  *addr = elem1;
-}
-
 CUDA_DEVICE void sharedStore(float* ptr, float val) {
   asm volatile ("st.shared.f32 [%0], {%1};\n" :: "l"(ptr), "f"(val));
 }

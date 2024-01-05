@@ -35,3 +35,34 @@ uint32_t fusedYColumn(const FusedParams& fusedParams, const Matrix& Y,
   uint cCol = p5Index + withinP5;
   return cCol;
 }
+
+template<typename ElemT>
+__device__ __forceinline__
+ElemT epilogue(const EpilogueParams& params, uint32_t idx, ElemT yVal) {
+  ElemT d = params.getBeta<ElemT>() * ((params.getD<ElemT>() != nullptr) ? params.getD<ElemT>()[idx] : 0);
+  return params.getAlpha<ElemT>() * yVal + d;
+}
+
+
+//Store PTX instructions for each vector type
+template<typename ElemT>
+CUDA_DEVICE void stGlobalVec(ElemT* addr, int numValues, ElemT values[]) {
+}
+
+template<>
+CUDA_DEVICE void stGlobalVec(float* addr, int numValues, float values[]) {
+  switch (numValues) {
+    case 1:
+      asm volatile ("st.global.f32 [%0], {%1};" ::
+                    "l"(addr), "f"(values[0]));
+      break;
+    case 2:
+      asm volatile ("st.global.v2.f32 [%0], {%1, %2};" ::
+                    "l"(addr), "f"(values[0]), "f"(values[1]));
+      break;
+    case 4:
+      asm volatile ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" ::
+                    "l"(addr), "f"(values[0]), "f"(values[1]), "f"(values[2]), "f"(values[3]));
+      break;
+  }
+}
