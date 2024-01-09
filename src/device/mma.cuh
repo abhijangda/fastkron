@@ -1,5 +1,5 @@
 template<typename XReg, typename FReg, typename YReg>
-__device__ __forceinline__ 
+CUDA_DEVICE
 void slicedMMA(uint32_t rowA, XReg& Xr, FReg& Fr, YReg& Yr) {
   //Matrix Multiply Accumulate  
   #pragma unroll
@@ -15,7 +15,7 @@ void slicedMMA(uint32_t rowA, XReg& Xr, FReg& Fr, YReg& Yr) {
 
 template<typename ElemT, typename XShared, typename FShared, typename YReg,
          uint32_t TileM, uint32_t CRegRows, uint32_t CRegCols, uint32_t TileP>
-__device__ __forceinline__
+CUDA_DEVICE
 void mainMMA(uint tileColA, uint32_t outerTileKronCol, XShared& Xsh, FShared& Fsh, YReg& Yr) {
   register XRegisters<ElemT, TileM, CRegRows, TileP> Xr;
   register FRegisters<ElemT, TileP, CRegCols> Fr;
