@@ -58,16 +58,19 @@ void stVecYReg(ElemT* addr, YReg& Yr, int row, int i, int j) {
   switch (numValues) {
     case 1:
       asm volatile ("st.global.f32 [%0], {%1};" ::
-                    "l"(addr), "f"(Yr.at(row, i, j)));
+                    "l"(addr), 
+                    "f"(Yr.at(row, i, j)));
       break;
     case 2:
       asm volatile ("st.global.v2.f32 [%0], {%1, %2};" ::
-                    "l"(addr), "f"(Yr.at(row, i+0, j)), "f"(Yr.at(row, i+1, j)));
+                    "l"(addr),
+                    "f"(Yr.at(row, i+0, j)), "f"(Yr.at(row, i+1, j)));
       break;
     case 4:
       asm volatile ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" ::
-                    "l"(addr), "f"(Yr.at(row, i  , j)), "f"(Yr.at(row, i+1, j)), 
-                               "f"(Yr.at(row, i+2, j)), "f"(Yr.at(row, i+3, j)));
+                    "l"(addr), 
+                    "f"(Yr.at(row, i  , j)), "f"(Yr.at(row, i+1, j)), 
+                    "f"(Yr.at(row, i+2, j)), "f"(Yr.at(row, i+3, j)));
       break;
   }
 }

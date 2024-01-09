@@ -10,6 +10,17 @@
 #include <type_traits>
 #include <typeinfo>
 
+template<uint MaxQ, uint TileQ>
+CUDA_DEVICE uint32_t getTileK() {
+  return blockIdx.x/DIVUP(MaxQ, TileQ);
+}
+
+template<uint MaxQ, uint TileQ>
+CUDA_DEVICE uint32_t getTileQ() {
+  return blockIdx.x%DIVUP(MaxQ, TileQ);
+}
+
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads, 
          uint MaxQ, uint MaxP, uint TileQ, uint TileK,
@@ -41,29 +52,24 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                 typename std::conditional<FAlignment == 2, Vec2T,
                                           Vec4T>::type>::type>::type;
 
-  const uint tid     = threadIdx.x;
   const uint ShTileK = TileK/(MaxP/TileP);
 
   __shared__ ElemT ptrXsh[TileM][ShTileK];
   __shared__ ElemT ptrFsh[TileP][TileQ];
 
-  uint Q;
-  uint P;
-
-  if (KPK_EQUALS_VAR) {
-    Q = MaxQ;
-    P = MaxP;
-  } else {
-    Q = params.problem.f(0).q();
-    P = params.problem.f(0).p();
-  }
-
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
 
-  const uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
-  constexpr uint wSz = (TileK/MaxP)/CRegRows;
+  const uint Q = (KPK_EQUALS_VAR) ? MaxQ : params.problem.f(0).q();
+  const uint P = (KPK_EQUALS_VAR) ? MaxP : params.problem.f(0).p();
 
+  const uint tileQ = getTileQ<MaxQ, TileQ>();
+  const uint tileK = getTileK<MaxQ, TileQ>();
+
+  const uint wSz = (TileK/MaxP)/CRegRows;
+
+  const uint tid     = threadIdx.x;
+  
   const uint kp_col_start_ = (tid / wSz) * CRegCols;
   const uint a_col_start_  = (tid % wSz) * CRegRows;
 
@@ -72,7 +78,6 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const uint tileColC         = a_col_start_ ;
   
   bool isThreadValid = (kp_col_start_ + CRegCols <= TileQ);
-  uint tileK = get_tile_k<MaxQ, TileQ>();
 
   Slice<ElemT> XTile(tileRowA, tileK * TileK, 
                      (TileM == 1) ? 1 : MIN(TileM, X.m() - tileRowA),
@@ -119,11 +124,11 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   for (uint rowA = 0; rowA < yReg.TileM(); rowA++) {
   if (rowA < XTile.m()) {
     //TODO: Improve below code like in the paper
-    constexpr uint32_t stVecElems = storeVectorElems<FusedMuls, XAlignment, CRegRows>();
+    constexpr uint32_t NumStElems = storeVectorElems<FusedMuls, XAlignment, CRegRows>();
     #pragma unroll
     for (uint reg_j = 0; reg_j < CRegCols; reg_j++) {
     #pragma unroll
-    for (uint reg_i = 0; reg_i < CRegRows; reg_i += stVecElems) {
+    for (uint reg_i = 0; reg_i < CRegRows; reg_i += NumStElems) {
       const uint cRow = (rowA + tileRowA);
       const uint32_t MaxXSlices = TileK/MaxP;
       uint shCol = outerTileKronCol*MaxXSlices + reg_j*MaxXSlices + tileColC + reg_i;
@@ -138,11 +143,10 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
 
         cCol = tileK * MaxXSlices + (shCol/MaxXSlices) * YSlices + shCol%MaxXSlices;
         if (TileQ != Q) {
-          uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
+          uint tileQ = getTileQ<MaxQ, TileQ>();
           const uint32_t NumQTiles = Q/TileQ;
           cCol += tileQ*(Y.n()/NumQTiles);
-        }
-      }
+      }}
 
       if (DistributeToGPUs) {
         outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, cRow, cCol);
@@ -151,11 +155,11 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
         outputArray = (ElemT*)params.problem.y().data() + cIdx;
         if (params.kp_idx == 0) {
           #pragma unroll
-          for (int i = 0; i < stVecElems; i++) {
+          for (int i = 0; i < NumStElems; i++) {
             yReg.regs[rowA][reg_i+i][reg_j] =
               epilogue(epilogueParams, cIdx + i, yReg.at(rowA,reg_i+i,reg_j));
       }}}
 
-      stVecYReg<ElemT, decltype(yReg), stVecElems>(outputArray, yReg, rowA, reg_i, reg_j);
+      stVecYReg<ElemT, decltype(yReg), NumStElems>(outputArray, yReg, rowA, reg_i, reg_j);
   }}}}
 }
