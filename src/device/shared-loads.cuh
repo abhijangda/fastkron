@@ -4,14 +4,14 @@
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
 void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
-                  const uint tid, const Slice<ElemT> XTile, ShiftShared& Xsh) {
+                  const uint tileP, const uint tid, const Slice<ElemT> XTile, ShiftShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   for (uint row = 0; row < Xsh.m(); row += 1) {
     //Use NumThreads in loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
-      ldGlobalVec((VecT*)XTile.data(row, k), regs);
+      ldGlobalVec((VecT*)XTile.data(row, k, tileP), regs);
       Xsh.store<ElemT, VecTLen>(row, k, TileP, CRegRows, regs);
     }
   }

@@ -95,11 +95,12 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
   DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
+
   //TODO: Make tileP and remove it from XTile
-  for ( ; XTile.valid(); XTile.nextTileP()) {
+  for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedMuls == 1
     storeAgToAsh<ElemT, XVecT>(TileP, NumThreads, RegK,
-                               tid, XTile, Xsh);
+                               tileP, tid, XTile, Xsh);
 
     #pragma unroll
     for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
@@ -110,7 +111,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       const ElemT* __restrict__ Fgl = (ElemT*)params.problem.f(fusedFac).data();
       const Factor F(P, Q, params.problem.f(fusedFac).data());
 
-      directFglToFsh<ElemT, FVecT>(NumThreads, tid, XTile.tileP, F, Fsh);
+      directFglToFsh<ElemT, FVecT>(NumThreads, tid, tileP, F, Fsh);
       __syncthreads();
 
       if (isThreadValid) {
