@@ -1,7 +1,7 @@
 template<typename ElemT, typename DistParams>
 CUDA_DEVICE
 ElemT* p2pStoreAddress(const DistParams& distParams, const Matrix& Y,
-                         uint32_t row, uint32_t col) {
+                       uint32_t row, uint32_t col) {
   //TODO: Function do not need row
   uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
   const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
@@ -52,21 +52,22 @@ CUDA_DEVICE
 void stGlobalVec(ElemT* addr, int numValues, ElemT values[]) {
 }
 
-template<>
+template<typename ElemT, typename YReg, uint numValues>
 CUDA_DEVICE
-void stGlobalVec(float* addr, int numValues, float values[]) {
+void stVecYReg(ElemT* addr, YReg& Yr, int row, int i, int j) {
   switch (numValues) {
     case 1:
       asm volatile ("st.global.f32 [%0], {%1};" ::
-                    "l"(addr), "f"(values[0]));
+                    "l"(addr), "f"(Yr.at(row, i, j)));
       break;
     case 2:
       asm volatile ("st.global.v2.f32 [%0], {%1, %2};" ::
-                    "l"(addr), "f"(values[0]), "f"(values[1]));
+                    "l"(addr), "f"(Yr.at(row, i+0, j)), "f"(Yr.at(row, i+1, j)));
       break;
     case 4:
       asm volatile ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" ::
-                    "l"(addr), "f"(values[0]), "f"(values[1]), "f"(values[2]), "f"(values[3]));
+                    "l"(addr), "f"(Yr.at(row, i  , j)), "f"(Yr.at(row, i+1, j)), 
+                               "f"(Yr.at(row, i+2, j)), "f"(Yr.at(row, i+3, j)));
       break;
   }
 }

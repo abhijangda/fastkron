@@ -62,7 +62,6 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   const Matrix Y = params.problem.y();
 
   const uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
-  const uint MaxL = (TileK/MaxP)*MaxQ;
   constexpr uint wSz = (TileK/MaxP)/CRegRows;
 
   const uint kp_col_start_ = (tid / wSz) * CRegCols;
@@ -126,7 +125,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
     #pragma unroll
     for (uint reg_i = 0; reg_i < CRegRows; reg_i += stVecElems) {
       const uint cRow = (rowA + tileRowA);
-      uint shCol = outerTileKronCol*(TileK/MaxP) + reg_j*(TileK/MaxP) + tileColC + reg_i;
+      const uint32_t MaxXSlices = TileK/MaxP;
+      uint shCol = outerTileKronCol*MaxXSlices + reg_j*MaxXSlices + tileColC + reg_i;
       uint cCol = 0;
       ElemT* outputArray;
       uint32_t cIdx;
@@ -134,16 +134,18 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       if (FusedMuls > 1) {
         cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, shCol);
       } else {
-        cCol = tileK * (MaxL/Q) + (shCol/(MaxL/Q)) * (Y.n()/Q) + shCol%(MaxL/Q);
-      }
+        const uint32_t YSlices = Y.n()/Q;
 
-      if (TileQ != Q) {
-        uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
-        cCol += tileQ*(Y.n()/(Q/TileQ)); 
+        cCol = tileK * MaxXSlices + (shCol/MaxXSlices) * YSlices + shCol%MaxXSlices;
+        if (TileQ != Q) {
+          uint tileQ = get_external_tile_kp_n<MaxQ, TileQ>();
+          const uint32_t NumQTiles = Q/TileQ;
+          cCol += tileQ*(Y.n()/NumQTiles);
+        }
       }
 
       if (DistributeToGPUs) {
-        outputArray = p2pStoreAddress<ElemT, decltype(distParams)>(distParams, Y, cRow, cCol);
+        outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, cRow, cCol);
       } else {
         cIdx = cRow * Y.n() + cCol;
         outputArray = (ElemT*)params.problem.y().data() + cIdx;
@@ -152,16 +154,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
           for (int i = 0; i < stVecElems; i++) {
             yReg.regs[rowA][reg_i+i][reg_j] =
               epilogue(epilogueParams, cIdx + i, yReg.at(rowA,reg_i+i,reg_j));
-          }
-        }
-      }
+      }}}
 
-      register ElemT storeValues[stVecElems];
-      #pragma unroll
-      for (int v = 0; v < stVecElems; v++) {
-        storeValues[v] = yReg.at(rowA, reg_i+v, reg_j);
-      }
-
-      stGlobalVec(outputArray, stVecElems, storeValues);
+      stVecYReg<ElemT, decltype(yReg), stVecElems>(outputArray, yReg, rowA, reg_i, reg_j);
   }}}}
 }
