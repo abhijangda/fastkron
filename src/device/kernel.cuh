@@ -24,13 +24,13 @@ CUDA_DEVICE uint32_t getTileQ() {
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads, 
          uint MaxQ, uint MaxP, uint TileQ, uint TileK,
-         uint TileM, uint FusedMuls, bool DistributeToGPUs, 
+         uint TileM, uint FusedFacs, bool DistributeToGPUs, 
          uint RegK, uint RegQ,
          uint KPK_EQUALS_VAR, uint TileP, 
          int XAlignment, int FAlignment>
 __launch_bounds__(NumThreads)
-__global__ void kronGemmKernel(KernelParams<FusedMuls> params,
-                               FusedParams<FusedMuls> fusedParams,
+__global__ void kronGemmKernel(KernelParams<FusedFacs> params,
+                               FusedParams<FusedFacs> fusedParams,
                                DistributedParams distParams,
                                EpilogueParams epilogueParams) {
   //Alignment of X and F are correct in terms of elements of 4-bytes
@@ -44,8 +44,8 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
                 "Alignment of Factor should be 1, 2 or 4");
   //Sanity Conditions on Tile Sizes
   static_assert(0 < TileQ && TileQ <= MaxQ, "");
-  static_assert(FusedMuls == 1 ||
-                (FusedMuls > 1 &&
+  static_assert(FusedFacs == 1 ||
+                (FusedFacs > 1 &&
                  TileP >= MaxP &&
                  TileQ >= MaxQ),
                 "Invalid tile size params for fusion");
@@ -96,38 +96,34 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
-  //TODO: Make tileP and remove it from XTile
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
-    //Loop iterates only once when FusedMuls == 1
+    //Loop iterates only once when FusedFacs == 1
     storeAgToAsh<ElemT, XVecT>(TileP, NumThreads, RegK,
                                tileP, tid, XTile, Xsh);
 
     #pragma unroll
-    for (int fusedFac = FusedMuls - 1; fusedFac >= 0; fusedFac--) {
-      if (FusedMuls > 1) {
-        yReg.clear();
-      }
-
-      const ElemT* __restrict__ Fgl = (ElemT*)params.problem.f(fusedFac).data();
-      const Factor F(P, Q, params.problem.f(fusedFac).data());
+    for (int fac = FusedFacs - 1; fac >= 0; fac--) {
+      const Factor F(P, Q, params.problem.f(fac).data());
 
       directFglToFsh<ElemT, FVecT>(NumThreads, tid, tileP, F, Fsh);
       __syncthreads();
 
+      if (FusedFacs > 1) yReg.zero();
       if (isThreadValid) {
         mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), TileM, RegK, RegQ, TileP>
           (yK, yQ, Xsh, Fsh, yReg);
       }
-
-      __syncthreads();
-
-      if (isThreadValid && FusedMuls > 1 && fusedFac > 0) {
-        //Store C to shared memory using shift method
-        fusionYrToXSh<ElemT, decltype(Xsh), decltype(yReg), TileP>(yQ, yK, F, Xsh, yReg);
+      
+      if (FusedFacs > 1 && fac > 0) {
+        __syncthreads();
+        if (isThreadValid) {
+          //Store C to shared memory using shift method
+          fusionYrToXSh<ElemT, decltype(Xsh), decltype(yReg), TileP>(yQ, yK, F, Xsh, yReg);
+        }
       }
+
       __syncthreads();
-    }
-  }
+  }}
 
   if (!isThreadValid) return;
 
@@ -135,7 +131,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
   for (uint rowA = 0; rowA < yReg.TileM(); rowA++) {
   if (rowA < XTile.m()) {
     //TODO: Improve below code like in the paper
-    constexpr uint32_t NumStElems = storeVectorElems<FusedMuls, XAlignment, RegK>();
+    constexpr uint32_t NumStElems = storeVectorElems<FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint reg_j = 0; reg_j < RegQ; reg_j++) {
     #pragma unroll
@@ -147,7 +143,7 @@ __global__ void kronGemmKernel(KernelParams<FusedMuls> params,
       ElemT* outputArray;
       uint32_t cIdx;
 
-      if (FusedMuls > 1) {
+      if (FusedFacs > 1) {
         cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, shCol);
       } else {
         const uint32_t YSlices = Y.n()/Q;

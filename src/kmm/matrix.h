@@ -267,10 +267,10 @@ public:
 
 public:
   CUDA_DEVICE_HOST
-  YRegisters() : Matrix(SliceM_, SliceN_) {clear();}
+  YRegisters() : Matrix(SliceM_, SliceN_) {zero();}
   
   CUDA_DEVICE_HOST
-  void clear() {
+  void zero() {
     #pragma unroll
     for (uint r = 0; r < TileM_; r++) {
     #pragma unroll
