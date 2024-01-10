@@ -95,7 +95,9 @@ cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernelInfo, const uint kron
     case 5:
       return invoke<5>(kernelInfo, kronIndex, problem,
                        distParams, epilogueParams, stream);
-      break;
+    case 6:
+      return invoke<6>(kernel, kronIndex, problem, 
+                       distParams, epilogueParams, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
       return cudaErrorInvalidValue;
@@ -121,6 +123,9 @@ cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint 
                        distParams, epilogueParams, stream);
     case 5:
       return invoke<5>(kernel, kronIndex, problem, 
+                       distParams, epilogueParams, stream);
+    case 6:
+      return invoke<6>(kernel, kronIndex, problem, 
                        distParams, epilogueParams, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;

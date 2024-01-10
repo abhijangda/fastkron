@@ -138,11 +138,11 @@ def run_single_gpu():
     gp = GPyTorchEval().run_single_gpu(shape)
     print(" & ".join((str(p) for p in (fk + gp))))
 
-def multi_gpu():
+def multi_gpu(scaling):
   cases = []
-  M_64 = 64
+  M_64 = 128
   cases += [Shape(M_64, 4, 64, 64)]
-  M_128 = 4
+  M_128 = 8
   cases += [Shape(M_128, 4, 128, 128)]
   
   # run_command("make gen-multi-gpu-tests-kernel")
@@ -157,15 +157,19 @@ def multi_gpu():
     for j,gpus in enumerate([1, 2, 4, 8]):
       gm = GMs[j]
       gk = GKs[j]
-      shapeGM = Shape(shape.m * gpus, shape.n, shape.ps[0], shape.qs[0])
+      shapeGM = Shape(shape.m * (gpus if scaling == "weak" else 1), shape.n, shape.ps[0], shape.qs[0])
       LocalKrons = shapeGM.n if gk == 1 else shapeGM.n - 2
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-print("------- Single GPU -------")
-print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-run_single_gpu()
+# print("------- Single GPU -------")
+# print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
+# run_single_gpu()
 
-print("------- Multi GPU --------")
+# print("------- Multi GPU Weak Scaling --------")
+# print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
+# multi_gpu("weak")
+
+print("------- Multi GPU Strong Scaling --------")
 print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
-multi_gpu()
+multi_gpu("strong")
