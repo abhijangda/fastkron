@@ -134,16 +134,17 @@ public:
   ShiftShared(uint32_t rows, uint32_t cols, void* ptr) :
     Matrix(rows, cols, ptr) {}
 
-  template<typename T, uint32_t N>
+  template<typename ElemT, uint32_t N>
   CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t col, uint32_t TileP, uint32_t CRegRows, T elems[N]) {
+  void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, ElemT elems[N]) {
     #pragma unroll
     for (uint i = 0; i < N; i++) {
-      //TODO: refactor based on paper
-      uint shk = col + i;
-      uint shTileK = (shk/TileP)/CRegRows; //TODO:
-      uint finalShK = (shk/TileP)*TileP + (shTileK + shk%TileP)%TileP;
-      set<T>(row, finalShK, elems[i]);
+      uint32_t shCol = startCol + i;
+      uint32_t elem  = shCol%TileP;
+      uint32_t slice = shCol/TileP;
+      uint32_t shift = slice/RegK;
+
+      set<ElemT>(row, slice*TileP + (shift + elem)%TileP, elems[i]);
     }
   }
 };
@@ -299,7 +300,7 @@ public:
   CUDA_DEVICE_HOST
   uint32_t TileP(){return TileP_;}
   CUDA_DEVICE_HOST
-  uint32_t CRegRows() {return CRegRows_;}
+  uint32_t RegK() {return CRegRows_;}
 public:
   CUDA_DEVICE_HOST
   XRegisters() {} 

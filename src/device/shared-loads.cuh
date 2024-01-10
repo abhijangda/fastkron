@@ -3,8 +3,9 @@
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
-                  const uint tileP, const uint tid, const Slice<ElemT> XTile, ShiftShared& Xsh) {
+void storeXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
+                  const uint tileP, const uint tid, const Slice<ElemT> XTile,
+                  ShiftShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   for (uint row = 0; row < Xsh.m(); row += 1) {
     //Use NumThreads in loop adder instead of blockDim.x for better perf
@@ -12,7 +13,7 @@ void storeAgToAsh(const uint TileP, const uint NumThreads, const uint CRegRows,
       ElemT regs[VecTLen];
 
       ldGlobalVec((VecT*)XTile.data(row, k, tileP), regs);
-      Xsh.store<ElemT, VecTLen>(row, k, TileP, CRegRows, regs);
+      Xsh.store<ElemT, VecTLen>(row, k, TileP, RegK, regs);
     }
   }
 }

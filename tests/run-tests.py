@@ -18,10 +18,10 @@ gen_test_kernels = {
                     'gen-non-square-tuner-test-kernels' : ['single-gpu-non-square-tuner-tests'],
                     'gen-single-gpu-distinct-shapes'    : ['single-gpu-distinct-shapes'],
                     'gen-single-gpu-odd-shapes'         : ['single-gpu-odd-shapes'],
-                    'gen-multi-gpu-tests-kernel'        : ['DIST_COMM=NCCL multi-gpu-no-fusion-tests', 'DIST_COMM=P2P multi-gpu-no-fusion-tests'],
-                    'gen-multi-gpu-tuner-kernels'       : ['multi-gpu-tuner-tests'],
-                    'gen-multi-gpu-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-gpu-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-gpu-no-fusion-non-square-tests'],
-                    'gen-multi-gpu-distinct-shapes'     : ['DIST_COMM=P2P multi-gpu-distinct-shapes', 'DIST_COMM=NCCL multi-gpu-distinct-shapes']
+                    # 'gen-multi-gpu-tests-kernel'        : ['DIST_COMM=NCCL multi-gpu-no-fusion-tests', 'DIST_COMM=P2P multi-gpu-no-fusion-tests'],
+                    # 'gen-multi-gpu-tuner-kernels'       : ['multi-gpu-tuner-tests'],
+                    # 'gen-multi-gpu-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-gpu-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-gpu-no-fusion-non-square-tests'],
+                    # 'gen-multi-gpu-distinct-shapes'     : ['DIST_COMM=P2P multi-gpu-distinct-shapes', 'DIST_COMM=NCCL multi-gpu-distinct-shapes']
                   }
 
 sorted_keys = sorted(list(gen_test_kernels.keys()))

@@ -98,7 +98,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
-    storeAgToAsh<ElemT, XVecT>(TileP, NumThreads, RegK,
+    storeXgToXsh<ElemT, XVecT>(TileP, NumThreads, RegK,
                                tileP, tid, XTile, Xsh);
 
     #pragma unroll
