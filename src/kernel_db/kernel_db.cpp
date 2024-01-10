@@ -74,26 +74,26 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
   return status;
 }
 
-cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
+cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronIndex, 
                                          KMMProblem problem, EpilogueParams epilogueParams,
                                          cudaStream_t stream) {
   DistributedParams distParams;
 
   switch(problem.n()) {
     case 1:
-      return invoke<1>(kernelInfo, kronIndex, problem,
+      return invoke<1>(kernel, kronIndex, problem,
                        distParams, epilogueParams, stream);
     case 2:
-      return invoke<2>(kernelInfo, kronIndex, problem,
+      return invoke<2>(kernel, kronIndex, problem,
                        distParams, epilogueParams, stream);
     case 3:
-      return invoke<3>(kernelInfo, kronIndex, problem,
+      return invoke<3>(kernel, kronIndex, problem,
                        distParams, epilogueParams, stream);
     case 4:
-      return invoke<4>(kernelInfo, kronIndex, problem,
+      return invoke<4>(kernel, kronIndex, problem,
                        distParams, epilogueParams, stream);
     case 5:
-      return invoke<5>(kernelInfo, kronIndex, problem,
+      return invoke<5>(kernel, kronIndex, problem,
                        distParams, epilogueParams, stream);
     case 6:
       return invoke<6>(kernel, kronIndex, problem, 
