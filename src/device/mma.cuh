@@ -29,6 +29,7 @@ void mainMMA(uint tileColA, uint32_t outerTileKronCol, XShared& Xsh, FShared& Fs
       uint shACol = tileColA + rowC;
       #pragma unroll
       for (uint colC = 0; colC < TileP; colC++) {
+        //TODO: bring shift calculation in Xsh.at
         ElemT temp = Xsh.template at<ElemT>(rowA, shACol * TileP + (colC + round_start)%TileP);
         Xr.set(rowA, rowC, colC, temp);
       }

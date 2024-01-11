@@ -92,24 +92,30 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                      (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
                      P, TileP,
                      X);
-  ShiftShared Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
+  ShiftShared<ElemT> Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
   DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
-    storeXgToXsh<ElemT, XVecT>(TileP, NumThreads, RegK,
+    //Load X to shared memory
+    shiftXgToXsh<ElemT, XVecT>(TileP, NumThreads, RegK,
                                tileP, tid, XTile, Xsh);
 
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
-
+      
+      //Load F to shared memory
       directFglToFsh<ElemT, FVecT>(NumThreads, tid, tileP, F, Fsh);
+      
       __syncthreads();
 
+      //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
+      
       if (isThreadValid) {
+        //TODO: Declare Xr and Fr here instead of passing RegK, RegQ, TileP and TileM.
         mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), TileM, RegK, RegQ, TileP>
           (yK, yQ, Xsh, Fsh, yReg);
       }

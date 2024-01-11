@@ -3,59 +3,53 @@
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void storeXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
+void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
                   const uint tileP, const uint tid, const Slice<ElemT> XTile,
-                  ShiftShared& Xsh) {
+                  ShiftShared<ElemT>& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   for (uint row = 0; row < Xsh.m(); row += 1) {
-    //Use NumThreads in loop adder instead of blockDim.x for better perf
+    //Use NumThreads in the loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
       ldGlobalVec((VecT*)XTile.data(row, k, tileP), regs);
-      Xsh.store<ElemT, VecTLen>(row, k, TileP, RegK, regs);
+      Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }
   }
 }
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void directFglToFsh(const uint NumThreads,
-                    const uint tid, const uint tileP,
+void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
                     const Factor& F, DirectShared<Factor, ElemT>& Fsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
-    //Create F.q() subwarps and each subwarp loads 0 to TileP elements
-    const uint QVecs = Fsh.q()/VecTLen;
-    const uint subWarps = MAX(1, NumThreads/QVecs);
-    for (uint swid = tid/QVecs; swid < Fsh.p(); swid += subWarps) {
-      ElemT regs[VecTLen];
+    //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
+    const uint QVecs    = Fsh.q()/VecTLen;
+    const uint ThGroups = MAX(1, NumThreads/QVecs);
 
-      for (uint elem = tid%QVecs; elem < QVecs; elem += blockDim.x/subWarps) {
-        const uint col = Fsh.tilecol*Fsh.q() + elem*VecTLen;
+    for (uint swid = tid/QVecs; swid < Fsh.p(); swid += ThGroups) {
+      for (uint qelem = tid%QVecs; qelem < QVecs; qelem += blockDim.x/ThGroups) {
+        ElemT elems[VecTLen];
+
+        const uint col = Fsh.tilecol*Fsh.q() + qelem*VecTLen;
         const uint row = swid;
 
-        ldGlobalVec((VecT*)F.data<ElemT>((tileP + row), col), regs);
+        ldGlobalVec((VecT*)F.data<ElemT>((tileP + row), col), elems);
+        Fsh.store(row, qelem * VecTLen, VecTLen, elems);
 
-        Fsh.store(row, elem * VecTLen, VecTLen, regs);
-
-        //This condition avoids generating the loop giving better performance
-        if (QVecs == NumThreads/subWarps) break;
-      }
-    }
-  } else {
+        //This condition avoids generating this loop giving better performance
+        if (QVecs == NumThreads/ThGroups) break;
+  }}} else {
     //Optimized to load full factor matrix
     //Use blockDim in loop adder instead of NumThreads for better perf 
     for (uint eIdx = tid*VecTLen; eIdx < F.numel(); eIdx += blockDim.x*VecTLen) {
       ElemT regs[VecTLen];
 
       ldGlobalVec((VecT*)F.data<ElemT>(eIdx), regs);
-
       Fsh.store(eIdx, VecTLen, regs);
-    }
-  }
-}
+}}}
 
 template<typename ElemT, typename XShared, typename YReg, uint32_t TileP>
 __device__

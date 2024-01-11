@@ -162,13 +162,13 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-# print("------- Single GPU -------")
-# print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-# run_single_gpu()
+print("------- Single GPU -------")
+print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
+run_single_gpu()
 
-# print("------- Multi GPU Weak Scaling --------")
-# print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
-# multi_gpu("weak")
+print("------- Multi GPU Weak Scaling --------")
+print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
+multi_gpu("weak")
 
 print("------- Multi GPU Strong Scaling --------")
 print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))

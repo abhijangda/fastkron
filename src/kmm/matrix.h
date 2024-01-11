@@ -128,17 +128,18 @@ public:
   uint32_t m() const {return rows;}
 };
 
+template<typename ElemT>
 class ShiftShared : public Matrix {
 public:
   CUDA_DEVICE_HOST
   ShiftShared(uint32_t rows, uint32_t cols, void* ptr) :
     Matrix(rows, cols, ptr) {}
 
-  template<typename ElemT, uint32_t N>
   CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, ElemT elems[N]) {
+  void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
+             uint32_t numElems, ElemT* elems) {
     #pragma unroll
-    for (uint i = 0; i < N; i++) {
+    for (uint i = 0; i < numElems; i++) {
       uint32_t shCol = startCol + i;
       uint32_t elem  = shCol%TileP;
       uint32_t slice = shCol/TileP;
@@ -183,6 +184,7 @@ public:
     Base(TileP, TileQ, ptr), tilerow(tilerow), tilecol(tilecol) {}
 
   CUDA_DEVICE_HOST
+  //TODO: Make this Coord1D
   void store(uint32_t eIdx, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
@@ -192,6 +194,7 @@ public:
   }
 
   CUDA_DEVICE_HOST
+  //TODO: Make this Coord2D
   void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
