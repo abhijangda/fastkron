@@ -269,9 +269,12 @@ public:
   CUDA_DEVICE_HOST
   uint32_t SliceN() {return SliceN_;}
 
+  uint32_t yK;
+  uint32_t yQ;
+
 public:
   CUDA_DEVICE_HOST
-  YRegisters() : Matrix(SliceM_, SliceN_) {zero();}
+  YRegisters(uint32_t yK, uint32_t yQ) : Matrix(SliceM_, SliceN_), yQ(yQ), yK(yK) {zero();}
   
   CUDA_DEVICE_HOST
   void zero() {

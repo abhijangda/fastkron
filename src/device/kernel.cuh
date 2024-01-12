@@ -94,7 +94,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                      X);
   ShiftShared<ElemT> Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
   DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
-  register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
+  register YRegisters<ElemT, TileM, RegK, RegQ> yReg(yK, yQ);
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
@@ -115,9 +115,11 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       if (FusedFacs > 1) yReg.zero();
       
       if (isThreadValid) {
-        //TODO: Declare Xr and Fr here instead of passing RegK, RegQ, TileP and TileM.
-        mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), TileM, RegK, RegQ, TileP>
-          (yK, yQ, Xsh, Fsh, yReg);
+        register XRegisters<ElemT, TileM, RegK, TileP> Xr;
+        register FRegisters<ElemT, TileP, RegQ> Fr;
+
+        mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), 
+                decltype(Xr), decltype(Fr)> (Xsh, Fsh, yReg, Xr, Fr);
       }
       
       if (FusedFacs > 1 && fac > 0) {
