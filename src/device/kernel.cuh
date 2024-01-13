@@ -136,7 +136,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   if (!isThreadValid) return;
 
   #pragma unroll
-  for (uint rowA = 0; rowA < yReg.M(); rowA++) {
+  for (uint rowA = 0; rowA < yReg.m(); rowA++) {
   if (rowA < XTile.m()) {
     //TODO: Improve below code like in the paper
     constexpr uint32_t NumStElems = storeVectorElems<FusedFacs, XAlignment, RegK>();

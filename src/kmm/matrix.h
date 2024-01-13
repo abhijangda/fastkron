@@ -263,11 +263,11 @@ public:
   //TODO: make these functions lower case
   T regs[TileM][RegK][RegQ];
   CUDA_DEVICE_HOST
-  uint32_t M()  {return TileM;}
+  uint32_t m()  {return TileM;}
   CUDA_DEVICE_HOST
-  uint32_t K() {return RegK;}
+  uint32_t k() {return RegK;}
   CUDA_DEVICE_HOST
-  uint32_t Q() {return RegQ;}
+  uint32_t q() {return RegQ;}
 
   uint32_t yK;
   uint32_t yQ;
@@ -279,11 +279,11 @@ public:
   CUDA_DEVICE_HOST
   void zero() {
     #pragma unroll
-    for (uint r = 0; r < M(); r++) {
+    for (uint r = 0; r < m(); r++) {
     #pragma unroll
-    for (uint i = 0; i < K(); i++) {
+    for (uint i = 0; i < k(); i++) {
     #pragma unroll
-    for (uint j = 0; j < Q(); j++) {
+    for (uint j = 0; j < q(); j++) {
       regs[r][i][j] = (T)0;
     }}}
   }
@@ -299,14 +299,17 @@ public:
   }
 };
 
-template<typename T, uint32_t TileM, uint32_t CRegRows_, uint32_t TileP_>
+template<typename T, uint32_t M, uint32_t K, uint32_t P>
 class XRegisters {
 public:
-  T regs[TileM][CRegRows_][TileP_];
+  T regs[M][K][P];
+
   CUDA_DEVICE_HOST
-  uint32_t TileP(){return TileP_;}
+  uint32_t m(){return M;}
   CUDA_DEVICE_HOST
-  uint32_t RegK() {return CRegRows_;}
+  uint32_t k() {return K;}
+  CUDA_DEVICE_HOST
+  uint32_t p(){return P;}
 public:
   CUDA_DEVICE_HOST
   XRegisters() {} 
