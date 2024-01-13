@@ -89,7 +89,7 @@ class FastKronEval:
     run_command("cd build && make benchmark -j")
 
   def run_fastkron(self, shape, GM, GK, LocalKrons):
-    kron = f"cd build && ./benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 20 -w 10 -t float --tune"
+    kron = f"cd build && ./benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 100 -w 10 -t float --tune"
     if GM * GK != 1:
       kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
 

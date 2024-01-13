@@ -54,13 +54,13 @@ void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
 template<typename ElemT, typename XShared, typename YReg, uint32_t TileP>
 __device__
 void fusionYrToXSh(uint32_t outerTileKronCol, uint32_t tileColC, const Factor& F, XShared& Xsh, YReg& Yr) {
-  for (int rowA = 0; rowA < Yr.TileM(); rowA++) {
+  for (int rowA = 0; rowA < Yr.M(); rowA++) {
     if (rowA < Xsh.m()) {
       #pragma unroll
-      for (uint reg_i = 0; reg_i < Yr.SliceM(); reg_i++) {
-      for (uint reg_j = 0; reg_j < Yr.SliceN(); reg_j++) {
+      for (uint reg_i = 0; reg_i < Yr.K(); reg_i++) {
+      for (uint reg_j = 0; reg_j < Yr.Q(); reg_j++) {
         uint cCol = outerTileKronCol*(Xsh.n()/F.p()) + reg_j*(Xsh.n()/F.p()) + tileColC + reg_i;
-        uint tileColC_ = (cCol/TileP)/Yr.SliceM(); //TODO: This is shift?
+        uint tileColC_ = (cCol/TileP)/Yr.K(); //TODO: This is shift?
         
         cCol = (cCol/TileP)*TileP + (tileColC_ + cCol%TileP)%TileP;
         Xsh.template set<ElemT>(rowA, cCol, Yr.at(rowA, reg_i, reg_j));

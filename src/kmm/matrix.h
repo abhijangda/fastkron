@@ -257,33 +257,33 @@ public:
 };
 
 //Make this Tensor3D
-template<typename T, uint32_t TileM_, uint32_t SliceM_, uint32_t SliceN_>
+template<typename T, uint32_t TileM, uint32_t RegK, uint32_t RegQ>
 class YRegisters : public Matrix {
 public:
-  //TODO: change names based on paper
-  T regs[TileM_][SliceM_][SliceN_];
+  //TODO: make these functions lower case
+  T regs[TileM][RegK][RegQ];
   CUDA_DEVICE_HOST
-  uint32_t TileM()  {return TileM_;}
+  uint32_t M()  {return TileM;}
   CUDA_DEVICE_HOST
-  uint32_t SliceM() {return SliceM_;}
+  uint32_t K() {return RegK;}
   CUDA_DEVICE_HOST
-  uint32_t SliceN() {return SliceN_;}
+  uint32_t Q() {return RegQ;}
 
   uint32_t yK;
   uint32_t yQ;
 
 public:
   CUDA_DEVICE_HOST
-  YRegisters(uint32_t yK, uint32_t yQ) : Matrix(SliceM_, SliceN_), yQ(yQ), yK(yK) {zero();}
+  YRegisters(uint32_t yK, uint32_t yQ) : Matrix(RegK, RegQ), yQ(yQ), yK(yK) {zero();}
   
   CUDA_DEVICE_HOST
   void zero() {
     #pragma unroll
-    for (uint r = 0; r < TileM_; r++) {
+    for (uint r = 0; r < M(); r++) {
     #pragma unroll
-    for (uint i = 0; i < SliceM_; i++) {
+    for (uint i = 0; i < K(); i++) {
     #pragma unroll
-    for (uint j = 0; j < SliceN_; j++) {
+    for (uint j = 0; j < Q(); j++) {
       regs[r][i][j] = (T)0;
     }}}
   }

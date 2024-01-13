@@ -119,7 +119,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
         mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), 
-                decltype(Xr), decltype(Fr)> (Xsh, Fsh, yReg, Xr, Fr);
+                decltype(Xr), decltype(Fr)>(Xsh, Fsh, yReg, Xr, Fr);
       }
       
       if (FusedFacs > 1 && fac > 0) {
@@ -136,7 +136,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   if (!isThreadValid) return;
 
   #pragma unroll
-  for (uint rowA = 0; rowA < yReg.TileM(); rowA++) {
+  for (uint rowA = 0; rowA < yReg.M(); rowA++) {
   if (rowA < XTile.m()) {
     //TODO: Improve below code like in the paper
     constexpr uint32_t NumStElems = storeVectorElems<FusedFacs, XAlignment, RegK>();

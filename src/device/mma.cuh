@@ -1,15 +1,14 @@
 template<typename XReg, typename FReg, typename YReg>
 CUDA_DEVICE
-void slicedMMA(uint32_t rowA, XReg& Xr, FReg& Fr, YReg& Yr) {
+void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
   //Matrix Multiply Accumulate  
   #pragma unroll
-  for (uint i = 0;    i < Yr.SliceM();         i++)
+  for (uint i = 0; i < Yr.K(); i++)
   #pragma unroll
-  for (uint j = 0;    j < Yr.SliceN();         j++) {
-    #pragma unroll
-    for (uint k = 0;    k < Xr.TileP(); k++) {
-      Yr.add(rowA, i, j, Xr.at(rowA, i, k) * Fr.at(k, j));
-    }
+  for (uint j = 0; j < Yr.Q(); j++)
+  #pragma unroll
+  for (uint p = 0; p < Xr.TileP();  p++) {
+    Yr.add(m, i, j, Xr.at(m, i, p) * Fr.at(p, j));
   }
 }
 
@@ -17,33 +16,34 @@ template<typename ElemT, typename XShared, typename FShared,
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
 void mainMMA(XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr) {
-  uint round_start = (Yr.yK / Yr.SliceM())%Xr.TileP();
+  uint round_start = (Yr.yK / Yr.K())%Xr.TileP();
 
+  //Load shared memory Xsh to registers Xr 
   #pragma unroll
-  for (uint rowA = 0; rowA < Yr.TileM(); rowA++) {
-  if (rowA < Xsh.m()) {
+  for (uint rm = 0; rm < Yr.M(); rm++) {
+  if (rm < Xsh.m()) {
     #pragma unroll
-    for (uint rowC = 0; rowC < Xr.RegK(); rowC++) {
-      uint shACol = Yr.yK + rowC;
+    for (uint rk = 0; rk < Xr.RegK(); rk++) {
+      uint shACol = Yr.yK + rk;
       #pragma unroll
-      for (uint colC = 0; colC < Xr.TileP(); colC++) {
+      for (uint p = 0; p < Xr.TileP(); p++) {
         //TODO: bring shift calculation in Xsh.at
-        ElemT temp = Xsh.template at<ElemT>(rowA, shACol * Xr.TileP() + (colC + round_start)%Xr.TileP());
-        Xr.set(rowA, rowC, colC, temp);
+        ElemT temp = Xsh.template at<ElemT>(rm, shACol * Xr.TileP() + (p + round_start)%Xr.TileP());
+        Xr.set(rm, rk, p, temp);
       }
   }}}
   
   #pragma unroll
-  for (uint colC = 0; colC < Yr.SliceN(); colC++) {
-    uint shKronCol = Yr.yQ + colC;
+  for (uint rq = 0; rq < Yr.Q(); rq++) {
+    uint shKronCol = Yr.yQ + rq;
     #pragma unroll
-    for (uint elem = 0; elem < Xr.TileP(); elem++) {
-      Fr.set(elem, colC, Fsh.template at<ElemT>(elem, shKronCol));
+    for (uint p = 0; p < Xr.TileP(); p++) {
+      Fr.set(p, rq, Fsh.template at<ElemT>(p, shKronCol));
     }
   }
 
   #pragma unroll
-  for (uint rowA = 0; rowA < Yr.TileM(); rowA++)
-    if (rowA < Xsh.m())
-      slicedMMA(rowA, Xr, Fr, Yr);
+  for (uint rm = 0; rm < Yr.M(); rm++)
+    if (rm < Xsh.m())
+      slicedMMA(rm, Xr, Fr, Yr);
 }
