@@ -294,7 +294,7 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  T at(uint32_t r, uint32_t i, uint32_t j) {
+  T& at(uint32_t r, uint32_t i, uint32_t j) {
     return regs[r][i][j];
   }
 };

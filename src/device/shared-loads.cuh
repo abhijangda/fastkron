@@ -51,18 +51,16 @@ void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
       Fsh.store(eIdx, VecTLen, regs);
 }}}
 
-template<typename ElemT, typename XShared, typename YReg, uint32_t TileP>
+template<typename XShared, typename YReg, typename FShared>
 __device__
-void fusionYrToXSh(uint32_t outerTileKronCol, uint32_t tileColC, const Factor& F, XShared& Xsh, YReg& Yr) {
-  for (int rowA = 0; rowA < Yr.m(); rowA++) {
-    if (rowA < Xsh.m()) {
+void fusionYrToXSh(const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr) {
+  for (int tm = 0; tm < Yr.m(); tm++) {
+    if (tm < Xsh.m()) {
       #pragma unroll
       for (uint reg_i = 0; reg_i < Yr.k(); reg_i++) {
       for (uint reg_j = 0; reg_j < Yr.q(); reg_j++) {
-        uint cCol = outerTileKronCol*(Xsh.n()/F.p()) + reg_j*(Xsh.n()/F.p()) + tileColC + reg_i;
-        uint tileColC_ = (cCol/TileP)/Yr.k(); //TODO: This is shift?
+        uint shXk = Yr.yQ*(Xsh.n()/F.p()) + reg_j*(Xsh.n()/F.p()) + Yr.yK + reg_i;
         
-        cCol = (cCol/TileP)*TileP + (tileColC_ + cCol%TileP)%TileP;
-        Xsh.template set<ElemT>(rowA, cCol, Yr.at(rowA, reg_i, reg_j));
+        Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, reg_i, reg_j));
   }}}}
 }

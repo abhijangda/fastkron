@@ -119,14 +119,15 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
         mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), 
-                decltype(Xr), decltype(Fr)>(Xsh, Fsh, yReg, Xr, Fr);
+                decltype(Xr), decltype(Fr)>
+                (Xsh, Fsh, yReg, Xr, Fr);
       }
       
       if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
         if (isThreadValid) {
           //Store C to shared memory using shift method
-          fusionYrToXSh<ElemT, decltype(Xsh), decltype(yReg), TileP>(yQ, yK, F, Xsh, yReg);
+          fusionYrToXSh(F, Fsh, Xsh, yReg);
         }
       }
 
