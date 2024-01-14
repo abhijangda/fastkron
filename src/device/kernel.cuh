@@ -107,20 +107,21 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       const Factor F(P, Q, params.problem.f(fac).data());
       
       //Load F to shared memory
-      directFglToFsh<ElemT, FVecT>(NumThreads, tid, tileP, F, Fsh);
+      directFglToFsh<ElemT, FVecT>(NumThreads, tid, tileP,
+                                   F, Fsh);
       
       __syncthreads();
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
-      
+
       if (isThreadValid) {
         register XRegisters<ElemT, TileM, RegK, TileP> Xr;
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
         mainMMA(Xsh, Fsh, yReg, Xr, Fr);
       }
-      
+
       if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
         if (isThreadValid) {

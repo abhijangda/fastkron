@@ -12,7 +12,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
-      ldGlobalVec((VecT*)XTile.data(row, k, tileP), regs);
+      ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }
   }
@@ -31,13 +31,13 @@ void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
 
     for (uint swid = tid/QVecs; swid < Fsh.p(); swid += ThGroups) {
       for (uint qelem = tid%QVecs; qelem < QVecs; qelem += blockDim.x/ThGroups) {
-        ElemT elems[VecTLen];
+        ElemT regs[VecTLen];
 
         const uint col = Fsh.tilecol*Fsh.q() + qelem*VecTLen;
         const uint row = swid;
 
-        ldGlobalVec((VecT*)F.data<ElemT>((tileP + row), col), elems);
-        Fsh.store(row, qelem * VecTLen, VecTLen, elems);
+        ldGlobalVec(F.data<ElemT>((tileP + row), col), regs, VecTLen);
+        Fsh.store(row, qelem * VecTLen, VecTLen, regs);
 
         //This condition avoids generating this loop giving better performance
         if (QVecs == NumThreads/ThGroups) break;
@@ -47,7 +47,7 @@ void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
     for (uint eIdx = tid*VecTLen; eIdx < F.numel(); eIdx += blockDim.x*VecTLen) {
       ElemT regs[VecTLen];
 
-      ldGlobalVec((VecT*)F.data<ElemT>(eIdx), regs);
+      ldGlobalVec(F.data<ElemT>(eIdx), regs, VecTLen);
       Fsh.store(eIdx, VecTLen, regs);
 }}}
 
