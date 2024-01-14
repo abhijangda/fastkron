@@ -51,16 +51,16 @@ void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
       Fsh.store(eIdx, VecTLen, regs);
 }}}
 
-template<typename XShared, typename YReg, typename FShared>
-__device__
+template<typename FShared, typename XShared, typename YReg>
+CUDA_DEVICE
 void fusionYrToXSh(const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr) {
   for (int tm = 0; tm < Yr.m(); tm++) {
     if (tm < Xsh.m()) {
       #pragma unroll
-      for (uint reg_i = 0; reg_i < Yr.k(); reg_i++) {
-      for (uint reg_j = 0; reg_j < Yr.q(); reg_j++) {
-        uint shXk = Yr.yQ*(Xsh.n()/F.p()) + reg_j*(Xsh.n()/F.p()) + Yr.yK + reg_i;
+      for (uint tk = 0; tk < Yr.k(); tk++) {
+      for (uint tq = 0; tq < Yr.q(); tq++) {
+        uint shXk = Yr.yQ*(Xsh.n()/F.p()) + tq*(Xsh.n()/F.p()) + Yr.yK + tk;
         
-        Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, reg_i, reg_j));
+        Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, tk, tq));
   }}}}
 }

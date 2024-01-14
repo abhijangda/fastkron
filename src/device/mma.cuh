@@ -12,7 +12,7 @@ void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
   }
 }
 
-template<typename ElemT, typename XShared, typename FShared, 
+template<typename XShared, typename FShared, 
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
 void mainMMA(XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr) {
@@ -28,7 +28,7 @@ void mainMMA(XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr) {
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
         //TODO: bring shift calculation in Xsh.at
-        ElemT temp = Xsh.template at<ElemT>(rm, shXk * Xr.p() + (p + shift)%Xr.p());
+        auto temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
         Xr.set(rm, rk, p, temp);
       }
   }}}
@@ -38,7 +38,7 @@ void mainMMA(XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr) {
     uint shFcol = Yr.yQ + rq;
     #pragma unroll
     for (uint p = 0; p < Xr.p(); p++) {
-      Fr.set(p, rq, Fsh.template at<ElemT>(p, shFcol));
+      Fr.set(p, rq, Fsh.at(p, shFcol));
     }
   }
 

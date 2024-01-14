@@ -148,6 +148,11 @@ public:
       set<ElemT>(row, slice*TileP + (shift + elem)%TileP, elems[i]);
     }
   }
+
+  CUDA_DEVICE_HOST
+  ElemT at(uint32_t row, uint32_t col) {
+    return Matrix::at<ElemT>(row, col);
+  }
 };
 
 class Factor : public Matrix {
@@ -200,6 +205,11 @@ public:
     for (uint ve = 0; ve < num; ve++) {
       Base::template set<T>(row, col + ve, elems[ve]);
     }
+  }
+  
+  CUDA_DEVICE_HOST
+  T at(uint32_t row, uint32_t col) {
+    return Base::template at<T>(row, col);
   }
 };
 

@@ -118,9 +118,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register XRegisters<ElemT, TileM, RegK, TileP> Xr;
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA<ElemT, decltype(Xsh), decltype(Fsh), decltype(yReg), 
-                decltype(Xr), decltype(Fr)>
-                (Xsh, Fsh, yReg, Xr, Fr);
+        mainMMA(Xsh, Fsh, yReg, Xr, Fr);
       }
       
       if (FusedFacs > 1 && fac > 0) {
