@@ -105,11 +105,11 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
-      
+
       //Load F to shared memory
-      directFglToFsh<ElemT, FVecT>(NumThreads, tid, tileP,
-                                   F, Fsh);
-      
+      directFgToFsh<ElemT, FVecT>(NumThreads, tid, tileP,
+                                  F, Fsh);
+
       __syncthreads();
 
       //Zero out register results for fusion iterations
@@ -136,45 +136,45 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   if (!isThreadValid) return;
 
   #pragma unroll
-  for (uint rowA = 0; rowA < yReg.m(); rowA++) {
-  if (rowA < XTile.m()) {
+  for (uint rm = 0; rm < yReg.m(); rm++) {
+  if (rm < XTile.m()) {
     //TODO: Improve below code like in the paper
-    constexpr uint32_t NumStElems = storeVectorElems<FusedFacs, XAlignment, RegK>();
+    constexpr uint32_t StLen = storeVectorLen<FusedFacs, XAlignment, RegK>();
     #pragma unroll
-    for (uint reg_j = 0; reg_j < RegQ; reg_j++) {
+    for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
-    for (uint reg_i = 0; reg_i < RegK; reg_i += NumStElems) {
-      const uint cRow = (rowA + tileM);
-      const uint32_t MaxXSlices = TileK/MaxP;
-      uint shCol = yQ*MaxXSlices + reg_j*MaxXSlices + yK + reg_i;
-      uint cCol = 0;
+    for (uint tk = 0; tk < RegK; tk += StLen) {
+      const uint glM = (rm + tileM);
+      const uint32_t MaxXSlices = TileK/P;
+      uint shCol = yQ * MaxXSlices + tq * MaxXSlices + yK + tk;
+      uint glK;
       ElemT* outputArray;
       uint32_t cIdx;
 
       if (FusedFacs > 1) {
-        cCol = fusedYColumn<ElemT, decltype(fusedParams), decltype(Xsh)>(fusedParams, Y, Xsh, tileK, Q, shCol);
+        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, Q, shCol);
       } else {
         const uint32_t YSlices = Y.n()/Q;
 
-        cCol = tileK * MaxXSlices + (shCol/MaxXSlices) * YSlices + shCol%MaxXSlices;
+        glK = tileK * MaxXSlices + (shCol/MaxXSlices) * YSlices + shCol % MaxXSlices;
         if (TileQ != Q) {
           uint tileQ = getTileQ<MaxQ, TileQ>();
           const uint32_t NumQTiles = Q/TileQ;
-          cCol += tileQ*(Y.n()/NumQTiles);
+          glK += tileQ*(Y.n()/NumQTiles);
       }}
 
       if (DistributeToGPUs) {
-        outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, cRow, cCol);
+        outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
-        cIdx = cRow * Y.n() + cCol;
+        cIdx = glM * Y.n() + glK;
         outputArray = (ElemT*)params.problem.y().data() + cIdx;
         if (params.kp_idx == 0) {
           #pragma unroll
-          for (int i = 0; i < NumStElems; i++) {
-            yReg.regs[rowA][reg_i+i][reg_j] =
-              epilogue(epilogueParams, cIdx + i, yReg.at(rowA,reg_i+i,reg_j));
+          for (int i = 0; i < StLen; i++) {
+            yReg.regs[rm][tk+i][tq] =
+              epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq));
       }}}
 
-      stVecYReg<ElemT, decltype(yReg), NumStElems>(outputArray, yReg, rowA, reg_i, reg_j);
+      stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }

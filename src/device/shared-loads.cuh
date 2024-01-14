@@ -20,10 +20,10 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
 
 template<typename ElemT, typename VecT>
 CUDA_DEVICE
-void directFglToFsh(const uint NumThreads, const uint tid, const uint tileP,
-                    const Factor& F, DirectShared<Factor, ElemT>& Fsh) {
-  const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  
+void directFgToFsh(const uint NumThreads, const uint tid, const uint tileP,
+                   const Factor& F, DirectShared<Factor, ElemT>& Fsh) {
+  const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
+
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
     const uint QVecs    = Fsh.q()/VecTLen;
@@ -59,7 +59,8 @@ void fusionYrToXSh(const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr) 
       #pragma unroll
       for (uint tk = 0; tk < Yr.k(); tk++) {
       for (uint tq = 0; tq < Yr.q(); tq++) {
-        uint shXk = Yr.yQ*(Xsh.n()/F.p()) + tq*(Xsh.n()/F.p()) + Yr.yK + tk;
+        const uint32_t MaxXSlices = Xsh.n()/F.p();
+        uint32_t shXk = Yr.yQ*MaxXSlices + tq*MaxXSlices + Yr.yK + tk;
         
         Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, tk, tq));
   }}}}

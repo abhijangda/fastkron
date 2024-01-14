@@ -2,7 +2,6 @@ template<typename ElemT, typename DistParams>
 CUDA_DEVICE
 ElemT* p2pStoreAddress(const DistParams& distParams, const Matrix& Y,
                        uint32_t row, uint32_t col) {
-  //TODO: Function do not need row
   uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
   const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
   const uint perGPUNByKronCols = distParams.perGPUNByKronCols;
@@ -25,10 +24,10 @@ ElemT* p2pStoreAddress(const DistParams& distParams, const Matrix& Y,
   return &ptr[addr];
 }
 
-template<typename ElemT, typename FusedParams, typename ShiftShared>
+template<typename FusedParams, typename XShared>
 CUDA_DEVICE
-uint32_t fusedYColumn(const FusedParams& fusedParams, const Matrix& Y,
-                      const ShiftShared& Xsh, const uint32_t tileK, const uint32_t Q, uint32_t xshCol) {
+uint32_t fusedYColumn(const FusedParams& fusedParams, const Matrix& Y, const XShared& Xsh,
+                      const uint32_t tileK, const uint32_t Q, const uint32_t xshCol) {
   const uint TileSizeColsAByKronCols = Xsh.n()/Q;
   uint withinP5 = tileK * fusedParams.UVAColsRatioKronColsSquare +
                   ((xshCol%TileSizeColsAByKronCols)/fusedParams.UVAColsRatioKronColsSquare)*fusedParams.ColsCByKronColsPower + 
@@ -52,9 +51,9 @@ CUDA_DEVICE
 void stGlobalVec(ElemT* addr, int numValues, ElemT values[]) {
 }
 
-template<typename ElemT, typename YReg, uint numValues>
+template<typename ElemT, typename YReg>
 CUDA_DEVICE
-void stVecYReg(ElemT* addr, YReg& Yr, int row, int i, int j) {
+void stVecYReg(ElemT* addr, YReg& Yr, int numValues, int row, int i, int j) {
   switch (numValues) {
     case 1:
       asm volatile ("st.global.f32 [%0], {%1};" ::
@@ -77,7 +76,7 @@ void stVecYReg(ElemT* addr, YReg& Yr, int row, int i, int j) {
 
 template<uint32_t FusedMuls, uint32_t XAlign, uint32_t CRegRows>
 CUDA_DEVICE
-constexpr uint32_t storeVectorElems() {
+constexpr uint32_t storeVectorLen() {
   constexpr uint vecTyNumElems = (FusedMuls == 1) ? MIN(XAlign, MIN(CRegRows, 4) & (8 - 1)) : 1;
   static_assert (vecTyNumElems == 4 || vecTyNumElems == 2 || vecTyNumElems == 1);
   return vecTyNumElems;
