@@ -29,9 +29,9 @@ CUDA_DEVICE
 uint32_t fusedYColumn(const FusedParams& fusedParams, const Matrix& Y, const XShared& Xsh,
                       const uint32_t tileK, const uint32_t Q, const uint32_t xshCol) {
   const uint TileSizeColsAByKronCols = Xsh.n()/Q;
-  uint withinP5 = tileK * fusedParams.UVAColsRatioKronColsSquare +
-                  ((xshCol%TileSizeColsAByKronCols)/fusedParams.UVAColsRatioKronColsSquare)*fusedParams.ColsCByKronColsPower + 
-                  xshCol%fusedParams.UVAColsRatioKronColsSquare;
+  uint withinP5 = tileK * fusedParams.UVAColsRatioKronRowsSquare +
+                  ((xshCol%TileSizeColsAByKronCols)/fusedParams.UVAColsRatioKronRowsSquare)*fusedParams.ColsCByKronColsPower + 
+                  xshCol%fusedParams.UVAColsRatioKronRowsSquare;
   uint p5Index = (xshCol/TileSizeColsAByKronCols)*(Y.n()/Q);
   uint cCol = p5Index + withinP5;
   return cCol;
@@ -46,11 +46,6 @@ ElemT epilogue(const EpilogueParams& params, uint32_t idx, ElemT yVal) {
 
 
 //Store PTX instructions for each vector type
-template<typename ElemT>
-CUDA_DEVICE
-void stGlobalVec(ElemT* addr, int numValues, ElemT values[]) {
-}
-
 template<typename ElemT, typename YReg>
 CUDA_DEVICE
 void stVecYReg(ElemT* addr, YReg& Yr, int numValues, int row, int i, int j) {
@@ -74,10 +69,12 @@ void stVecYReg(ElemT* addr, YReg& Yr, int numValues, int row, int i, int j) {
   }
 }
 
-template<uint32_t FusedMuls, uint32_t XAlign, uint32_t CRegRows>
+template<uint32_t FusedMuls, uint32_t XAlign, uint32_t RegK>
 CUDA_DEVICE
 constexpr uint32_t storeVectorLen() {
-  constexpr uint vecTyNumElems = (FusedMuls == 1) ? MIN(XAlign, MIN(CRegRows, 4) & (8 - 1)) : 1;
-  static_assert (vecTyNumElems == 4 || vecTyNumElems == 2 || vecTyNumElems == 1);
-  return vecTyNumElems;
+  constexpr uint len = (FusedMuls == 1) ? 
+                      MIN(XAlign, MIN(RegK, 4) & (8 - 1)) :
+                      1;
+  static_assert (len == 4 || len == 2 || len == 1);
+  return len;
 }

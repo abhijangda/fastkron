@@ -80,13 +80,16 @@ struct KernelParams {
 template<uint Fused>
 struct FusedParams {
   uint KronColsPower;
-  uint UVAColsRatioKronColsSquare;
+  uint UVAColsRatioKronRowsSquare;
   uint ColsCByKronColsPower;
   
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
-    KronColsPower = (uint)std::pow((double)problem.f(0).q(), (double)Fused);
-    UVAColsRatioKronColsSquare = TileSizeColsA/KronColsPower;
-    ColsCByKronColsPower = problem.l()/KronColsPower;
+    const Factor factorPower = std::reduce(problem.fs(), problem.fs() + Fused, Factor(1,1), [](Factor prev, Factor curr) {
+      return Factor(prev.p() * curr.p(), prev.q() * curr.q());
+    });
+
+    UVAColsRatioKronRowsSquare = TileSizeColsA/factorPower.p();
+    ColsCByKronColsPower = problem.l()/factorPower.q();
   }
 };
 

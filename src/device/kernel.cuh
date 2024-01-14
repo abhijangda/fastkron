@@ -144,22 +144,31 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
-      const uint glM = (rm + tileM);
-      const uint32_t MaxXSlices = TileK/P;
-      uint shCol = yQ * MaxXSlices + tq * MaxXSlices + yK + tk;
+      const uint glM = rm + tileM;
+      const uint32_t XTileSlices = TileK/P;
+      //Total elements produced from TileK are (TileK/P) * Q
+      //No. of elems produced by slice-multiply of TileK with 
+      //the same col of F are: TileK/P, i.e, XTileSlices.
+      //These elems are stored consecutively.
+      const uint32_t shK = (yQ + tq)   * // F's col multiplied by this thread
+                           XTileSlices + // Index of first element produced by this F's col
+                           yK + tk     ; // index of element produced by multiplying this col with this slice
       uint glK;
       ElemT* outputArray;
       uint32_t cIdx;
 
       if (FusedFacs > 1) {
-        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, Q, shCol);
+        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, Q, shK);
       } else {
-        const uint32_t YSlices = Y.n()/Q;
-
-        glK = tileK * MaxXSlices + (shCol/MaxXSlices) * YSlices + shCol % MaxXSlices;
+        uint32_t XSlices = (X.n()/P); //# of slices for a row 
+        glK = (shK/XTileSlices)   * //The index of XTileSlices elems in TileK
+              XSlices             + //Scale the index to global column
+              tileK * XTileSlices + //Index of XTileSlices elems produced by a tileK 
+              shK % XTileSlices;    //The element index within consecutive elems
         if (TileQ != Q) {
-          uint tileQ = getTileQ<MaxQ, TileQ>();
+          const uint32_t tileQ     = getTileQ<MaxQ, TileQ>();
           const uint32_t NumQTiles = Q/TileQ;
+
           glK += tileQ*(Y.n()/NumQTiles);
       }}
 
