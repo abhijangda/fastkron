@@ -26,11 +26,11 @@ ElemT* p2pStoreAddress(const DistParams& distParams, const Matrix& Y,
 
 template<typename FusedParams, typename XShared>
 CUDA_DEVICE
-uint32_t fusedYColumn(const FusedParams& params, const Matrix& X, const XShared& Xsh,
-                      const uint32_t tileK, const uint32_t P, const uint32_t xshCol) {
+uint32_t fusedYColumn(const FusedParams& params, const Matrix& Y, const XShared& Xsh,
+                      const uint32_t tileK, const uint32_t P, const uint32_t Q, const uint32_t xshCol) {
   const uint32_t XTileSlices = Xsh.n()/P;
   //Scale shared mem slice idx to global mem idx
-  uint32_t glSlice = (xshCol/XTileSlices)*(X.n()/P);
+  uint32_t glSlice = (xshCol/XTileSlices)*(Y.n()/Q);
   //Scale shared fused slice to global mem
   uint32_t sliceElem = ((xshCol%XTileSlices)/params.XShFusedSlices)*params.XglFusedSlices;
   //Elem idx in Fused Slice

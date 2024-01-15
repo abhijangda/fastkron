@@ -160,9 +160,11 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       uint32_t cIdx;
 
       if (FusedFacs > 1) {
-        glK = fusedYColumn(fusedParams, X, Xsh, tileK, P, shK);
+        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
       } else {
-        uint32_t XSlices = (X.n()/P); //# of slices for a row equals to Y.n()/Q
+        //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
+        //number of loads as store also requires reading Y.n()
+        uint32_t XSlices = (Y.n()/Q);
         //Scale element location from within tile to global
         glK = (shK/XTileSlices)   * //The index of XTileSlices elems in TileK
               XSlices             + //Scale the index to global column
