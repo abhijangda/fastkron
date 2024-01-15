@@ -80,16 +80,16 @@ struct KernelParams {
 template<uint Fused>
 struct FusedParams {
   uint KronColsPower;
-  uint UVAColsRatioKronRowsSquare;
-  uint ColsCByKronColsPower;
+  uint XShFusedSlices;
+  uint XglFusedSlices;
   
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
     const Factor factorPower = std::reduce(problem.fs(), problem.fs() + Fused, Factor(1,1), [](Factor prev, Factor curr) {
       return Factor(prev.p() * curr.p(), prev.q() * curr.q());
     });
 
-    UVAColsRatioKronRowsSquare = TileSizeColsA/factorPower.p();
-    ColsCByKronColsPower = problem.l()/factorPower.q();
+    XShFusedSlices = TileSizeColsA/factorPower.p();
+    XglFusedSlices = problem.k()/factorPower.p();
   }
 };
 
@@ -141,7 +141,7 @@ struct DistributedParams {
     UVAColsRatioKronRowsSquare = PerGPUN_/KronColsPower;
     perGPUKByNumGPUs = PerGPUK_/gpusInK_;
     perGPUNByNumGPUs = PerGPUN_/gpusInK_;
-    perGPUNByKronCols = PerGPUN_/Factors[LocalKrons_-1].q();
+    perGPUNByKronCols = PerGPUN_/Factors[LocalKrons_-1].q(); //Same as perGPUKByKronCols
     gcMulUVAColsRatioKronRowsSquare = gc*UVAColsRatioKronRowsSquare;
     ColsCByKronCols = ColsC_/Factors[LocalKrons_-1].q();
     ColsCByKronColsPower = ColsC_/KronColsPower;

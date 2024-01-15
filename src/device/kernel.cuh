@@ -150,6 +150,8 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       //No. of elems produced by slice-multiply of TileK with 
       //the same col of F are: TileK/P, i.e, XTileSlices.
       //These elems are stored consecutively.
+
+      //Compute element location inside the tile
       const uint32_t shK = (yQ + tq)   * // F's col multiplied by this thread
                            XTileSlices + // Index of first element produced by this F's col
                            yK + tk     ; // index of element produced by multiplying this col with this slice
@@ -158,9 +160,10 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       uint32_t cIdx;
 
       if (FusedFacs > 1) {
-        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, Q, shK);
+        glK = fusedYColumn(fusedParams, X, Xsh, tileK, P, shK);
       } else {
-        uint32_t XSlices = (X.n()/P); //# of slices for a row 
+        uint32_t XSlices = (X.n()/P); //# of slices for a row equals to Y.n()/Q
+        //Scale element location from within tile to global
         glK = (shK/XTileSlices)   * //The index of XTileSlices elems in TileK
               XSlices             + //Scale the index to global column
               tileK * XTileSlices + //Index of XTileSlices elems produced by a tileK 
