@@ -2,7 +2,7 @@ template<typename ElemT, typename DistParams>
 CUDA_DEVICE
 ElemT* p2pStoreAddress(const DistParams& distParams, const Matrix& Y,
                        uint32_t row, uint32_t col) {
-  uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;//(perGPUK/KronRowsPower); //
+  uint UVAColsRatioKronRowsSquare = distParams.UVAColsRatioKronRowsSquare;
   const uint perGPUNByNumGPUs = distParams.perGPUNByNumGPUs;
   const uint perGPUNByKronCols = distParams.perGPUNByKronCols;
   const uint ColsCByKronCols = distParams.ColsCByKronCols;
@@ -28,14 +28,13 @@ template<typename FusedParams, typename XShared>
 CUDA_DEVICE
 uint32_t fusedYColumn(const FusedParams& params, const Matrix& X, const XShared& Xsh,
                       const uint32_t tileK, const uint32_t P, const uint32_t xshCol) {
-  const uint XTileSlices = Xsh.n()/P;
+  const uint32_t XTileSlices = Xsh.n()/P;
   //Scale shared mem slice idx to global mem idx
-  uint glSlice = (xshCol/XTileSlices)*(X.n()/P);
+  uint32_t glSlice = (xshCol/XTileSlices)*(X.n()/P);
   //Scale shared fused slice to global mem
-  uint sliceElem = ((xshCol%XTileSlices)/params.XShFusedSlices)*params.XglFusedSlices;
+  uint32_t sliceElem = ((xshCol%XTileSlices)/params.XShFusedSlices)*params.XglFusedSlices;
   //Elem idx in Fused Slice
-  uint elem = tileK * params.XShFusedSlices + 
-              xshCol%params.XShFusedSlices;
+  uint32_t elem = tileK * params.XShFusedSlices + xshCol%params.XShFusedSlices;
   return glSlice + sliceElem + elem;
 }
 

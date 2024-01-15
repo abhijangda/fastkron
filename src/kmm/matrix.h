@@ -266,7 +266,7 @@ public:
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
 };
 
-//Make this Tensor3D
+//Make this Const Tensor3D
 template<typename T, uint32_t TileM, uint32_t RegK, uint32_t RegQ>
 class YRegisters : public Matrix {
 public:
@@ -284,7 +284,8 @@ public:
 
 public:
   CUDA_DEVICE_HOST
-  YRegisters(uint32_t yK, uint32_t yQ) : Matrix(RegK, RegQ), yQ(yQ), yK(yK) {zero();}
+  YRegisters(uint32_t yK, uint32_t yQ) : 
+    Matrix(RegK, RegQ), yQ(yQ), yK(yK) {zero();}
   
   CUDA_DEVICE_HOST
   void zero() {
