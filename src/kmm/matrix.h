@@ -213,6 +213,7 @@ public:
   }
 };
 
+//TODO: StackArray.h
 template<typename T, uint32_t MaxSize>
 class StackArray {
 public:
@@ -266,11 +267,82 @@ public:
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
 };
 
+
+template<typename T, uint32_t Dims>
+class FixedShapeTensor {
+  using ElemT = T;
+  T* ptr;
+
+public:
+  CUDA_DEVICE_HOST
+  FixedShapeTensor(T* ptr): ptr(ptr) {}
+  CUDA_DEVICE_HOST
+  uint32_t dims()             {return Dims;}
+  CUDA_DEVICE_HOST
+  T& at(const uint32_t dim[Dims], const uint32_t size[Dims]) {
+    uint32_t id = dim[0];
+    #pragma unroll
+    for (uint32_t i = 1; i < dims(); i++) {
+      id += id * size[i] + dim[i];
+    }
+
+    return ptr[id];
+  }
+  CUDA_DEVICE_HOST
+  void set(const uint32_t dim[Dims], const uint32_t size[Dims], T val) {
+    at(dim, size) = val;
+  }
+};
+
+template<typename T, uint32_t N, uint32_t M>
+class FixedShapeTensor2D : public FixedShapeTensor<T, 2>{
+  using Base = FixedShapeTensor<T, 2>;
+public:
+  CUDA_DEVICE_HOST
+  FixedShapeTensor2D(T* ptr) : FixedShapeTensor<T, 2>(ptr) {}
+  CUDA_DEVICE_HOST
+  uint32_t size(uint32_t dim) {
+    switch(dim) {
+      case 0:
+        return N;
+      case 1:
+        return M;
+      default:
+        return 0;
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  T& at(uint32_t i, uint32_t j) {
+    uint32_t size[] = {N, M};
+    uint32_t dims[] = {i, j};
+   
+    return Base::at(dims, size);
+  }
+
+  CUDA_DEVICE_HOST
+  void set(uint32_t i, uint32_t j, T val) {
+    uint32_t size[] = {N, M};
+    uint32_t dims[] = {i, j};
+   
+    return Base::set(dims, size, val);
+  }
+};
+
+// template<typename T, uint32_t TileP, uint32_t CRegCols>
+// class FRegisters : public FixedShapeTensor2D<T, TileP, CRegCols>{
+//   T regs[TileP][CRegCols];
+//   using Base = FixedShapeTensor2D<T, TileP, CRegCols>;
+
+// public:
+//   CUDA_DEVICE_HOST
+//   FRegisters() : Base(&regs[0][0]) {}
+// };
+
 //Make this Const Tensor3D
 template<typename T, uint32_t TileM, uint32_t RegK, uint32_t RegQ>
 class YRegisters : public Matrix {
 public:
-  //TODO: make these functions lower case
   T regs[TileM][RegK][RegQ];
   CUDA_DEVICE_HOST
   uint32_t m()  {return TileM;}

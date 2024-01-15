@@ -122,7 +122,6 @@ struct DistributedParams {
   uint ColsCByKronRowsPower;
   uint ColsCByKronColsPower;
 
-
   DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {} 
   
   DistributedParams(const uint gr_, const uint gc_, const uint gpusInK_,   
