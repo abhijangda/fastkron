@@ -68,10 +68,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                                           Vec4T>::type>::type>::type;
 
   const uint ShTileK = TileK/(MaxP/TileP);
-
-  __shared__ ElemT ptrXsh[TileM][ShTileK];
-  // __shared__ ElemT ptrFsh[TileP][TileQ];
-
+  
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
 
