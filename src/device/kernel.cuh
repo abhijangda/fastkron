@@ -6,6 +6,7 @@
 #include "device/params.h"
 #include "device/mma.cuh"
 #include "device/global-store.cuh"
+#include "device/fixed-shape-tensor.cuh"
 
 #include <type_traits>
 #include <typeinfo>
@@ -15,6 +16,7 @@ CUDA_DEVICE uint32_t getTileK() {
   return blockIdx.x/DIVUP(MaxQ, TileQ);
 }
 
+//TODO: Make this blockIdx.z
 template<uint MaxQ, uint TileQ>
 CUDA_DEVICE uint32_t getTileQ() {
   return blockIdx.x%DIVUP(MaxQ, TileQ);
@@ -185,8 +187,8 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         if (params.kp_idx == 0) {
           #pragma unroll
           for (int i = 0; i < StLen; i++) {
-            yReg.regs[rm][tk+i][tq] =
-              epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq));
+            yReg.set(rm, tk+i, tq,
+              epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
