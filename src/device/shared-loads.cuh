@@ -18,10 +18,10 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
   }
 }
 
-template<typename ElemT, typename VecT>
+template<typename ElemT, typename VecT, typename FShared>
 CUDA_DEVICE
-void directFgToFsh(const uint NumThreads, const uint tid, const uint tileP,
-                   const Factor& F, DirectShared<Factor, ElemT>& Fsh) {
+void directFgToFsh(const uint NumThreads, const uint tid, const uint tileP, const uint tileQ,
+                   const Factor& F, FShared& Fsh) {
   const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
 
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
@@ -33,7 +33,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, const uint tileP,
       for (uint qelem = tid%QVecs; qelem < QVecs; qelem += blockDim.x/ThGroups) {
         ElemT regs[VecTLen];
 
-        const uint col = Fsh.tilecol*Fsh.q() + qelem*VecTLen;
+        const uint col = tileQ*Fsh.q() + qelem*VecTLen;
         const uint row = swid;
 
         ldGlobalVec(F.data<ElemT>((tileP + row), col), regs, VecTLen);

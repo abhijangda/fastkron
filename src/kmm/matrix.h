@@ -177,42 +177,6 @@ protected:
   uint32_t n() {return Matrix::n();}
 };
 
-template<class Base, typename T>
-class DirectShared : public Base {
-public:
-  //TODO: Coord2D
-  uint32_t tilerow, tilecol;
-
-  CUDA_DEVICE_HOST
-  DirectShared(uint32_t TileP, uint32_t TileQ, void* ptr, 
-               uint32_t tilerow, uint32_t tilecol) :
-    Base(TileP, TileQ, ptr), tilerow(tilerow), tilecol(tilecol) {}
-
-  CUDA_DEVICE_HOST
-  //TODO: Make this Coord1D
-  void store(uint32_t eIdx, uint32_t num, const T* elems) {
-    #pragma unroll
-    for (uint ve = 0; ve < num; ve++) {
-      uint idx = eIdx + ve;
-      Base::template set<T>(idx/Base::n(), idx%Base::n(), elems[ve]);
-    }
-  }
-
-  CUDA_DEVICE_HOST
-  //TODO: Make this Coord2D
-  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
-    #pragma unroll
-    for (uint ve = 0; ve < num; ve++) {
-      Base::template set<T>(row, col + ve, elems[ve]);
-    }
-  }
-  
-  CUDA_DEVICE_HOST
-  T at(uint32_t row, uint32_t col) {
-    return Base::template at<T>(row, col);
-  }
-};
-
 //TODO: StackArray.h
 template<typename T, uint32_t MaxSize>
 class StackArray {

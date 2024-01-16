@@ -32,8 +32,9 @@ class FixedShapeTensor2D {
 public:
   CUDA_DEVICE_HOST
   FixedShapeTensor2D() {}
+
   CUDA_DEVICE_HOST
-  uint32_t size(uint32_t dim) {
+  uint32_t size(uint32_t dim) const {
     switch(dim) {
       case 0:
         return N;
@@ -62,8 +63,9 @@ class FixedShapeTensor3D {
 public:
   CUDA_DEVICE_HOST
   FixedShapeTensor3D() {}
+
   CUDA_DEVICE_HOST
-  uint32_t size(uint32_t dim) {
+  uint32_t size(uint32_t dim) const {
     switch(dim) {
       case 0:
         return N;
@@ -95,7 +97,7 @@ public:
 
   CUDA_DEVICE_HOST
   T& add(uint32_t i, uint32_t j, uint32_t k, T val) {
-    set(i,j,k, at(i,j,k) + val);
+    set(i, j, k, at(i, j, k) + val);
   }
 
   CUDA_DEVICE_HOST
@@ -105,7 +107,43 @@ public:
 };
 
 //Shared Memory Tensors
+template<typename T, uint32_t TileP, uint32_t TileQ>
+class DirectShared : public FixedShapeTensor2D<T, TileP, TileQ> {
+  using Base = FixedShapeTensor2D<T, TileP, TileQ>;
 
+public:
+  CUDA_DEVICE_HOST
+  DirectShared() {}
+
+  CUDA_DEVICE_HOST
+  //TODO: Make this Coord1D
+  void store(uint32_t eIdx, uint32_t num, const T* elems) {
+    #pragma unroll
+    for (uint ve = 0; ve < num; ve++) {
+      uint idx = eIdx + ve;
+      Base::set(idx/Base::size(1), idx%Base::size(1), elems[ve]);
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  //TODO: Make this Coord2D
+  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
+    #pragma unroll
+    for (uint ve = 0; ve < num; ve++) {
+      Base::set(row, col + ve, elems[ve]);
+    }
+  }
+  
+  CUDA_DEVICE_HOST
+  T& at(uint32_t row, uint32_t col) {
+    return Base::at(row, col);
+  }
+
+  CUDA_DEVICE_HOST
+  uint32_t p() const {return Base::size(0);}
+  CUDA_DEVICE_HOST
+  uint32_t q() const {return Base::size(1);}
+};
 
 //Register Tensors
 template<typename T, uint32_t M, uint32_t K, uint32_t Q>

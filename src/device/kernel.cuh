@@ -70,7 +70,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   const uint ShTileK = TileK/(MaxP/TileP);
 
   __shared__ ElemT ptrXsh[TileM][ShTileK];
-  __shared__ ElemT ptrFsh[TileP][TileQ];
+  // __shared__ ElemT ptrFsh[TileP][TileQ];
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
@@ -95,7 +95,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                      P, TileP,
                      X);
   ShiftShared<ElemT> Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
-  DirectShared<Factor, ElemT> Fsh(TileP, TileQ, &ptrFsh[0][0], 0, tileQ);
+  __shared__ DirectShared<ElemT, TileP, TileQ> Fsh;
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg(yK, yQ);
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
@@ -109,7 +109,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
-      directFgToFsh<ElemT, FVecT>(NumThreads, tid, tileP,
+      directFgToFsh<ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, tileP, tileQ,
                                   F, Fsh);
 
       __syncthreads();
