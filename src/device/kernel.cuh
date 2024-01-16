@@ -94,14 +94,14 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                      (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
                      P, TileP,
                      X);
-  ShiftShared<ElemT> Xsh(XTile.m(), ShTileK, &ptrXsh[0][0]);
+  __shared__ ShiftShared<ElemT, TileM, ShTileK> Xsh;
   __shared__ DirectShared<ElemT, TileP, TileQ> Fsh;
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg(yK, yQ);
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<ElemT, XVecT>(TileP, NumThreads, RegK,
+    shiftXgToXsh<ElemT, XVecT, decltype(Xsh)>(TileP, NumThreads, RegK,
                                tileP, tid, XTile, Xsh);
 
     #pragma unroll
@@ -121,14 +121,14 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register XRegisters<ElemT, TileM, RegK, TileP> Xr;
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(Xsh, Fsh, yReg, Xr, Fr);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr);
       }
 
       if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
         if (isThreadValid) {
           //Store C to shared memory using shift method
-          fusionYrToXSh(F, Fsh, Xsh, yReg);
+          fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg);
         }
       }
 

@@ -145,16 +145,17 @@ public:
   uint32_t q() const {return Base::size(1);}
 };
 
-template<typename ElemT>
-class ShiftShared : public Matrix {
+template<typename T, uint32_t M, uint32_t N>
+class ShiftShared : public FixedShapeTensor2D<T, M, N> {
+  using Base = FixedShapeTensor2D<T, M, N>;
+
 public:
   CUDA_DEVICE_HOST
-  ShiftShared(uint32_t rows, uint32_t cols, void* ptr) :
-    Matrix(rows, cols, ptr) {}
+  ShiftShared() {}
 
   CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
-             uint32_t numElems, ElemT* elems) {
+             uint32_t numElems, T* elems) {
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
       uint32_t shCol = startCol + i;
@@ -162,14 +163,19 @@ public:
       uint32_t slice = shCol/TileP;
       uint32_t shift = slice/RegK;
 
-      set<ElemT>(row, slice*TileP + (shift + elem)%TileP, elems[i]);
+      Base::set(row, slice*TileP + (shift + elem)%TileP, elems[i]);
     }
   }
 
   CUDA_DEVICE_HOST
-  ElemT at(uint32_t row, uint32_t col) {
-    return Matrix::at<ElemT>(row, col);
+  T& at(uint32_t row, uint32_t col) {
+    return Base::at(row, col);
   }
+
+  CUDA_DEVICE_HOST
+  uint32_t m() const {return Base::size(0);}
+  CUDA_DEVICE_HOST
+  uint32_t n() const {return Base::size(1);}
 };
 
 //Register Tensors

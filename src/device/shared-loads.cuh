@@ -1,13 +1,13 @@
 #include "kmm/matrix.h"
 #include "device/register-loads.cuh"
 
-template<typename ElemT, typename VecT>
+template<typename ElemT, typename VecT, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
                   const uint tileP, const uint tid, const Slice<ElemT> XTile,
-                  ShiftShared<ElemT>& Xsh) {
+                  XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  for (uint row = 0; row < Xsh.m(); row += 1) {
+  for (uint row = 0; row < XTile.m(); row += 1) {
     //Use NumThreads in the loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
@@ -53,9 +53,9 @@ void directFgToFsh(const uint NumThreads, const uint tid, const uint tileP, cons
 
 template<typename FShared, typename XShared, typename YReg>
 CUDA_DEVICE
-void fusionYrToXSh(const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr) {
+void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr) {
   for (int tm = 0; tm < Yr.m(); tm++) {
-    if (tm < Xsh.m()) {
+    if (tm < m) {
       #pragma unroll
       for (uint tk = 0; tk < Yr.k(); tk++) {
       for (uint tq = 0; tq < Yr.q(); tq++) {
