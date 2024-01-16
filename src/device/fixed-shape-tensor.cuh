@@ -25,9 +25,9 @@
 //   }
 // };
 
-template<typename T, uint32_t N, uint32_t M>
+template<typename T, uint32_t M, uint32_t N>
 class FixedShapeTensor2D {
-  T data[N][M];
+  T data[M][N];
 
 public:
   CUDA_DEVICE_HOST
@@ -37,9 +37,9 @@ public:
   uint32_t size(uint32_t dim) const {
     switch(dim) {
       case 0:
-        return N;
-      case 1:
         return M;
+      case 1:
+        return N;
       default:
         return 0;
     }
@@ -56,9 +56,9 @@ public:
   }
 };
 
-template<typename T, uint32_t N, uint32_t M, uint32_t K>
+template<typename T, uint32_t M, uint32_t N, uint32_t K>
 class FixedShapeTensor3D {
-  T data[N][M][K];
+  T data[M][N][K];
 
 public:
   CUDA_DEVICE_HOST
@@ -68,9 +68,9 @@ public:
   uint32_t size(uint32_t dim) const {
     switch(dim) {
       case 0:
-        return N;
-      case 1:
         return M;
+      case 1:
+        return N;
       case 2:
         return K;
       default:
@@ -143,6 +143,33 @@ public:
   uint32_t p() const {return Base::size(0);}
   CUDA_DEVICE_HOST
   uint32_t q() const {return Base::size(1);}
+};
+
+template<typename ElemT>
+class ShiftShared : public Matrix {
+public:
+  CUDA_DEVICE_HOST
+  ShiftShared(uint32_t rows, uint32_t cols, void* ptr) :
+    Matrix(rows, cols, ptr) {}
+
+  CUDA_DEVICE_HOST
+  void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
+             uint32_t numElems, ElemT* elems) {
+    #pragma unroll
+    for (uint i = 0; i < numElems; i++) {
+      uint32_t shCol = startCol + i;
+      uint32_t elem  = shCol%TileP;
+      uint32_t slice = shCol/TileP;
+      uint32_t shift = slice/RegK;
+
+      set<ElemT>(row, slice*TileP + (shift + elem)%TileP, elems[i]);
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  ElemT at(uint32_t row, uint32_t col) {
+    return Matrix::at<ElemT>(row, col);
+  }
 };
 
 //Register Tensors
