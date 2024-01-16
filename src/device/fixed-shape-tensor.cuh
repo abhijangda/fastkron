@@ -1,29 +1,4 @@
-
-// template<typename T, uint32_t Dims>
-// class FixedShapeTensor {
-//   using ElemT = T;
-//   T* ptr;
-
-// public:
-//   CUDA_DEVICE_HOST
-//   FixedShapeTensor(T* ptr): ptr(ptr) {}
-//   CUDA_DEVICE_HOST
-//   uint32_t dims()             {return Dims;}
-//   CUDA_DEVICE_HOST
-//   T& at(const uint32_t dim[Dims], const uint32_t size[Dims]) {
-//     uint32_t id = dim[0];
-//     #pragma unroll
-//     for (uint32_t i = 1; i < dims(); i++) {
-//       id += id * size[i] + dim[i];
-//     }
-
-//     return ptr[id];
-//   }
-//   CUDA_DEVICE_HOST
-//   void set(const uint32_t dim[Dims], const uint32_t size[Dims], T val) {
-//     at(dim, size) = val;
-//   }
-// };
+#include "kmm/coord.h"
 
 template<typename T, uint32_t M, uint32_t N>
 class FixedShapeTensor2D {
@@ -183,20 +158,15 @@ template<typename T, uint32_t M, uint32_t K, uint32_t Q>
 class YRegisters : public FixedShapeTensor3D<T, M, K, Q> {
   using Base = FixedShapeTensor3D<T, M, K, Q>;
 public:
-  //TODO: Make this Coord2D inside kernel outside of this struct
-  uint32_t yK;
-  uint32_t yQ;
-
-public:
   CUDA_DEVICE_HOST
-  YRegisters(uint32_t yK, uint32_t yQ) : yQ(yQ), yK(yK) {Base::zero();}
+  YRegisters() {Base::zero();}
   
   CUDA_DEVICE_HOST
-  uint32_t m()  {return M;}
+  uint32_t m() const {return M;}
   CUDA_DEVICE_HOST
-  uint32_t k() {return K;}
+  uint32_t k() const {return K;}
   CUDA_DEVICE_HOST
-  uint32_t q() {return Q;}
+  uint32_t q() const {return Q;}
 };
 
 template<typename T, uint32_t M, uint32_t K, uint32_t P>
@@ -206,11 +176,11 @@ public:
   XRegisters() {}
 
   CUDA_DEVICE_HOST
-  uint32_t m() {return M;}
+  uint32_t m() const {return M;}
   CUDA_DEVICE_HOST
-  uint32_t k() {return K;}
+  uint32_t k() const {return K;}
   CUDA_DEVICE_HOST
-  uint32_t p() {return P;}
+  uint32_t p() const {return P;}
 };
 
 template<typename T, uint32_t TileP, uint32_t CRegCols>
@@ -218,4 +188,15 @@ class FRegisters : public FixedShapeTensor2D<T, TileP, CRegCols>{
   public:
     CUDA_DEVICE_HOST
     FRegisters() {}
+};
+
+class YElem : public Coord2D {
+public:
+  CUDA_DEVICE_HOST
+  YElem(uint32_t yQ, uint32_t yK) : Coord2D(yQ, yK) {}
+
+  CUDA_DEVICE_HOST
+  uint32_t q() const {return i();}
+  CUDA_DEVICE_HOST
+  uint32_t k() const {return j();}
 };

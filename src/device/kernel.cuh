@@ -1,12 +1,13 @@
 #include "config.h"
 
 #include "device/utils.cuh"
-#include "device/register-loads.cuh"
-#include "device/shared-loads.cuh"
 #include "device/params.h"
-#include "device/mma.cuh"
 #include "device/global-store.cuh"
 #include "device/fixed-shape-tensor.cuh"
+
+#include "device/mma.cuh"
+#include "device/shared-loads.cuh"
+#include "device/register-loads.cuh"
 
 #include <type_traits>
 #include <typeinfo>
@@ -21,7 +22,6 @@ template<uint MaxQ, uint TileQ>
 CUDA_DEVICE uint32_t getTileQ() {
   return blockIdx.x%DIVUP(MaxQ, TileQ);
 }
-
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads, 
@@ -85,6 +85,8 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   const uint QThreads = (TileK / MaxP)     / RegK;
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
+  
+  const YElem yElem(yQ, yK);
 
   bool isThreadValid = (yQ + RegQ <= TileQ);
 
@@ -96,7 +98,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                      X);
   __shared__ ShiftShared<ElemT, TileM, ShTileK> Xsh;
   __shared__ DirectShared<ElemT, TileP, TileQ> Fsh;
-  register YRegisters<ElemT, TileM, RegK, RegQ> yReg(yK, yQ);
+  register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
@@ -121,14 +123,14 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register XRegisters<ElemT, TileM, RegK, TileP> Xr;
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }
 
       if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
         if (isThreadValid) {
           //Store C to shared memory using shift method
-          fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg);
+          fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg, yElem);
         }
       }
 

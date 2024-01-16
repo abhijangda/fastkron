@@ -1,3 +1,5 @@
+#include "config.h"
+
 #pragma once
 
 template<typename T, uint32_t MaxSize>

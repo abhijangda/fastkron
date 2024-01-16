@@ -2,7 +2,7 @@
 #include <cassert>
 #include <functional>
 
-#include "stackarray.h"
+#include "kmm/stackarray.h"
 #include "config.h"
 
 #pragma once
@@ -151,9 +151,6 @@ protected:
   CUDA_DEVICE_HOST
   uint32_t n() {return Matrix::n();}
 };
-
-//TODO: StackArray.h
-
 
 template<uint32_t MaxSize>
 class FactorArray : public StackArray<Factor, MaxSize> {

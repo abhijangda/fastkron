@@ -53,14 +53,14 @@ void directFgToFsh(const uint NumThreads, const uint tid, const uint tileP, cons
 
 template<typename FShared, typename XShared, typename YReg>
 CUDA_DEVICE
-void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr) {
+void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr, const YElem& yElem) {
   for (int tm = 0; tm < Yr.m(); tm++) {
     if (tm < m) {
       #pragma unroll
       for (uint tk = 0; tk < Yr.k(); tk++) {
       for (uint tq = 0; tq < Yr.q(); tq++) {
         const uint32_t MaxXSlices = Xsh.n()/F.p();
-        uint32_t shXk = Yr.yQ*MaxXSlices + tq*MaxXSlices + Yr.yK + tk;
+        uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
         
         Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, tk, tq));
   }}}}
