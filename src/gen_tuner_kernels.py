@@ -95,7 +95,7 @@ class KernelConfig:
     return f"host_{self.kernelname()}"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, cudaStream_t stream)"
+    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, cudaStream_t stream)"
 
   def templateDecl(self):
     return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.aalign}, {self.kalign}"
@@ -226,7 +226,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       kernel_file_template = "\n".join(['#include "../kernel.cuh"',
                                         "",
                                         config.hostFuncDecl()+"{",
-                                        f"  {config.kernelDecl()}<<<grid, block, 0, stream>>>(params, fusedParams, distParams, epilogueParams);",
+                                        f"  {config.kernelDecl()}<<<grid, block, sharedSize, stream>>>(params, fusedParams, distParams, epilogueParams);",
                                         "}"]);
       f.write(kernel_file_template)
 

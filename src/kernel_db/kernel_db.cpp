@@ -65,10 +65,10 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
 
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
-                                     DistributedParams, EpilogueParams, dim3, dim3, cudaStream_t);
+                                     DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, 
                                         epilogueParams, kernelInfo.grid(problem), 
-                                        kernelInfo.block(), stream);
+                                        kernelInfo.block(), kernelInfo.sharedMemSize(), stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
   return status;

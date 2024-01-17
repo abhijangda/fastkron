@@ -68,4 +68,9 @@ struct KernelInfo {
   dim3 block() {
     return dim3{NumThreads, 1, 1};
   }
+
+  size_t sharedMemSize() {
+    Matrix Xsh = Matrix(tiledInput.m(), (tiledInput.n()/factor.p())*tiledFactor.p());
+    return (tiledFactor.numel() + Xsh.numel())*sizeof(float);
+  }
 };
