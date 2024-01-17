@@ -7,14 +7,14 @@ public:
   AbstractFixedShapeTensor2D() {}
 
   CUDA_DEVICE_HOST
+  static uint32_t numel() {return M*N;}
+
+  CUDA_DEVICE_HOST
   uint32_t shape(uint32_t dim) const {
     switch(dim) {
-      case 0:
-        return M;
-      case 1:
-        return N;
-      default:
-        return 0;
+      case  0: return M;
+      case  1: return N;
+      default: return 0;
     }
   }
 
@@ -61,14 +61,10 @@ public:
   CUDA_DEVICE_HOST
   uint32_t shape(uint32_t i) const {
     switch(i) {
-      case 0:
-        return M;
-      case 1:
-        return N;
-      case 2:
-        return K;
-      default:
-        return 0;
+      case  0: return M;
+      case  1: return N;
+      case  2: return K;
+      default: return 0;
     }
   }
 
@@ -126,13 +122,13 @@ public:
 
 //Shared Memory Tensors
 template<typename T, uint32_t TileP, uint32_t TileQ>
-class DirectShared : public FixedShapeTensor2D<T, TileP, TileQ> {
-  using Base = FixedShapeTensor2D<T, TileP, TileQ>;
-  T data[TileP*TileQ];
+class DirectShared : public AbstractFixedShapeTensor2D<T, TileP, TileQ> {
+  using Base = AbstractFixedShapeTensor2D<T, TileP, TileQ>;
+  T* data;
 
 public:
   CUDA_DEVICE_HOST
-  DirectShared() {}
+  DirectShared(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
@@ -140,7 +136,7 @@ public:
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint idx = eIdx + ve;
-      Base::set(idx/Base::shape(1), idx%Base::shape(1), elems[ve]);
+      Base::set(data, idx/Base::shape(1), idx%Base::shape(1), elems[ve]);
     }
   }
 
@@ -149,13 +145,13 @@ public:
   void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
-      Base::set(row, col + ve, elems[ve]);
+      Base::set(data, row, col + ve, elems[ve]);
     }
   }
   
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    return Base::at(row, col);
+    return Base::at(data, row, col);
   }
 
   CUDA_DEVICE_HOST
@@ -165,12 +161,13 @@ public:
 };
 
 template<typename T, uint32_t M, uint32_t N>
-class ShiftShared : public FixedShapeTensor2D<T, M, N> {
-  using Base = FixedShapeTensor2D<T, M, N>;
+class ShiftShared : public AbstractFixedShapeTensor2D<T, M, N> {
+  using Base = AbstractFixedShapeTensor2D<T, M, N>;
+  T* data;
 
 public:
   CUDA_DEVICE_HOST
-  ShiftShared() {}
+  ShiftShared(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
@@ -182,13 +179,13 @@ public:
       uint32_t slice = shCol/TileP;
       uint32_t shift = slice/RegK;
 
-      Base::set(row, slice*TileP + (shift + elem)%TileP, elems[i]);
+      Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
     }
   }
 
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    return Base::at(row, col);
+    return Base::at(data, row, col);
   }
 
   CUDA_DEVICE_HOST

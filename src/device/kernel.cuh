@@ -93,8 +93,15 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                      (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
                      P, TileP,
                      X);
-  __shared__ ShiftShared<ElemT, TileM, ShTileK> Xsh;
-  __shared__ DirectShared<ElemT, TileP, TileQ> Fsh;
+  
+  __shared__ ElemT sharedStorage[TileM*ShTileK + TileP*TileQ];
+  
+  using XShared = ShiftShared<ElemT, TileM, ShTileK>;
+  using FShared = DirectShared<ElemT, TileP, TileQ>;
+  
+  XShared Xsh(&sharedStorage[0]);
+  FShared Fsh(&sharedStorage[Xsh.numel()]);
+
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
