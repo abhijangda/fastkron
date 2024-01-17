@@ -17,7 +17,6 @@ CUDA_DEVICE uint32_t getTileK() {
   return blockIdx.x/DIVUP(MaxQ, TileQ);
 }
 
-//TODO: Make this blockIdx.z
 template<uint MaxQ, uint TileQ>
 CUDA_DEVICE uint32_t getTileQ() {
   return blockIdx.x%DIVUP(MaxQ, TileQ);
@@ -28,7 +27,7 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint TileQ, uint TileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs, 
          uint RegK, uint RegQ,
-         uint KPK_EQUALS_VAR, uint TileP, 
+         uint FactorHasMaxShape, uint TileP, 
          int XAlignment, int FAlignment>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
@@ -68,13 +67,14 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                                           Vec4T>::type>::type>::type;
 
   const uint ShTileK = TileK/(MaxP/TileP);
-  
+
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
 
-  const uint Q = (KPK_EQUALS_VAR) ? MaxQ : params.problem.f(0).q();
-  const uint P = (KPK_EQUALS_VAR) ? MaxP : params.problem.f(0).p();
+  const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
+  const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
 
+  //TODO: Make this Coord2D
   const uint tileQ = getTileQ<MaxQ, TileQ>();
   const uint tileK = getTileK<MaxQ, TileQ>();
 
@@ -85,7 +85,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   
   const YElem yElem(yQ, yK);
 
-  bool isThreadValid = (yQ + RegQ <= TileQ);
+  bool isThreadValid = (yElem.q() + RegQ <= TileQ);
 
   const uint tileM = blockIdx.y* TileM;
 
@@ -139,7 +139,6 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
   if (rm < XTile.m()) {
-    //TODO: Improve below code like in the paper
     constexpr uint32_t StLen = storeVectorLen<FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
@@ -153,9 +152,9 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
       //These elems are stored consecutively.
 
       //Compute element location inside the tile
-      const uint32_t shK = (yQ + tq)   * // F's col multiplied by this thread
-                           XTileSlices + // Index of first element produced by this F's col
-                           yK + tk     ; // index of element produced by multiplying this col with this slice
+      const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
+                            XTileSlices +       // Index of first element produced by this F's col
+                            yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
       uint glK;
       ElemT* outputArray;
       uint32_t cIdx;
