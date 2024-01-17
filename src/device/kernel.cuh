@@ -24,10 +24,10 @@ CUDA_DEVICE uint32_t getTileQ() {
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads, 
-         uint MaxQ, uint MaxP, uint TileQ, uint TileK,
+         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs, 
          uint RegK, uint RegQ,
-         uint FactorHasMaxShape, uint TileP, 
+         uint FactorHasMaxShape, 
          int XAlignment, int FAlignment>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<FusedFacs> params,

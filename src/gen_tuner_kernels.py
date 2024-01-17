@@ -98,7 +98,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.tileP}, {self.aalign}, {self.kalign}"
+    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.aalign}, {self.kalign}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"
@@ -107,9 +107,10 @@ class KernelConfig:
     return repr(self) == repr(other)
 
   def kernelInfo(self):
+    constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}"
     return "KernelInfo{"+\
             f"(void*){self.hostFuncName()},"+\
-            repr(self).replace("float", "ElementType::Float") + "}"
+            constructor.replace("float", "ElementType::Float") + "}"
 
   def isValid(self):
     return self.wsz > 0 and \

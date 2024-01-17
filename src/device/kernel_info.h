@@ -29,11 +29,11 @@ struct KernelInfo {
   uint AAlignment;
   uint KronAlignment;
   KernelInfo() {}
-  KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileQ,
+  KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileP, uint tileQ,
              uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
              uint CRegRows_, uint CRegCols_, ElementType elemType_,
              uint AAlignment_, uint KronAlignment_) :
-             kernel(kernel_), NumThreads(NumThreads_), factor(P, Q), tiledFactor(P, tileQ),
+             kernel(kernel_), NumThreads(NumThreads_), factor(P, Q), tiledFactor(tileP, tileQ),
              tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_),
@@ -51,7 +51,7 @@ struct KernelInfo {
   }
 
   bool canCompute(KMMProblem problem, bool p2p) {
-    return tiledFactor == problem.f(0) &&
+    return Factor(factor.p(), tiledFactor.q()) == problem.f(0) &&
            problem.k() % tiledInput.n() == 0 &&
            problem.n() == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;
