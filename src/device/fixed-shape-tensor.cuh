@@ -1,15 +1,13 @@
 #include "kmm/coord.h"
 
 template<typename T, uint32_t M, uint32_t N>
-class FixedShapeTensor2D {
-  T data[M][N];
-
+class AbstractFixedShapeTensor2D {
 public:
   CUDA_DEVICE_HOST
-  FixedShapeTensor2D() {}
+  AbstractFixedShapeTensor2D() {}
 
   CUDA_DEVICE_HOST
-  uint32_t size(uint32_t dim) const {
+  uint32_t shape(uint32_t dim) const {
     switch(dim) {
       case 0:
         return M;
@@ -21,27 +19,48 @@ public:
   }
 
   CUDA_DEVICE_HOST
+  T& at(T data[], uint32_t i, uint32_t j) {
+    return data[i * shape(1) + j];
+  }
+
+  CUDA_DEVICE_HOST
+  void set(T data[], uint32_t i, uint32_t j, T val) {
+    data[i*shape(1) + j] = val;
+  }
+};
+
+template<typename T, uint32_t M, uint32_t N>
+class FixedShapeTensor2D : public AbstractFixedShapeTensor2D<T, M, N> {
+  using Base = AbstractFixedShapeTensor2D<T, M, N>;
+  T data[M*N];
+
+public:
+  CUDA_DEVICE_HOST
+  FixedShapeTensor2D() : Base() {}
+
+  CUDA_DEVICE_HOST
   T& at(uint32_t i, uint32_t j) {
-    return data[i][j];
+    return Base::at(data, i, j);
   }
 
   CUDA_DEVICE_HOST
   void set(uint32_t i, uint32_t j, T val) {
-    data[i][j] = val;
+    Base::set(data, i, j, val);
   }
 };
 
 template<typename T, uint32_t M, uint32_t N, uint32_t K>
-class FixedShapeTensor3D {
-  T data[M][N][K];
-
+class AbstractFixedShapeTensor3D {
 public:
   CUDA_DEVICE_HOST
-  FixedShapeTensor3D() {}
+  AbstractFixedShapeTensor3D() {}
 
   CUDA_DEVICE_HOST
-  uint32_t size(uint32_t dim) const {
-    switch(dim) {
+  uint32_t numel() {return M*N*K;}
+
+  CUDA_DEVICE_HOST
+  uint32_t shape(uint32_t i) const {
+    switch(i) {
       case 0:
         return M;
       case 1:
@@ -54,30 +73,54 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  void zero() {
+  void zero(T data[]) {
     #pragma unroll
-    for (uint i = 0; i < size(0); i++) {
-    #pragma unroll
-    for (uint j = 0; j < size(1); j++) {
-    #pragma unroll
-    for (uint k = 0; k < size(2); k++) {
-      set(i, j, k, (T)0);
-    }}}
+    for (uint i = 0; i < numel(); i++) {
+      data[i] = (T)0;
+    }
   }
 
   CUDA_DEVICE_HOST
+  T& at(T data[], uint32_t i, uint32_t j, uint32_t k) {
+    return data[(i*shape(1)+j)*shape(2) + k];
+  }
+
+  CUDA_DEVICE_HOST
+  T& add(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
+    set(data, i, j, k, at(data, i, j, k) + val);
+  }
+
+  CUDA_DEVICE_HOST
+  void set(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
+    data[(i*shape(1)+j)*shape(2) + k] = val;
+  }
+};
+
+template<typename T, uint32_t M, uint32_t N, uint32_t K>
+class FixedShapeTensor3D : public AbstractFixedShapeTensor3D<T, M, N, K> {
+  T data[M*N*K];
+  using Base = AbstractFixedShapeTensor3D<T, M, N, K>;
+
+public:
+  CUDA_DEVICE_HOST
+  FixedShapeTensor3D() : Base() {}
+
+  CUDA_DEVICE_HOST
+  void zero() {Base::zero(data);}
+  
+  CUDA_DEVICE_HOST
   T& at(uint32_t i, uint32_t j, uint32_t k) {
-    return data[i][j][k];
+    return Base::at(data, i, j, k);
   }
 
   CUDA_DEVICE_HOST
   T& add(uint32_t i, uint32_t j, uint32_t k, T val) {
-    set(i, j, k, at(i, j, k) + val);
+    return Base::add(data, i, j, k, val);
   }
 
   CUDA_DEVICE_HOST
   void set(uint32_t i, uint32_t j, uint32_t k, T val) {
-    data[i][j][k] = val;
+    Base::set(data, i, j, k, val);
   }
 };
 
@@ -85,6 +128,7 @@ public:
 template<typename T, uint32_t TileP, uint32_t TileQ>
 class DirectShared : public FixedShapeTensor2D<T, TileP, TileQ> {
   using Base = FixedShapeTensor2D<T, TileP, TileQ>;
+  T data[TileP*TileQ];
 
 public:
   CUDA_DEVICE_HOST
@@ -96,7 +140,7 @@ public:
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint idx = eIdx + ve;
-      Base::set(idx/Base::size(1), idx%Base::size(1), elems[ve]);
+      Base::set(idx/Base::shape(1), idx%Base::shape(1), elems[ve]);
     }
   }
 
@@ -115,9 +159,9 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t p() const {return Base::size(0);}
+  uint32_t p() const {return Base::shape(0);}
   CUDA_DEVICE_HOST
-  uint32_t q() const {return Base::size(1);}
+  uint32_t q() const {return Base::shape(1);}
 };
 
 template<typename T, uint32_t M, uint32_t N>
@@ -148,15 +192,16 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t m() const {return Base::size(0);}
+  uint32_t m() const {return Base::shape(0);}
   CUDA_DEVICE_HOST
-  uint32_t n() const {return Base::size(1);}
+  uint32_t n() const {return Base::shape(1);}
 };
 
 //Register Tensors
 template<typename T, uint32_t M, uint32_t K, uint32_t Q>
 class YRegisters : public FixedShapeTensor3D<T, M, K, Q> {
   using Base = FixedShapeTensor3D<T, M, K, Q>;
+
 public:
   CUDA_DEVICE_HOST
   YRegisters() {Base::zero();}
