@@ -127,14 +127,16 @@ class KernelConfig:
   def isValid(self):
     return self.wsz > 0 and \
            self.shape.k % self.shape.p == 0 and \
-           self.num_threads >= 32 and self.threads() <= 1024 and \
+           self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
-           self.dist in [0, 1] 
+           self.dist in [0, 1] and \
+           self.cRegCols <= 32 and \
+           self.cRegRows * self.cRegCols <= 64
+
           #  and \
           #  self.num_threads >= 128 and self.num_threads <= 256 and self.tileQ >= 64 and\
-          #  self.cRegRows * self.cRegCols <= 64
 
           #  and "128, 64, 64, 64, 2, 4096, 2, 16, 1, float, 1, 0" in repr(self)
 
