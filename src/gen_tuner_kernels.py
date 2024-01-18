@@ -133,8 +133,7 @@ class KernelConfig:
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.dist in [0, 1] and \
            self.cRegCols <= 32 and \
-           self.cRegRows * self.cRegCols <= 64
-
+           self.tileM * self.cRegRows * self.cRegCols <= 64
           #  and \
           #  self.num_threads >= 128 and self.num_threads <= 256 and self.tileQ >= 64 and\
 

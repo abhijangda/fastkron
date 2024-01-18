@@ -44,6 +44,5 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
 
   #pragma unroll
   for (uint rm = 0; rm < Yr.m(); rm++)
-    if (rm < m)
-      slicedMMA(rm, Xr, Fr, Yr);
+    slicedMMA(rm, Xr, Fr, Yr);
 }
