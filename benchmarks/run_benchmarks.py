@@ -77,7 +77,7 @@ class FastKronEval:
       shutil.rmtree('build/')
     os.mkdir('build/')
     os.chdir('build/')
-    run_command('cmake ..')
+    run_command('cmake .. -DNVCC_GENCODE_FLAGS="-gencode arch=compute_80,code=sm_80"')
     os.chdir(d)
 
   def gen_kernels(self, shape, distKernels):
