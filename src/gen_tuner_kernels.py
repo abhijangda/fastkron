@@ -8,6 +8,11 @@ import functools
 kernel_dir = os.path.join(os.path.dirname(__file__), "device/kron-kernels/")
 
 #Device limits
+#Volta
+MAX_SHARED_MEM = 96 * 1024
+#Ampere
+MAX_SHARED_MEM = 164 * 1024
+#Normal
 MAX_SHARED_MEM = 48 * 1024
 
 def slurp(file):
@@ -75,7 +80,7 @@ class KernelConfig:
        Corresponds to line numbers in kernel.cuh
     """
     self.wsz = (self.shape.k//self.shape.p)//self.cRegRows 
-    self.shared_mem_usage = (self.tileM * self.shape.k + self.tileP * self.tileQ)*element_size(elemType)
+    self.shared_mem_usage = (self.tileM * ((self.shape.k/self.shape.p)*self.tileP) + self.tileP * self.tileQ)*element_size(elemType)
 
   def threads(self):
     if self.num_threads%WARP_SIZE != 0:
@@ -92,7 +97,7 @@ class KernelConfig:
     return f"kernel_{self.kernelname()}.cu"
 
   def hostFuncName(self):
-    return f"host_{self.kernelname()}"
+    return f"invoke{self.kernelname()}"
 
   def hostFuncDecl(self):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, cudaStream_t stream)"
@@ -110,7 +115,14 @@ class KernelConfig:
     constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}"
     return "KernelInfo{"+\
             f"(void*){self.hostFuncName()},"+\
+            f"get{self.kernelname()},"+\
             constructor.replace("float", "ElementType::Float") + "}"
+
+  def getKernelFuncName(self):
+    return f"get{self.kernelname()}"
+
+  def getKernelFuncDecl(self):
+    return f"void* {self.getKernelFuncName()}()"
 
   def isValid(self):
     return self.wsz > 0 and \
@@ -120,6 +132,10 @@ class KernelConfig:
            self.cRegRows in [1, 2, 4] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.dist in [0, 1] 
+          #  and \
+          #  self.num_threads >= 128 and self.num_threads <= 256 and self.tileQ >= 64 and\
+          #  self.cRegRows * self.cRegCols <= 64
+
           #  and "128, 64, 64, 64, 2, 4096, 2, 16, 1, float, 1, 0" in repr(self)
 
   def __hash__(self):
@@ -149,7 +165,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
-      TilePs = [min(p, 32)]
+      TilePs = [min(p, 32)] + [i for i in factors(p) if i > 32]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
@@ -225,6 +241,9 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
     with open(kernel_filename, "w") as f:
       kernel_file_template = "\n".join(['#include "../kernel.cuh"',
                                         "",
+                                        config.getKernelFuncDecl()+"{",
+                                        f"  return (void*)&{config.kernelDecl()};",
+                                        "}",
                                         config.hostFuncDecl()+"{",
                                         f"  {config.kernelDecl()}<<<grid, block, sharedSize, stream>>>(params, fusedParams, distParams, epilogueParams);",
                                         "}"]);
@@ -233,7 +252,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
   #declare KernelInfo for each config
   host_decls = ''
   for config in combinedConfigs:
-    host_decls += config.hostFuncDecl() + ";\n"
+    host_decls += config.hostFuncDecl() + ";\n" + config.getKernelFuncDecl() + ";\n"
   host_decls += "\n"
   
   kernel_infos = "#define ALL_KERNELS \\\n"

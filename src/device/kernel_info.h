@@ -13,7 +13,8 @@ enum ElementType {
 };
 
 struct KernelInfo {
-  void* kernel;
+  void* invokerFunc;
+  void* kernelFunc;
   uint NumThreads;
   
   Factor factor;
@@ -29,17 +30,17 @@ struct KernelInfo {
   uint AAlignment;
   uint KronAlignment;
   KernelInfo() {}
-  KernelInfo(void* kernel_, uint NumThreads_, uint Q, uint P, uint tileP, uint tileQ,
+  KernelInfo(void* invokerFunc, void*(*getKernelFunc)(), uint NumThreads_, uint Q, uint P, uint tileP, uint tileQ,
              uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
              uint CRegRows_, uint CRegCols_, ElementType elemType_,
              uint AAlignment_, uint KronAlignment_) :
-             kernel(kernel_), NumThreads(NumThreads_), factor(P, Q), tiledFactor(tileP, tileQ),
+             invokerFunc(invokerFunc), kernelFunc(getKernelFunc()), NumThreads(NumThreads_), factor(P, Q), tiledFactor(tileP, tileQ),
              tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_),
              AAlignment(AAlignment_), KronAlignment(KronAlignment_) {}
 
-  bool isValid() {return kernel != nullptr;}
+  bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}
   friend std::ostream& operator<<(std::ostream &out, const KernelInfo &info) {
     out << info.NumThreads << "_" << info.tiledFactor << "_" << info.tiledInput << "**" << 
           info.NumFusedKerns_ << "_"<< info.DistributeToGPUs_
@@ -72,5 +73,16 @@ struct KernelInfo {
   size_t sharedMemSize() {
     Matrix Xsh = Matrix(tiledInput.m(), (tiledInput.n()/factor.p())*tiledFactor.p());
     return (tiledFactor.numel() + Xsh.numel())*sizeof(float);
+  }
+
+  cudaError_t setSharedMemAttr() {
+    cudaError_t err = cudaSuccess;
+    if (sharedMemSize() >= (48 << 10)) {
+      err = cudaFuncSetAttribute(kernelFunc,
+                                 cudaFuncAttributeMaxDynamicSharedMemorySize,
+                                 sharedMemSize());
+    }
+
+    return err;
   }
 };

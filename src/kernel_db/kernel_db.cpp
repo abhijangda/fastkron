@@ -26,6 +26,7 @@ KernelDatabase::KernelDatabase() {
   for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = KronGemmKernels[i];
     if (!isValidKernel(info)) abort();
+    CUDA_CHECK(info.setSharedMemAttr());
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
     auto iter = compiledKernels.find(info.factor);
     if (iter == compiledKernels.end()) {
@@ -66,7 +67,7 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernel)(params, fusedParams, distParams, 
+  KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, 
                                         epilogueParams, kernelInfo.grid(problem), 
                                         kernelInfo.block(), kernelInfo.sharedMemSize(), stream);
   status = cudaGetLastError();
