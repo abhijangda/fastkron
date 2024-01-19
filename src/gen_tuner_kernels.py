@@ -23,12 +23,12 @@ def empty_dir(dir):
   for filename in os.listdir(dir):
     file_path = os.path.join(dir, filename)
     try:
-        if os.path.isfile(file_path) or os.path.islink(file_path):
-            os.unlink(file_path)
-        elif os.path.isdir(file_path):
-            shutil.rmtree(file_path)
+      if os.path.isfile(file_path) or os.path.islink(file_path):
+          os.unlink(file_path)
+      elif os.path.isdir(file_path):
+          shutil.rmtree(file_path)
     except Exception as e:
-        print('Failed to delete %s. Reason: %s' % (file_path, e))
+      print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 def element_size(elem_type : str) -> int:
   if elem_type.lower() == "float":
@@ -134,10 +134,6 @@ class KernelConfig:
            self.dist in [0, 1] and \
            self.cRegCols <= 32 and \
            self.tileM * self.cRegRows * self.cRegCols <= 64
-          #  and \
-          #  self.num_threads >= 128 and self.num_threads <= 256 and self.tileQ >= 64 and\
-
-          #  and "128, 64, 64, 64, 2, 4096, 2, 16, 1, float, 1, 0" in repr(self)
 
   def __hash__(self):
     return hash(repr(self))
