@@ -36,8 +36,8 @@ int main(int argc, char* argv[]) {
   int facs = 0;
   char* fac_rows = NULL;
   char* fac_cols = NULL;
-  FastKronLayout flayout = FastKronLayout_N;
-  FastKronLayout xlayout = FastKronLayout_N;
+  fastKronLayout flayout = fastKronLayout_N;
+  fastKronLayout xlayout = fastKronLayout_N;
   char* type = NULL;
   bool checkResults = false;
   int runs = 0;
@@ -127,18 +127,18 @@ int main(int argc, char* argv[]) {
   if (opt->getValue("xlayout") != NULL) {
     char* str = opt->getValue("xlayout");
     if (strcmp(str, "N") == 0) {
-      xlayout = FastKronLayout_N;
+      xlayout = fastKronLayout_N;
     } else if (strcmp(str, "T") == 0) {
-      xlayout = FastKronLayout_T;
+      xlayout = fastKronLayout_T;
     }    
   }
 
   if (opt->getValue("flayout") != NULL) {
     char* str = opt->getValue("flayout");
     if (strcmp(str, "N") == 0) {
-      flayout = FastKronLayout_N;
+      flayout = fastKronLayout_N;
     } else if (strcmp(str, "T") == 0) {
-      flayout = FastKronLayout_T;
+      flayout = fastKronLayout_T;
     }
   }
 
