@@ -5,6 +5,11 @@
 extern "C" {
 typedef struct FastKronHandle* fastKronHandle;
 
+enum FastKronLayout {
+  FastKronLayout_N,
+  FastKronLayout_T
+};
+
 cudaError_t fastKronInit(fastKronHandle* handle, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
 void fastKronDestroy(fastKronHandle handle);
 

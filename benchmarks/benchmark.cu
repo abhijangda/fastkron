@@ -36,6 +36,8 @@ int main(int argc, char* argv[]) {
   int facs = 0;
   char* fac_rows = NULL;
   char* fac_cols = NULL;
+  FastKronLayout flayout = FastKronLayout_N;
+  FastKronLayout xlayout = FastKronLayout_N;
   char* type = NULL;
   bool checkResults = false;
   int runs = 0;
@@ -66,6 +68,8 @@ int main(int argc, char* argv[]) {
 
   opt->setOption("rows", 'm');
   opt->setOption("facs", 'n');
+  opt->setOption("xlayout");
+  opt->setOption("flayout");
   opt->setOption("fac_rows", 'p');
   opt->setOption("fac_cols", 'q');
   opt->setOption("type", 't');
@@ -118,6 +122,24 @@ int main(int argc, char* argv[]) {
 
   if (opt->getValue('w') != NULL) {
     warmup = atoi(opt->getValue('w'));
+  }
+
+  if (opt->getValue("xlayout") != NULL) {
+    char* str = opt->getValue("xlayout");
+    if (strcmp(str, "N") == 0) {
+      xlayout = FastKronLayout_N;
+    } else if (strcmp(str, "T") == 0) {
+      xlayout = FastKronLayout_T;
+    }    
+  }
+
+  if (opt->getValue("flayout") != NULL) {
+    char* str = opt->getValue("flayout");
+    if (strcmp(str, "N") == 0) {
+      flayout = FastKronLayout_N;
+    } else if (strcmp(str, "T") == 0) {
+      flayout = FastKronLayout_T;
+    }
   }
 
   tune = opt->getFlag("tune");
@@ -187,7 +209,7 @@ int main(int argc, char* argv[]) {
 
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, xlayout, flayout, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   // else if (strcmp(type, "int") == 0)
   //   status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
   //                     gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);

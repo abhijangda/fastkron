@@ -138,14 +138,45 @@ void baselineKPThenMatmul(uint NUM_KP_MATS, int* result, int* x, int* kpout[], i
   // printMatrix(result, M, N, 4, 4);
 }
 
+template<typename T>
+T* transpose(uint M, uint N, T* data) {
+  T* Trdata = new T[M * N];
+
+  for (int m = 0; m < M; m++) {
+    for (int n = 0; n < N; n++) {
+      Trdata[n*M + m] = data[m*N + n];
+    }
+  }
+
+  return Trdata;
+}
+
+void swap(uint& X, uint& Y) {
+  uint Temp = X;
+  X = Y;
+  Y = Temp;
+}
+
 //Serial implementation of the new Kron GEMM implementation
 template<typename T>
 void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
-                  uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[]) {
+                  uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
+                  FastKronLayout XLayout, FastKronLayout FLayout) {
   uint secFacRowMulSize = 1;
   uint rowsTillNow = 1;
   uint colsTillNow = 1;
   uint resultCols = 0;
+
+  if (FLayout == FastKronLayout_T) {
+    for (int i = 0; i < NUM_KP_MATS; i++) {
+      swap(KP_MAT_K[i], KP_MAT_N[i]);
+    }
+  }
+
+  if (XLayout == FastKronLayout_T) {
+    swap(M, K);
+  }
+
   for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
     T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     uint kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
@@ -238,7 +269,9 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
 ***************************************************/
 template<typename T>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
-                uint* KP_MAT_N, uint* KP_MAT_K, uint numIters, uint warmup, 
+                uint* KP_MAT_N, uint* KP_MAT_K,
+                FastKronLayout XLayout, FastKronLayout FLayout,
+                uint numIters, uint warmup, 
                 bool useUVA, int gpuInRows, int gpuInCols, int gpus,
                 uint kronBatch, bool checkResults, bool useFusion, bool tune, bool verbose) {
   verbose = true;
@@ -331,7 +364,21 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       for (uint i = 0; i < NUM_KP_MATS; i++) {
         hKpMatmulResult[i] = new T[tempSize * gpus];
       }
-      slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K);
+      if (XLayout == FastKronLayout_T) {
+        T* trhX = transpose(M, N, hX);
+        delete[] hX;
+        hX = trhX;
+      }
+
+      if (FLayout == FastKronLayout_T) {
+        for (int i = 0; i < NUM_KP_MATS; i++) {
+          T* tr = transpose(KP_MAT_K[i], KP_MAT_N[i], hKpMats[i]);
+          delete[] hKpMats[i];
+          hKpMats[i] = tr;
+        }
+      }
+
+      slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K, XLayout, FLayout);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
     }
     if (verbose) printf("running kron gemm\n");
