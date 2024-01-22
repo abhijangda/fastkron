@@ -15,7 +15,7 @@
   int devices = 0;\
   CUDACHECK(cudaGetDeviceCount(&devices));\
   if (devices < GM * GK) {EXPECT_TRUE(true); return;}\
-  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 0, 0, false, GM, GK, GM*GK, KronBatch, true, false, true, false);\
+  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_N, fastKronOp_N, 0, 0, false, GM, GK, GM*GK, KronBatch, true, false, true, false);\
   EXPECT_TRUE(b);\
 }
 

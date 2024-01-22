@@ -12,7 +12,8 @@
     K *= FacSize;\
     KP_MAT_K[i] = KP_MAT_N[i] = FacSize;\
   }\
-  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, 1, 0, false, 1, 1, 1, 1, true, true, true, false);\
+  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_N, fastKronOp_N, 
+  1, 0, false, 1, 1, 1, 1, true, true, true, false);\
   EXPECT_TRUE(b);\
 }
 
