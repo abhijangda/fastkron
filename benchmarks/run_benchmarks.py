@@ -80,9 +80,10 @@ class FastKronEval:
     run_command('cmake .. -DNVCC_GENCODE_FLAGS="-gencode arch=compute_80,code=sm_80"')
     os.chdir(d)
 
-  def gen_kernels(self, shape, distKernels):
+  def gen_kernels(self, shape, opX, opF, distKernels):
     run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
                 str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
+                " -opX " + opX + " -opF " + opF + \
                 (" -dist-kernels " if distKernels else ""))
 
   def build_kron(self):

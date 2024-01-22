@@ -26,40 +26,30 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
   const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
 
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
-    if (opF == fastKronOp_N) {
-      //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
-      const uint QVecs    = Fsh.q()/VecTLen;
-      const uint ThGroups = MAX(1, NumThreads/QVecs);
-
-      for (uint swid = tid/QVecs; swid < Fsh.p(); swid += ThGroups) {
-        for (uint qelem = tid%QVecs; qelem < QVecs; qelem += blockDim.x/ThGroups) {
-          ElemT regs[VecTLen];
-
-          const uint col = tileQ*Fsh.q() + qelem*VecTLen;
+    //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
+    const uint Vecs    = Fsh.shape(1)/VecTLen;
+    const uint ThGroups = MAX(1, NumThreads/Vecs);
+    for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
+      for (uint elem = tid%Vecs; elem < Vecs; elem += blockDim.x/ThGroups) {
+        ElemT regs[VecTLen];
+        if (opF == fastKronOp_N) {
+          const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
 
           ldGlobalVec(F.data<ElemT>(tileP + row, col), regs, VecTLen);
-          Fsh.store(row, qelem * VecTLen, VecTLen, regs);
-
-          //This condition avoids generating this loop giving better performance
-          if (QVecs == NumThreads/ThGroups) break;
-    }}} else if (opF == fastKronOp_T) {
-      const uint PVecs    = Fsh.p()/VecTLen;
-      const uint ThGroups = MAX(1, NumThreads/PVecs);
-
-      for (uint swid = tid/PVecs; swid < Fsh.q(); swid += ThGroups) {
-        for (uint pelem = tid%PVecs; pelem < PVecs; pelem += blockDim.x/ThGroups) {
-          ElemT regs[VecTLen];
-
+        } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
-          const uint col = pelem*VecTLen;
+          const uint col = elem*VecTLen;
 
           ldGlobalVec(F.data<ElemT>(row, tileP + col), regs, VecTLen);
-          Fsh.store(swid, pelem * VecTLen, VecTLen, regs);
+        }
+        
+        Fsh.store(swid, elem * VecTLen, VecTLen, regs);
 
-          //This condition avoids generating this loop giving better performance
-          if (PVecs == NumThreads/ThGroups) break;
-    }}}
+        //This condition avoids generating this loop giving better performance
+        if (Vecs == NumThreads/ThGroups) break;
+      }
+    }
   } else {
     //Optimized to load full factor matrix
     //Use blockDim in loop adder instead of NumThreads for better perf 
