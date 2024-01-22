@@ -132,11 +132,16 @@ public:
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
-  void store(uint32_t eIdx, uint32_t num, const T* elems) {
+  void store(uint32_t eIdx, uint32_t num, const T* elems, fastKronOp op) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint idx = eIdx + ve;
-      Base::set(data, idx/Base::shape(1), idx%Base::shape(1), elems[ve]);
+      uint row = idx/Base::shape(1);
+      uint col = idx%Base::shape(1);
+      if (op == fastKronOp_N)
+        Base::set(data, row, col, elems[ve]);
+      else if (op == fastKronOp_T)
+        Base::set(data, col, row, elems[ve]);
     }
   }
 

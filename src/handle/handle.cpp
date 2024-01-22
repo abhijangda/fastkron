@@ -4,6 +4,7 @@
 #include "utils/utils.h"
 #include "utils/thread_pool.h"
 #include "handle/handle.h"
+#include "handle/op.h"
 #include "env/env.h"
 #include "autotuner/autotuner.h"
 #include "kmm/kmmalgo.h"
@@ -105,7 +106,7 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
 }
 */
 
-std::string fastKronOpToStr(fastKronOp op) {
+std::string fastKronOpToStr(const fastKronOp& op) {
   switch (op) {
     case fastKronOp_N:
       return "N";
@@ -116,7 +117,7 @@ std::string fastKronOpToStr(fastKronOp op) {
   return NULL;
 }
 
-std::ostream& operator<<(std::ostream& os, const fastKronOp op) {
+std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
   os << fastKronOpToStr(op);
   return os;
 }

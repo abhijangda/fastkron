@@ -2,7 +2,6 @@
 #include <iomanip>
 
 #include "utils/utils.h"
-
 #include "kernel_db/kernel_db.h"
 #include "kernel_db/kernel_defs.h"
 

@@ -42,9 +42,6 @@ enum ProcType {
   MultipleProcess
 };
 
-std::string fastKronOpToStr(fastKronOp op);
-std::ostream& operator<<(std::ostream& os, const fastKronOp op);
-
 struct FastKronHandle {
   void* result_;
 

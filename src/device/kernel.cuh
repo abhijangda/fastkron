@@ -109,15 +109,15 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
     shiftXgToXsh<ElemT, XVecT, decltype(Xsh)>(TileP, NumThreads, RegK,
-                               tileP, tid, XTile, Xsh);
+                                              tileP, tid, XTile, Xsh);
 
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
-      directFgToFsh<ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, tileP, tileQ,
-                                  F, Fsh);
+      directFgToFsh<ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, OpF, tileP, tileQ,
+                                                 F, Fsh);
 
       __syncthreads();
 
