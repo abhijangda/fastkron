@@ -89,8 +89,8 @@ class FastKronEval:
   def build_kron(self):
     run_command("cd build && make benchmark -j")
 
-  def run_fastkron(self, shape, GM, GK, LocalKrons):
-    kron = f"cd build && ./benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 100 -w 10 -t float --tune"
+  def run_fastkron(self, shape, GM, GK, LocalKrons, opX, opF):
+    kron = f"cd build && ./benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 100 -w 10 -t float --tune --opx {opX} --opf {opF}"
     if GM * GK != 1:
       kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
 
@@ -110,13 +110,13 @@ class FastKronEval:
     else:
       return (shape, GM, GK, wofuse, fused)
 
-  def run_single_gpu(self, shape):
-    self.gen_kernels(shape, False)
+  def run_single_gpu(self, shape, opX, opF):
+    self.gen_kernels(shape, opX, opF, False)
     self.setup_cmake()
     self.build_kron()
-    return self.run_fastkron(shape, 1, 1, 1)
+    return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
-def run_single_gpu():
+def run_single_gpu_nn():
   M = 1024
   cases = [
            Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
@@ -135,9 +135,26 @@ def run_single_gpu():
            ]
 
   for shape in cases:
-    fk = FastKronEval().run_single_gpu(shape)
+    fk = FastKronEval().run_single_gpu(shape, "N", "N")
     gp = GPyTorchEval().run_single_gpu(shape)
     print(" & ".join((str(p) for p in (fk + gp))))
+
+def run_single_gpu_nt():
+  M = 1024
+  cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
+           Shape(M, 3, 64, 64), Shape(320, 3, 128, 128)]
+
+  M = 16
+  cases += [Shape(M, 8, 8, 8),
+           Shape(M, 6, 16, 16),
+           Shape(M, 5, 32, 32),
+           Shape(M, 4, 64, 64),
+          #  Shape(M, 3, 128, 128)
+           ]
+
+  for shape in cases:
+    fk = FastKronEval().run_single_gpu(shape,"N", "T")
+    print(" & ".join((str(p) for p in (fk))))
 
 def multi_gpu(scaling):
   cases = []
@@ -163,9 +180,13 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-print("------- Single GPU -------")
+print("------- Single GPU NN-------")
 print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-run_single_gpu()
+# run_single_gpu_nn()
+
+print("------- Single GPU NT-------")
+print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
+run_single_gpu_nt()
 
 print("------- Multi GPU Weak Scaling --------")
 print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
