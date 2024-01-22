@@ -67,7 +67,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
       ElemT regs[VecTLen];
 
       ldGlobalVec(F.data<ElemT>(eIdx), regs, VecTLen);
-      Fsh.store(eIdx, VecTLen, regs, opF);
+      Fsh.store(eIdx, VecTLen, regs);
 }}}
 
 template<typename FShared, typename XShared, typename YReg>

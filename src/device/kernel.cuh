@@ -97,8 +97,8 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
   
-  using XShared = ShiftShared<ElemT, TileM, ShTileK>;
-  using FShared = DirectShared<ElemT, TileP, TileQ>;
+  using XShared = ShiftShared<OpX, ElemT, TileM, ShTileK>;
+  using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
   
   XShared Xsh(&sharedStorage[0]);
   FShared Fsh(&sharedStorage[Xsh.numel()]);

@@ -1,6 +1,6 @@
 #include "kmm/coord.h"
 
-template<typename T, uint32_t M, uint32_t N>
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
 class AbstractFixedShapeTensor2D {
 public:
   CUDA_DEVICE_HOST
@@ -11,27 +11,48 @@ public:
 
   CUDA_DEVICE_HOST
   uint32_t shape(uint32_t dim) const {
-    switch(dim) {
-      case  0: return M;
-      case  1: return N;
-      default: return 0;
+    if (Layout == fastKronOp_N) {
+      switch(dim) {
+        case  0: return M;
+        case  1: return N;
+        default: return 0;
+      }
+    } else if (Layout == fastKronOp_T) {
+      switch(dim) {
+        case  0: return N;
+        case  1: return M;
+        default: return 0;
+      }
     }
   }
 
   CUDA_DEVICE_HOST
+  uint32_t linearIdx(uint32_t i, uint32_t j) {
+    if (Layout == fastKronOp_N)
+      return i * shape(1) + j;
+    else
+      return j * shape(1) + i;
+  }
+
+  CUDA_DEVICE_HOST
   T& at(T data[], uint32_t i, uint32_t j) {
-    return data[i * shape(1) + j];
+    return data[linearIdx(i, j)];
+  }
+
+  CUDA_DEVICE_HOST
+  void set(T data[], uint32_t i, T val) {
+    data[i] = val;
   }
 
   CUDA_DEVICE_HOST
   void set(T data[], uint32_t i, uint32_t j, T val) {
-    data[i*shape(1) + j] = val;
+    data[linearIdx(i, j)] = val;
   }
 };
 
-template<typename T, uint32_t M, uint32_t N>
-class FixedShapeTensor2D : public AbstractFixedShapeTensor2D<T, M, N> {
-  using Base = AbstractFixedShapeTensor2D<T, M, N>;
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
+class FixedShapeTensor2D : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
   T data[M*N];
 
 public:
@@ -121,9 +142,9 @@ public:
 };
 
 //Shared Memory Tensors
-template<typename T, uint32_t TileP, uint32_t TileQ>
-class DirectShared : public AbstractFixedShapeTensor2D<T, TileP, TileQ> {
-  using Base = AbstractFixedShapeTensor2D<T, TileP, TileQ>;
+template<fastKronOp Layout, typename T, uint32_t TileP, uint32_t TileQ>
+class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ>;
   T* data;
 
 public:
@@ -132,16 +153,11 @@ public:
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
-  void store(uint32_t eIdx, uint32_t num, const T* elems, fastKronOp op) {
+  void store(uint32_t eIdx, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint idx = eIdx + ve;
-      uint row = idx/Base::shape(1);
-      uint col = idx%Base::shape(1);
-      if (op == fastKronOp_N)
-        Base::set(data, row, col, elems[ve]);
-      else if (op == fastKronOp_T)
-        Base::set(data, col, row, elems[ve]);
+      Base::set(data, idx, elems[ve]);
     }
   }
 
@@ -169,9 +185,9 @@ public:
   uint32_t q() const {return Base::shape(1);}
 };
 
-template<typename T, uint32_t M, uint32_t N>
-class ShiftShared : public AbstractFixedShapeTensor2D<T, M, N> {
-  using Base = AbstractFixedShapeTensor2D<T, M, N>;
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
+class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
   T* data;
 
 public:
@@ -235,7 +251,7 @@ public:
 };
 
 template<typename T, uint32_t TileP, uint32_t CRegCols>
-class FRegisters : public FixedShapeTensor2D<T, TileP, CRegCols>{
+class FRegisters : public FixedShapeTensor2D<fastKronOp_N, T, TileP, CRegCols>{
   public:
     CUDA_DEVICE_HOST
     FRegisters() {}
