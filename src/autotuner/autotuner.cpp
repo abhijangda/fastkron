@@ -105,7 +105,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     //Use temporary as input/output matrix
     //TODO: fix this
     auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
-                                 problem.n(), &Fs[0][0], 
+                                 problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
     tune(tmpProblem, false, DistributedParams(), stream);
     std::cout << "Finding min execution time of the series" << std::endl;
@@ -151,7 +151,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     TunedKernelsSeries tunedKernelSeries;
 
     auto tmpProblem = KMMProblem(Matrix(gpuM, gpuK, temp1[0].data()), 
-                                 problem.n(), &Fs[0][0],
+                                 problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(gpuM, problem.y().n()/fastKron.gpusInK_, temp2[0].data()));
 
     for (int i = problem.n() - 1; i >= 0; i -= MaxLocalKrons) {

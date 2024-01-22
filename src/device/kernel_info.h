@@ -20,6 +20,9 @@ struct KernelInfo {
   Factor factor;
   Factor tiledFactor;
   Matrix tiledInput;
+
+  fastKronOp opX;
+  fastKronOp opF;
   
   uint NumFusedKerns_;
   bool DistributeToGPUs_;
@@ -30,15 +33,18 @@ struct KernelInfo {
   uint AAlignment;
   uint KronAlignment;
   KernelInfo() {}
-  KernelInfo(void* invokerFunc, void*(*getKernelFunc)(), uint NumThreads_, uint Q, uint P, uint tileP, uint tileQ,
+  KernelInfo(void* invokerFunc, void*(*getKernelFunc)(), uint NumThreads_, 
+             uint Q, uint P, uint tileP, uint tileQ,
              uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
              uint CRegRows_, uint CRegCols_, ElementType elemType_,
-             uint AAlignment_, uint KronAlignment_) :
+             uint AAlignment_, uint KronAlignment_,
+             fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), kernelFunc(getKernelFunc()), NumThreads(NumThreads_), factor(P, Q), tiledFactor(tileP, tileQ),
              tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
              CRegRows(CRegRows_),
              CRegCols(CRegCols_), elemType(elemType_),
-             AAlignment(AAlignment_), KronAlignment(KronAlignment_) {}
+             AAlignment(AAlignment_), KronAlignment(KronAlignment_),
+             opX(opX), opF(opF) {}
 
   bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}
   friend std::ostream& operator<<(std::ostream &out, const KernelInfo &info) {
@@ -46,13 +52,15 @@ struct KernelInfo {
           info.NumFusedKerns_ << "_"<< info.DistributeToGPUs_
           << "_" <<
            info.CRegRows << "x" << info.CRegCols << "_" <<
-           info.AAlignment << "_" << info.KronAlignment;
+           info.AAlignment << "_" << info.KronAlignment << "_" << info.opX << info.opF;
       
     return out;
   }
 
   bool canCompute(KMMProblem problem, bool p2p) {
     return Factor(factor.p(), tiledFactor.q()) == problem.f(0) &&
+           problem.opFs() == opF &&
+           problem.opX()  == opX &&
            problem.k() % tiledInput.n() == 0 &&
            problem.n() == NumFusedKerns_ &&
            DistributeToGPUs_ == p2p;

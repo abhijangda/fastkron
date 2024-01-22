@@ -74,13 +74,14 @@ cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
   }
 
   Matrix result = problem.y();
-  problem = KMMProblem(problem.x(), problem.n(), problem.fs(),
-                       Matrix(problem.m(), problem.l(), firstIterOut));
+  problem = KMMProblem(problem.x(), problem.opX(), problem.n(), problem.fs(),
+                       problem.opFs(), Matrix(problem.m(), problem.l(), firstIterOut));
   cudaError_t err;
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
-    if (i < nextF) problem = KMMProblem(problem.x(), problem.n(), problem.fs(), result);
+    if (i < nextF) problem = KMMProblem(problem.x(), problem.opX(), problem.n(), 
+                                        problem.fs(), problem.opFs(), result);
     err = func(problem.rsub(i, nextF), i, tmps, result);
     if (err != cudaSuccess) break;
     if (tmps != nullptr)
@@ -98,7 +99,8 @@ cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* tmps[2], Matrix result
   cudaError_t err;
   for (int i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
-    if (i < nextF) problem = KMMProblem(problem.x(), problem.n(), problem.fs(), result);
+    if (i < nextF) problem = KMMProblem(problem.x(), problem.opX(), problem.n(), 
+                                        problem.fs(), problem.opFs(), result);
     err = func(problem.rsub(i, nextF), i, tmps, result);
     if (err != cudaSuccess) break;
     if (tmps != nullptr)

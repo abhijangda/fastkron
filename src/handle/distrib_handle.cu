@@ -237,7 +237,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         //TODO: a single switch case for FusedKernels?
         cudaError_t status;
         KMMProblem subProblem(gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
-                              (void**)krons, (void*)innerCurrResult, prevTempN, currTempN);
+                              fastKronOp_N, (void**)krons, fastKronOp_N, (void*)innerCurrResult, prevTempN, currTempN);
         status = handle.kerneldb.invokeP2PStoreKernel(kernel.kernel, kernel.end, subProblem, distParams, 
                                                            EpilogueParams::create<float>(), stream[g]);
         assert(status == cudaSuccess);        

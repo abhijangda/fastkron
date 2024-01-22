@@ -2,13 +2,13 @@
 #include<driver_types.h>
 #pragma once
 
+enum fastKronOp {
+  fastKronOp_N = 1,
+  fastKronOp_T = 2
+};
+
 extern "C" {
 typedef struct FastKronHandle* fastKronHandle;
-
-enum fastKronLayout {
-  fastKronLayout_N,
-  fastKronLayout_T
-};
 
 cudaError_t fastKronInit(fastKronHandle* handle, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
 void fastKronDestroy(fastKronHandle handle);
@@ -17,21 +17,21 @@ cudaError_t gekmmSizes(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs
                        size_t* resultSize, size_t* tempSize);
 
 cudaError_t sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, 
-                   fastKronLayout LayoutX, float* Fs[], fastKronLayout LayoutFs, float* Y,
+                   fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
                    float alpha, float beta, float *Z, float* temp1, float* temp2, cudaStream_t stream);
 cudaError_t igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, 
-                   fastKronLayout LayoutX, int* Fs[], fastKronLayout LayoutFs, int* Y,
+                   fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, int *Z, int* temp1, int* temp2, cudaStream_t stream);
 cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, 
-                   fastKronLayout LayoutX, double* Fs[], fastKronLayout LayoutFs, double* Y,
+                   fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2, cudaStream_t stream);
 
 cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronLayout LayoutX, fastKronLayout LayoutFs, cudaStream_t stream);
+                       fastKronOp opX, fastKronOp opFs, cudaStream_t stream);
 cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronLayout LayoutX, fastKronLayout LayoutFs, cudaStream_t stream);
+                       fastKronOp opX, fastKronOp opFs, cudaStream_t stream);
 cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronLayout LayoutX, fastKronLayout LayoutFs, cudaStream_t stream);
+                       fastKronOp opX, fastKronOp opFs, cudaStream_t stream);
 
 cudaError_t kronSGEMMOutofCore(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);

@@ -161,19 +161,19 @@ void swap(uint& X, uint& Y) {
 template<typename T>
 void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
                   uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
-                  fastKronLayout xlayout, fastKronLayout fslayout) {
+                  fastKronOp xlayout, fastKronOp fslayout) {
   uint secFacRowMulSize = 1;
   uint rowsTillNow = 1;
   uint colsTillNow = 1;
   uint resultCols = 0;
 
-  if (fslayout == fastKronLayout_T) {
+  if (fslayout == fastKronOp_T) {
     for (int i = 0; i < NUM_KP_MATS; i++) {
       swap(KP_MAT_K[i], KP_MAT_N[i]);
     }
   }
 
-  if (xlayout == fastKronLayout_T) {
+  if (xlayout == fastKronOp_T) {
     swap(M, K);
   }
 
@@ -213,7 +213,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
               Call KronGEMM Library Functions
 ***************************************************/
 template<typename T>
-static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, fastKronLayout xlayout, T* kpMats[], fastKronLayout fslayout, T* result,
+static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, fastKronOp xlayout, T* kpMats[], fastKronOp fslayout, T* result,
                      uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2,
                      cudaStream_t stream) {
   if (std::is_same<T, float>::value) {
@@ -270,7 +270,7 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
 template<typename T>
 static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
                 uint* KP_MAT_N, uint* KP_MAT_K,
-                fastKronLayout xlayout, fastKronLayout fslayout,
+                fastKronOp xlayout, fastKronOp fslayout,
                 uint numIters, uint warmup, 
                 bool useUVA, int gpuInRows, int gpuInCols, int gpus,
                 uint kronBatch, bool checkResults, bool useFusion, bool tune, bool verbose) {
@@ -364,13 +364,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       for (uint i = 0; i < NUM_KP_MATS; i++) {
         hKpMatmulResult[i] = new T[tempSize * gpus];
       }
-      if (xlayout == fastKronLayout_T) {
+      if (xlayout == fastKronOp_T) {
         T* trhX = transpose(M, N, hX);
         delete[] hX;
         hX = trhX;
       }
 
-      if (fslayout == fastKronLayout_T) {
+      if (fslayout == fastKronOp_T) {
         for (int i = 0; i < NUM_KP_MATS; i++) {
           T* tr = transpose(KP_MAT_K[i], KP_MAT_N[i], hKpMats[i]);
           delete[] hKpMats[i];

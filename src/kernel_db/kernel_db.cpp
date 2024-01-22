@@ -28,11 +28,12 @@ KernelDatabase::KernelDatabase() {
     if (!isValidKernel(info)) abort();
     CUDA_CHECK(info.setSharedMemAttr());
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-    auto iter = compiledKernels.find(info.factor);
+    DbKey key {info.factor, info.opX, info.opF};
+    auto iter = compiledKernels.find(key);
     if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(info.factor, std::vector<KernelInfo>()));
+      compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo>()));
     }
-    compiledKernels.at(info.factor).push_back(info);
+    compiledKernels.at(key).push_back(info);
   }
   
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
@@ -143,13 +144,14 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
   cudaEvent_t start, end;
   float minTime;
   bool foundProblem = false;
+  std::vector<KernelInfo> allKernels;
 
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
   minTime = std::numeric_limits<float>::max();
 
-  if (compiledKernels.find(problem.f(0)) != compiledKernels.end()) {
-  for (auto kernel : compiledKernels.at(problem.f(0))) {
+  if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
+  for (auto kernel : allKernels) {
     if (!kernel.canCompute(problem, distP2PStore)) continue;
     if (!foundProblem) {
       std::cout << "Tuning for shape "  << problem << std::endl;
