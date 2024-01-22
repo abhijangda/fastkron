@@ -38,14 +38,14 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           const uint col = tileQ*Fsh.q() + qelem*VecTLen;
           const uint row = swid;
 
-          ldGlobalVec(F.data<ElemT>((tileP + row), col), regs, VecTLen);
-          Fsh.store(row, qelem * VecTLen, VecTLen, regs, opF);
+          ldGlobalVec(F.data<ElemT>(tileP + row, col), regs, VecTLen);
+          Fsh.store(row, qelem * VecTLen, VecTLen, regs);
 
           //This condition avoids generating this loop giving better performance
           if (QVecs == NumThreads/ThGroups) break;
     }}} else if (opF == fastKronOp_T) {
-      const uint PVecs    = Fsh.p()/VecTLen; //32/4 = 8
-      const uint ThGroups = MAX(1, NumThreads/PVecs); 
+      const uint PVecs    = Fsh.p()/VecTLen;
+      const uint ThGroups = MAX(1, NumThreads/PVecs);
 
       for (uint swid = tid/PVecs; swid < Fsh.q(); swid += ThGroups) {
         for (uint pelem = tid%PVecs; pelem < PVecs; pelem += blockDim.x/ThGroups) {
@@ -55,7 +55,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           const uint col = pelem*VecTLen;
 
           ldGlobalVec(F.data<ElemT>(row, tileP + col), regs, VecTLen);
-          Fsh.store(pelem * VecTLen, swid, VecTLen, regs, opF);
+          Fsh.store(swid, pelem * VecTLen, VecTLen, regs);
 
           //This condition avoids generating this loop giving better performance
           if (PVecs == NumThreads/ThGroups) break;

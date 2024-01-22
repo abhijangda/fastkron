@@ -163,14 +163,11 @@ public:
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord2D
-  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems, fastKronOp op) {
+  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
-      if (op == fastKronOp_N) {
-        Base::set(data, row, col + ve, elems[ve]);
-      } else if (op == fastKronOp_T) {
-        Base::set(data, row + ve, col, elems[ve]); 
-      }
+      uint32_t idx = row * Base::shape(1) + col + ve;
+      Base::set(data, idx, elems[ve]);
     }
   }
   
@@ -180,9 +177,9 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t p() const {return Base::shape(0);}
+  uint32_t p() const {return TileP;}
   CUDA_DEVICE_HOST
-  uint32_t q() const {return Base::shape(1);}
+  uint32_t q() const {return TileQ;}
 };
 
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
