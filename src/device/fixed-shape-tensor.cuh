@@ -147,10 +147,14 @@ public:
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord2D
-  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
+  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems, fastKronOp op) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
-      Base::set(data, row, col + ve, elems[ve]);
+      if (op == fastKronOp_N) {
+        Base::set(data, row, col + ve, elems[ve]);
+      } else if (op == fastKronOp_T) {
+        Base::set(data, row + ve, col, elems[ve]); 
+      }
     }
   }
   
