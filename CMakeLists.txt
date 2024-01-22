@@ -102,7 +102,7 @@ set(TESTS_LIBS GTest::gtest_main FastKron nccl)
 add_executable(single-gpu-no-fusion-tests tests/single-gpu-no-fusion-tests.cpp)
 add_executable(single-gpu-fusion-tests tests/single-gpu-fusion-tests.cpp)
 add_custom_target(gen-single-gpu-kernels
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 20 2,2 -same-factors 10 4,4 -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128 -match-configs-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/single-gpu-kernel-decls.in
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 20 2,2 -same-factors 10 4,4 -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128 -opX N -opF N -match-configs-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/single-gpu-kernel-decls.in
 )
 target_include_directories(single-gpu-no-fusion-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-no-fusion-tests ${TESTS_LIBS})
@@ -112,56 +112,56 @@ target_link_libraries(single-gpu-fusion-tests ${TESTS_LIBS})
 
 add_executable(single-gpu-tuner-tests tests/single-gpu-tuner-tests.cpp)
 add_custom_target(gen-tuner-kernels
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 16,16 -same-factors 3 64,64
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 16,16 -same-factors 3 64,64 -opX N -opF N
 )
 target_include_directories(single-gpu-tuner-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-tuner-tests ${TESTS_LIBS})
 
 add_executable(single-gpu-non-square-tuner-tests tests/single-gpu-non-square-tuner-tests.cpp)
 add_custom_target(gen-non-square-tuner-test-kernels
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 8,16 -same-factors 3 32,16 -same-factors 3 128,32
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 8,16 -same-factors 3 32,16 -same-factors 3 128,32 -opX N -opF N
 )
 target_include_directories(single-gpu-non-square-tuner-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-non-square-tuner-tests ${TESTS_LIBS})
 
 add_executable(single-gpu-distinct-shapes tests/single-gpu-distinct-shapes.cpp)
 add_custom_target(gen-single-gpu-distinct-shapes
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -distinct-factors 3 8,16 16,8 8,32
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -distinct-factors 3 8,16 16,8 8,32 -opX N -opF N
 )
 target_include_directories(single-gpu-distinct-shapes PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-distinct-shapes ${TESTS_LIBS})
 
 add_executable(single-gpu-odd-shapes tests/single-gpu-odd-shapes.cpp)
 add_custom_target(gen-single-gpu-odd-shapes
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 2 31,16 -same-factors 2 16,31 -same-factors 4 31,31
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 2 31,16 -same-factors 2 16,31 -same-factors 4 31,31 -opX N -opF N
 )
 target_include_directories(single-gpu-odd-shapes PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-odd-shapes ${TESTS_LIBS})
 
 add_executable(multi-gpu-no-fusion-tests tests/multi-gpu-no-fusion-tests.cpp)
 add_custom_target(gen-multi-gpu-tests-kernel
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 64,64 -same-factors 4 128,128 -dist-kernels -match-configs 128,64,64,64,4096,2,1,0,2,16 128,64,64,64,4096,2,1,1,2,16 128,128,128,128,8192,1,1,0,2,32 128,128,128,128,8192,1,1,1,2,32
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 64,64 -same-factors 4 128,128 -dist-kernels -match-configs 128,64,64,64,4096,2,1,0,2,16 128,64,64,64,4096,2,1,1,2,16 128,128,128,128,8192,1,1,0,2,32 128,128,128,128,8192,1,1,1,2,32 -opX N -opF N
 )
 target_include_directories(multi-gpu-no-fusion-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(multi-gpu-no-fusion-tests ${TESTS_LIBS})
 
 add_executable(multi-gpu-tuner-tests tests/multi-gpu-tuner-tests.cpp)
 add_custom_target(gen-multi-gpu-tuner-kernels
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 5 16,16 -dist-kernels
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 5 16,16 -dist-kernels -opX N -opF N
 )
 target_include_directories(multi-gpu-tuner-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(multi-gpu-tuner-tests ${TESTS_LIBS})
 
 add_executable(multi-gpu-no-fusion-non-square-tests tests/multi-gpu-no-fusion-non-square-tests.cpp)
 add_custom_target(gen-multi-gpu-no-fusion-non-square-tests-kernel
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 5 8,32 -same-factors 4 64,16 -dist-kernels
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 5 8,32 -same-factors 4 64,16 -dist-kernels -opX N -opF N
 )
 target_include_directories(multi-gpu-no-fusion-non-square-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(multi-gpu-no-fusion-non-square-tests ${TESTS_LIBS})
 
 add_executable(multi-gpu-distinct-shapes tests/multi-gpu-distinct-shapes.cpp)
 add_custom_target(gen-multi-gpu-distinct-shapes
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -distinct-factors 3 8,16 32,8 16,8 -match-configs 64,16,8,16,256 32,8,32,8,256 128,8,16,8,256 -dist-kernels
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -distinct-factors 3 8,16 32,8 16,8 -match-configs 64,16,8,16,256 32,8,32,8,256 128,8,16,8,256 -dist-kernels -opX N -opF N
 )
 target_include_directories(multi-gpu-distinct-shapes PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(multi-gpu-distinct-shapes ${TESTS_LIBS})

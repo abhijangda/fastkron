@@ -42,21 +42,8 @@ enum ProcType {
   MultipleProcess
 };
 
-static std::string fastKronOpToStr(fastKronOp op) {
-  switch (op) {
-    case fastKronOp_N:
-      return "N";
-    case fastKronOp_T:
-      return "T";
-  }
-
-  return NULL;
-}
-
-std::ostream& operator<<(std::ostream& os, const fastKronOp op) {
-  os << fastKronOpToStr(op);
-  return os;
-}
+std::string fastKronOpToStr(fastKronOp op);
+std::ostream& operator<<(std::ostream& os, const fastKronOp op);
 
 struct FastKronHandle {
   void* result_;

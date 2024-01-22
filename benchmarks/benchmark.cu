@@ -36,8 +36,8 @@ int main(int argc, char* argv[]) {
   int facs = 0;
   char* fac_rows = NULL;
   char* fac_cols = NULL;
-  fastKronOp flayout = fastKronOp_N;
-  fastKronOp xlayout = fastKronOp_N;
+  fastKronOp opf = fastKronOp_N;
+  fastKronOp opx = fastKronOp_N;
   char* type = NULL;
   bool checkResults = false;
   int runs = 0;
@@ -68,8 +68,8 @@ int main(int argc, char* argv[]) {
 
   opt->setOption("rows", 'm');
   opt->setOption("facs", 'n');
-  opt->setOption("xlayout");
-  opt->setOption("flayout");
+  opt->setOption("opx");
+  opt->setOption("opf");
   opt->setOption("fac_rows", 'p');
   opt->setOption("fac_cols", 'q');
   opt->setOption("type", 't');
@@ -124,21 +124,21 @@ int main(int argc, char* argv[]) {
     warmup = atoi(opt->getValue('w'));
   }
 
-  if (opt->getValue("xlayout") != NULL) {
-    char* str = opt->getValue("xlayout");
+  if (opt->getValue("opx") != NULL) {
+    char* str = opt->getValue("opx");
     if (strcmp(str, "N") == 0) {
-      xlayout = fastKronOp_N;
+      opx = fastKronOp_N;
     } else if (strcmp(str, "T") == 0) {
-      xlayout = fastKronOp_T;
+      opx = fastKronOp_T;
     }    
   }
 
-  if (opt->getValue("flayout") != NULL) {
-    char* str = opt->getValue("flayout");
+  if (opt->getValue("opf") != NULL) {
+    char* str = opt->getValue("opf");
     if (strcmp(str, "N") == 0) {
-      flayout = fastKronOp_N;
+      opf = fastKronOp_N;
     } else if (strcmp(str, "T") == 0) {
-      flayout = fastKronOp_T;
+      opf = fastKronOp_T;
     }
   }
 
@@ -209,7 +209,7 @@ int main(int argc, char* argv[]) {
 
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, xlayout, flayout, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
   // else if (strcmp(type, "int") == 0)
   //   status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
   //                     gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);

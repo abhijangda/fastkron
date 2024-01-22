@@ -28,7 +28,8 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          uint TileM, uint FusedFacs, bool DistributeToGPUs, 
          uint RegK, uint RegQ,
          uint FactorHasMaxShape, 
-         int XAlignment, int FAlignment>
+         int XAlignment, int FAlignment,
+         fastKronOp OpX, fastKronOp opF>
 __launch_bounds__(NumThreads)
 __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                                FusedParams<FusedFacs> fusedParams,

@@ -105,6 +105,22 @@ TunedKernelsSeries FastKronHandle::selectKernelSeries(const uint NumKronMats,
 }
 */
 
+std::string fastKronOpToStr(fastKronOp op) {
+  switch (op) {
+    case fastKronOp_N:
+      return "N";
+    case fastKronOp_T:
+      return "T";
+  }
+
+  return NULL;
+}
+
+std::ostream& operator<<(std::ostream& os, const fastKronOp op) {
+  os << fastKronOpToStr(op);
+  return os;
+}
+
 cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
                                    EpilogueParams epilogueParams, cudaStream_t stream) {
   TunedKernelsSeries kernelSeries;

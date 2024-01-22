@@ -56,10 +56,10 @@ WARP_SIZE=32
 
 class KernelConfig:  
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
-               tileQ : int, tileP : int, tileM: int, 
+               tileQ : int, tileP : int, tileM: int,
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
-               allPowersOf2):
+               allPowersOf2: int, opX : bool, opF : bool):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.kron_rows = kron_rows
@@ -69,6 +69,8 @@ class KernelConfig:
     self.tileM = tileM
     self.cRegRows = cRegRows
     self.cRegCols = cRegCols
+    self.opX = opX
+    self.opF = opF
     self.fused_kernels = FusedKernel
     assert self.fused_kernels > 0
     self.dist = dist
@@ -88,7 +90,7 @@ class KernelConfig:
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}"
+    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
 
   def kernelname(self):
     return repr(self).replace(", ", "_")
@@ -103,7 +105,7 @@ class KernelConfig:
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.aalign}, {self.kalign}"
+    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
   
   def kernelDecl(self):
     return f"kronGemmKernel<{self.templateDecl()}>"
@@ -112,7 +114,8 @@ class KernelConfig:
     return repr(self) == repr(other)
 
   def kernelInfo(self):
-    constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}"
+    #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
+    constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
     return "KernelInfo{"+\
             f"(void*){self.hostFuncName()},"+\
             f"get{self.kernelname()},"+\
@@ -152,7 +155,7 @@ def all_sliced_mults(m, k, n, ps, qs):
 def alignment(cols):
   return max([a for a in [1, 2, 4] if cols%a == 0])
 
-def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
+def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
   if not os.path.exists(kernel_dir):
     os.mkdir(kernel_dir)
 
@@ -167,7 +170,7 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
       TileMs = [1, 2] #[2 ** i for i in range(0, int(math.log2(m)))]
-    
+
       shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
         configs[shape] = []
@@ -190,9 +193,10 @@ def generate_kernel_decls(cases, useFusion, useDistKernels, numKernels, onlySpec
                       distKernels = [0, 1] if useDistKernels else [0]
                       for dist in distKernels: 
                         __configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                                    p, q, tQ, tP, tM, 
+                                                                   p, q, tQ, tP, tM, 
                                       regRows, regCols,
-                                      numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes)]
+                                      numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
+                                      opX, opF)]
       configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
@@ -305,12 +309,14 @@ def parse_same_factors(case):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-distinct-factors', required=False, nargs="+", action='append', type=str)
-  parser.add_argument('-same-factors', required=False, nargs="+", action='append', type=str)
-  parser.add_argument('-no-fuse', required=False, action='store_true')
-  parser.add_argument('-num-kernels', required=False, type=int, default=10000)
-  parser.add_argument('-dist-kernels', required=False, action='store_true', default=False)
-  parser.add_argument('-match-configs', nargs="+", action='append', type=str)
+  parser.add_argument('-distinct-factors',   required=False , type=str,  action='append',     nargs="+")
+  parser.add_argument('-same-factors',       required=False , type=str,  action='append',     nargs="+")
+  parser.add_argument('-opX',                required=True , type=str)
+  parser.add_argument('-opF',                required=True , type=str)
+  parser.add_argument('-num-kernels',        required=False, type=int,                       default=10000)
+  parser.add_argument('-no-fuse',            required=False, action='store_true')
+  parser.add_argument('-dist-kernels',       required=False, action='store_true', default=False)
+  parser.add_argument('-match-configs',      required=False, type=str,  action='append',     nargs="+")
   parser.add_argument('-match-configs-file', required=False, type=str)
 
   args = parser.parse_args()
@@ -335,6 +341,8 @@ if __name__ == "__main__":
         sys.exit(0)
   
   print("Generating kernels for ", parsed_cases)
+  assert args.opX in ["N", "T"]
+  assert args.opF in ["N", "T"]
   assert (args.match_configs == None and args.match_configs_file == None) or \
          (args.match_configs != None and args.match_configs_file == None) or \
          (args.match_configs == None and args.match_configs_file != None)
@@ -343,4 +351,5 @@ if __name__ == "__main__":
   if args.match_configs_file != None:
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
-  generate_kernel_decls(parsed_cases, not args.no_fuse, args.dist_kernels, args.num_kernels, match_configs)
+  generate_kernel_decls(parsed_cases, args.opX, args.opF, not args.no_fuse, args.dist_kernels,
+                        args.num_kernels, match_configs)
