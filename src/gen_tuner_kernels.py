@@ -141,19 +141,19 @@ class KernelConfig:
   def __hash__(self):
     return hash(repr(self))
 
-def all_sliced_mults(m, k, n, ps, qs):
+def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
   prevTmpK = k
   for i in range(n):
     f = n - i - 1
-    sliced_mult = (m, prevTmpK, ps[f], qs[f])
+    sliced_mult = (m, prevTmpK, opX if i == 0 else "N", ps[f], qs[f])
     prevTmpK = (prevTmpK//ps[f])*qs[f]
     sliced_mults += [sliced_mult]
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
 def alignment(cols):
-  return max([a for a in [1, 2, 4] if cols%a == 0])
+  return max([a for a in [1, 2, 4] if cols % a == 0])
 
 def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
   if not os.path.exists(kernel_dir):
@@ -164,7 +164,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
-    for (_, currK, p, q) in all_sliced_mults(m, k, n, ps, qs):
+    for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
       TilePs = [min(p, 32)] + [i for i in factors(p) if i > 32]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)
@@ -196,7 +196,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                                                                    p, q, tQ, tP, tM, 
                                       regRows, regCols,
                                       numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
-                                      opX, opF)]
+                                      opx, opF)]
       configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))

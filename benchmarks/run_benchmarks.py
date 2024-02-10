@@ -182,7 +182,7 @@ def multi_gpu(scaling):
 
 print("------- Single GPU NN-------")
 print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-# run_single_gpu_nn()
+run_single_gpu_nn()
 
 print("------- Single GPU NT-------")
 print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))

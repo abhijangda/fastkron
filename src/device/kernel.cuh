@@ -108,7 +108,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<ElemT, XVecT, decltype(Xsh)>(TileP, NumThreads, RegK,
+    shiftXgToXsh<ElemT, XVecT, decltype(Xsh)>(TileP, NumThreads, RegK, OpX,
                                               tileP, tid, XTile, Xsh);
 
     #pragma unroll

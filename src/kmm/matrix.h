@@ -116,14 +116,27 @@ public:
     P(P), TileP(TileP), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
 
   CUDA_DEVICE_HOST
-  const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
-    uint32_t idx = row * parent.n();
-    if (TileP == P) {
-      idx += col;
-    } else {
-      idx += (col/TileP)*P + tileP + col%TileP;
+  const T* data(uint32_t row, uint32_t col, uint32_t tileP, fastKronOp op) const {
+    //TODO: get common parts out
+    if (op == fastKronOp_N) {
+      uint32_t idx = row * parent.n();
+      if (TileP == P) {
+        idx += col;
+      } else {
+        idx += (col/TileP)*P + tileP + col%TileP;
+      }
+      return &ptr[idx];
+    } else if (op == fastKronOp_T) {
+      uint32_t idx = 0;
+      if (TileP == P) {
+        idx += col;
+      } else {
+        idx += (col/TileP)*P + tileP + col%TileP;
+      }
+
+      idx = idx * parent.m() + row;
+      return &ptr[idx];
     }
-    return &ptr[idx];
   }
 
   CUDA_DEVICE_HOST

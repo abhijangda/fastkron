@@ -3,18 +3,34 @@
 
 template<typename ElemT, typename VecT, typename XShared>
 CUDA_DEVICE
-void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
+void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK, fastKronOp opX,
                   const uint tileP, const uint tid, const Slice<ElemT> XTile,
                   XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  for (uint row = 0; row < XTile.m(); row += 1) {
+  if (OpX == fastKronOp_N) {
+    for (uint row = 0; row < XTile.m(); row += 1) {
     //Use NumThreads in the loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
-    }
+    }}
+  } else if (OpX == fastKronOp_T) {
+    //TODO: Similar to directFgToFsh. combine both?
+    const uint Vecs     = XTile.m()/VecTLen;
+    const uint ThGroups = MAX(1, NumThreads/Vecs);
+
+    for (uint swid = tid/Vecs; swid < Xsh.n(); swid += ThGroups) {
+    for (uint elem = tid%Vecs; elem < Vecs;    elem += NumThreads/ThGroups) {
+      ElemT regs[VecTLen];
+      
+      const uint k = elem*VecTLen;
+      const uint row = swid;
+
+      ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+      Xsh.store(row, k, TileP, RegK, VecTLen, regs);
+    }}
   }
 }
 
