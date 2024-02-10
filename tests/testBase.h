@@ -173,10 +173,6 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
     }
   }
 
-  if (opx == fastKronOp_T) {
-    swap(M, K);
-  }
-
   for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
     T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     uint kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
@@ -200,7 +196,12 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
 
           T v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
           
-          r += prevKPMatmul[i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k] * v2;
+          T v1;
+          if (opx == fastKronOp_T && kp == 0)
+            v1 = prevKPMatmul[((j*kpSecondK)%prevKPMatmulCols + kp_k) * M + i];
+          else
+            v1 = prevKPMatmul[i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k];
+          r += v1 * v2;
         }
 
         kpMatmulResult[kp][i*resultCols + j] = r;
@@ -365,7 +366,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         hKpMatmulResult[i] = new T[tempSize * gpus];
       }
       if (opx == fastKronOp_T) {
-        T* trhX = transpose(M, N, hX);
+        T* trhX = transpose(M, K, hX);
         delete[] hX;
         hX = trhX;
       }

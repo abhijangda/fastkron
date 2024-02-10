@@ -58,7 +58,8 @@ public:
     assert (subn <= n());
     assert (rstart - (subn - 1) >= 0);
 
-    return KMMProblemT(Matrix(x().m(), subk, x().data()), opX(),
+    fastKronOp subOpX = (rstart == n() - 1) ? opX() : fastKronOp_N;
+    return KMMProblemT(Matrix(x().m(), subk, x().data()), subOpX,
                       factors.sub(rstart - (subn - 1), subn), opFs(),
                       Matrix(y().m(), subl, y().data()));
   }
@@ -77,7 +78,9 @@ public:
     assert (subn <= n());
     assert (start + (subn - 1) <= n());
 
-    return KMMProblemT(Matrix(x().m(), subk, x().data()), opX(),
+    fastKronOp subOpX = (start == 0) ? opX() : fastKronOp_N;
+
+    return KMMProblemT(Matrix(x().m(), subk, x().data()), subOpX,
                       factors.sub(start, subn), opFs(),
                       Matrix(y().m(), subl, y().data()));
   }
@@ -169,6 +172,7 @@ public:
         if (i < problem.n() - 1) out << "(x)";
       }
     out << ")";
+    out << "_" << problem.opX() << "_" << problem.opFs();
     return out;
   }
 };

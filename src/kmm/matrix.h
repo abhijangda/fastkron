@@ -2,6 +2,7 @@
 #include <cassert>
 #include <functional>
 
+#include "fastkron.h"
 #include "kmm/stackarray.h"
 #include "config.h"
 
