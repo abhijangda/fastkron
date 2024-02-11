@@ -104,12 +104,16 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
-
+  if (isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
+    printf("params.execMode %d params.kp_idx %d OpX %d\n", params.execMode, params.kp_idx, OpX);
+  }
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
     shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
-                                              tileP, tid, XTile, Xsh);
+                                              tileP, tid, XTile, Xsh,
+                                              params.execMode == KernelModeNormal &&
+                                              params.kp_idx == 0 && tileM == 0);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
@@ -120,7 +124,8 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
 
       __syncthreads();
       
-      if (params.kp_idx == 1 && threadIdx.x == 0 && tileM == 0 && blockIdx.x == 0) {
+      if (params.execMode == KernelModeNormal &&
+          params.kp_idx == 0 && threadIdx.x == 0 && tileM == 0 && blockIdx.x == 0) {
         for (int i = 0; i < Xsh.n(); i++) {
           // if (Xsh.at(0, i) != 0.0f) printf("i %d: %f\n", i, Xsh.at(0, i));
         }

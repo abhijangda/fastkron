@@ -45,6 +45,8 @@ public:
   KMMProblemT(const uint m, const int n, const uint *ps, const uint *qs, fastKronOp opX, fastKronOp opFs) :
     KMMProblemT(m, n, ps, qs, nullptr, opX, nullptr, opFs, nullptr) {}
 
+  void setOpX(fastKronOp op) {opIn = op;}
+
   KMMProblemT rsub(int rstart, int subn) const {    
     int subk = x().n(), subl = y().n();
     for (int i = 0; i <= rstart - subn; i++) {
@@ -58,8 +60,7 @@ public:
     assert (subn <= n());
     assert (rstart - (subn - 1) >= 0);
 
-    fastKronOp subOpX = (rstart == n() - 1) ? opX() : fastKronOp_N;
-    return KMMProblemT(Matrix(x().m(), subk, x().data()), subOpX,
+    return KMMProblemT(Matrix(x().m(), subk, x().data()), opX(),
                       factors.sub(rstart - (subn - 1), subn), opFs(),
                       Matrix(y().m(), subl, y().data()));
   }
@@ -78,9 +79,7 @@ public:
     assert (subn <= n());
     assert (start + (subn - 1) <= n());
 
-    fastKronOp subOpX = (start == 0) ? opX() : fastKronOp_N;
-
-    return KMMProblemT(Matrix(x().m(), subk, x().data()), subOpX,
+    return KMMProblemT(Matrix(x().m(), subk, x().data()), opX(),
                       factors.sub(start, subn), opFs(),
                       Matrix(y().m(), subl, y().data()));
   }

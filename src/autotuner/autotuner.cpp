@@ -20,6 +20,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix result) {
     const int subn = rstart + 1;
     auto tunedProblem = problem.sub(startKron, subn);
+    if (rstart != problem.n() - 1) tunedProblem.setOpX(fastKronOp_N);
     bool isP2P = isDistributed && startKron == 0;
     if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
       TunedKernelsSeries epilogueKernels;
@@ -60,6 +61,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix r) {
     for (int endP = rstart; endP < problem.n(); endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
+      if (endP != 0) secondPart.setOpX(fastKronOp_N);
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
