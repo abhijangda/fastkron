@@ -1,23 +1,24 @@
 #include "kmm/matrix.h"
 #include "device/register-loads.cuh"
 
-template<typename ElemT, typename VecT, typename XShared>
+template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
-void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK, fastKronOp opX,
-                  const uint tileP, const uint tid, const Slice<ElemT> XTile,
+void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
+                  const uint tileP, const uint tid, const Slice<ElemT, OpX> XTile,
                   XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
-  if (opX == fastKronOp_N) {
+  if (OpX == fastKronOp_N) {
     for (uint row = 0; row < XTile.m(); row += 1) {
     //Use NumThreads in the loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
-      ldGlobalVec(XTile.data(row, k, tileP, opX), regs, VecTLen);
+      ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }}
-  } else if (opX == fastKronOp_T) {
+  } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?
+    const int VecTLen = 1;
     const uint Vecs     = XTile.m()/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
 
@@ -25,10 +26,10 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK, fast
     for (uint elem = tid%Vecs; elem < Vecs;    elem += NumThreads/ThGroups) {
       ElemT regs[VecTLen];
       
-      const uint k = elem*VecTLen;
-      const uint row = swid;
+      const uint row = elem*VecTLen;
+      const uint k = swid;
 
-      ldGlobalVec(XTile.data(row, k, tileP, opX), regs, VecTLen);
+      ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }}
   }
@@ -52,12 +53,12 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
 
-          ldGlobalVec(F.data<ElemT>(tileP + row, col), regs, VecTLen);
+          ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;
-
-          ldGlobalVec(F.data<ElemT>(row, tileP + col), regs, VecTLen);
+          //TODO: Fix fastKronOp_N here
+          ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
         }
         
         Fsh.store(swid, elem * VecTLen, VecTLen, regs);

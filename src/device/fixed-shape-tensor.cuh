@@ -211,9 +211,9 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t m() const {return Base::shape(0);}
+  uint32_t m() const {return M;}
   CUDA_DEVICE_HOST
-  uint32_t n() const {return Base::shape(1);}
+  uint32_t n() const {return N;}
 };
 
 //Register Tensors

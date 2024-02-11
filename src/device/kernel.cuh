@@ -90,10 +90,10 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
 
   const uint tileM = blockIdx.y* TileM;
 
-  Slice<ElemT> XTile(tileM, tileK * TileK, 
-                     (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
-                     P, TileP,
-                     X);
+  Slice<ElemT, OpX> XTile(tileM, tileK * TileK, 
+                          (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
+                          P, TileP,
+                          X);
   
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
   
@@ -108,9 +108,8 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<ElemT, XVecT, decltype(Xsh)>(TileP, NumThreads, RegK, OpX,
+    shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
                                               tileP, tid, XTile, Xsh);
-
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
@@ -120,6 +119,15 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                                                  F, Fsh);
 
       __syncthreads();
+      
+      // if (params.kp_idx == 1 && threadIdx.x == 0) {
+      //   for (int i = 0; i < Xsh.n(); i++) {
+      //     if (Xsh.at(0, i) != 1.0f) {
+      //       printf("%d: %f\n", i, Xsh.at(0, i));
+      //       break;
+      //     }
+      //   }
+      // }
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();

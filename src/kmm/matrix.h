@@ -49,8 +49,9 @@ public:
   }
   template<typename T>
   CUDA_DEVICE_HOST
-  T* data(uint32_t row, uint32_t col) const {
-    return data<T>((row * n() + col));
+  T* data(uint32_t row, uint32_t col, fastKronOp op) const {
+    if (op == fastKronOp_N) return data<T>((row * n() + col));
+    else if (op == fastKronOp_T) return data<T>((col * m() + row));
   }
 
   template<typename T>
@@ -97,7 +98,7 @@ public:
 };
 
 //TODO: Think about this
-template<typename T>
+template<typename T, fastKronOp Op>
 class Slice {
   const Matrix parent;
   //TODO: Create Coord2D
@@ -114,12 +115,12 @@ public:
   Slice(uint32_t startrow, uint32_t startcol, uint32_t rows, uint32_t cols,
         uint32_t P, uint32_t TileP, Matrix parent) :
     startrow(startrow), startcol(startcol), rows(rows), cols(cols),
-    P(P), TileP(TileP), parent(parent), ptr(parent.data<T>(startrow, startcol)) {}
+    P(P), TileP(TileP), parent(parent), ptr(parent.data<T>(startrow, startcol, Op)) {}
 
   CUDA_DEVICE_HOST
-  const T* data(uint32_t row, uint32_t col, uint32_t tileP, fastKronOp op) const {
+  const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
     //TODO: get common parts out
-    if (op == fastKronOp_N) {
+    if (Op == fastKronOp_N) {
       uint32_t idx = row * parent.n();
       if (TileP == P) {
         idx += col;
@@ -127,10 +128,10 @@ public:
         idx += (col/TileP)*P + tileP + col%TileP;
       }
       return &ptr[idx];
-    } else if (op == fastKronOp_T) {
+    } else if (Op == fastKronOp_T) {
       uint32_t idx = 0;
       if (TileP == P) {
-        idx += col;
+        idx = col;
       } else {
         idx += (col/TileP)*P + tileP + col%TileP;
       }

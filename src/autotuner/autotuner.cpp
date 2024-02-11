@@ -88,6 +88,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   Factor Fs[fastKron.numGPUs_][problem.n()];
 
   for (uint32_t p = 0; p < fastKron.numGPUs_; p++) {
+    //TODO: Init temp to 1
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
     fastKron.kerneldb.procMalloc(p, temp1[p]);
