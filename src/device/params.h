@@ -4,6 +4,11 @@
 
 #include "kmm/kmmalgo.h"
 
+enum KernelMode {
+  KernelModeTuning,
+  KernelModeNormal,
+};
+
 #pragma once
 
 union AllTypes {
@@ -72,9 +77,10 @@ template<uint Fused>
 struct KernelParams {
   KMMProblemT<Fused> problem;
   const uint kp_idx;
+  KernelMode execMode;
 
-  KernelParams(KMMProblem problem_, uint kp_idx) :
-               problem(problem_), kp_idx(kp_idx) {}
+  KernelParams(KMMProblem problem_, uint kp_idx, KernelMode execMode) :
+               problem(problem_), kp_idx(kp_idx), execMode(execMode) {}
 };
 
 template<uint Fused>

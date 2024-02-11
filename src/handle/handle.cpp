@@ -151,7 +151,7 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
         printf("rstart %d\n", rstart);
         err = kerneldb.invokeKernel(selectedKernel, rstart, 
                                     subProblem, epilogueParams,
-                                    stream);
+                                    KernelModeNormal, stream);
         CUDA_CHECK(err);
         kernelSeriesIter++;
         CUDA_CHECK(cudaDeviceSynchronize());

@@ -239,7 +239,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         KMMProblem subProblem(gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
                               fastKronOp_N, (void**)krons, fastKronOp_N, (void*)innerCurrResult, prevTempN, currTempN);
         status = handle.kerneldb.invokeP2PStoreKernel(kernel.kernel, kernel.end, subProblem, distParams, 
-                                                           EpilogueParams::create<float>(), stream[g]);
+                                                           EpilogueParams::create<float>(), KernelModeNormal, stream[g]);
         assert(status == cudaSuccess);        
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         

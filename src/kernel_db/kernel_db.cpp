@@ -57,11 +57,12 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
                    KMMProblem problem,
                    DistributedParams distParams,
                    EpilogueParams epilogueParams,
+                   KernelMode execMode,
                    cudaStream_t stream) {
   cudaError_t status;
 
   //Create the grid and thread block
-  KernelParams<NumFusedKerns> params (problem, kronIndex);
+  KernelParams<NumFusedKerns> params (problem, kronIndex, execMode);
   FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.n());
 
   //Call kernel
@@ -77,28 +78,28 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
 
 cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronIndex, 
                                          KMMProblem problem, EpilogueParams epilogueParams,
-                                         cudaStream_t stream) {
+                                         KernelMode execMode, cudaStream_t stream) {
   DistributedParams distParams;
 
   switch(problem.n()) {
     case 1:
       return invoke<1>(kernel, kronIndex, problem,
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 2:
       return invoke<2>(kernel, kronIndex, problem,
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 3:
       return invoke<3>(kernel, kronIndex, problem,
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 4:
       return invoke<4>(kernel, kronIndex, problem,
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 5:
       return invoke<5>(kernel, kronIndex, problem,
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 6:
       return invoke<6>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
       return cudaErrorInvalidValue;
@@ -108,26 +109,26 @@ cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronInde
 cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint kronIndex, 
                                                  KMMProblem problem, DistributedParams distParams, 
                                                  EpilogueParams epilogueParams,
-                                                 cudaStream_t stream) {
+                                                 KernelMode execMode, cudaStream_t stream) {
   switch (problem.n()) {
     case 1:
       return invoke<1>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 2:
       return invoke<2>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 3:
       return invoke<3>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 4:
       return invoke<4>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 5:
       return invoke<5>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     case 6:
       return invoke<6>(kernel, kronIndex, problem, 
-                       distParams, epilogueParams, stream);
+                       distParams, epilogueParams, execMode, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
   }
@@ -173,10 +174,10 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
       if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
       if (distP2PStore) {
         status = invokeP2PStoreKernel(kernel, factorIdx, problem,
-                                      distParams, EpilogueParams::create<float>(), stream);
+                                      distParams, EpilogueParams::create<float>(), KernelModeTuning, stream);
       } else {
         status = invokeKernel(kernel, factorIdx, problem,
-                              EpilogueParams::create<float>(), stream);
+                              EpilogueParams::create<float>(), KernelModeTuning, stream);
       }
     }
     CUDA_CHECK(status);
