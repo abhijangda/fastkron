@@ -93,14 +93,29 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
     fastKron.kerneldb.procMalloc(p, temp1[p]);
     fastKron.kerneldb.procMalloc(p, temp2[p]);
-    
+    fastKron.kerneldb.procMemset(p, temp1[p], 1.0f);
+    fastKron.kerneldb.procMemset(p, temp2[p], 1.0f);
+
     for (int f = 0; f < problem.n(); f++) {
       Fs[p][f] = problem.f(f);
       fastKron.kerneldb.procMalloc(p, Fs[p][f]);
-    }  
+      fastKron.kerneldb.procMemset(p, Fs[p][f], 1.0f);
+    }
   }
 
   CUDA_CHECK(cudaSetDevice(0));
+
+  // if (true) {
+  //   float* tt = new float[8 * 16384];
+  //   CUDA_CHECK(cudaMemcpy(tt, temp1[0].data(), 8*16384*sizeof(float), cudaMemcpyDeviceToHost));
+  //   printf("162: %p\n", temp1[0].data());
+  //   for (int i = 0; i < 8; i++) {
+  //     for (int j = 0; j < 16384; j++) {
+  //       if (i == 0) //if (tt[i * 16384 + j] != 0.0f) printf("tt[%d * 16384 + %d] %f\n", i, j, tt[i * 16384 + j]);
+  //       printf("%f\n", tt[i * 16384 + j]);
+  //     }
+  //   }
+  // }
 
   if (!fastKron.isDistributed_) {
     //Use temporary as input/output matrix

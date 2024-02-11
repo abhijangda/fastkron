@@ -148,13 +148,22 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
 
         KernelInfo selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-
+        printf("rstart %d\n", rstart);
         err = kerneldb.invokeKernel(selectedKernel, rstart, 
                                     subProblem, epilogueParams,
                                     stream);
         CUDA_CHECK(err);
         kernelSeriesIter++;
-
+        CUDA_CHECK(cudaDeviceSynchronize());
+        // if (rstart == 1) {
+        //   float* tt = new float[8 * 16384];
+        //   CUDA_CHECK(cudaMemcpy(tt, subProblem.y().data(), 8*16384*sizeof(float), cudaMemcpyDeviceToHost));
+        //   for (int i = 0; i < 8; i++) {
+        //     for (int j = 0; j < 16384; j++) {
+        //       if (i % 2 == 0) if (tt[i * 16384 + j] != 0.0f) printf("tt[%d * 16384 + %d] %f\n", i, j, tt[i * 16384 + j]);
+        //     }
+        //   }
+        // }
         return err;
     });
 

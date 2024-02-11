@@ -97,7 +97,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
   
-  using XShared = ShiftShared<OpX, ElemT, TileM, ShTileK>;
+  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, ShTileK>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
   
   XShared Xsh(&sharedStorage[0]);
@@ -120,14 +120,11 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
 
       __syncthreads();
       
-      // if (params.kp_idx == 1 && threadIdx.x == 0) {
-      //   for (int i = 0; i < Xsh.n(); i++) {
-      //     if (Xsh.at(0, i) != 1.0f) {
-      //       printf("%d: %f\n", i, Xsh.at(0, i));
-      //       break;
-      //     }
-      //   }
-      // }
+      if (params.kp_idx == 1 && threadIdx.x == 0 && tileM == 0 && blockIdx.x == 0) {
+        for (int i = 0; i < Xsh.n(); i++) {
+          // if (Xsh.at(0, i) != 0.0f) printf("i %d: %f\n", i, Xsh.at(0, i));
+        }
+      }
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
@@ -136,7 +133,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register XRegisters<ElemT, TileM, RegK, TileP> Xr;
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 0 && tileM == 0);
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -204,7 +201,11 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
             yReg.set(rm, tk+i, tq,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
-
+      
+      // if (params.kp_idx == 0 and glM == 0)
+      //   for (int i = 0; i < StLen; i++) {
+      //     printf("cIdx %d yReg %f\n", cIdx+i, yReg.at(rm,tk+i,tq));
+      //   }
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }

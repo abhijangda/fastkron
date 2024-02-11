@@ -14,6 +14,10 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
       ElemT regs[VecTLen];
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+      // if (XTile.startrow == 0 && regs[0] != 0.0f && regs[1] != 0.0f && regs[2] != 0.0f && regs[3] != 0.0f)
+      //   printf("row %d, k %d, %f\n", row, k, regs[0]);
+      // if (regs[0] == 64.0f || regs[1] == 64.0f || regs[2] == 64.0f || regs[3] == 64.0f)
+      //   printf(" %d %f %f %f %f\n", XTile.startrow, regs[0], regs[1], regs[2], regs[3]);
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }}
   } else if (OpX == fastKronOp_T) {
@@ -25,7 +29,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
     for (uint swid = tid/Vecs; swid < Xsh.n(); swid += ThGroups) {
     for (uint elem = tid%Vecs; elem < Vecs;    elem += NumThreads/ThGroups) {
       ElemT regs[VecTLen];
-      
+
       const uint row = elem*VecTLen;
       const uint k = swid;
 

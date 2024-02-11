@@ -100,6 +100,7 @@ public:
 //TODO: Think about this
 template<typename T, fastKronOp Op>
 class Slice {
+public:
   const Matrix parent;
   //TODO: Create Coord2D
   uint32_t startrow;
