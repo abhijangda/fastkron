@@ -133,7 +133,7 @@ class KernelConfig:
            self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.cRegRows in [1, 2, 4] and \
-           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opX == "N")) and \
+           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.dist in [0, 1] and \
            self.cRegCols <= 32 and \
            self.tileM * self.cRegRows * self.cRegCols <= 64

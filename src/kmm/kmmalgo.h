@@ -171,7 +171,7 @@ public:
         if (i < problem.n() - 1) out << "(x)";
       }
     out << ")";
-    out << "_" << problem.opX() << "_" << problem.opFs();
+    out << "_" << problem.opX() << problem.opFs();
     return out;
   }
 };

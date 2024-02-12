@@ -15,7 +15,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
       // if (XTile.startrow == 0 && regs[0] != 0.0f && regs[1] != 0.0f && regs[2] != 0.0f && regs[3] != 0.0f)
-      //   printf("row %d, k %d, %f\n", row, k, regs[0]);
+      // if (canPrint) printf("row %d, k %d, %f\n", row, k, regs[0]);
       // if (regs[0] == 64.0f || regs[1] == 64.0f || regs[2] == 64.0f || regs[3] == 64.0f)
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }}

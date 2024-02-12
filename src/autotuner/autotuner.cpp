@@ -20,13 +20,22 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix result) {
     const int subn = rstart + 1;
     auto tunedProblem = problem.sub(startKron, subn);
-    if (rstart != problem.n() - 1) tunedProblem.setOpX(fastKronOp_N);
+    printf("rstart %d\n", rstart);
+    if (problem.opX() == fastKronOp_T && startKron + subn == problem.n()) {
+      //If opX is T and the tunedProblem has reached end of the problem
+      //then consider only TT or TN kernels
+      tunedProblem.setOpX(fastKronOp_T);
+    } else {
+      tunedProblem.setOpX(fastKronOp_N);
+    }
+    std::cout << "25: " << tunedProblem << std::endl;
     bool isP2P = isDistributed && startKron == 0;
     if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
       TunedKernelsSeries epilogueKernels;
+      std::cout << "29: " << tunedKernelsMap.getKernel(tunedProblem, false) << std::endl;
       float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
       float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
-                                               isDistributed, 
+                                               isDistributed,
                                                epilogueKernels, tunedKernelsMap);
       if (minTime > kernelTime + epilogueTime) {
         minTime = kernelTime + epilogueTime;
@@ -61,7 +70,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix r) {
     for (int endP = rstart; endP < problem.n(); endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
-      if (endP != 0) secondPart.setOpX(fastKronOp_N);
+      if (rstart + secondPart.n() < problem.n() - 1) secondPart.setOpX(fastKronOp_N);
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;

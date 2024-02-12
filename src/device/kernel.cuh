@@ -113,7 +113,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
     shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
                                               tileP, tid, XTile, Xsh,
                                               params.execMode == KernelModeNormal &&
-                                              params.kp_idx == 0 && tileM == 0);
+                                              params.kp_idx == 3 && tileM == 0);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
@@ -123,13 +123,6 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
                                                  F, Fsh);
 
       __syncthreads();
-      
-      if (params.execMode == KernelModeNormal &&
-          params.kp_idx == 0 && threadIdx.x == 0 && tileM == 0 && blockIdx.x == 0) {
-        for (int i = 0; i < Xsh.n(); i++) {
-          // if (Xsh.at(0, i) != 0.0f) printf("i %d: %f\n", i, Xsh.at(0, i));
-        }
-      }
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
