@@ -27,6 +27,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
+int iPlusJ(int i, int j) {return i + j;}
 int randMod(int i, int j) {return rand()%3 + 1;}
 
 template<typename T>
@@ -365,11 +366,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       for (uint i = 0; i < NUM_KP_MATS; i++) {
         hKpMatmulResult[i] = new T[tempSize * gpus];
       }
-      if (opx == fastKronOp_T) {
-        T* trhX = transpose(M, K, hX);
-        delete[] hX;
-        hX = trhX;
-      }
+      // if (opx == fastKronOp_T) {
+      //   T* trhX = transpose(M, K, hX);
+      //   delete[] hX;
+      //   hX = trhX;
+      // }
 
       if (opfs == fastKronOp_T) {
         for (int i = 0; i < NUM_KP_MATS; i++) {
