@@ -27,6 +27,7 @@
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
 int setToI(int i, int j) {return i;}
+int setToJ(int i, int j) {return j;}
 int iPlusJ(int i, int j) {return i + j;}
 int randMod(int i, int j) {return rand()%3 + 1;}
 
@@ -168,12 +169,6 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
   uint colsTillNow = 1;
   uint resultCols = 0;
 
-  if (opfs == fastKronOp_T) {
-    for (int i = 0; i < NUM_KP_MATS; i++) {
-      swap(KP_MAT_K[i], KP_MAT_N[i]);
-    }
-  }
-
   for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
     T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
     uint kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
@@ -195,8 +190,13 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
         for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
           uint slice = (j / secFacRowMulSize) % kpSecondN;
 
-          T v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
-          
+          T v2 = 0;
+          if (opfs == fastKronOp_T) {
+            v2 = kpMats[NUM_KP_MATS - 1 - kp][slice*KP_MAT_K[NUM_KP_MATS - 1 - kp] + kp_k];
+          } else {
+            v2 = kpMats[NUM_KP_MATS - 1 - kp][kp_k*kpSecondN + slice];
+          }
+
           T v1;
           if (opx == fastKronOp_T && kp == 0)
             v1 = prevKPMatmul[((j*kpSecondK)%prevKPMatmulCols + kp_k) * M + i];
@@ -365,19 +365,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       //CPU implementation of algorithm
       for (uint i = 0; i < NUM_KP_MATS; i++) {
         hKpMatmulResult[i] = new T[tempSize * gpus];
-      }
-      // if (opx == fastKronOp_T) {
-      //   T* trhX = transpose(M, K, hX);
-      //   delete[] hX;
-      //   hX = trhX;
-      // }
-
-      if (opfs == fastKronOp_T) {
-        for (int i = 0; i < NUM_KP_MATS; i++) {
-          T* tr = transpose(KP_MAT_K[i], KP_MAT_N[i], hKpMats[i]);
-          delete[] hKpMats[i];
-          hKpMats[i] = tr;
-        }
       }
 
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K, opx, opfs);

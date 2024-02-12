@@ -27,11 +27,9 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
     } else {
       tunedProblem.setOpX(fastKronOp_N);
     }
-    std::cout << "25: " << tunedProblem << std::endl;
     bool isP2P = isDistributed && startKron == 0;
     if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
       TunedKernelsSeries epilogueKernels;
-      std::cout << "29: " << tunedKernelsMap.getKernel(tunedProblem, false) << std::endl;
       float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
       float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
                                                isDistributed,
@@ -70,7 +68,6 @@ cudaError_t Autotuner::tune(KMMProblem problem,
     for (int endP = rstart; endP < problem.n(); endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
       if (rstart + secondPart.n() < problem.n()) secondPart.setOpX(fastKronOp_N);
-      std::cout << "73: " << secondPart << "  " << rstart << " " << endP << std::endl;
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
@@ -128,7 +125,6 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     minTime = minExecTimeOfSeries(problem, 0, false,
                                   tunedKernels, tunedKernelsMap);
     fastKron.tunedKernelSeries = tunedKernels;
-
   } else {
     if (!checkDistributedKronSizes(problem,
                                    fastKron.perGPUKronBatch_, fastKron.gpusInK_))

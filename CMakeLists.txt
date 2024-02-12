@@ -131,6 +131,13 @@ add_custom_target(gen-non-square-tuner-test-kernels
 target_include_directories(single-gpu-non-square-tuner-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-non-square-tuner-tests ${TESTS_LIBS})
 
+add_executable(single-gpu-non-square-TT-tests tests/single-gpu-non-square-TT-tests.cpp)
+add_custom_target(gen-single-gpu-non-square-TT-kernels
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 4 8,16 -same-factors 3 32,16 -same-factors 3 128,32 -opX T -opF T
+)
+target_include_directories(single-gpu-non-square-TT-tests PUBLIC ${TESTS_INCLUDES})
+target_link_libraries(single-gpu-non-square-TT-tests ${TESTS_LIBS})
+
 add_executable(single-gpu-distinct-shapes tests/single-gpu-distinct-shapes.cpp)
 add_custom_target(gen-single-gpu-distinct-shapes
     COMMAND python ${GEN_TUNER_KERNELS_PY} -distinct-factors 3 8,16 16,8 8,32 -opX N -opF N

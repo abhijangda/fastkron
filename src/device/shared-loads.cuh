@@ -45,6 +45,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
     const uint Vecs    = Fsh.shape(1)/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
+
     for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += blockDim.x/ThGroups) {
         ElemT regs[VecTLen];
@@ -56,10 +57,10 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;
-          //TODO: Fix fastKronOp_N here
+
           ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
         }
-        
+
         Fsh.store(swid, elem * VecTLen, VecTLen, regs);
 
         //This condition avoids generating this loop giving better performance
