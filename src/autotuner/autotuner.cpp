@@ -20,7 +20,6 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix result) {
     const int subn = rstart + 1;
     auto tunedProblem = problem.sub(startKron, subn);
-    printf("rstart %d\n", rstart);
     if (problem.opX() == fastKronOp_T && startKron + subn == problem.n()) {
       //If opX is T and the tunedProblem has reached end of the problem
       //then consider only TT or TN kernels
@@ -70,7 +69,8 @@ cudaError_t Autotuner::tune(KMMProblem problem,
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix r) {
     for (int endP = rstart; endP < problem.n(); endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
-      if (rstart + secondPart.n() < problem.n() - 1) secondPart.setOpX(fastKronOp_N);
+      if (rstart + secondPart.n() < problem.n()) secondPart.setOpX(fastKronOp_N);
+      std::cout << "73: " << secondPart << "  " << rstart << " " << endP << std::endl;
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
@@ -95,7 +95,7 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   
   Matrix temp1[fastKron.numGPUs_];
   Matrix temp2[fastKron.numGPUs_];
-//TODO: Make this FactorArray
+  //TODO: Make this FactorArray
   Factor Fs[fastKron.numGPUs_][problem.n()];
 
   for (uint32_t p = 0; p < fastKron.numGPUs_; p++) {
@@ -115,18 +115,6 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   }
 
   CUDA_CHECK(cudaSetDevice(0));
-
-  // if (true) {
-  //   float* tt = new float[8 * 16384];
-  //   CUDA_CHECK(cudaMemcpy(tt, temp1[0].data(), 8*16384*sizeof(float), cudaMemcpyDeviceToHost));
-  //   printf("162: %p\n", temp1[0].data());
-  //   for (int i = 0; i < 8; i++) {
-  //     for (int j = 0; j < 16384; j++) {
-  //       if (i == 0) //if (tt[i * 16384 + j] != 0.0f) printf("tt[%d * 16384 + %d] %f\n", i, j, tt[i * 16384 + j]);
-  //       printf("%f\n", tt[i * 16384 + j]);
-  //     }
-  //   }
-  // }
 
   if (!fastKron.isDistributed_) {
     //Use temporary as input/output matrix

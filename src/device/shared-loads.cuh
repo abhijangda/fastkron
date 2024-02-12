@@ -14,14 +14,10 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
       ElemT regs[VecTLen];
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-      // if (XTile.startrow == 0 && regs[0] != 0.0f && regs[1] != 0.0f && regs[2] != 0.0f && regs[3] != 0.0f)
-      // if (canPrint) printf("row %d, k %d, %f\n", row, k, regs[0]);
-      // if (regs[0] == 64.0f || regs[1] == 64.0f || regs[2] == 64.0f || regs[3] == 64.0f)
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }}
   } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?
-    const int VecTLen = 1;
     const uint Vecs     = XTile.m()/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
 

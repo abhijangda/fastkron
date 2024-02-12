@@ -110,12 +110,12 @@ target_link_libraries(single-gpu-no-fusion-tests ${TESTS_LIBS})
 target_include_directories(single-gpu-fusion-tests PUBLIC ${TESTS_INCLUDES})
 target_link_libraries(single-gpu-fusion-tests ${TESTS_LIBS})
 
-add_executable(single-gpu-NT-tests tests/single-gpu-NT-tests.cpp)
-add_custom_target(gen-single-gpu-NT-kernels
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128 -opX N -opF T -match-configs-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/single-gpu-kernel-decls.in
+add_executable(single-gpu-TT-tests tests/single-gpu-TT-tests.cpp)
+add_custom_target(gen-single-gpu-TT-kernels
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -same-factors 8 8,8 -same-factors 6 16,16 -same-factors 5 32,32 -same-factors 4 64,64 -same-factors 3 128,128 -opX T -opF T -match-configs-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/single-gpu-kernel-decls.in
 )
-target_include_directories(single-gpu-NT-tests PUBLIC ${TESTS_INCLUDES})
-target_link_libraries(single-gpu-NT-tests ${TESTS_LIBS})
+target_include_directories(single-gpu-TT-tests PUBLIC ${TESTS_INCLUDES})
+target_link_libraries(single-gpu-TT-tests ${TESTS_LIBS})
 
 add_executable(single-gpu-tuner-tests tests/single-gpu-tuner-tests.cpp)
 add_custom_target(gen-tuner-kernels

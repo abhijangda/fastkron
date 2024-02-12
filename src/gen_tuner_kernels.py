@@ -152,7 +152,14 @@ def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
-def alignment(cols):
+def xalignment(m, cols, op):
+  if op == "T":
+    #TODO: Return Alignment based on TileM and M
+    return 1 #max([a for a in [1, 2, 4] if m % a == 0])
+  else:
+    return max([a for a in [1, 2, 4] if cols % a == 0])
+
+def falignment(cols):
   return max([a for a in [1, 2, 4] if cols % a == 0])
 
 def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
@@ -182,8 +189,8 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
               continue
             CRows = factors(tK//p)
             CCols = factors(tQ)
-            aalign = alignment(tK)
-            kronalign = alignment(tQ)
+            aalign = xalignment(tM, tK, opX)
+            kronalign = falignment(tQ)
             for regRows in CRows:
               for regCols in CCols:
                 for tP in TilePs:

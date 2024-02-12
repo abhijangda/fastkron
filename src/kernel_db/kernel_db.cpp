@@ -168,6 +168,7 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
     //     }
     //   }
     // }
+    std::cout << kernel << std::endl;
     CUDA_CHECK(cudaStreamSynchronize(stream));
     cudaError_t status;
     for (int r = 0; r < warmups + runs; r++) {

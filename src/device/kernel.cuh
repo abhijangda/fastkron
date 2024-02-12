@@ -104,9 +104,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
   register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
-  if (isfirstIdx(threadIdx) && isfirstIdx(blockIdx)) {
-    printf("params.execMode %d params.kp_idx %d OpX %d\n", params.execMode, params.kp_idx, OpX);
-  }
+
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
@@ -199,11 +197,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
             yReg.set(rm, tk+i, tq,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
-      
-      // if (params.kp_idx == 0 and glM == 0)
-      //   for (int i = 0; i < StLen; i++) {
-      //     printf("cIdx %d yReg %f\n", cIdx+i, yReg.at(rm,tk+i,tq));
-      //   }
+
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }
