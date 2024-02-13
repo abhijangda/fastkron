@@ -1,0 +1,8 @@
+add_subdirectory(AnyOption EXCLUDE_FROM_ALL)
+add_executable(benchmark benchmark.cpp)
+add_dependencies(benchmark anyoption)
+target_include_directories(benchmark PRIVATE AnyOption ${CMAKE_CURRENT_SOURCE_DIR}/../ ${SRC}/)
+target_link_libraries(benchmark PRIVATE FastKron anyoption nccl)
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(benchmark PRIVATE OpenMP::OpenMP_CXX)
+endif()

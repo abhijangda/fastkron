@@ -1,6 +1,6 @@
-[submodule "googletest"]
-	path = googletest
-	url = https://github.com/google/googletest/
-[submodule "AnyOption"]
-	path = AnyOption
+[submodule "tests/benchmarks/AnyOption"]
+	path = tests/benchmarks/AnyOption
 	url = https://github.com/hackorama/AnyOption.git
+[submodule "tests/googletest"]
+	path = tests/googletest
+	url = https://github.com/google/googletest
