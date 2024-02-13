@@ -5,7 +5,7 @@ template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
                   const uint tileP, const uint tid, const Slice<ElemT, OpX> XTile,
-                  XShared& Xsh, bool canPrint) {
+                  XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   if (OpX == fastKronOp_N) {
     for (uint row = 0; row < XTile.m(); row += 1) {

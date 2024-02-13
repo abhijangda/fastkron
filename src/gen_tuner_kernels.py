@@ -59,7 +59,7 @@ class KernelConfig:
                tileQ : int, tileP : int, tileM: int,
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
-               allPowersOf2: int, opX : bool, opF : bool):
+               allPowersOf2: int, opX : str, opF : str):
     self.shape = shape
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.kron_rows = kron_rows

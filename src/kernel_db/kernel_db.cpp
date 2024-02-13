@@ -157,18 +157,7 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
       std::cout << "Tuning for shape "  << problem << std::endl;
       foundProblem = true;
     }
-    // if (true) {
-    //   float* tt = new float[8 * 16384];
-    //   CUDA_CHECK(cudaMemcpy(tt, problem.x().data(), 8*16384*sizeof(float), cudaMemcpyDeviceToHost));
-    //   printf("162: %p\n", problem.x().data());
-    //   for (int i = 0; i < 8; i++) {
-    //     for (int j = 0; j < 16384; j++) {
-    //       if (i == 0) //if (tt[i * 16384 + j] != 0.0f) printf("tt[%d * 16384 + %d] %f\n", i, j, tt[i * 16384 + j]);
-    //       printf("%f\n", tt[i * 16384 + j]);
-    //     }
-    //   }
-    // }
-    std::cout << kernel << std::endl;
+    std::cout << kernel;
     CUDA_CHECK(cudaStreamSynchronize(stream));
     cudaError_t status;
     for (int r = 0; r < warmups + runs; r++) {
@@ -186,12 +175,11 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
     CUDA_CHECK(cudaEventSynchronize(end));
     
     if (status != cudaSuccess)
-      std::cout << "Error: " << cudaGetErrorString(status) << " for " 
-                << kernel << " K " << problem.k() << std::endl;
+      std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
     float kernelTime;
     CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
     std::cout << std::fixed << std::setprecision(2) << 
-                kernel << " runs in " << (kernelTime/runs) << " ms " << std::endl;
+                " runs in " << (kernelTime/runs) << " ms " << std::endl;
     if (kernelTime < minTime) {
       bestKernel = kernel;
       minTime = kernelTime;
@@ -242,8 +230,6 @@ cudaError_t KernelDatabase::procFree(uint32_t proc, Matrix m) {
 cudaError_t KernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
   //TODO: call a CUDA kernel for memset
   CUDA_CHECK(cudaSetDevice(proc));
-  std::cout << "m.numel() " << m.numel() << std::endl;
-  std::cout << "m.data() " << m.data() << std::endl;
   float* host = new float[m.numel()];
   for (int i = 0; i < m.numel(); i++)
     host[i] = val;

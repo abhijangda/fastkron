@@ -109,7 +109,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
     shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
-                                              tileP, tid, XTile, Xsh, false);
+                                              tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
@@ -127,7 +127,7 @@ __global__ void kronGemmKernel(KernelParams<FusedFacs> params,
         register XRegisters<ElemT, TileM, RegK, TileP> Xr;
         register FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, false);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }
 
       if (FusedFacs > 1 && fac > 0) {
