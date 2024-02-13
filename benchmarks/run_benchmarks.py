@@ -155,6 +155,23 @@ def run_single_gpu_nt():
   for shape in cases:
     fk = FastKronEval().run_single_gpu(shape,"N", "T")
     print(" & ".join((str(p) for p in (fk))))
+  
+def run_single_gpu_tt():
+  M = 1024
+  cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
+           Shape(M, 3, 64, 64), Shape(320, 3, 128, 128)]
+
+  M = 16
+  cases += [Shape(M, 8, 8, 8),
+           Shape(M, 6, 16, 16),
+           Shape(M, 5, 32, 32),
+           Shape(M, 4, 64, 64),
+          #  Shape(M, 3, 128, 128)
+           ]
+
+  for shape in cases:
+    fk = FastKronEval().run_single_gpu(shape,"T", "T")
+    print(" & ".join((str(p) for p in (fk))))
 
 def multi_gpu(scaling):
   cases = []
@@ -169,7 +186,7 @@ def multi_gpu(scaling):
     GMs = [1, 2, 2, 4, 4]
     GKs = [1, 1, 2, 2, 4]
     fk = FastKronEval()
-    fk.gen_kernels(shape, True)
+    fk.gen_kernels(shape, "N", "N", True)
     fk.setup_cmake()
     fk.build_kron()
     for j,gpus in enumerate([1, 2, 4, 8]):
@@ -187,6 +204,10 @@ run_single_gpu_nn()
 print("------- Single GPU NT-------")
 print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
 run_single_gpu_nt()
+
+print("------- Single GPU TT-------")
+print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
+run_single_gpu_tt()
 
 print("------- Multi GPU Weak Scaling --------")
 print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
