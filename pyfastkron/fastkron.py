@@ -135,7 +135,8 @@ class FastKronTorch:
 
     return fn(x.shape[0], self.ps(fs), self.qs(fs))
 
-  def gekmmTune(self, x, fs, y, stream = None):
+  def gekmmTune(self, x, fs, y,
+                trX = False, trF = False, stream = None):
     if stream is None:
       stream = torch.cuda.current_stream()
 
@@ -150,10 +151,12 @@ class FastKronTorch:
       fn = self.pyfastkron.dgekmmTune
 
     fn(x.shape[0], self.ps(fs), self.qs(fs),
-       FastKronOpN, FastKronOpN, 
+       FastKronOpN if not trX else FastKronOpT,
+       FastKronOpN if not trF else FastKronOpT, 
        ctypes.c_void_p(stream.cuda_stream))
 
-  def gekmm(self, x, fs, y, alpha, beta, z, temp, stream = None):
+  def gekmm(self, x, fs, y, alpha, beta, z, temp, 
+            trX = False, trF = False, stream = None):
     if stream is None:
       stream = torch.cuda.current_stream()
 
@@ -168,12 +171,13 @@ class FastKronTorch:
       fn = self.pyfastkron.dgekmm
 
     fn(x.shape[0], self.ps(fs), self.qs(fs), 
-       x.data_ptr(), FastKronOpN, self.fptrs(fs), FastKronOpN, 
+       x.data_ptr(), FastKronOpN if not trX else FastKronOpT, 
+       self.fptrs(fs), FastKronOpN if not trF else FastKronOpT,
        y.data_ptr(),
        alpha, beta, None if z is None else z.data_ptr(), 
        temp.data_ptr(), None,
        ctypes.c_void_p(stream.cuda_stream))
-
+  
 if __name__ == "__main__":
   import torch
   fastKron = FastKronTorch()
