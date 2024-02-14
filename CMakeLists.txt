@@ -68,7 +68,8 @@ cuda_add_library(FastKron SHARED
     OPTIONS ${NVCC_FLAGS}
 )
 
-#FixNCCL target_link_libraries(FastKron PUBLIC nccl)
+#FixNCCL 
+target_link_libraries(FastKron nccl)
 target_include_directories(FastKron 
                            PRIVATE 
                               ${SRC}/
