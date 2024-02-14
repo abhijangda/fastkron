@@ -1,6 +1,7 @@
 from functools import reduce
 import ctypes
 
+#TODO: Make these as fields of PyFastKronWrapper
 def to_ctype_array(elems, ctype_t):
   return (ctype_t * len(elems))(*elems)
 
@@ -105,12 +106,16 @@ class FastKronTorch:
   def fptrs(self, fs):
     return [f.data_ptr() for f in fs]
 
-  def _check(self, x, fs, y):
+  def _check(self, x, fs, y, stream):
     assert x.shape[1] == product(self.ps(fs))
+    
     assert x.dtype    == fs[0].dtype
     assert len(set([f.dtype for f in fs])) == 1
+    
     assert x.device   == fs[0].device
     assert len(set([f.device for f in fs])) == 1
+    if stream is not None:
+      assert stream.device == x.device
 
     if y is not None:
       assert x.shape[0] == y.shape[0]
@@ -119,7 +124,7 @@ class FastKronTorch:
       assert x.device   == y.device
 
   def gekmmSizes(self, x, fs):
-    self._check(x, fs, None)
+    self._check(x, fs, None, None)
     fn = None
     if x.dtype == torch.float:
       fn = self.pyfastkron.sgekmmSizes
@@ -134,7 +139,7 @@ class FastKronTorch:
     if stream is None:
       stream = torch.cuda.current_stream()
 
-    self._check(x, fs, y)
+    self._check(x, fs, y, stream)
 
     fn = None
     if x.dtype == torch.float:
@@ -145,14 +150,14 @@ class FastKronTorch:
       fn = self.pyfastkron.dgekmmTune
 
     fn(x.shape[0], self.ps(fs), self.qs(fs),
-        FastKronOpN, FastKronOpN, 
-        ctypes.c_void_p(stream.cuda_stream))
+       FastKronOpN, FastKronOpN, 
+       ctypes.c_void_p(stream.cuda_stream))
 
   def gekmm(self, x, fs, y, alpha, beta, z, temp, stream = None):
     if stream is None:
       stream = torch.cuda.current_stream()
 
-    self._check(x, fs, y)
+    self._check(x, fs, y, stream)
 
     fn = None
     if x.dtype == torch.float:
@@ -163,11 +168,11 @@ class FastKronTorch:
       fn = self.pyfastkron.dgekmm
 
     fn(x.shape[0], self.ps(fs), self.qs(fs), 
-        x.data_ptr(), FastKronOpN, self.fptrs(fs), FastKronOpN, 
-        y.data_ptr(),
-        alpha, beta, None if z is None else z.data_ptr(), 
-        temp.data_ptr(), None,
-        ctypes.c_void_p(stream.cuda_stream))
+       x.data_ptr(), FastKronOpN, self.fptrs(fs), FastKronOpN, 
+       y.data_ptr(),
+       alpha, beta, None if z is None else z.data_ptr(), 
+       temp.data_ptr(), None,
+       ctypes.c_void_p(stream.cuda_stream))
 
 if __name__ == "__main__":
   import torch
