@@ -5,7 +5,7 @@ def to_ctype_array(elems, ctype_t):
   return (ctype_t * len(elems))(*elems)
 
 def product(values):
-  reduce((lambda a, b: a * b), values)
+  return reduce((lambda a, b: a * b), values)
 
 class FastKronOp:
   def __init__(self, op):
@@ -53,31 +53,32 @@ class PyFastKronWrapper:
                                   ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p]
     self.sgekmmTuneFn.restype = ctypes.c_uint
 
-  def gekmmSizes(self, m, n, ps, qs):
+  def sgekmmSizes(self, m, ps, qs):
     assert len(ps) == len(qs)
-    assert len(ps) == n
 
     resultSize = ctypes.c_size_t(0)
     tempSize   = ctypes.c_size_t(0)
-    self.gekmmSizesFn(self.cpp_handle, ctypes.c_uint(m), ctypes.c_uint(n), 
+    self.gekmmSizesFn(self.cpp_handle, ctypes.c_uint(m), ctypes.c_uint(len(ps)), 
                       to_ctype_array(ps, ctypes.c_uint), to_ctype_array(qs, ctypes.c_uint),
                       ctypes.byref(resultSize), ctypes.byref(tempSize))
-    return resultSize.value, tempSize.value
+    return resultSize.value//4, tempSize.value//4
   
-  def sgekmm(self, m, n, ps, qs, x, opX, fs, opFs, y, alpha, beta, z, t1, t2, stream):
+  def sgekmm(self, m, ps, qs, x, opX, fs, opFs, y, alpha, beta, z, t1, t2, stream):
     assert len(ps) == len(qs)
-    assert len(ps) == n
-    assert len(fs) == n
+    assert len(ps) == len(fs)
 
-    return self.sgekmmFn(self.cpp_handle, m, n,
+    return self.sgekmmFn(self.cpp_handle, m, len(ps),
                          to_ctype_array(ps, ctypes.c_uint), to_ctype_array(qs, ctypes.c_uint), 
                          ctypes.c_void_p(x), opX.op, 
                          to_ctype_array([ctypes.c_void_p(f) for f in fs], ctypes.c_void_p), opFs.op,
                          ctypes.c_void_p(y), ctypes.c_float(alpha), ctypes.c_float(beta),
                          ctypes.c_void_p(z), ctypes.c_void_p(t1), ctypes.c_void_p(t2), stream)
 
-  def sgekmmTune(self, m, n, ps, qs, opX, opFs, stream):
-    return self.sgekmmTuneFn(self.cpp_handle, m, n,
+  def sgekmmTune(self, m, ps, qs, opX, opFs, stream):
+    assert len(ps) == len(qs)
+    assert len(ps) == len(fs)
+
+    return self.sgekmmTuneFn(self.cpp_handle, m, len(ps),
                              to_ctype_array(ps, ctypes.c_uint),
                              to_ctype_array(qs, ctypes.c_uint),
                              opX.op, opFs.op, stream)
@@ -99,46 +100,73 @@ class FastKronTorch:
     return [f.shape[0] for f in fs]
   
   def qs(self, fs):
-    return [f.shape[0] for f in fs]
+    return [f.shape[1] for f in fs]
 
   def fptrs(self, fs):
     return [f.data_ptr() for f in fs]
 
   def _check(self, x, fs, y):
-    assert x.shape[0] == y.shape[0]
     assert x.shape[1] == product(self.ps(fs))
-    assert y.shape[1] == product(self.qs(fs))
-    assert x.dtype    == y.dtype
     assert x.dtype    == fs[0].dtype
     assert len(set([f.dtype for f in fs])) == 1
+    assert x.device   == fs[0].device
+    assert len(set([f.device for f in fs])) == 1
+
+    if y is not None:
+      assert x.shape[0] == y.shape[0]
+      assert y.shape[1] == product(self.qs(fs))
+      assert x.dtype    == y.dtype
+      assert x.device   == y.device
 
   def gekmmSizes(self, x, fs):
-    self._check(x, fs)
-    return self.pyfastkron.gekmmSizes(x.shape[0], x.shape[1], self.ps(fs), self.qs(fs))
+    self._check(x, fs, None)
+    fn = None
+    if x.dtype == torch.float:
+      fn = self.pyfastkron.sgekmmSizes
+    elif x.dtype == torch.double:
+      fn = self.pyfastkron.dgekmmSizes
+    elif x.dtype == torch.int:
+      fn = self.pyfastkron.igekmmSizes
 
-  def gekmmTune(self, x, fs, y, stream = torch.cuda.current_stream()):
+    return fn(x.shape[0], self.ps(fs), self.qs(fs))
+
+  def gekmmTune(self, x, fs, y, stream = None):
+    if stream is None:
+      stream = torch.cuda.current_stream()
+
     self._check(x, fs, y)
+
     fn = None
     if x.dtype == torch.float:
       fn = self.pyfastkron.sgekmmTune
     elif x.dtype == torch.int:
       fn = self.pyfastkron.igekmmTune
-    #TODO
-    fn(x.shape[0], len(fs), self.ps(fs), self.qs(fs),
+    elif x.dtype == torch.double:
+      fn = self.pyfastkron.dgekmmTune
+
+    fn(x.shape[0], self.ps(fs), self.qs(fs),
         FastKronOpN, FastKronOpN, 
         ctypes.c_void_p(stream.cuda_stream))
 
-  def gekmm(self, x, fs, y, alpha, beta, z, temp, stream = torch.cuda.current_stream()):
+  def gekmm(self, x, fs, y, alpha, beta, z, temp, stream = None):
+    if stream is None:
+      stream = torch.cuda.current_stream()
+
     self._check(x, fs, y)
+
     fn = None
     if x.dtype == torch.float:
       fn = self.pyfastkron.sgekmm
     elif x.dtype == torch.int:
       fn = self.pyfastkron.igekmm
-    
-    fn(x.shape[0], len(fs), self.ps(fs), self.qs(fs), 
+    elif x.dtype == torch.double:
+      fn = self.pyfastkron.dgekmm
+
+    fn(x.shape[0], self.ps(fs), self.qs(fs), 
         x.data_ptr(), FastKronOpN, self.fptrs(fs), FastKronOpN, 
-        y, alpha, beta, z.data_ptr(), t1,
+        y.data_ptr(),
+        alpha, beta, None if z is None else z.data_ptr(), 
+        temp.data_ptr(), None,
         ctypes.c_void_p(stream.cuda_stream))
 
 if __name__ == "__main__":
@@ -154,10 +182,9 @@ if __name__ == "__main__":
   fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float32).cuda() for i in range(0, N)]
 
   rs, ts = fastKron.gekmmSizes(x, fs)
-  fastKron.sgekmmTune(x, fs, y)
+  fastKron.gekmmTune(x, fs, y)
 
-  t1 = torch.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=torch.float32).cuda()
+  t1 = torch.zeros(rs, dtype=torch.float32).cuda()
 
-  handle.sgekmm(M, N, Ps, Qs, x.data_ptr(), FastKronOpN, [f.data_ptr() for f in fs], FastKronOpN,
-                y.data_ptr(), 1.0, 0.0, None, t1.data_ptr(), None, ctypes.c_void_p(torch.cuda.current_stream().cuda_stream))
+  fastKron.gekmm(x, fs, y, 1.0, 0.0, None, t1)
   print(y)
