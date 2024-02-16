@@ -21,7 +21,7 @@ typedef struct FastKronHandle* fastKronHandle;
 cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
 void fastKronDestroy(fastKronHandle handle);
 
-cudaError_t fastKronSetCUDAStream(fastKronHandle* handle, void *ptrToStream);
+cudaError_t fastKronSetCUDAStream(fastKronHandle handle, void *ptrToStream);
 
 //TODO: A different function for setting stream of handle 
 cudaError_t gekmmSizes(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[],

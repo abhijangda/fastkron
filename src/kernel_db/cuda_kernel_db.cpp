@@ -78,7 +78,7 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
 
 cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronIndex, 
                                          KMMProblem problem, EpilogueParams epilogueParams,
-                                         KernelMode execMode, cudaStream_t stream) {
+                                         KernelMode execMode) {
   DistributedParams distParams;
 
   switch(problem.n()) {
@@ -137,7 +137,7 @@ cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const u
 }
 
 std::pair<KernelInfo, float> CUDAKernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
-    uint factorIdx, DistributedParams distParams, cudaStream_t stream) {
+    uint factorIdx, DistributedParams distParams) {
   const uint runs = 5;
   const uint warmups = 2;
   KernelInfo bestKernel;
@@ -167,7 +167,7 @@ std::pair<KernelInfo, float> CUDAKernelDatabase::tuneKernelForProblem(KMMProblem
                                       distParams, EpilogueParams::create<float>(), KernelModeTuning, stream);
       } else {
         status = invokeKernel(kernel, factorIdx, problem,
-                              EpilogueParams::create<float>(), KernelModeTuning, stream);
+                              EpilogueParams::create<float>(), KernelModeTuning);
       }
     }
     CUDA_CHECK(status);

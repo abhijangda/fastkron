@@ -216,23 +216,19 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],
 ***************************************************/
 template<typename T>
 static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* result,
-                     uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2,
-                     cudaStream_t stream) {
+                     uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2) {
   if (std::is_same<T, float>::value) {
     CUDACHECK(sgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (float*)x, opx, (float**)kpMats, opfs, (float*)result,
-                     1, 0, nullptr, (float*)temp1, (float*)temp2,
-                     stream));
+                     1, 0, nullptr, (float*)temp1, (float*)temp2));
   } else if (std::is_same<T, int>::value) {
     CUDACHECK(igekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (int*)x, opx, (int**)kpMats, opfs, (int*)result,
-                     1, 0, nullptr, (int*)temp1, (int*)temp2,
-                     stream));
+                     1, 0, nullptr, (int*)temp1, (int*)temp2));
   } else if (std::is_same<T, double>::value) {
     CUDACHECK(dgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (double*)x, opx, (double**)kpMats, opfs, (double*)result,
-                     1, 0, nullptr, (double*)temp1, (double*)temp2,
-                     stream));
+                     1, 0, nullptr, (double*)temp1, (double*)temp2));
   } else {
     printf("Invalid type\n");
     return;
@@ -305,6 +301,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (verbose) printf("allocating\n");
   CUDA_CHECK(fastKronInit(&handle, backend, gpus, gpuInRows, gpuInCols, kronBatch));
   handle->setUseFusion(useFusion);
+  CUDA_CHECK(fastKronSetCUDAStream(handle, &stream[0]));
   size_t resultSize = 0;
   size_t tempSize = 0;
   CUDACHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
@@ -339,7 +336,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("memcpy\n");
   if (tune) {
-    CUDACHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs, stream[0]));
+    CUDACHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
   }
     
   for (int g = 0; g < gpus; g++) {
@@ -375,7 +372,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (useDistributed) {
       kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
     } else {
-      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0], stream[0]);
+      kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
     }
     for (int g = 0; g < gpus; g++) {
       CUDACHECK(cudaSetDevice(g));
@@ -417,7 +414,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       if (useDistributed) {
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
       } else {
-        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0], stream[0]);
+        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
       }
     }
     for (int g = 0; g < gpus; g++) {
@@ -436,7 +433,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       if (useDistributed) {
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
       } else {
-        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0], stream[0]);
+        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
       }
     }
     printf("405\n");

@@ -49,5 +49,5 @@ public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
   {}
 
-  cudaError_t tune(KMMProblem problem, cudaStream_t stream);
+  cudaError_t tune(KMMProblem problem);
 };

@@ -46,8 +46,8 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
-cudaError_t fastKronSetCUDAStream(fastKronHandle* handle, void *ptrToStream) {
-  return handle->setCUDAStream(ptrToStream);
+cudaError_t fastKronSetCUDAStream(fastKronHandle handlePtr, void *ptrToStream) {
+  return handlePtr->setCUDAStream(ptrToStream);
 }
 
 cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 

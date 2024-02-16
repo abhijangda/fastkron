@@ -220,7 +220,7 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
 
 cudaError_t FastKronHandle::setCUDAStream(void* ptrToStream) {
   #ifdef ENABLE_CUDA
-    cudaKernels->setStream(*((cudaStream_t*)ptrToStream));
+    cudaKernels.setStream(*((cudaStream_t*)ptrToStream));
     return cudaSuccess;
   #else
     return cudaErrorInvalidValue;

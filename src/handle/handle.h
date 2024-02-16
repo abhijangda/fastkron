@@ -59,7 +59,7 @@ struct FastKronHandle {
   CUDAKernelDatabase cudaKernels;
 #endif
 
-  void setCUDAStream(void* ptrToStream);
+  cudaError_t setCUDAStream(void* ptrToStream);
 
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;

@@ -29,7 +29,8 @@ protected:
   std::unordered_map<DbKey, std::vector<KernelInfo>, DbKeyHash> compiledKernels;
 
 public:
-  KernelDatabase();
+  KernelDatabase() {}
+
   void free() {
     compiledKernels.clear();
   }
@@ -37,11 +38,12 @@ public:
   virtual cudaError_t invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode);
+                                   KernelMode execMode) = 0;
   virtual cudaError_t invokeP2PStoreKernel(KernelInfo& kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
-                                           KernelMode execMode, cudaStream_t stream);
+                                           KernelMode execMode, cudaStream_t stream) = 0;
+
   bool findAllKernels(const Factor& f, fastKronOp opX, fastKronOp opF, std::vector<KernelInfo>& kernels) {
     auto it = compiledKernels.find(DbKey{f, opX, opF});
     if (it == compiledKernels.end()) return false;
@@ -50,9 +52,9 @@ public:
   }
 
   virtual std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams) = 0;
-  virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
-  virtual cudaError_t procMalloc(uint32_t proc, Matrix& m);
-  virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
-  virtual cudaError_t procFree(uint32_t proc, Matrix m);
-  virtual cudaError_t procFree(uint32_t proc, void* ptr);
+  virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
+  virtual cudaError_t procMalloc(uint32_t proc, Matrix& m) = 0;
+  virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val) = 0;
+  virtual cudaError_t procFree(uint32_t proc, Matrix m) = 0;
+  virtual cudaError_t procFree(uint32_t proc, void* ptr) = 0;
 };

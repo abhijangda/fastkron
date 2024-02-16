@@ -35,9 +35,9 @@ public:
                                            KernelMode execMode, cudaStream_t stream); //TODO: Fix remove stream arg
 
   std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
-  // virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
-  // virtual cudaError_t procMalloc(uint32_t proc, Matrix& m);
-  // virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
-  // virtual cudaError_t procFree(uint32_t proc, Matrix m);
-  // virtual cudaError_t procFree(uint32_t proc, void* ptr);
+  virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
+  virtual cudaError_t procMalloc(uint32_t proc, Matrix& m);
+  virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
+  virtual cudaError_t procFree(uint32_t proc, Matrix m);
+  virtual cudaError_t procFree(uint32_t proc, void* ptr);
 };

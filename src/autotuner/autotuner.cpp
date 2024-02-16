@@ -52,8 +52,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
 }
 
 cudaError_t Autotuner::tune(KMMProblem problem,
-                            bool isDistributed, DistributedParams distParams,
-                            cudaStream_t stream) {
+                            bool isDistributed, DistributedParams distParams) {
   //Only row major layout of all matrics is supported.
   //For performance eval we do not need these to contain any value
   
@@ -71,7 +70,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
-      auto bestKernelWithTime = fastKron.cudaKernels.tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams, stream);
+      auto bestKernelWithTime = fastKron.cudaKernels.tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams);
       if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
         tunedKernelsMap.add(secondPart, distP2PStore,
                             bestKernelWithTime);
@@ -119,7 +118,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
-    tune(tmpProblem, false, DistributedParams(), stream);
+    tune(tmpProblem, false, DistributedParams());
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(problem, 0, false,
@@ -177,7 +176,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
                                    subproblem.n());
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
-      tune(subproblem, distP2PStore, distParams, stream);
+      tune(subproblem, distP2PStore, distParams);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
                                         tunedKernels, tunedKernelsMap);
