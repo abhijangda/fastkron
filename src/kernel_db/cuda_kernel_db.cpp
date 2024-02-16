@@ -20,7 +20,10 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
   return true;
 }
 
-CUDAKernelDatabase::CUDAKernelDatabase() : stream(NULL) {
+CUDAKernelDatabase::CUDAKernelDatabase() {
+  streams = new cudaStream_t;
+  streams[0] = NULL;
+
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(CUDAKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = CUDAKernels[i];
@@ -236,4 +239,103 @@ cudaError_t CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) 
   CUDA_CHECK(cudaMemcpy(m.data(), host, m.numel()*sizeof(float), cudaMemcpyHostToDevice));
   delete host;
   return cudaSuccess;
+}
+
+cudaError_t CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
+  streams = new cudaStream_t[gpus];
+  if (isDistributed_) {
+    bool allP2PAccess = true;
+    for (int g1 = 0; g1 < gpus; g1++) {
+      for (int g2 = 0; g2 < gpus; g2++) {
+        if (g1 == g2) continue;
+        int p2pAccess = -1;
+        CUDA_CHECK(cudaDeviceCanAccessPeer(&p2pAccess, g1, g2));
+        if (p2pAccess == 0) {allP2PAccess = false; break;}
+        CUDA_CHECK(cudaSetDevice(g1));
+        CUDA_CHECK(cudaDeviceEnablePeerAccess(g2, 0));
+      }
+      if (!allP2PAccess) break;
+    }
+
+    distComm_ = env::getDistComm();
+
+    if (distComm_ == DistComm::P2P) {
+      if (!allP2PAccess) {
+        std::cout << "P2P Access among GPUs not available using NCCL" << std::endl;
+        distComm_ = DistComm::DistCommNone;
+      }
+    } else if (distComm_ == DistComm::NCCL) {
+      int devs[gpus];
+      distComm_ = DistComm::NCCL;
+      ncclUniqueId ncclId;
+      ncclGetUniqueId(&ncclId);
+      std::cout << "Initializing NCCL"<<std::endl;
+      for (int i = 0; i < gpus; i++) {
+        CUDA_CHECK(cudaSetDevice(i));
+        ncclComms.push_back(nullptr);
+        devs[i] = i;
+      }
+      NCCLCHECK(ncclCommInitAll(&ncclComms[0], gpus, devs));
+    }
+
+    if (distComm_ == DistComm::DistCommNone) {
+      if (allP2PAccess) {
+        distComm_ = DistComm::P2P;
+      } else {
+        int devs[gpus];
+        distComm_ = DistComm::NCCL;
+        ncclUniqueId ncclId;
+        ncclGetUniqueId(&ncclId);
+        std::cout << "Initializing NCCL"<<std::endl;
+        for (int i = 0; i < gpus; i++) {
+          CUDA_CHECK(cudaSetDevice(i));
+          ncclComms.push_back(nullptr);
+          devs[i] = i;
+        }
+        NCCLCHECK(ncclCommInitAll(&ncclComms[0], gpus, devs));
+      }
+    }
+
+    std::cout << "Using " << distComm_ << " for distributed comm" << std::endl;
+
+    if (gpusInK >= 1)
+      gpusInK_ = gpusInK;
+    else
+      gpusInK_ = 2;//ilog2(gpus);
+    
+    if (gpusInM >= 1)
+      gpusInM_ = gpusInM;  
+    else
+      gpusInM_ = 1;//ilog2(gpus);
+      
+    //TODO: Check that gpuKrons batch is valid, i.e., P1*P2..PBatch <= gpusInK
+    if (gpuKrons > 0)
+      perGPUKronBatch_ = gpuKrons;
+    else 
+      perGPUKronBatch_ = 1;
+
+    //TODO: Check if gpusInK_ == 1 then perGPUKronBatch = NumKrons
+
+    std::cout << "gpusInRows " << gpusInM_ <<
+                 " gpusInCols " << gpusInK_ << 
+                 " gpuKronBatch " << perGPUKronBatch_ <<
+                 std::endl;
+    if (gpusInK_ * gpusInM_ != numGPUs_)  {
+      std::cout << "gpusInCols * gpusInRows != total gpus (" << 
+                   gpusInK_ * gpusInM_ << "!= " << 
+                   numGPUs_<< ")" << std::endl;
+      abort();
+    }
+    //TODO: Check that localKrons <= log (gpuK_)_P
+    
+    //All gpus with same row shares the same barrier
+    //TODO: free
+    barriers_ = new pthread_barrier_t[gpusInM_];
+    threads_ = new thread_pool<ThreadArgs*>(numGPUs_);
+
+    for (int i = 0; i < gpusInM_; i++) {
+      int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
+      PTHREAD_BARRIER_CHECK(s);
+    }
+  }
 }

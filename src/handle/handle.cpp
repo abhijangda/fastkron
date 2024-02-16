@@ -166,8 +166,8 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
 }
 
 cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp) {
-  if (isDistributed_) {
-    if (!checkDistributedKronSizes(problem, perGPUKronBatch_, gpusInK_))
+  if (cudaKernels.isDistributed_) {
+    if (!checkDistributedKronSizes(problem, cudaKernels.perGPUKronBatch_, cudaKernels.gpusInK_))
       return cudaErrorInvalidValue;
   }
 
@@ -184,7 +184,7 @@ cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, 
   
   uint gpuM;
 
-  if (isDistributed_) {
+  if (cudaKernels.isDistributed_) {
     getDistributedSizes(problem.m(), tempCols,   gpuM, tempCols);
     getDistributedSizes(problem.m(), resultCols, gpuM, resultCols);
   } else {
@@ -201,12 +201,12 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   if (tempSize   == nullptr) return cudaErrorInvalidValue;
 
   Matrix result, temp;
-
+  //TODO: Should move to individual backend
   cudaError_t e = gekmmResultTemp(problem, result, temp);
 
   if (e == cudaSuccess) {
     *tempSize   = temp.numel();
-    if (isDistributed_ and distComm_ == DistComm::NCCL)
+    if (cudaKernels.isDistributed_ and cudaKernels.distComm_ == DistComm::NCCL)
       //Include size of send and recv buffers 
       *tempSize = (*tempSize) * 2;
     *resultSize = result.numel();
@@ -218,139 +218,27 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   return e;
 }
 
-cudaError_t FastKronHandle::setCUDAStream(void* ptrToStream) {
-  #ifdef ENABLE_CUDA
-    cudaKernels.setStream(*((cudaStream_t*)ptrToStream));
-    return cudaSuccess;
-  #else
-    return cudaErrorInvalidValue;
-  #endif
+cudaError_t FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
+#ifdef ENABLE_CUDA
+  cudaKernels.init((cudaStream_t*)ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
+  return cudaSuccess;
+#else
+  return cudaErrorInvalidValue;
+#endif
 }
 
-FastKronHandle::FastKronHandle(fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuKrons) : 
+FastKronHandle::FastKronHandle(fastKronBackend backend) :
   tunedKernelSeries(), backend(backend), cudaKernels() {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
-  useFusion_ = true;
-  isDistributed_ = gpus > 1;
-  numGPUs_ = gpus;
-  
-  if (isDistributed_) {
-    bool allP2PAccess = true;
-    for (int g1 = 0; g1 < gpus; g1++) {
-      for (int g2 = 0; g2 < gpus; g2++) {
-        if (g1 == g2) continue;
-        int p2pAccess = -1;
-        CUDA_CHECK(cudaDeviceCanAccessPeer(&p2pAccess, g1, g2));
-        if (p2pAccess == 0) {allP2PAccess = false; break;}
-        CUDA_CHECK(cudaSetDevice(g1));
-        CUDA_CHECK(cudaDeviceEnablePeerAccess(g2, 0));
-      }
-      if (!allP2PAccess) break;
-    }
-
-    distComm_ = env::getDistComm();
-
-    if (distComm_ == DistComm::P2P) {
-      if (!allP2PAccess) {
-        std::cout << "P2P Access among GPUs not available using NCCL" << std::endl;
-        distComm_ = DistComm::DistCommNone;
-      }
-    } else if (distComm_ == DistComm::NCCL) {
-      int devs[gpus];
-      distComm_ = DistComm::NCCL;
-      ncclUniqueId ncclId;
-      ncclGetUniqueId(&ncclId);
-      std::cout << "Initializing NCCL"<<std::endl;
-      for (int i = 0; i < gpus; i++) {
-        CUDA_CHECK(cudaSetDevice(i));
-        ncclComms.push_back(nullptr);
-        devs[i] = i;
-      }
-      NCCLCHECK(ncclCommInitAll(&ncclComms[0], gpus, devs));
-    }
-
-    if (distComm_ == DistComm::DistCommNone) {
-      if (allP2PAccess) {
-        distComm_ = DistComm::P2P;
-      } else {
-        int devs[gpus];
-        distComm_ = DistComm::NCCL;
-        ncclUniqueId ncclId;
-        ncclGetUniqueId(&ncclId);
-        std::cout << "Initializing NCCL"<<std::endl;
-        for (int i = 0; i < gpus; i++) {
-          CUDA_CHECK(cudaSetDevice(i));
-          ncclComms.push_back(nullptr);
-          devs[i] = i;
-        }
-        NCCLCHECK(ncclCommInitAll(&ncclComms[0], gpus, devs));
-      }
-    }
-
-    std::cout << "Using " << distComm_ << " for distributed comm" << std::endl;
-
-    if (gpusInK >= 1)
-      gpusInK_ = gpusInK;
-    else
-      gpusInK_ = 2;//ilog2(gpus);
-    
-    if (gpusInM >= 1)
-      gpusInM_ = gpusInM;  
-    else
-      gpusInM_ = 1;//ilog2(gpus);
-      
-    //TODO: Check that gpuKrons batch is valid, i.e., P1*P2..PBatch <= gpusInK
-    if (gpuKrons > 0)
-      perGPUKronBatch_ = gpuKrons;
-    else 
-      perGPUKronBatch_ = 1;
-
-    //TODO: Check if gpusInK_ == 1 then perGPUKronBatch = NumKrons
-
-    std::cout << "gpusInRows " << gpusInM_ <<
-                 " gpusInCols " << gpusInK_ << 
-                 " gpuKronBatch " << perGPUKronBatch_ <<
-                 std::endl;
-    if (gpusInK_ * gpusInM_ != numGPUs_)  {
-      std::cout << "gpusInCols * gpusInRows != total gpus (" << 
-                   gpusInK_ * gpusInM_ << "!= " << 
-                   numGPUs_<< ")" << std::endl;
-      abort();
-    }
-    //TODO: Check that localKrons <= log (gpuK_)_P
-    
-    //All gpus with same row shares the same barrier
-    //TODO: free
-    barriers_ = new pthread_barrier_t[gpusInM_];
-    threads_ = new thread_pool<ThreadArgs*>(numGPUs_);
-
-    for (int i = 0; i < gpusInM_; i++) {
-      int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
-      PTHREAD_BARRIER_CHECK(s);
-    }
-  }  
+  useFusion_ = true;  
 }
 
 void FastKronHandle::free() {
-  if (isDistributed_) {
-    for (uint g = 0; g < gpusInM_; g++) {
-      int s = pthread_barrier_destroy(&barriers_[g]);
-      PTHREAD_BARRIER_CHECK(s);
-    }
-
-    delete threads_;
-    delete barriers_;
-
-    if (distComm_ == DistComm::NCCL) {
-      for (int i=0; i<ncclComms.size(); i++)
-        ncclCommDestroy(ncclComms[i]);
-    }
-  }
-
   cudaKernels.free();
 }
 
 void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {
-  gpuM = M/gpusInM_;
-  gpuK = K/gpusInK_;
+  //TODO: Should move to individual backends
+  gpuM = M/cudaKernels.gpusInM_;
+  gpuK = K/cudaKernels.gpusInK_;
 }

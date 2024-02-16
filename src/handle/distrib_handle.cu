@@ -76,7 +76,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   //TODO: User supplied result should be used as a temp and the final results are written in it
   //TODO: What if Rows are not multiple of GPUs in Rows
   void* innerResults[2] = {temp1[g], temp2[g]};
-  // std::cout << "handle.gpuM_ " << handle.gpuM_ << " handle.gpuK_ " <<handle.gpuK_ << " gpusInCols " << gpusInCols << " gpusInRows " << gpusInRows << " K " << K << std::endl;
+  // std::cout << "handle.cudaKernels.gpuM_ " << handle.cudaKernels.gpuM_ << " handle.cudaKernels.gpuK_ " <<handle.cudaKernels.gpuK_ << " gpusInCols " << gpusInCols << " gpusInRows " << gpusInRows << " K " << K << std::endl;
   void* innerPrevResult;
   void* innerCurrResult;
   uint gpuM, gpuK;
@@ -96,8 +96,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
     uint prevTempN = gpuK;
     uint numSwaps = 0;
 
-    for (uint io = 0; io < NumKronMats; io += handle.perGPUKronBatch_) {
-      uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
+    for (uint io = 0; io < NumKronMats; io += handle.cudaKernels.perGPUKronBatch_) {
+      uint KronMulBatchSize = min(handle.cudaKernels.perGPUKronBatch_, NumKronMats - io);
       uint MaxI = io + KronMulBatchSize;
       const uint endKron = NumKronMats - io - KronMulBatchSize;
       
@@ -123,7 +123,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         assert (false);
       }
       //  else {
-      //   auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
+      //   auto localSeries = handle.cudaKernels.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
       //                                         LocalKronCols, LocalKronRows, true);
       //   for (auto& kernel : localSeries) {
       //     kernel.end += endKron;
@@ -131,7 +131,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       //   kernelSeries = localSeries;
       // }
 
-      numSwaps += kernelSeries.size() + ((handle.distComm_ == DistComm::P2P) ? 0 : 1);
+      numSwaps += kernelSeries.size() + ((handle.cudaKernels.distComm_ == DistComm::P2P) ? 0 : 1);
     }
 
     if (numSwaps%2 == 1) {
@@ -145,8 +145,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
     innerCurrResult = innerResults[0]; 
   }
 
-  for (uint io = 0; io < NumKronMats; io += handle.perGPUKronBatch_) {
-    uint KronMulBatchSize = min(handle.perGPUKronBatch_, NumKronMats - io);
+  for (uint io = 0; io < NumKronMats; io += handle.cudaKernels.perGPUKronBatch_) {
+    uint KronMulBatchSize = min(handle.cudaKernels.perGPUKronBatch_, NumKronMats - io);
     uint MaxI = io + KronMulBatchSize;
     {
       const uint endKron = NumKronMats - io - KronMulBatchSize;
@@ -171,7 +171,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       } else {
         printf("136\n");
         assert(false);
-        // auto localSeries = handle.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
+        // auto localSeries = handle.cudaKernels.selectKernelSeries(KronMulBatchSize, gpuM, gpuK, gpuK, 
         //                                       LocalKronCols, LocalKronRows, true);
         // for (auto& kernel : localSeries) {
         //   kernel.end += endKron;
@@ -179,13 +179,13 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         // kernelSeries = localSeries;
       }
 
-      int prevFullK = prevTempN * handle.gpusInK_;
-      int currFullN = currTempN * handle.gpusInK_;
+      int prevFullK = prevTempN * handle.cudaKernels.gpusInK_;
+      int currFullN = currTempN * handle.cudaKernels.gpusInK_;
       Factor localFactors[KronMulBatchSize];
       for (int ii = 0; ii < KronMulBatchSize; ii++) {
         localFactors[ii] = Factor(LocalKronRows[ii], LocalKronCols[ii]);
       }
-      DistributedParams distParams(gr, gc, handle.gpusInK_, 
+      DistributedParams distParams(gr, gc, handle.cudaKernels.gpusInK_, 
                                    prevFullK, currFullN,
                                    prevTempN, currTempN, localFactors, KronMulBatchSize);
       uint slicedMuls = 0;
@@ -213,7 +213,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         }
         
         if (kernel.end - NumFusedKerns + 1 == 0) {
-          if (handle.distComm_ == DistComm::P2P or handle.gpusInK_ == 1)
+          if (handle.cudaKernels.distComm_ == DistComm::P2P or handle.cudaKernels.gpusInK_ == 1)
             innerCurrResult = results[g];
           else
             ncclRecvInResult = true;
@@ -228,9 +228,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           gpuTempResults = (void**)results;
         }
         
-        void* gpuResults[handle.gpusInK_];
-        for (int _gc = 0; _gc < handle.gpusInK_; _gc++) {
-          gpuResults[_gc] = gpuTempResults[gr * handle.gpusInK_ + _gc];
+        void* gpuResults[handle.cudaKernels.gpusInK_];
+        for (int _gc = 0; _gc < handle.cudaKernels.gpusInK_; _gc++) {
+          gpuResults[_gc] = gpuTempResults[gr * handle.cudaKernels.gpusInK_ + _gc];
         }
         distParams.updateGPUResults((void**)gpuResults);
 
@@ -244,7 +244,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         
         // if (gc == 0 and kernel.end == 1) {
-        //   printGPUArray(handle.gpuM_, handle.gpuK_, 128.0f*128.0f, innerCurrResult, stream[g]);
+        //   printGPUArray(handle.cudaKernels.gpuM_, handle.cudaKernels.gpuK_, 128.0f*128.0f, innerCurrResult, stream[g]);
         // }
         // if (gc == 0) printf("slicedMuls %d innerCurrResult %p innerPrevResult %p\n", slicedMuls, innerCurrResult, innerPrevResult);
         // if (status != cudaSuccess) goto end;
@@ -263,7 +263,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       
       thread_barrier_wait(thArgs->barrier);
 
-      if (handle.distComm_ == DistComm::NCCL && handle.gpusInK_ > 1) {
+      if (handle.cudaKernels.distComm_ == DistComm::NCCL && handle.cudaKernels.gpusInK_ > 1) {
         typedef float T;
         size_t resultSize = 0, tempSize = 0;
         if (ncclRecvInResult)
@@ -275,7 +275,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         //Call we want to use NCCL Send/Recv
         {
           const uint SliceRows = gpuM;
-          const uint SliceCols = currTempN/handle.gpusInK_;
+          const uint SliceCols = currTempN/handle.cudaKernels.gpusInK_;
           const size_t sendRecvSize = SliceRows * SliceCols;
           const uint startRow = 0;
           const uint startCol = gc * SliceCols;
@@ -284,29 +284,29 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                       recvTemp, stream[g], g, io, true);
           dim3 grid = {gpuM, 1,1};
           dim3 block = {256, 1, 1};
-          storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
-                                                              KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
+          storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.cudaKernels.gpusInK_, prevTempN*handle.cudaKernels.gpusInK_,
+                                                              KronMatRows[0], KronMatCols[0], gc, handle.cudaKernels.gpusInK_,
                                                               (T*)recvTemp, gpuM, currTempN,
                                                               (T*)innerCurrResult, gc, KronMulBatchSize, io, distParams, false);
           CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         }
 
         //All GPUs with the same gr share their intermediates
-        for (int dst = 0; dst < handle.gpusInK_; dst++) {
+        for (int dst = 0; dst < handle.cudaKernels.gpusInK_; dst++) {
           const uint SliceRows = gpuM;
-          const uint SliceCols = currTempN/handle.gpusInK_;
+          const uint SliceCols = currTempN/handle.cudaKernels.gpusInK_;
           const size_t sendRecvSize = SliceRows * SliceCols;
           if (dst == gc) {
-            for (int src = 0; src < handle.gpusInK_; src++) {
+            for (int src = 0; src < handle.cudaKernels.gpusInK_; src++) {
               // printf("g %d dst %d src %d\n", g, dst, src);
               if (src == dst) {
               } else {
-                NCCLCHECK(ncclRecv(recvTemp, sendRecvSize, ncclFloat, gr * handle.gpusInK_ + src, handle.ncclComms[g], stream[g]));
+                NCCLCHECK(ncclRecv(recvTemp, sendRecvSize, ncclFloat, gr * handle.cudaKernels.gpusInK_ + src, handle.cudaKernels.ncclComms[g], stream[g]));
                 CUDA_CHECK(cudaStreamSynchronize(stream[g]));
                 dim3 grid = {gpuM, 1,1};
                 dim3 block = {256, 1, 1};
-                storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.gpusInK_, prevTempN*handle.gpusInK_,
-                                                                    KronMatRows[0], KronMatCols[0], gc, handle.gpusInK_,
+                storeGPUTile<T, 256><<<grid, block, 0, stream[g]>>>(M, currTempN*handle.cudaKernels.gpusInK_, prevTempN*handle.cudaKernels.gpusInK_,
+                                                                    KronMatRows[0], KronMatCols[0], gc, handle.cudaKernels.gpusInK_,
                                                                     (T*)recvTemp, gpuM, currTempN,
                                                                     (T*)innerCurrResult, src, KronMulBatchSize, io, distParams, false);
                 CUDA_CHECK(cudaStreamSynchronize(stream[g]));
@@ -320,10 +320,10 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
                         sendTemp, stream[g], g, io);
             CUDA_CHECK(cudaStreamSynchronize(stream[g]));
             // if (g == 1 && dst == 0) {
-            //    printGPUArray<float>(SliceRows, SliceCols, (float*)handle.sendTemps_[g], stream[g]);
+            //    printGPUArray<float>(SliceRows, SliceCols, (float*)handle.cudaKernels.sendTemps_[g], stream[g]);
             //    printf("699 dst %d g %d\n", dst, g);
             // }
-            NCCLCHECK(ncclSend(sendTemp, sendRecvSize, ncclFloat, gr * handle.gpusInK_ + dst, handle.ncclComms[g], stream[g]));
+            NCCLCHECK(ncclSend(sendTemp, sendRecvSize, ncclFloat, gr * handle.cudaKernels.gpusInK_ + dst, handle.cudaKernels.ncclComms[g], stream[g]));
             CUDA_CHECK(cudaStreamSynchronize(stream[g]));
           }
         }
@@ -351,20 +351,20 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   uint gpuM, gpuK;
   handle.getDistributedSizes(M, K, gpuM, gpuK);
   
-  // if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.perGPUKronBatch_, handle.gpusInK_))
+  // if (!checkDistributedKronSizes(NumKronMats, M, N, K, KronMatCols, KronMatRows, handle.cudaKernels.perGPUKronBatch_, handle.cudaKernels.gpusInK_))
   //   return cudaErrorInvalidValue;
 
   if (result == NULL)                        return cudaErrorInvalidValue;
   if (M % gpuM != 0)                         return cudaErrorInvalidValue;
-  if (NumKronMats < handle.perGPUKronBatch_) return cudaErrorInvalidValue;
+  if (NumKronMats < handle.cudaKernels.perGPUKronBatch_) return cudaErrorInvalidValue;
   if (temp1 == nullptr)                      return cudaErrorInvalidValue;
 
-  const uint batchedKronMuls = handle.perGPUKronBatch_;
+  const uint batchedKronMuls = handle.cudaKernels.perGPUKronBatch_;
 
-  thread_pool<ThreadArgs*>::task tasks[handle.numGPUs_];
-  ThreadArgs threadArgs[handle.numGPUs_];
+  thread_pool<ThreadArgs*>::task tasks[handle.cudaKernels.numGPUs_];
+  ThreadArgs threadArgs[handle.cudaKernels.numGPUs_];
 
-  for (uint thread = 0; thread < handle.numGPUs_; thread++) {
+  for (uint thread = 0; thread < handle.cudaKernels.numGPUs_; thread++) {
     ThreadArgs args = ThreadArgs(
       &handle,
       NumKronMats,
@@ -376,22 +376,22 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
       &KronMatRows[0],
       (void**)temp1, (void**)temp2,
       streams,
-      thread/handle.gpusInK_,
-      thread % handle.gpusInK_,
-      handle.gpusInM_,
-      handle.gpusInK_,
-      &handle.barriers_[thread/handle.gpusInK_]
+      thread/handle.cudaKernels.gpusInK_,
+      thread % handle.cudaKernels.gpusInK_,
+      handle.cudaKernels.gpusInM_,
+      handle.cudaKernels.gpusInK_,
+      &handle.cudaKernels.barriers_[thread/handle.cudaKernels.gpusInK_]
     );
 
     threadArgs[thread] = args;
     tasks[thread] = thread_pool<ThreadArgs*>::task(perGPUKronMatmul, &threadArgs[thread]);
   }
 
-  handle.threads_->execute_tasks(tasks);
-  handle.threads_->join_tasks();
+  handle.cudaKernels.threads_->execute_tasks(tasks);
+  handle.cudaKernels.threads_->join_tasks();
 
   cudaError_t status;
-  for (uint thread = 0; thread < handle.numGPUs_; thread++) {
+  for (uint thread = 0; thread < handle.cudaKernels.numGPUs_; thread++) {
     status = threadArgs[thread].threadResult.status;
     // result[thread] =(T*)threadArgs[thread].threadResult.result;
   }
@@ -413,7 +413,7 @@ static uint getYColumns(uint M, uint K, uint NumKronMats, uint KronMatCols[], ui
 
 cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint K) {
   //TODO: Make FastKronError type
-  if (!isDistributed_) return cudaErrorInvalidValue;
+  if (!cudaKernels.isDistributed_) return cudaErrorInvalidValue;
 
   uint gpuM, gpuK;
   getDistributedSizes(M, K, gpuM, gpuK);
@@ -422,15 +422,15 @@ cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint
   typedef float T;
   T* gpuHostX = new T[((size_t)gpuM) * ((size_t)gpuK)];
   std::cout << "Distributing X to all GPUs "<<std::endl;
-  // std::cout << handle.gpuM_ << "  " << handle.gpuK_ << "  " << sizeof(T) << std::endl;
-  for (int g = 0; g < numGPUs_; g++) {
+  // std::cout << handle.cudaKernels.gpuM_ << "  " << handle.cudaKernels.gpuK_ << "  " << sizeof(T) << std::endl;
+  for (int g = 0; g < cudaKernels.numGPUs_; g++) {
     CUDA_CHECK(cudaSetDevice(g));
     CUDA_CHECK(cudaMalloc(&dX[g], sizeof(T) * gpuM * gpuK));
   }
 
-  for(int gr = 0; gr < gpusInM_; gr++) {
-    for (uint gc = 0; gc < gpusInK_; gc++) {
-      const uint g = gr * gpusInK_ + gc;
+  for(int gr = 0; gr < cudaKernels.gpusInM_; gr++) {
+    for (uint gc = 0; gc < cudaKernels.gpusInK_; gc++) {
+      const uint g = gr * cudaKernels.gpusInK_ + gc;
       // std::cout << "g " << g << " gr " <<gr << " gc " << gc << std::endl;
       CUDA_CHECK(cudaSetDevice(g));
       uint startGpuM = gpuM * gr;
@@ -450,7 +450,7 @@ cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint
 cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   //TODO: Make FastKronError type
   typedef float T;
-  if (!isDistributed_) return cudaErrorInvalidValue;
+  if (!cudaKernels.isDistributed_) return cudaErrorInvalidValue;
   //TODO: Check that hY is on host memory
   uint gpuM, gpuYCols, YCols;
   YCols = getYColumns(M, K, NumKronMats, KronMatCols, KronMatRows);
@@ -458,9 +458,9 @@ cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uin
   T* gpuHostY = new T[gpuM * gpuYCols];
   std::cout << "Gather Y from all GPUs"<<std::endl;
 
-  for(int gr = 0; gr < gpusInM_; gr++) {
-    for (uint gc = 0; gc < gpusInK_; gc++) {
-      uint g = gr * gpusInK_ + gc;
+  for(int gr = 0; gr < cudaKernels.gpusInM_; gr++) {
+    for (uint gc = 0; gc < cudaKernels.gpusInK_; gc++) {
+      uint g = gr * cudaKernels.gpusInK_ + gc;
       CUDA_CHECK(cudaSetDevice(g));
       //TODO: check that dX[g] is on GPU g
       CUDA_CHECK(cudaMemcpy(gpuHostY, dY[g], 

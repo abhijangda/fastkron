@@ -10,7 +10,6 @@
           Library Functions
 ***************************************************/
 cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
-  printf("%d\n", backend);
   switch (backend) {
     case fastKronBackend_CUDA:
       #ifndef ENABLE_CUDA
@@ -36,7 +35,7 @@ cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gp
       return cudaErrorInvalidValue;
   }
 
-  FastKronHandle* h = new FastKronHandle(backend, gpus, gpusInM, gpusInK, gpuLocalKrons);
+  FastKronHandle* h = new FastKronHandle(backend);
   *handle = h;
   return cudaSuccess;
 }
@@ -46,8 +45,8 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
-cudaError_t fastKronSetCUDAStream(fastKronHandle handlePtr, void *ptrToStream) {
-  return handlePtr->setCUDAStream(ptrToStream);
+cudaError_t fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  return handlePtr->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
 cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 

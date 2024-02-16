@@ -89,12 +89,12 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   Matrix result, temp;
   fastKron.gekmmResultTemp(problem, result, temp);
   
-  Matrix temp1[fastKron.numGPUs_];
-  Matrix temp2[fastKron.numGPUs_];
+  Matrix temp1[fastKron.cudaKernels.numGPUs_];
+  Matrix temp2[fastKron.cudaKernels.numGPUs_];
   //TODO: Make this FactorArray
-  Factor Fs[fastKron.numGPUs_][problem.n()];
+  Factor Fs[fastKron.cudaKernels.numGPUs_][problem.n()];
 
-  for (uint32_t p = 0; p < fastKron.numGPUs_; p++) {
+  for (uint32_t p = 0; p < fastKron.cudaKernels.numGPUs_; p++) {
     //TODO: Init temp to 1
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
@@ -112,7 +112,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
 
   CUDA_CHECK(cudaSetDevice(0));
 
-  if (!fastKron.isDistributed_) {
+  if (!fastKron.cudaKernels.isDistributed_) {
     //Use temporary as input/output matrix
     //TODO: fix this
     auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
@@ -126,7 +126,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     fastKron.tunedKernelSeries = tunedKernels;
   } else {
     if (!checkDistributedKronSizes(problem,
-                                   fastKron.perGPUKronBatch_, fastKron.gpusInK_))
+                                   fastKron.cudaKernels.perGPUKronBatch_, fastKron.cudaKernels.gpusInK_))
       return cudaErrorInvalidValue;
 
     //In distributed case run every LocalKron series on a single GPU    
@@ -137,20 +137,20 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     TunedKernelsSeries minKernelSeries;
     //For P2P go through all MaxLocalKrons and for NCCL set MaxLocalKrons to maximum value
     int MaxLocalKrons;
-    if (fastKron.distComm_ == DistComm::P2P) {
+    if (fastKron.cudaKernels.distComm_ == DistComm::P2P) {
       MaxLocalKrons = 1;
-    } else if (fastKron.distComm_ == DistComm::NCCL) {
-      if (fastKron.perGPUKronBatch_ > 1)
+    } else if (fastKron.cudaKernels.distComm_ == DistComm::NCCL) {
+      if (fastKron.cudaKernels.perGPUKronBatch_ > 1)
         MaxLocalKrons = problem.n() - 1;
       else
         MaxLocalKrons = 1;
     }
 
     uint UpperLocalKrons = problem.n();
-    if (fastKron.distComm_ == DistComm::NCCL && fastKron.perGPUKronBatch_ == 1)
+    if (fastKron.cudaKernels.distComm_ == DistComm::NCCL && fastKron.cudaKernels.perGPUKronBatch_ == 1)
       UpperLocalKrons = 2;
     
-    if (fastKron.gpusInK_ == 1) {
+    if (fastKron.cudaKernels.gpusInK_ == 1) {
       UpperLocalKrons = problem.n() + 1;
       MaxLocalKrons = problem.n();
     }
@@ -162,20 +162,20 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
 
     auto tmpProblem = KMMProblem(Matrix(gpuM, gpuK, temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
-                                 Matrix(gpuM, problem.y().n()/fastKron.gpusInK_, temp2[0].data()));
+                                 Matrix(gpuM, problem.y().n()/fastKron.cudaKernels.gpusInK_, temp2[0].data()));
 
     for (int i = problem.n() - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
       //TODO: any way to avoid declaring ps, qs, and fs on stack
       //set max value of N as 64
       auto subproblem = tmpProblem.rsub(i, LocalKrons);
-      void* gpuResults[fastKron.numGPUs_] = {nullptr};
-      std::transform(temp2, temp2 + fastKron.numGPUs_, &gpuResults[0], [](Matrix m) {return m.data();});
-      DistributedParams distParams(0, 0, fastKron.gpusInK_, subproblem.k() * fastKron.gpusInK_, subproblem.l() * fastKron.gpusInK_, 
+      void* gpuResults[fastKron.cudaKernels.numGPUs_] = {nullptr};
+      std::transform(temp2, temp2 + fastKron.cudaKernels.numGPUs_, &gpuResults[0], [](Matrix m) {return m.data();});
+      DistributedParams distParams(0, 0, fastKron.cudaKernels.gpusInK_, subproblem.k() * fastKron.cudaKernels.gpusInK_, subproblem.l() * fastKron.cudaKernels.gpusInK_, 
                                    subproblem.k(), subproblem.l(), subproblem.fs(), 
                                    subproblem.n());
       distParams.updateGPUResults((void**)gpuResults);
-      bool distP2PStore = fastKron.gpusInK_ > 1 && fastKron.isDistributed_ && fastKron.distComm_ == DistComm::P2P;
+      bool distP2PStore = fastKron.cudaKernels.gpusInK_ > 1 && fastKron.cudaKernels.isDistributed_ && fastKron.cudaKernels.distComm_ == DistComm::P2P;
       tune(subproblem, distP2PStore, distParams);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
@@ -190,12 +190,12 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     if (seriesTime < minTime) {
       minTime = seriesTime;
       fastKron.tunedKernelSeries = tunedKernelSeries;
-      fastKron.perGPUKronBatch_ = MaxLocalKrons;
+      fastKron.cudaKernels.perGPUKronBatch_ = MaxLocalKrons;
     }
     }
   }
 
-  for (int p = 0; p < fastKron.numGPUs_; p++) {
+  for (int p = 0; p < fastKron.cudaKernels.numGPUs_; p++) {
     fastKron.cudaKernels.procFree(p, temp1[p]);
     fastKron.cudaKernels.procFree(p, temp2[p]);
     for (int f = 0; f < problem.n(); f++) {
@@ -206,13 +206,13 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
-    if (fastKron.isDistributed_ and fastKron.gpusInK_ > 1 and 
-        ((problem.n() - iter->start) % fastKron.perGPUKronBatch_ == 0 or 
+    if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
+        ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
         iter->start == 0)) {
       uint gpuM, gpuK;
       fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
       std::cout << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
-                   "[GM, " << fastKron.gpusInK_ << "] using " << fastKron.distComm_ << std::endl;
+                   "[GM, " << fastKron.cudaKernels.gpusInK_ << "] using " << fastKron.cudaKernels.distComm_ << std::endl;
     }
   }
   return cudaSuccess;

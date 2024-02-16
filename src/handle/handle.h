@@ -1,7 +1,3 @@
-#include <nccl.h>
-#include <cuda_runtime.h>
-#include <cuda.h>
-
 #include <vector>
 #include <unordered_map>
 
@@ -33,7 +29,6 @@ struct TunedKernelFromStart {
 };
 
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
-struct ThreadArgs;
 
 enum ProcType {
   ProcNone = 0,
@@ -45,24 +40,15 @@ enum ProcType {
 struct FastKronHandle {
   void* result_;
 
-  FastKronHandle(fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuKrons);
+  FastKronHandle(fastKronBackend backend);
 
   fastKronBackend backend;
-  uint numGPUs_;
-  uint gpusInM_;
-  uint gpusInK_;
-  uint perGPUKronBatch_;
-  bool isDistributed_;
-  DistComm distComm_;
 
 #ifdef ENABLE_CUDA
   CUDAKernelDatabase cudaKernels;
 #endif
 
-  cudaError_t setCUDAStream(void* ptrToStream);
-
-  pthread_barrier_t* barriers_;
-  thread_pool<ThreadArgs*>* threads_;
+  cudaError_t initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
 
   //TODO: these two functions should be a part of utils?
   cudaError_t allocDistributedX(void* dX[], void* hX, uint M, uint K);
@@ -79,8 +65,6 @@ struct FastKronHandle {
 
   TunedKernelsSeries tunedKernelSeries;
   
-  std::vector<ncclComm_t> ncclComms;
-
   //SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
   //KernelInfo selectKernel(SlicedMulShape shape);
   //uint maxFusedKernels(SlicedMulShape shape);
