@@ -50,6 +50,8 @@ int main(int argc, char* argv[]) {
   bool multiGPU = false;
   bool useFusion = false;
   bool tune = false;
+  fastKronBackend backend = fastKronBackend_NONE;
+
   AnyOption *opt = new AnyOption();
 
   opt->addUsage("Performs KronMatmul of matrix X[M, K] with Kronecker Product of N matrices of shape F[Pi, Qi]");
@@ -62,6 +64,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage("runs:  Number of runs");
   opt->addUsage("warmup:  Number of warmup runs");
   opt->addUsage("uva: Allocate and run using NVIDIA UVA");
+  opt->addUsage("backend: Backend one of CUDA, ROCM, X86, ARM");
   opt->addUsage("gpurows: Rows for temp on GPU. valid only with uva");
   opt->addUsage("maxkronbatch: Factors rows per inner iteration. valid only with uva");
   opt->addUsage("nummaxkronbatch");
@@ -86,12 +89,30 @@ int main(int argc, char* argv[]) {
   opt->setFlag("fuse");
   opt->setFlag("tune");
 
+  opt->setOption("backend");
+
   opt->processCommandArgs(argc, argv);
   
   if (!opt->hasOptions()) { /* print usage if no options */
     opt->printUsage();
     delete opt;
     return 1;
+  }
+
+  if (opt->getValue("backend") == NULL) {
+    std::cout << "No backend specific" << std::endl;
+    return 1;
+  } else {
+    char* backendStr = opt->getValue("backend");
+    if (strcmp(backendStr, "CUDA") == 0) {
+      backend = fastKronBackend_CUDA;
+    } else if (strcmp(backendStr, "ROCM") == 0) {
+      backend = fastKronBackend_ROCM;
+    } else if (strcmp(backendStr, "X86") == 0) {
+      backend = fastKronBackend_X86;
+    } else if (strcmp(backendStr, "ARM") == 0) {
+      backend = fastKronBackend_ARM;
+    }
   }
 
   if (opt->getValue('m') != NULL) {
@@ -209,7 +230,7 @@ int main(int argc, char* argv[]) {
 
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   // else if (strcmp(type, "int") == 0)
   //   status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, 
   //                     gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);

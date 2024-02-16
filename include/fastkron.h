@@ -8,9 +8,11 @@ enum fastKronOp {
 };
 
 enum fastKronBackend {
-  fastKronBackend_CPU = 1,
-  fastKronBackend_CUDA = 2,
-  fastKronBackend_ROCM = 3
+  fastKronBackend_NONE = 0,
+  fastKronBackend_X86 = 1,
+  fastKronBackend_ARM = 2,
+  fastKronBackend_CUDA = 3,
+  fastKronBackend_ROCM = 4
 };
 
 extern "C" {

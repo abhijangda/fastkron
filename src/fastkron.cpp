@@ -10,17 +10,31 @@
           Library Functions
 ***************************************************/
 cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  printf("%d\n", backend);
   switch (backend) {
     case fastKronBackend_CUDA:
+      printf("15\n");
       #ifndef ENABLE_CUDA
-        return cudaSuccess;
+        return cudaErrorInvalidValue;
       #endif
+      break;
     case fastKronBackend_ROCM:
       #ifndef ENABLE_ROCM 
-        return cudaSuccess;
+        return cudaErrorInvalidValue;
       #endif
-    case fastKronBackend_CPU:
       break;
+    case fastKronBackend_X86:
+      #ifndef ENABLE_X86
+        return cudaErrorInvalidValue;
+      #endif
+      break;
+    case fastKronBackend_ARM:
+      #ifndef ENABLE_ARM
+        return cudaErrorInvalidValue;
+      #endif
+      break;
+    default:
+      return cudaErrorInvalidValue;
   }
 
   FastKronHandle* h = new FastKronHandle(backend, gpus, gpusInM, gpusInK, gpuLocalKrons);

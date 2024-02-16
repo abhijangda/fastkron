@@ -275,7 +275,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
                 fastKronOp opx, fastKronOp opfs,
                 uint numIters, uint warmup, 
                 bool useUVA, int gpuInRows, int gpuInCols, int gpus,
-                uint kronBatch, bool checkResults, bool useFusion, bool tune, bool verbose) {
+                uint kronBatch, bool checkResults, bool useFusion, bool tune, fastKronBackend backend, bool verbose) {
   verbose = true;
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
@@ -303,7 +303,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate GPU data
   fastKronHandle handle;
   if (verbose) printf("allocating\n");
-  fastKronInit(&handle, gpus, gpuInRows, gpuInCols, kronBatch);
+  CUDA_CHECK(fastKronInit(&handle, backend, gpus, gpuInRows, gpuInCols, kronBatch));
   handle->setUseFusion(useFusion);
   size_t resultSize = 0;
   size_t tempSize = 0;
