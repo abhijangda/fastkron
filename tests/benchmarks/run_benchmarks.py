@@ -7,6 +7,8 @@ from functools import reduce
 import time
 import torch
 
+backend = 'CUDA'
+
 def run_command(command):
   (s, o) = subprocess.getstatusoutput(command)
   if s != 0:
@@ -77,7 +79,8 @@ class FastKronEval:
       shutil.rmtree('build/')
     os.mkdir('build/')
     os.chdir('build/')
-    run_command('cmake .. -DNVCC_GENCODE_FLAGS="-gencode arch=compute_80,code=sm_80"')
+    backend_flags = '-DNVCC_GENCODE_FLAGS="-gencode arch=compute_80,code=sm_80" -DENABLE_CUDA=ON' if backend == 'CUDA' else ""
+    run_command('cmake .. ' + backend_flags)
     os.chdir(d)
 
   def gen_kernels(self, shape, opX, opF, distKernels):
@@ -90,9 +93,10 @@ class FastKronEval:
     run_command("cd build && make benchmark -j")
 
   def run_fastkron(self, shape, GM, GK, LocalKrons, opX, opF):
-    kron = f"cd build && ./benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 100 -w 10 -t float --tune --opx {opX} --opf {opF}"
+    kron = f"cd build && ./tests/benchmarks/benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 100 -w 10 -t float --tune --opx {opX} --opf {opF}"
     if GM * GK != 1:
       kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
+    kron += " --backend CUDA" if backend == 'CUDA' else ''
 
     o = run_command(kron + " --fuse")
     fused = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]

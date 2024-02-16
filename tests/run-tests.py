@@ -41,7 +41,7 @@ for gen in sorted_keys:
     execute(f'make {gen}')
     for run in gen_test_kernels[gen]:
         output = execute(f'make {run if " " not in run else run.split(" ")[1]} -j')
-        output = execute(("./"+run) if ' ' not in run else run.replace(' ', ' ./'))
+        output = execute(("tests/"+run) if ' ' not in run else run.replace(' ', ' ./'))
         if 'FAILED' in output:
             print(output)
         
