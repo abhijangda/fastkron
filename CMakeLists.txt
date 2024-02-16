@@ -62,40 +62,55 @@ set(CUDA ${SRC}/kernels/cuda)
 set(KERNELS ${SRC}/kernels)
 
 ##### FastKron ################
-include(${CUDA}/kron-kernels/kernels.cmake)
 set(KERNEL_HEADER_FILES 
     ${KERNELS}/kernel_info.h
-    ${KERNELS}/params.h)
+    ${KERNELS}/params.h
+    #TODO Fix this
+    ${SRC}/handle/distrib_handle.cu)
 
-set(CUDA_HEADER_FILES 
-    ${CUDA}/kron-kernels/kernel_decl.inc
-    ${CUDA}/utils.cuh 
-    ${CUDA}/shared-loads.cuh
-    ${CUDA}/register-loads.cuh
-    ${CUDA}/kernel.cuh
-    ${CUDA}/otherkernels.cuh)
+if(ENABLE_CUDA)
+  include(${CUDA}/kron-kernels/kernels.cmake)
+  set(CUDA_HEADER_FILES 
+      ${CUDA}/kron-kernels/kernel_decl.inc
+      ${CUDA}/utils.cuh 
+      ${CUDA}/shared-loads.cuh
+      ${CUDA}/register-loads.cuh
+      ${CUDA}/kernel.cuh
+      ${CUDA}/otherkernels.cuh)
+else()
+  set(CUDA_HEADER_FILES)
+endif()
 
-set(HEADER_FILES ${SRC}/env/env.h 
-                 ${SRC}/autotuner/autotuner.h
-                 ${SRC}/handle/handle.h ${SRC}/handle/op.h 
-                 ${SRC}/kernel_db/kernel_defs.h ${SRC}/kernel_db/kernel_db.h 
-                 ${SRC}/kmm/kmmalgo.h ${SRC}/kmm/matrix.h
-                 ${SRC}/utils/thread_pool.h ${SRC}/utils/utils.h)
+set(HEADER_FILES 
+    ${SRC}/env/env.h 
+    ${SRC}/autotuner/autotuner.h
+    ${SRC}/handle/handle.h 
+    ${SRC}/handle/op.h 
+    ${SRC}/kernel_db/kernel_defs.h
+    ${SRC}/kernel_db/kernel_db.h 
+    ${SRC}/kmm/kmmalgo.h
+    ${SRC}/kmm/matrix.h
+    ${SRC}/utils/thread_pool.h
+    ${SRC}/utils/utils.h)
 
-set(SOURCES ${SRC}/fastkron.cpp
-            ${SRC}/env/env.cpp
-            ${SRC}/autotuner/autotuner.cpp 
-            ${SRC}/handle/handle.cpp ${SRC}/handle/distrib_handle.cu
-            ${SRC}/kernel_db/kernel_db.cpp 
-            ${SRC}/kmm/kmmalgo.cpp ${SRC}/kmm/matrix.cpp)
+set(SOURCES
+    ${SRC}/fastkron.cpp
+    ${SRC}/env/env.cpp
+    ${SRC}/autotuner/autotuner.cpp 
+    ${SRC}/handle/handle.cpp
+    ${SRC}/kernel_db/kernel_db.cpp 
+    ${SRC}/kmm/kmmalgo.cpp
+    ${SRC}/kmm/matrix.cpp)
 
-cuda_add_library(FastKron SHARED
+cuda_add_library(FastKron 
+  SHARED
     ${SOURCES}
     ${HEADER_FILES}
     ${KERNEL_HEADER_FILES}
     ${CUDA_HEADER_FILES}
     ${CUDA_KERNELS}
-    OPTIONS ${NVCC_FLAGS}
+  OPTIONS
+    ${NVCC_FLAGS}
 )
 
 target_link_libraries(FastKron nccl)
@@ -108,8 +123,5 @@ target_include_directories(FastKron
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
 install(TARGETS FastKron)
-
-
-
 
 add_subdirectory(tests/)

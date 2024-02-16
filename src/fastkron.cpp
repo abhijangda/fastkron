@@ -13,7 +13,6 @@ cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gp
   printf("%d\n", backend);
   switch (backend) {
     case fastKronBackend_CUDA:
-      printf("15\n");
       #ifndef ENABLE_CUDA
         return cudaErrorInvalidValue;
       #endif

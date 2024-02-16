@@ -22,8 +22,8 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
 
 KernelDatabase::KernelDatabase() {
   //Load kernels into compiledKernels map
-  for (uint i = 0; i < sizeof(KronGemmKernels)/sizeof(KernelInfo); i++) {
-    KernelInfo& info = KronGemmKernels[i];
+  for (uint i = 0; i < sizeof(CUDAKernels)/sizeof(KernelInfo); i++) {
+    KernelInfo& info = CUDAKernels[i];
     if (!isValidKernel(info)) abort();
     CUDA_CHECK(info.setSharedMemAttr());
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};

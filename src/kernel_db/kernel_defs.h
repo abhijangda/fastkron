@@ -1,5 +1,9 @@
-#include "kernels/cuda/kron-kernels/kernel_decl.inc"
+#ifdef ENABLE_CUDA
+  #include "kernels/cuda/kron-kernels/kernel_decl.inc"
+#endif
 
-KernelInfo KronGemmKernels[] = {
-  ALL_KERNELS
+KernelInfo CUDAKernels[] = {
+#ifdef ENABLE_CUDA
+  ALL_CUDA_KERNELS
+#endif
 };

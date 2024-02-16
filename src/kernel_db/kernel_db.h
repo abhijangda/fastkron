@@ -57,6 +57,5 @@ public:
   cudaError_t procMalloc(uint32_t proc, Matrix& m);
   cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
   cudaError_t procFree(uint32_t proc, Matrix m);
-  cudaError_t procFree(uint32_t proc, void* ptr); 
-
+  cudaError_t procFree(uint32_t proc, void* ptr);
 };

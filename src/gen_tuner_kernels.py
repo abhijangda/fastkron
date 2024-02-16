@@ -263,7 +263,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
     host_decls += config.hostFuncDecl() + ";\n" + config.getKernelFuncDecl() + ";\n"
   host_decls += "\n"
   
-  kernel_infos = "#define ALL_KERNELS \\\n"
+  kernel_infos = "#define ALL_CUDA_KERNELS \\\n"
   for config in combinedConfigs:
     kernel_infos += config.kernelInfo() + ",\\\n"
   
