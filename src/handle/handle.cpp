@@ -212,12 +212,13 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   return e;
 }
 
-FastKronHandle::FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons) : tunedKernelSeries() {
+FastKronHandle::FastKronHandle(fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuKrons) : 
+  tunedKernelSeries(), backend(backend) {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   useFusion_ = true;
   isDistributed_ = gpus > 1;
   numGPUs_ = gpus;
-
+  
   if (isDistributed_) {
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {

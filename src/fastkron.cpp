@@ -13,8 +13,17 @@
 /**************************************************
           Library Functions
 ***************************************************/
-cudaError_t fastKronInit(fastKronHandle* handle, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
-  FastKronHandle* h = new FastKronHandle(gpus, gpusInM, gpusInK, gpuLocalKrons);
+cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  switch (backend) {
+    case fastKronBackend_CUDA:
+      if (!ENABLE_CUDA) return cudaSuccess;
+    case fastKronBackend_ROCM:
+      if (!ENABLE_ROCM) return cudaSuccess;
+    case fastKronBackend_CPU:
+      break;
+  }
+
+  FastKronHandle* h = new FastKronHandle(backend, gpus, gpusInM, gpusInK, gpuLocalKrons);
   *handle = h;
   return cudaSuccess;
 }

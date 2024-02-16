@@ -45,7 +45,8 @@ enum ProcType {
 struct FastKronHandle {
   void* result_;
 
-  FastKronHandle(int gpus, int gpusInM, int gpusInK, int gpuKrons);
+  FastKronHandle(fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuKrons);
+  fastKronBackend backend;
   uint numGPUs_;
   uint gpusInM_;
   uint gpusInK_;

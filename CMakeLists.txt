@@ -17,6 +17,22 @@ if(OpenMP_CXX_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+#### Options ####
+option(ENABLE_CUDA "Enable CUDA Kernels" OFF)
+option(ENABLE_OPENMP "Use OpenMP for parallel thread" OFF)
+option(ENABLE_ROCM "Enable Rocm/HIP" OFF)
+
+if(ENABLE_CUDA)
+  add_definitions(-DENABLE_CUDA)
+endif()
+if(ENABLE_OPENMP)
+  add_definitions(-DENABLE_OPENMP)
+endif()
+if(ENABLE_ROCM)
+  add_definitions(-DENABLE_ROCM)
+endif()
+################
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -68,7 +84,6 @@ cuda_add_library(FastKron SHARED
     OPTIONS ${NVCC_FLAGS}
 )
 
-#FixNCCL 
 target_link_libraries(FastKron nccl)
 target_include_directories(FastKron 
                            PRIVATE 
@@ -80,6 +95,7 @@ target_include_directories(FastKron
 set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
 install(TARGETS FastKron)
 
-##########################
+
+
 
 add_subdirectory(tests/)

@@ -7,10 +7,16 @@ enum fastKronOp {
   fastKronOp_T = 2
 };
 
+enum fastKronBackend {
+  fastKronBackend_CPU = 1,
+  fastKronBackend_CUDA = 2,
+  fastKronBackend_ROCM = 3
+}
+
 extern "C" {
 typedef struct FastKronHandle* fastKronHandle;
 
-cudaError_t fastKronInit(fastKronHandle* handle, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
 void fastKronDestroy(fastKronHandle handle);
 
 cudaError_t gekmmSizes(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[],
