@@ -7,7 +7,7 @@
 
 #include "fastkron.h"
 #include "utils/thread_pool.h"
-#include "kernel_db/kernel_db.h"
+#include "kernel_db/cuda_kernel_db.h"
 #include "env/env.h"
 #include "kmm/kmmalgo.h"
 
@@ -54,8 +54,12 @@ struct FastKronHandle {
   uint perGPUKronBatch_;
   bool isDistributed_;
   DistComm distComm_;
-  KernelDatabase kerneldb;
-  //Map from Factor size and Number of factors to KernelInfos
+
+#ifdef ENABLE_CUDA
+  CUDAKernelDatabase cudaKernels;
+#endif
+
+  void setCUDAStream(void* ptrToStream);
 
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
@@ -82,7 +86,7 @@ struct FastKronHandle {
   //uint maxFusedKernels(SlicedMulShape shape);
 
   cudaError_t xgekmm(const KMMProblem problem, void* temp1, void* temp2, 
-                     EpilogueParams epilogueParams, cudaStream_t stream);
+                     EpilogueParams epilogueParams);
 
   cudaError_t distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,

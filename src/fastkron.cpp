@@ -46,6 +46,10 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
+cudaError_t fastKronSetCUDAStream(fastKronHandle* handle, void *ptrToStream) {
+  return handle->setCUDAStream(ptrToStream);
+}
+
 cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
                        size_t* resultSize, size_t* tempSize) {
   KMMProblem problem(M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);
@@ -54,37 +58,37 @@ cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint
 
 cudaError_t sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, 
                    fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
-                   float alpha, float beta, float *Z, float* temp1, float* temp2, cudaStream_t stream) {
+                   float alpha, float beta, float *Z, float* temp1, float* temp2) {
   KMMProblem problem(M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return handle->xgekmm(problem, (void*)temp1, (void*)temp2,
-                        EpilogueParams::create<float>(alpha, beta, Z), stream);
+                        EpilogueParams::create<float>(alpha, beta, Z));
 }
 cudaError_t igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, 
                    fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
-                   int alpha, int beta, int *Z, int* temp1, int* temp2, cudaStream_t stream) {
+                   int alpha, int beta, int *Z, int* temp1, int* temp2) {
   KMMProblem problem(M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
-                        EpilogueParams::create<int>(alpha, beta, Z), stream);
+                        EpilogueParams::create<int>(alpha, beta, Z));
 }
 cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, 
                    fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
-                   double alpha, double beta, double *Z, double* temp1, double* temp2, cudaStream_t stream) {
+                   double alpha, double beta, double *Z, double* temp1, double* temp2) {
   KMMProblem problem(M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
-                        EpilogueParams::create<double>(alpha, beta, Z), stream);
+                        EpilogueParams::create<double>(alpha, beta, Z));
 }
 
 cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronOp opX, fastKronOp opFs, cudaStream_t stream) {
-  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs), stream);
+                       fastKronOp opX, fastKronOp opFs) {
+  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs));
 }
 cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronOp opX, fastKronOp opFs, cudaStream_t stream) {
-  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs), stream);
+                       fastKronOp opX, fastKronOp opFs) {
+  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs));
 }
 cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronOp opX, fastKronOp opFs, cudaStream_t stream) {
-  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs), stream);
+                       fastKronOp opX, fastKronOp opFs) {
+  return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs));
 }
 
 cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],

@@ -7,9 +7,6 @@
 #include "kernels/kernel_info.h"
 #include "kernels/params.h"
 
-#pragma once
-
-//TODO: Change name to Executor?
 class KernelDatabase {
 public:
   struct DbKey {
@@ -28,7 +25,7 @@ public:
     }
   };
 
-private:
+protected:
   std::unordered_map<DbKey, std::vector<KernelInfo>, DbKeyHash> compiledKernels;
 
 public:
@@ -37,14 +34,14 @@ public:
     compiledKernels.clear();
   }
   
-  cudaError_t invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
-                           KMMProblem problem,
-                           EpilogueParams epilogueParams,
-                           KernelMode execMode, cudaStream_t stream);
-  cudaError_t invokeP2PStoreKernel(KernelInfo& kernelInfo, const uint kronIndex, 
-                                   KMMProblem problem, DistributedParams distParams, 
+  virtual cudaError_t invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
+                                   KMMProblem problem,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode, cudaStream_t stream);
+                                   KernelMode execMode);
+  virtual cudaError_t invokeP2PStoreKernel(KernelInfo& kernelInfo, const uint kronIndex, 
+                                           KMMProblem problem, DistributedParams distParams, 
+                                           EpilogueParams epilogueParams,
+                                           KernelMode execMode, cudaStream_t stream);
   bool findAllKernels(const Factor& f, fastKronOp opX, fastKronOp opF, std::vector<KernelInfo>& kernels) {
     auto it = compiledKernels.find(DbKey{f, opX, opF});
     if (it == compiledKernels.end()) return false;
@@ -52,10 +49,10 @@ public:
     return true;
   }
 
-  std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams, cudaStream_t stream);
-  cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
-  cudaError_t procMalloc(uint32_t proc, Matrix& m);
-  cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
-  cudaError_t procFree(uint32_t proc, Matrix m);
-  cudaError_t procFree(uint32_t proc, void* ptr);
+  virtual std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams) = 0;
+  virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
+  virtual cudaError_t procMalloc(uint32_t proc, Matrix& m);
+  virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
+  virtual cudaError_t procFree(uint32_t proc, Matrix m);
+  virtual cudaError_t procFree(uint32_t proc, void* ptr);
 };

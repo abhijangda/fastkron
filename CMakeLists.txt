@@ -87,7 +87,7 @@ set(HEADER_FILES
     ${SRC}/handle/handle.h 
     ${SRC}/handle/op.h 
     ${SRC}/kernel_db/kernel_defs.h
-    ${SRC}/kernel_db/kernel_db.h 
+    ${SRC}/kernel_db/cuda_kernel_db.h 
     ${SRC}/kmm/kmmalgo.h
     ${SRC}/kmm/matrix.h
     ${SRC}/utils/thread_pool.h
@@ -98,7 +98,7 @@ set(SOURCES
     ${SRC}/env/env.cpp
     ${SRC}/autotuner/autotuner.cpp 
     ${SRC}/handle/handle.cpp
-    ${SRC}/kernel_db/kernel_db.cpp 
+    ${SRC}/kernel_db/cuda_kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
     ${SRC}/kmm/matrix.cpp)
 

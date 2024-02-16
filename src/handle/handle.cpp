@@ -123,7 +123,7 @@ std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
 }
 
 cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
-                                   EpilogueParams epilogueParams, cudaStream_t stream) {
+                                   EpilogueParams epilogueParams) {
   TunedKernelsSeries kernelSeries;
   if (tunedKernelSeries.size() > 0) {
     kernelSeries = tunedKernelSeries;
@@ -141,16 +141,22 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   auto kernelSeriesIter = kernelSeries.begin();
   cudaError_t err = executeGeKMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel.NumFusedKerns_;},
-    [&kernelSeriesIter, epilogueParams, stream, this]
+    [&kernelSeriesIter, epilogueParams, this]
       (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
         cudaError_t err;
         auto kernel = *kernelSeriesIter;
 
         KernelInfo selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-        err = kerneldb.invokeKernel(selectedKernel, rstart, 
-                                    subProblem, epilogueParams,
-                                    KernelModeNormal, stream);
+        switch (backend) {
+          case fastKronBackend_CUDA:
+            err = cudaKernels.invokeKernel(selectedKernel, rstart, 
+                                           subProblem, epilogueParams,
+                                           KernelModeNormal);
+            break;
+          case fastKronBackend_ARM:
+            break;
+        }
         CUDA_CHECK(err);
         kernelSeriesIter++;
         return err;
@@ -212,8 +218,17 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   return e;
 }
 
+cudaError_t FastKronHandle::setCUDAStream(void* ptrToStream) {
+  #ifdef ENABLE_CUDA
+    cudaKernels->setStream(*((cudaStream_t*)ptrToStream));
+    return cudaSuccess;
+  #else
+    return cudaErrorInvalidValue;
+  #endif
+}
+
 FastKronHandle::FastKronHandle(fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuKrons) : 
-  tunedKernelSeries(), backend(backend) {
+  tunedKernelSeries(), backend(backend), cudaKernels() {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   useFusion_ = true;
   isDistributed_ = gpus > 1;
@@ -332,7 +347,7 @@ void FastKronHandle::free() {
     }
   }
 
-  kerneldb.free();
+  cudaKernels.free();
 }
 
 void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {

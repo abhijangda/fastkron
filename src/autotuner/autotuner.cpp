@@ -71,7 +71,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
-      auto bestKernelWithTime = fastKron.kerneldb.tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams, stream);
+      auto bestKernelWithTime = fastKron.cudaKernels.tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams, stream);
       if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
         tunedKernelsMap.add(secondPart, distP2PStore,
                             bestKernelWithTime);
@@ -84,7 +84,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
   return err;
 }
 
-cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
+cudaError_t Autotuner::tune(KMMProblem problem) {
   //Only row major layout of all matrics is supported.
   float minTime = 0;
   Matrix result, temp;
@@ -99,15 +99,15 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
     //TODO: Init temp to 1
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
-    fastKron.kerneldb.procMalloc(p, temp1[p]);
-    fastKron.kerneldb.procMalloc(p, temp2[p]);
-    fastKron.kerneldb.procMemset(p, temp1[p], 1.0f);
-    fastKron.kerneldb.procMemset(p, temp2[p], 1.0f);
+    fastKron.cudaKernels.procMalloc(p, temp1[p]);
+    fastKron.cudaKernels.procMalloc(p, temp2[p]);
+    fastKron.cudaKernels.procMemset(p, temp1[p], 1.0f);
+    fastKron.cudaKernels.procMemset(p, temp2[p], 1.0f);
 
     for (int f = 0; f < problem.n(); f++) {
       Fs[p][f] = problem.f(f);
-      fastKron.kerneldb.procMalloc(p, Fs[p][f]);
-      fastKron.kerneldb.procMemset(p, Fs[p][f], 1.0f);
+      fastKron.cudaKernels.procMalloc(p, Fs[p][f]);
+      fastKron.cudaKernels.procMemset(p, Fs[p][f], 1.0f);
     }
   }
 
@@ -197,8 +197,8 @@ cudaError_t Autotuner::tune(KMMProblem problem, cudaStream_t stream) {
   }
 
   for (int p = 0; p < fastKron.numGPUs_; p++) {
-    fastKron.kerneldb.procFree(p, temp1[p]);
-    fastKron.kerneldb.procFree(p, temp2[p]);
+    fastKron.cudaKernels.procFree(p, temp1[p]);
+    fastKron.cudaKernels.procFree(p, temp2[p]);
     for (int f = 0; f < problem.n(); f++) {
       //TODO: // CUDA_CHECK(cudaFree(Fs[g * problem.n() + f]));
     }

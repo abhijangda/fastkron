@@ -2,7 +2,7 @@
 #include <iomanip>
 
 #include "utils/utils.h"
-#include "kernel_db/kernel_db.h"
+#include "kernel_db/cuda_kernel_db.h"
 #include "kernel_db/kernel_defs.h"
 
 static bool isValidKernel(KernelInfo& kernelInfo) {
@@ -20,7 +20,7 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
   return true;
 }
 
-KernelDatabase::KernelDatabase() {
+CUDAKernelDatabase::CUDAKernelDatabase() : stream(NULL) {
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(CUDAKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = CUDAKernels[i];
@@ -76,7 +76,7 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
   return status;
 }
 
-cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronIndex, 
+cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronIndex, 
                                          KMMProblem problem, EpilogueParams epilogueParams,
                                          KernelMode execMode, cudaStream_t stream) {
   DistributedParams distParams;
@@ -106,7 +106,7 @@ cudaError_t KernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronInde
   }
 }
 
-cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint kronIndex, 
+cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint kronIndex, 
                                                  KMMProblem problem, DistributedParams distParams, 
                                                  EpilogueParams epilogueParams,
                                                  KernelMode execMode, cudaStream_t stream) {
@@ -136,7 +136,7 @@ cudaError_t KernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint 
   return cudaErrorInvalidValue;
 }
 
-std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
+std::pair<KernelInfo, float> CUDAKernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
     uint factorIdx, DistributedParams distParams, cudaStream_t stream) {
   const uint runs = 5;
   const uint warmups = 2;
@@ -198,7 +198,7 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
   return std::make_pair(bestKernel, minTime);
 }
 
-cudaError_t KernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
+cudaError_t CUDAKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
   CUDA_CHECK(cudaSetDevice(proc));
   CUDA_CHECK(cudaMalloc(&ptr, size));
   CUDA_CHECK(cudaMemset(ptr, 1, size));
@@ -206,7 +206,7 @@ cudaError_t KernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
   return cudaSuccess;
 }
 
-cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
+cudaError_t CUDAKernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
   void* ptr = nullptr;
   cudaError_t e = procMalloc(proc, m.numel() * sizeof(float), ptr);
 
@@ -217,17 +217,17 @@ cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
   return e;
 }
 
-cudaError_t KernelDatabase::procFree(uint32_t proc, void* ptr) {
+cudaError_t CUDAKernelDatabase::procFree(uint32_t proc, void* ptr) {
   CUDA_CHECK(cudaSetDevice(proc));
   CUDA_CHECK(cudaFree(ptr));
   return cudaSuccess;
 }
 
-cudaError_t KernelDatabase::procFree(uint32_t proc, Matrix m) {
+cudaError_t CUDAKernelDatabase::procFree(uint32_t proc, Matrix m) {
   return procFree(proc, m.data());
 }
 
-cudaError_t KernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
+cudaError_t CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
   //TODO: call a CUDA kernel for memset
   CUDA_CHECK(cudaSetDevice(proc));
   float* host = new float[m.numel()];
