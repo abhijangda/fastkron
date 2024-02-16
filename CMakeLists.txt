@@ -54,14 +54,23 @@ endif()
 ################################
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-set(DEVICE ${SRC}/device)
+set(CUDA ${SRC}/kernels/cuda)
+set(KERNELS ${SRC}/kernels)
 
 ##### FastKron ################
-include(${DEVICE}/kron-kernels/kernels.cmake)
-set(DEVICE_HEADER_FILES ${DEVICE}/kron-kernels/kernel_decl.inc
-                        ${DEVICE}/utils.cuh ${DEVICE}/shared-loads.cuh ${DEVICE}/register-loads.cuh
-                        ${DEVICE}/kernel_info.h ${DEVICE}/kernel.cuh ${DEVICE}/otherkernels.cuh
-                        ${DEVICE}/params.h)
+include(${CUDA}/kron-kernels/kernels.cmake)
+set(KERNEL_HEADER_FILES 
+    ${KERNELS}/kernel_info.h
+    ${KERNELS}/params.h)
+
+set(CUDA_HEADER_FILES 
+    ${CUDA}/kron-kernels/kernel_decl.inc
+    ${CUDA}/utils.cuh 
+    ${CUDA}/shared-loads.cuh
+    ${CUDA}/register-loads.cuh
+    ${CUDA}/kernel.cuh
+    ${CUDA}/otherkernels.cuh)
+
 set(HEADER_FILES ${SRC}/env/env.h 
                  ${SRC}/autotuner/autotuner.h
                  ${SRC}/handle/handle.h ${SRC}/handle/op.h 
@@ -79,7 +88,8 @@ set(SOURCES ${SRC}/fastkron.cpp
 cuda_add_library(FastKron SHARED
     ${SOURCES}
     ${HEADER_FILES}
-    ${DEVICE_HEADER_FILES}
+    ${KERNEL_HEADER_FILES}
+    ${CUDA_HEADER_FILES}
     ${CUDA_KERNELS}
     OPTIONS ${NVCC_FLAGS}
 )

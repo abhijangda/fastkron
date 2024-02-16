@@ -4,8 +4,8 @@
 #include <cuda.h>
 
 #include "kmm/kmmalgo.h"
-#include "device/kernel_info.h"
-#include "device/params.h"
+#include "kernels/kernel_info.h"
+#include "kernels/params.h"
 
 #pragma once
 

@@ -5,7 +5,7 @@ import os
 import shutil
 import functools
 
-kernel_dir = os.path.join(os.path.dirname(__file__), "device/kron-kernels/")
+kernel_dir = os.path.join(os.path.dirname(__file__), "kernels/cuda/kron-kernels/")
 
 #Device limits
 #Volta

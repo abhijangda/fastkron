@@ -11,7 +11,7 @@ enum fastKronBackend {
   fastKronBackend_CPU = 1,
   fastKronBackend_CUDA = 2,
   fastKronBackend_ROCM = 3
-}
+};
 
 extern "C" {
 typedef struct FastKronHandle* fastKronHandle;

@@ -3,7 +3,7 @@
 
 #include "handle/handle.h"
 #include "utils/utils.h"
-#include "device/otherkernels.cuh"
+#include "kernels/cuda/otherkernels.cuh"
 
 struct ThreadArgs {
   ThreadArgs() {}

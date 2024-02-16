@@ -1,13 +1,13 @@
 #include "config.h"
 
-#include "device/utils.cuh"
-#include "device/params.h"
-#include "device/global-store.cuh"
-#include "device/fixed-shape-tensor.cuh"
+#include "kernels/params.h"
 
-#include "device/mma.cuh"
-#include "device/shared-loads.cuh"
-#include "device/register-loads.cuh"
+#include "kernels/cuda/utils.cuh"
+#include "kernels/cuda/global-store.cuh"
+#include "kernels/cuda/fixed-shape-tensor.cuh"
+#include "kernels/cuda/mma.cuh"
+#include "kernels/cuda/shared-loads.cuh"
+#include "kernels/cuda/register-loads.cuh"
 
 #include <type_traits>
 #include <typeinfo>

@@ -1,6 +1,5 @@
-#include "params.h"
-
-#include "device/utils.cuh"
+#include "kernels/params.h"
+#include "kernels/cuda/utils.cuh"
 
 template<typename ElemT, typename VecT, uint NumGPUs, uint PerGPUK, uint TileK, uint NumThreads>
 __launch_bounds__(NumThreads)

@@ -1,5 +1,5 @@
 #include "kmm/matrix.h"
-#include "device/register-loads.cuh"
+#include "kernels/cuda/register-loads.cuh"
 
 template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE

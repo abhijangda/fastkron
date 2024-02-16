@@ -4,11 +4,7 @@
 #include <unordered_map>
 
 #include "handle/handle.h"
-#include "device/params.h"
-#include "device/kernel_info.h"
 #include "autotuner/autotuner.h"
-#include "utils/utils.h"
-#include "kmm/kmmalgo.h"
 
 /**************************************************
           Library Functions
@@ -16,9 +12,13 @@
 cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   switch (backend) {
     case fastKronBackend_CUDA:
-      if (!ENABLE_CUDA) return cudaSuccess;
+      #ifndef ENABLE_CUDA
+        return cudaSuccess;
+      #endif
     case fastKronBackend_ROCM:
-      if (!ENABLE_ROCM) return cudaSuccess;
+      #ifndef ENABLE_ROCM 
+        return cudaSuccess;
+      #endif
     case fastKronBackend_CPU:
       break;
   }
