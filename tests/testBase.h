@@ -299,9 +299,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate GPU data
   fastKronHandle handle;
   if (verbose) printf("allocating\n");
-  CUDA_CHECK(fastKronInit(&handle, backend, gpus, gpuInRows, gpuInCols, kronBatch));
+  CUDA_CHECK(fastKronInit(&handle, backend));
   handle->setUseFusion(useFusion);
-  CUDA_CHECK(fastKronSetCUDAStream(handle, &stream[0]));
+  if (backend == fastKronBackend_CUDA)
+    CUDA_CHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
   size_t resultSize = 0;
   size_t tempSize = 0;
   CUDACHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,

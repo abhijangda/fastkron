@@ -60,7 +60,7 @@ public:
   virtual cudaError_t invokeP2PStoreKernel(KernelInfo& kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
-                                           KernelMode execMode, cudaStream_t stream); //TODO: Fix remove stream arg
+                                           KernelMode execMode);
 
   std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
   virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);

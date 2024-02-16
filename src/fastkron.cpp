@@ -9,7 +9,7 @@
 /**************************************************
           Library Functions
 ***************************************************/
-cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend) {
   switch (backend) {
     case fastKronBackend_CUDA:
       #ifndef ENABLE_CUDA

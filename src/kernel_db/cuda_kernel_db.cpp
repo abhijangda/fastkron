@@ -83,6 +83,7 @@ cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kron
                                          KMMProblem problem, EpilogueParams epilogueParams,
                                          KernelMode execMode) {
   DistributedParams distParams;
+  cudaStream_t stream = streams[0];
 
   switch(problem.n()) {
     case 1:
@@ -112,7 +113,8 @@ cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kron
 cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint kronIndex, 
                                                  KMMProblem problem, DistributedParams distParams, 
                                                  EpilogueParams epilogueParams,
-                                                 KernelMode execMode, cudaStream_t stream) {
+                                                 KernelMode execMode) {
+  cudaStream_t stream = streams[distParams.proc()];
   switch (problem.n()) {
     case 1:
       return invoke<1>(kernel, kronIndex, problem, 
@@ -151,6 +153,7 @@ std::pair<KernelInfo, float> CUDAKernelDatabase::tuneKernelForProblem(KMMProblem
 
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
+  cudaStream_t stream = streams[0];
   minTime = std::numeric_limits<float>::max();
 
   if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
@@ -167,7 +170,7 @@ std::pair<KernelInfo, float> CUDAKernelDatabase::tuneKernelForProblem(KMMProblem
       if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
       if (distP2PStore) {
         status = invokeP2PStoreKernel(kernel, factorIdx, problem,
-                                      distParams, EpilogueParams::create<float>(), KernelModeTuning, stream);
+                                      distParams, EpilogueParams::create<float>(), KernelModeTuning);
       } else {
         status = invokeKernel(kernel, factorIdx, problem,
                               EpilogueParams::create<float>(), KernelModeTuning);
@@ -338,4 +341,6 @@ cudaError_t CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, i
       PTHREAD_BARRIER_CHECK(s);
     }
   }
+
+  return cudaSuccess;
 }

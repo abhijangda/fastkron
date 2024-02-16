@@ -42,7 +42,7 @@ public:
   virtual cudaError_t invokeP2PStoreKernel(KernelInfo& kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
-                                           KernelMode execMode, cudaStream_t stream) = 0;
+                                           KernelMode execMode) = 0;
 
   bool findAllKernels(const Factor& f, fastKronOp opX, fastKronOp opF, std::vector<KernelInfo>& kernels) {
     auto it = compiledKernels.find(DbKey{f, opX, opF});

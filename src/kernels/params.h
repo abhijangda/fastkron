@@ -188,4 +188,8 @@ struct DistributedParams {
       //TODO: for all 16 GPUs
     }
   }
+
+  uint32_t proc() const {
+    return gr * gpusInK + gc;
+  }
 };
