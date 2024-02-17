@@ -22,7 +22,7 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
 
 CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
-
+  
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(CUDAKernels)/sizeof(KernelInfo); i++) {
     KernelInfo& info = CUDAKernels[i];
@@ -139,67 +139,42 @@ cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const u
   return cudaErrorInvalidValue;
 }
 
-std::pair<KernelInfo, float> CUDAKernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
-    uint factorIdx, DistributedParams distParams) {
-  const uint runs = 5;
-  const uint warmups = 2;
-  KernelInfo bestKernel;
-  cudaEvent_t start, end;
-  float minTime;
-  bool foundProblem = false;
-  std::vector<KernelInfo> allKernels;
-
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&end));
+cudaError_t CUDAKernelDatabase::timeKernel(KernelInfo& kernel, const uint factorIdx, 
+                                           KMMProblem problem, DistributedParams distParams, 
+                                           EpilogueParams epilogueParams,
+                                           KernelMode execMode, 
+                                           bool distP2PStore,
+                                           int warmups, int runs,
+                                           float& runtime) {
   cudaStream_t stream = streams[0];
-  minTime = std::numeric_limits<float>::max();
-
-  if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
-  for (auto kernel : allKernels) {
-    if (!kernel.canCompute(problem, distP2PStore)) continue;
-    if (!foundProblem) {
-      std::cout << "Tuning for shape "  << problem << std::endl;
-      foundProblem = true;
+  CUDA_CHECK(cudaStreamSynchronize(stream));
+  CUDA_CHECK(cudaEventCreate(&startEvent));
+  CUDA_CHECK(cudaEventCreate(&endEvent));
+  cudaError_t status;
+  for (int r = 0; r < warmups + runs; r++) {
+    if (r == warmups) CUDA_CHECK(cudaEventRecord(startEvent, stream));
+    if (distP2PStore) {
+      status = invokeP2PStoreKernel(kernel, factorIdx, problem,
+                                    distParams, epilogueParams, execMode);
+    } else {
+      status = invokeKernel(kernel, factorIdx, problem,
+                            epilogueParams, execMode);
     }
-    std::cout << kernel;
-    CUDA_CHECK(cudaStreamSynchronize(stream));
-    cudaError_t status;
-    for (int r = 0; r < warmups + runs; r++) {
-      if (r == warmups) CUDA_CHECK(cudaEventRecord(start, stream));
-      if (distP2PStore) {
-        status = invokeP2PStoreKernel(kernel, factorIdx, problem,
-                                      distParams, EpilogueParams::create<float>(), KernelModeTuning);
-      } else {
-        status = invokeKernel(kernel, factorIdx, problem,
-                              EpilogueParams::create<float>(), KernelModeTuning);
-      }
-    }
-    CUDA_CHECK(status);
-    CUDA_CHECK(cudaEventRecord(end, stream));
-    CUDA_CHECK(cudaEventSynchronize(end));
-    
-    if (status != cudaSuccess)
-      std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
-    float kernelTime;
-    CUDA_CHECK(cudaEventElapsedTime(&kernelTime, start, end));
-    std::cout << std::fixed << std::setprecision(2) << 
-                " runs in " << (kernelTime/runs) << " ms " << std::endl;
-    if (kernelTime < minTime) {
-      bestKernel = kernel;
-      minTime = kernelTime;
-    }
-  }}
-
-  CUDA_CHECK(cudaEventDestroy(start));
-  CUDA_CHECK(cudaEventDestroy(end));
-
-  if (minTime < std::numeric_limits<float>::max()) {
-    std::cout << std::fixed << std::setprecision(2) <<
-                "Best kernel for " << problem << ": " << bestKernel << " runs in " << (minTime/runs) << " ms" << std::endl;
-    return std::make_pair(bestKernel, minTime/runs);
   }
-
-  return std::make_pair(bestKernel, minTime);
+  CUDA_CHECK(status);
+  CUDA_CHECK(cudaEventRecord(endEvent, stream));
+  CUDA_CHECK(cudaEventSynchronize(endEvent));
+  if (status != cudaSuccess) {
+    CUDA_CHECK(cudaEventDestroy(startEvent));
+    CUDA_CHECK(cudaEventDestroy(endEvent));
+    std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
+    return status;
+  }
+  CUDA_CHECK(cudaEventElapsedTime(&runtime, startEvent, endEvent));
+  runtime = runtime/runs;
+  CUDA_CHECK(cudaEventDestroy(startEvent));
+  CUDA_CHECK(cudaEventDestroy(endEvent));
+  return status;
 }
 
 cudaError_t CUDAKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {

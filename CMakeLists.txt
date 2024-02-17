@@ -98,6 +98,7 @@ set(SOURCES
     ${SRC}/env/env.cpp
     ${SRC}/autotuner/autotuner.cpp 
     ${SRC}/handle/handle.cpp
+    ${SRC}/kernel_db/kernel_db.cpp
     ${SRC}/kernel_db/cuda_kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
     ${SRC}/kmm/matrix.cpp)

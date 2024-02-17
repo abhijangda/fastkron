@@ -51,7 +51,14 @@ public:
     return true;
   }
 
-  virtual std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams) = 0;
+  std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
+  virtual cudaError_t timeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
+                                 KMMProblem problem, DistributedParams distParams, 
+                                 EpilogueParams epilogueParams,
+                                 KernelMode execMode, 
+                                 bool distP2PStore,
+                                 int warmups, int runs,
+                                 float& runtime) = 0;
   virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
   virtual cudaError_t procMalloc(uint32_t proc, Matrix& m) = 0;
   virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val) = 0;

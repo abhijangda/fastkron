@@ -58,7 +58,6 @@ cudaError_t Autotuner::tune(KMMProblem problem,
   
   //Use double buffering for writing result and using output 
   //of previous iteration as input to current
-  std::cout << "Fusion enabled?  " << this->fastKron.getUseFusion() << std::endl;
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
   auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 

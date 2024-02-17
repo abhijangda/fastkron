@@ -30,6 +30,8 @@ public:
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
 
+  cudaEvent_t startEvent;
+  cudaEvent_t endEvent;
 public:
   CUDAKernelDatabase();
 
@@ -62,8 +64,13 @@ public:
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
                                            KernelMode execMode);
-
-  std::pair<KernelInfo, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
+  virtual cudaError_t timeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
+                                 KMMProblem problem, DistributedParams distParams, 
+                                 EpilogueParams epilogueParams,
+                                 KernelMode execMode, 
+                                 bool distP2PStore,
+                                 int warmups, int runs,
+                                 float& runtime);
   virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual cudaError_t procMalloc(uint32_t proc, Matrix& m);
   virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
