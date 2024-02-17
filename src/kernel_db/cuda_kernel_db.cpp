@@ -21,8 +21,7 @@ static bool isValidKernel(KernelInfo& kernelInfo) {
 }
 
 CUDAKernelDatabase::CUDAKernelDatabase() {
-  streams = new cudaStream_t;
-  streams[0] = NULL;
+  streams.push_back(NULL);
 
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(CUDAKernels)/sizeof(KernelInfo); i++) {
@@ -245,7 +244,11 @@ cudaError_t CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) 
 }
 
 cudaError_t CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  streams = new cudaStream_t[gpus];
+  streams.clear();
+  for (int i = 0; i < gpus; i++) {
+    streams.push_back(((cudaStream_t*)ptrToStream)[i]);
+  }
+  numGPUs_ = gpus;
   if (isDistributed_) {
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {

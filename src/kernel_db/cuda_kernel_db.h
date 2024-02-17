@@ -1,4 +1,5 @@
 #include <functional>
+#include <vector>
 
 #include <cuda_runtime.h>
 #include <cuda.h>
@@ -18,7 +19,7 @@ struct ThreadArgs;
 //TODO: Change name to Executor?
 class CUDAKernelDatabase : public KernelDatabase {
 public:
-  cudaStream_t* streams;
+  std::vector<cudaStream_t> streams;
   uint numGPUs_;
   uint gpusInM_;
   uint gpusInK_;
@@ -36,7 +37,7 @@ public:
 
   void free() {
     compiledKernels.clear();
-    delete[] streams;
+    streams.clear();
     if (isDistributed_) {
       for (uint g = 0; g < gpusInM_; g++) {
         int s = pthread_barrier_destroy(&barriers_[g]);
