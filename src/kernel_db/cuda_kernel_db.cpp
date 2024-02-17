@@ -83,7 +83,6 @@ cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kron
                                          KernelMode execMode) {
   DistributedParams distParams;
   cudaStream_t stream = streams[0];
-
   switch(problem.n()) {
     case 1:
       return invoke<1>(kernel, kronIndex, problem,
@@ -249,6 +248,7 @@ cudaError_t CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, i
     streams.push_back(((cudaStream_t*)ptrToStream)[i]);
   }
   numGPUs_ = gpus;
+  isDistributed_ = gpus > 1;
   if (isDistributed_) {
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {

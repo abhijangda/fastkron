@@ -111,7 +111,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   }
 
   CUDA_CHECK(cudaSetDevice(0));
-
+  std::cout << "fastKron.cudaKernels.isDistributed_ "<< fastKron.cudaKernels.isDistributed_ << std::endl;
   if (!fastKron.cudaKernels.isDistributed_) {
     //Use temporary as input/output matrix
     //TODO: fix this

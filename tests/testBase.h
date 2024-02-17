@@ -407,7 +407,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       CUDACHECK(cudaSetDevice(g));
       CUDACHECK(cudaEventCreate(&start[g]));
       CUDACHECK(cudaEventCreate(&end[g]));
-      cudaStreamCreate(&stream[g]);
     }
     printf("warmup\n");
     //Warm Up iterations

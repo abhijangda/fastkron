@@ -134,7 +134,7 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   // }
   if (problem.y().data() == nullptr) return cudaErrorInvalidValue;
-  if (temp1           == nullptr) return cudaErrorInvalidValue;
+  if (temp1              == nullptr) return cudaErrorInvalidValue;
 
   void* temps[2] = {temp1, temp2};
 
