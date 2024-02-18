@@ -88,30 +88,34 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   Matrix result, temp;
   fastKron.gekmmResultTemp(problem, result, temp);
   
-  Matrix temp1[fastKron.cudaKernels.numGPUs_];
-  Matrix temp2[fastKron.cudaKernels.numGPUs_];
-  //TODO: Make this FactorArray
-  Factor Fs[fastKron.cudaKernels.numGPUs_][problem.n()];
+  uint devicesPerProc = fastKron.cudaKernels.numGPUs_;
+  auto kernelDb = fastKron.getBackendKernelDb();
 
-  for (uint32_t p = 0; p < fastKron.cudaKernels.numGPUs_; p++) {
+  Matrix temp1[devicesPerProc];
+  Matrix temp2[devicesPerProc];
+  //TODO: Make this FactorArray
+  Factor Fs[devicesPerProc][problem.n()];
+
+  for (uint32_t p = 0; p < devicesPerProc; p++) {
     //TODO: Init temp to 1
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
-    fastKron.cudaKernels.procMalloc(p, temp1[p]);
-    fastKron.cudaKernels.procMalloc(p, temp2[p]);
-    fastKron.cudaKernels.procMemset(p, temp1[p], 1.0f);
-    fastKron.cudaKernels.procMemset(p, temp2[p], 1.0f);
+    kernelDb->procMalloc(p, temp1[p]);
+    kernelDb->procMalloc(p, temp2[p]);
+    kernelDb->procMemset(p, temp1[p], 1.0f);
+    kernelDb->procMemset(p, temp2[p], 1.0f);
 
     for (int f = 0; f < problem.n(); f++) {
       Fs[p][f] = problem.f(f);
-      fastKron.cudaKernels.procMalloc(p, Fs[p][f]);
-      fastKron.cudaKernels.procMemset(p, Fs[p][f], 1.0f);
+      kernelDb->procMalloc(p, Fs[p][f]);
+      kernelDb->procMemset(p, Fs[p][f], 1.0f);
     }
   }
 
   CUDA_CHECK(cudaSetDevice(0));
-  std::cout << "fastKron.cudaKernels.isDistributed_ "<< fastKron.cudaKernels.isDistributed_ << std::endl;
-  if (!fastKron.cudaKernels.isDistributed_) {
+  
+  bool isDistributed_ = fastKron.cudaKernels.isDistributed_;
+  if (!isDistributed_) {
     //Use temporary as input/output matrix
     //TODO: fix this
     auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
@@ -124,6 +128,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
                                   tunedKernels, tunedKernelsMap);
     fastKron.tunedKernelSeries = tunedKernels;
   } else {
+    assert (fastKron.backend == fastKronBackend_CUDA);
     if (!checkDistributedKronSizes(problem,
                                    fastKron.cudaKernels.perGPUKronBatch_, fastKron.cudaKernels.gpusInK_))
       return cudaErrorInvalidValue;
@@ -194,9 +199,9 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     }
   }
 
-  for (int p = 0; p < fastKron.cudaKernels.numGPUs_; p++) {
-    fastKron.cudaKernels.procFree(p, temp1[p]);
-    fastKron.cudaKernels.procFree(p, temp2[p]);
+  for (int p = 0; p < devicesPerProc; p++) {
+    kernelDb->procFree(p, temp1[p]);
+    kernelDb->procFree(p, temp2[p]);
     for (int f = 0; f < problem.n(); f++) {
       //TODO: // CUDA_CHECK(cudaFree(Fs[g * problem.n() + f]));
     }

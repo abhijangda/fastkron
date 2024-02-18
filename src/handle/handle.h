@@ -6,6 +6,7 @@
 #include "kernel_db/cuda_kernel_db.h"
 #include "env/env.h"
 #include "kmm/kmmalgo.h"
+#include "kernel_db/cpu_kernel_db.h"
 
 #pragma once
 
@@ -47,7 +48,30 @@ struct FastKronHandle {
 #ifdef ENABLE_CUDA
   CUDAKernelDatabase cudaKernels;
 #endif
+#ifdef ENABLE_X86
+  X86KernelDatabase x86Kernels;
+#endif
 
+  KernelDatabase* getKernelDb(fastKronBackend backend) {
+    switch (backend) {
+      case fastKronBackend_X86:
+        #ifdef ENABLE_X86
+          return &x86Kernels;
+        #endif
+      case fastKronBackend_CUDA:
+        #ifdef ENABLE_CUDA
+          return &cudaKernels;
+        #endif
+      default:
+        return nullptr;
+    }
+  }
+
+  KernelDatabase* getBackendKernelDb() {
+    return getKernelDb(backend);
+  }
+
+  cudaError_t initX86Backend();
   cudaError_t initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
 
   //TODO: these two functions should be a part of utils?

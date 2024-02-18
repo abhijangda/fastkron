@@ -30,15 +30,13 @@ public:
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
 
-  cudaEvent_t startEvent;
-  cudaEvent_t endEvent;
 public:
   CUDAKernelDatabase();
+  ~CUDAKernelDatabase() {}
 
   cudaError_t init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
-
+  
   void free() {
-    compiledKernels.clear();
     streams.clear();
     if (isDistributed_) {
       for (uint g = 0; g < gpusInM_; g++) {
@@ -55,7 +53,7 @@ public:
       }
     }
   }
-  
+
   virtual cudaError_t invokeKernel(KernelInfo& kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,

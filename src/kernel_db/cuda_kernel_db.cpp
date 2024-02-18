@@ -148,6 +148,7 @@ cudaError_t CUDAKernelDatabase::timeKernel(KernelInfo& kernel, const uint factor
                                            float& runtime) {
   cudaStream_t stream = streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
+  cudaEvent_t startEvent, endEvent;
   CUDA_CHECK(cudaEventCreate(&startEvent));
   CUDA_CHECK(cudaEventCreate(&endEvent));
   cudaError_t status;

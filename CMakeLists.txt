@@ -76,9 +76,18 @@ if(ENABLE_CUDA)
       ${CUDA}/shared-loads.cuh
       ${CUDA}/register-loads.cuh
       ${CUDA}/kernel.cuh
-      ${CUDA}/otherkernels.cuh)
+      ${CUDA}/otherkernels.cuh
+      ${SRC}/kernel_db/cuda_kernel_db.h
+      ${SRC}/kernel_db/cuda_kernel_db.cpp)
 else()
   set(CUDA_HEADER_FILES)
+endif()
+
+if (ENABLE_X86)
+  set(X86_HEADER_FILES
+      ${SRC}/kernel_db/cpu_kernel_db.h)
+else()
+  set(X86_HEADER_FILES)
 endif()
 
 set(HEADER_FILES 
@@ -86,8 +95,7 @@ set(HEADER_FILES
     ${SRC}/autotuner/autotuner.h
     ${SRC}/handle/handle.h 
     ${SRC}/handle/op.h 
-    ${SRC}/kernel_db/kernel_defs.h
-    ${SRC}/kernel_db/cuda_kernel_db.h 
+    ${SRC}/kernel_db/kernel_defs.h 
     ${SRC}/kmm/kmmalgo.h
     ${SRC}/kmm/matrix.h
     ${SRC}/utils/thread_pool.h
@@ -99,7 +107,6 @@ set(SOURCES
     ${SRC}/autotuner/autotuner.cpp 
     ${SRC}/handle/handle.cpp
     ${SRC}/kernel_db/kernel_db.cpp
-    ${SRC}/kernel_db/cuda_kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
     ${SRC}/kmm/matrix.cpp)
 
@@ -110,6 +117,7 @@ cuda_add_library(FastKron
     ${KERNEL_HEADER_FILES}
     ${CUDA_HEADER_FILES}
     ${CUDA_KERNELS}
+    ${X86_HEADER_FILES}
   OPTIONS
     ${NVCC_FLAGS}
 )
