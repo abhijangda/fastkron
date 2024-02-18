@@ -45,3 +45,18 @@ std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem pro
 
   return std::make_pair(bestKernel, minTime);
 }
+
+cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
+  void* ptr = nullptr;
+  cudaError_t e = procMalloc(proc, m.numel() * sizeof(float), ptr);
+
+  if (e == cudaSuccess) {
+    m.ptr = ptr;
+  }
+
+  return e;
+}
+
+cudaError_t KernelDatabase::procFree(uint32_t proc, Matrix m) {
+  return procFree(proc, m.data());
+}

@@ -79,3 +79,9 @@ static int ilog2(uint x) {
 static bool isPowerOf2(uint x) {
     return (x & (x - 1)) == 0;
 }
+
+template<typename T>
+static void memset(T* ptr, size_t nelem, T val) {
+  for (int i = 0; i < nelem; i++)
+    ptr[i] = val;
+}

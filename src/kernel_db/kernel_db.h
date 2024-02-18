@@ -50,9 +50,9 @@ public:
                                  int warmups, int runs,
                                  float& runtime) = 0;
   virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
-  virtual cudaError_t procMalloc(uint32_t proc, Matrix& m) = 0;
+  cudaError_t procMalloc(uint32_t proc, Matrix& m);
   virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val) = 0;
-  virtual cudaError_t procFree(uint32_t proc, Matrix m) = 0;
+  cudaError_t procFree(uint32_t proc, Matrix m);
   virtual cudaError_t procFree(uint32_t proc, void* ptr) = 0;
 
   bool findAllKernels(const Factor& f, fastKronOp opX, fastKronOp opF, std::vector<KernelInfo>& kernels) {

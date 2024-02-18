@@ -186,33 +186,17 @@ cudaError_t CUDAKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& pt
   return cudaSuccess;
 }
 
-cudaError_t CUDAKernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
-  void* ptr = nullptr;
-  cudaError_t e = procMalloc(proc, m.numel() * sizeof(float), ptr);
-
-  if (e == cudaSuccess) {
-    m.ptr = ptr;
-  }
-
-  return e;
-}
-
 cudaError_t CUDAKernelDatabase::procFree(uint32_t proc, void* ptr) {
   CUDA_CHECK(cudaSetDevice(proc));
   CUDA_CHECK(cudaFree(ptr));
   return cudaSuccess;
 }
 
-cudaError_t CUDAKernelDatabase::procFree(uint32_t proc, Matrix m) {
-  return procFree(proc, m.data());
-}
-
 cudaError_t CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
   //TODO: call a CUDA kernel for memset
   CUDA_CHECK(cudaSetDevice(proc));
   float* host = new float[m.numel()];
-  for (int i = 0; i < m.numel(); i++)
-    host[i] = val;
+  memset<float>(host, m.numel(), val);
   CUDA_CHECK(cudaMemcpy(m.data(), host, m.numel()*sizeof(float), cudaMemcpyHostToDevice));
   delete host;
   return cudaSuccess;
