@@ -4,7 +4,7 @@
 #pragma once
 
 class TunedKernelsMap {
-  using ProblemToKernels = std::unordered_map<KMMProblem, std::pair<KernelInfo, float>>;
+  using ProblemToKernels = std::unordered_map<KMMProblem, std::pair<KernelInfo*, float>>;
 
   ProblemToKernels kernels;
   ProblemToKernels p2pKernels;
@@ -16,7 +16,7 @@ class TunedKernelsMap {
 public:
   TunedKernelsMap() {}
 
-  void add(const KMMProblem& problem, bool p2p, std::pair<KernelInfo, float> kernelAndtime) {
+  void add(const KMMProblem& problem, bool p2p, std::pair<KernelInfo*, float> kernelAndtime) {
     if (p2p) {
       p2pKernels.emplace(std::make_pair(problem, kernelAndtime));
     } else {
@@ -29,7 +29,7 @@ public:
                    getKernel(kernels,    problem) != kernels.end();
   }
 
-  KernelInfo getKernel(const KMMProblem& problem, bool p2p) {
+  KernelInfo* getKernel(const KMMProblem& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem)->second.first :
                    getKernel(kernels,    problem)->second.first;    
   }
@@ -45,6 +45,7 @@ class Autotuner {
   TunedKernelsMap tunedKernelsMap;
 
   cudaError_t tune(KMMProblem problem, bool isDistributed, DistributedParams distParams);
+
 public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
   {}

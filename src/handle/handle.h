@@ -12,19 +12,19 @@
 
 struct TunedKernelFromStart {
   //TODO: Cannot improve unless distributed code is refactored 
-  KernelInfo kernel;
+  KernelInfo* kernel;
   uint start, end;
   uint K;
   float time;
   bool distShare;
 
   TunedKernelFromStart() {}
-  TunedKernelFromStart(KernelInfo kernel_, uint start_, uint end_, uint K_, float time_):
+  TunedKernelFromStart(KernelInfo* kernel_, uint start_, uint end_, uint K_, float time_):
     kernel(kernel_), start(start_), end(end_), K(K_), time(time_), distShare(false) {}
 
   friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {
     out << "[" << k.start << ", " << k.end << "] = " << k.K << " " 
-        << k.kernel << " runs for " << k.time << " ms";
+        << k.kernel->str() << " runs for " << k.time << " ms";
     return out;
   }
 };

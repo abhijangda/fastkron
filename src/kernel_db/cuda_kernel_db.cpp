@@ -5,15 +5,15 @@
 #include "kernel_db/cuda_kernel_db.h"
 #include "kernel_db/kernel_defs.h"
 
-static bool isValidKernel(KernelInfo& kernelInfo) {
-  const uint NumThreads = kernelInfo.NumThreads;
-  const uint CRegRows = kernelInfo.CRegRows;
-  const uint CRegCols = kernelInfo.CRegCols;
-  const Factor& tiledFactor = kernelInfo.tiledFactor;
+static bool isValidKernel(CUDAKernel& cudaKernel) {
+  const uint NumThreads = cudaKernel.NumThreads;
+  const uint CRegRows = cudaKernel.CRegRows;
+  const uint CRegCols = cudaKernel.CRegCols;
+  const Factor& tiledFactor = cudaKernel.tiledFactor;
 
-  const uint ValidThreads = ((kernelInfo.tiledInput.n()/kernelInfo.factor.p())/CRegRows) * (tiledFactor.q()/CRegCols);
+  const uint ValidThreads = ((cudaKernel.tiledInput.n()/cudaKernel.factor.p())/CRegRows) * (tiledFactor.q()/CRegCols);
   if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
-    std::cout << "Invalid kernel config " << kernelInfo << std::endl; 
+    std::cout << "Invalid kernel config " << cudaKernel.str() << std::endl; 
     return false;
   }
 
@@ -24,17 +24,17 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
   
   //Load kernels into compiledKernels map
-  for (uint i = 0; i < sizeof(CUDAKernels)/sizeof(KernelInfo); i++) {
-    KernelInfo& info = CUDAKernels[i];
+  for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKernel); i++) {
+    CUDAKernel& info = AllCUDAKernels[i];
     if (!isValidKernel(info)) abort();
     CUDA_CHECK(info.setSharedMemAttr());
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
     DbKey key {info.factor, info.opX, info.opF};
     auto iter = compiledKernels.find(key);
     if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo>()));
+      compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
     }
-    compiledKernels.at(key).push_back(info);
+    compiledKernels.at(key).push_back(&info);
   }
   
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
@@ -55,7 +55,7 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
 
 //Launch cuda kernels
 template<uint NumFusedKerns>
-cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex, 
+cudaError_t invoke(CUDAKernel& kernelInfo, const uint kronIndex, 
                    KMMProblem problem,
                    DistributedParams distParams,
                    EpilogueParams epilogueParams,
@@ -78,29 +78,31 @@ cudaError_t invoke(KernelInfo& kernelInfo, const uint kronIndex,
   return status;
 }
 
-cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kronIndex, 
-                                         KMMProblem problem, EpilogueParams epilogueParams,
-                                         KernelMode execMode) {
+cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronIndex, 
+                                             KMMProblem problem, EpilogueParams epilogueParams,
+                                             KernelMode execMode) {
   DistributedParams distParams;
   cudaStream_t stream = streams[0];
+  CUDAKernel& cudaKernel = dynamic_cast<CUDAKernel&>(*kernel);
+
   switch(problem.n()) {
     case 1:
-      return invoke<1>(kernel, kronIndex, problem,
+      return invoke<1>(cudaKernel, kronIndex, problem,
                        distParams, epilogueParams, execMode, stream);
     case 2:
-      return invoke<2>(kernel, kronIndex, problem,
+      return invoke<2>(cudaKernel, kronIndex, problem,
                        distParams, epilogueParams, execMode, stream);
     case 3:
-      return invoke<3>(kernel, kronIndex, problem,
+      return invoke<3>(cudaKernel, kronIndex, problem,
                        distParams, epilogueParams, execMode, stream);
     case 4:
-      return invoke<4>(kernel, kronIndex, problem,
+      return invoke<4>(cudaKernel, kronIndex, problem,
                        distParams, epilogueParams, execMode, stream);
     case 5:
-      return invoke<5>(kernel, kronIndex, problem,
+      return invoke<5>(cudaKernel, kronIndex, problem,
                        distParams, epilogueParams, execMode, stream);
     case 6:
-      return invoke<6>(kernel, kronIndex, problem, 
+      return invoke<6>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
@@ -108,29 +110,31 @@ cudaError_t CUDAKernelDatabase::invokeKernel(KernelInfo& kernel, const uint kron
   }
 }
 
-cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const uint kronIndex, 
-                                                 KMMProblem problem, DistributedParams distParams, 
-                                                 EpilogueParams epilogueParams,
-                                                 KernelMode execMode) {
+cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo* kernel, const uint kronIndex, 
+                                                     KMMProblem problem, DistributedParams distParams, 
+                                                     EpilogueParams epilogueParams,
+                                                     KernelMode execMode) {
   cudaStream_t stream = streams[distParams.proc()];
+  CUDAKernel& cudaKernel = dynamic_cast<CUDAKernel&>(*kernel);
+
   switch (problem.n()) {
     case 1:
-      return invoke<1>(kernel, kronIndex, problem, 
+      return invoke<1>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     case 2:
-      return invoke<2>(kernel, kronIndex, problem, 
+      return invoke<2>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     case 3:
-      return invoke<3>(kernel, kronIndex, problem, 
+      return invoke<3>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     case 4:
-      return invoke<4>(kernel, kronIndex, problem, 
+      return invoke<4>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     case 5:
-      return invoke<5>(kernel, kronIndex, problem, 
+      return invoke<5>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     case 6:
-      return invoke<6>(kernel, kronIndex, problem, 
+      return invoke<6>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
@@ -139,7 +143,7 @@ cudaError_t CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo& kernel, const u
   return cudaErrorInvalidValue;
 }
 
-cudaError_t CUDAKernelDatabase::timeKernel(KernelInfo& kernel, const uint factorIdx, 
+cudaError_t CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
                                            KernelMode execMode, 

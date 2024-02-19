@@ -4,25 +4,25 @@
 
 #include "kernel_db/kernel_db.h"
 
-std::pair<KernelInfo, float> KernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
+std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
     uint factorIdx, DistributedParams distParams) {
   const uint runs = 5;
   const uint warmups = 2;
-  KernelInfo bestKernel;
+  KernelInfo* bestKernel;
   float minTime;
   bool foundProblem = false;
-  std::vector<KernelInfo> allKernels;
+  std::vector<KernelInfo*> allKernels;
 
   minTime = std::numeric_limits<float>::max();
 
   if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
   for (auto kernel : allKernels) {
-    if (!kernel.canCompute(problem, distP2PStore)) continue;
+    if (!kernel->canCompute(problem, distP2PStore)) continue;
     if (!foundProblem) {
       std::cout << "Tuning for shape "  << problem << std::endl;
       foundProblem = true;
     }
-    std::cout << kernel;
+    std::cout << kernel->str();
     float kernelTime = std::numeric_limits<float>::max();
     cudaError_t status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 

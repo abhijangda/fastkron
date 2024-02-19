@@ -116,7 +116,7 @@ class KernelConfig:
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
     constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
-    return "KernelInfo{"+\
+    return "CUDAKernel{"+\
             f"(void*){self.hostFuncName()},"+\
             f"get{self.kernelname()},"+\
             constructor.replace("float", "ElementType::Float") + "}"
@@ -162,7 +162,7 @@ def xalignment(m, cols, op):
 def falignment(cols):
   return max([a for a in [1, 2, 4] if cols % a == 0])
 
-def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs):
+def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend):
   if not os.path.exists(kernel_dir):
     os.mkdir(kernel_dir)
 
@@ -234,7 +234,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
             if specificConfig.replace(' ', '') in repr(config).replace(' ', ''):
               __configs += [config]
               break
-              
+
         configs = __configs
     combinedConfigs += configs
   
@@ -316,16 +316,16 @@ def parse_same_factors(case):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('-distinct-factors',   required=False , type=str,  action='append',     nargs="+")
-  parser.add_argument('-same-factors',       required=False , type=str,  action='append',     nargs="+")
-  parser.add_argument('-opX',                required=True , type=str)
-  parser.add_argument('-opF',                required=True , type=str)
-  parser.add_argument('-num-kernels',        required=False, type=int,                       default=10000)
-  parser.add_argument('-no-fuse',            required=False, action='store_true')
-  parser.add_argument('-dist-kernels',       required=False, action='store_true', default=False)
-  parser.add_argument('-match-configs',      required=False, type=str,  action='append',     nargs="+")
+  parser.add_argument('-distinct-factors'  , required=False, type=str,  action='append',     nargs="+")
+  parser.add_argument('-same-factors'      , required=False, type=str,  action='append',     nargs="+")
+  parser.add_argument('-opX'               , required=True , type=str)
+  parser.add_argument('-opF'               , required=True , type=str)
+  parser.add_argument('-num-kernels'       , required=False, type=int,   default=10000)
+  parser.add_argument('-no-fuse'           , required=False, action='store_true')
+  parser.add_argument('-dist-kernels'      , required=False, action='store_true', default=False)
+  parser.add_argument('-match-configs'     , required=False, type=str,  action='append',     nargs="+")
   parser.add_argument('-match-configs-file', required=False, type=str)
-
+  parser.add_argument('-backend'           , type=str)
   args = parser.parse_args()
   parsed_cases = []
   
@@ -347,6 +347,10 @@ if __name__ == "__main__":
         print(e)
         sys.exit(0)
   
+  if args.backend is None or args.backend.lower() not in ['cuda', 'x86', 'rocm', 'arm']:
+    print(f"Invalid backend: {args.backend}")
+    sys.exit(0)
+
   print("Generating kernels for ", parsed_cases)
   assert args.opX in ["N", "T"]
   assert args.opF in ["N", "T"]
@@ -359,4 +363,4 @@ if __name__ == "__main__":
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
   generate_kernel_decls(parsed_cases, args.opX, args.opF, not args.no_fuse, args.dist_kernels,
-                        args.num_kernels, match_configs)
+                        args.num_kernels, match_configs, args.backend)
