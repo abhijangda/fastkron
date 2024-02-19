@@ -22,6 +22,7 @@ cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend);
 void fastKronDestroy(fastKronHandle handle);
 
 cudaError_t fastKronInitCUDA(fastKronHandle handle, void *ptrToStream, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+cudaError_t fastKronInitX86(fastKronHandle handlePtr);
 
 //TODO: A different function for setting stream of handle 
 cudaError_t gekmmSizes(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[],

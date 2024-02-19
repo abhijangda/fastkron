@@ -6,8 +6,10 @@
 class CPUKernelDatabase : public KernelDatabase {
 
 public:
-  CPUKernelDatabase() : KernelDatabase() {}
+  CPUKernelDatabase();
 
+  void init() {}
+  
   virtual cudaError_t invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
@@ -22,7 +24,7 @@ public:
                                  KernelMode execMode, 
                                  bool distP2PStore,
                                  int warmups, int runs,
-                                 float& runtime) {}
+                                 float& runtime);
   virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
   virtual cudaError_t procFree(uint32_t proc, void* ptr);

@@ -27,12 +27,47 @@ public:
     }
   };
 
+  bool isValidKernel(KernelInfo& info) {return true;} //TODO:
+  void initKernel(KernelInfo& info) {return;} //TODO:
+  
 protected:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
 
 public:
   KernelDatabase() {}
   ~KernelDatabase() {}
+
+  template<typename SubClassKernel>
+  void loadKernels(SubClassKernel* kernels, uint32_t num) {
+    //Load kernels into compiledKernels map
+    for (uint i = 0; i < num; i++) {
+      SubClassKernel& info = kernels[i];
+      if (!isValidKernel(info)) abort();
+      initKernel(info); //CUDA_CHECK(info.setSharedMemAttr());
+      //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
+      DbKey key {info.factor, info.opX, info.opF};
+      auto iter = compiledKernels.find(key);
+      if (iter == compiledKernels.end()) {
+        compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
+      }
+      compiledKernels.at(key).push_back(&info);
+    }
+  
+    //TODO: Check that if distP2PStore is needed then there is a kernel that can 
+    //do it
+    //TODO: Add if debug
+    if (true) {
+      uint numKernels = 0;
+      std::cout << "Loading compiled kernels" << std::endl;
+      for (auto iter : compiledKernels) {
+        for (auto kernel : iter.second) {
+          std::cout << kernel->str() << std::endl;
+        }
+        numKernels += iter.second.size();
+      }
+      std::cout << "Number of kernels loaded: " << numKernels << std::endl;
+    }
+  }
 
   virtual cudaError_t invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,

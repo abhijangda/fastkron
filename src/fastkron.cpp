@@ -49,6 +49,10 @@ cudaError_t fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gp
   return handlePtr->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
+cudaError_t fastKronInitX86(fastKronHandle handlePtr) {
+  return handlePtr->initX86Backend();
+}
+
 cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
                        size_t* resultSize, size_t* tempSize) {
   KMMProblem problem(M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);

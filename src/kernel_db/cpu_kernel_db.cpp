@@ -11,6 +11,10 @@ CPUKernel AllX86Kernels[] = {
 #endif
 };
 
+CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {
+  loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(CPUKernel));
+}
+
 cudaError_t CPUKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
   ptr = new float[size];
   return ptr != nullptr ? cudaSuccess : cudaErrorInvalidValue; 
@@ -22,4 +26,15 @@ cudaError_t CPUKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
 
 cudaError_t CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
 
+}
+
+cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+                                 KMMProblem problem, DistributedParams distParams, 
+                                 EpilogueParams epilogueParams,
+                                 KernelMode execMode, 
+                                 bool distP2PStore,
+                                 int warmups, int runs,
+                                 float& runtime) {
+  runtime = 1.0f;
+  return cudaSuccess;
 }

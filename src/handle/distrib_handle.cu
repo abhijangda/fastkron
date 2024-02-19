@@ -48,7 +48,7 @@ static void thread_barrier_wait(pthread_barrier_t* barrier) {
 
 void perGPUKronMatmul(ThreadArgs* thArgs) {
   // ThreadArgs<T>& thArgs = *(ThreadArgs<T>*)arg;
-
+#ifdef ENABLE_CUDA
   FastKronHandle& handle = *thArgs->handle;
   uint NumKronMats = thArgs->NumKronMats;
   void* x = thArgs->x;
@@ -68,8 +68,6 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   uint gpusInK_ = thArgs->gpusInK_; 
   uint currTempN;
   uint g = gr * gpusInK_ + gc;
-
-#ifdef ENABLE_CUDA
 
   CUDA_CHECK(cudaSetDevice(g));
 

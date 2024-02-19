@@ -305,6 +305,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   handle->setUseFusion(useFusion);
   if (backend == fastKronBackend_CUDA)
     CUDA_CHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
+  else if (backend == fastKronBackend_X86)
+    CUDA_CHECK(fastKronInitX86(handle));
   size_t resultSize = 0;
   size_t tempSize = 0;
   CUDACHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
