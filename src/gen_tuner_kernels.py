@@ -100,7 +100,7 @@ class CPUKernel(Kernel):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.opX}, {self.opF}"
+    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.fused_kernels}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
@@ -231,7 +231,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
 
   empty_dir(kernel_dir)
   configs = {}
-  
+
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):

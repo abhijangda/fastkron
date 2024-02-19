@@ -85,8 +85,8 @@ else()
 endif()
 
 if (ENABLE_X86)
+  include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
   set(X86_HEADER_FILES
-      ${KERNELS}/cpu/x86/kron-kernels/kernels.cmake
       ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
       ${SRC}/kernel_db/cpu_kernel_db.cpp
       ${SRC}/kernel_db/cpu_kernel_db.h
