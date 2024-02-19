@@ -1,7 +1,19 @@
 #include "anyoption.h"
 #include "testBase.h"
 
+#include<string.h>
+#include<stdio.h>
+
 #include <sstream>
+
+char* strupr(char* str) {
+  uint len = strlen(str);
+  for (int i = 0; i < len; i++) {
+    str[i] = toupper(str[i]);
+  }
+
+  return str;
+}
 
 bool parseStringToIntegers(char* str, uint array[], const int numInts) {
   int parsedInts = 0;
@@ -104,13 +116,13 @@ int main(int argc, char* argv[]) {
     return 1;
   } else {
     char* backendStr = opt->getValue("backend");
-    if (strcmp(backendStr, "CUDA") == 0) {
+    if (strcmp(strupr(backendStr), "CUDA") == 0) {
       backend = fastKronBackend_CUDA;
-    } else if (strcmp(backendStr, "ROCM") == 0) {
+    } else if (strcmp(strupr(backendStr), "ROCM") == 0) {
       backend = fastKronBackend_ROCM;
-    } else if (strcmp(backendStr, "X86") == 0) {
+    } else if (strcmp(strupr(backendStr), "X86") == 0) {
       backend = fastKronBackend_X86;
-    } else if (strcmp(backendStr, "ARM") == 0) {
+    } else if (strcmp(strupr(backendStr), "ARM") == 0) {
       backend = fastKronBackend_ARM;
     }
   }
