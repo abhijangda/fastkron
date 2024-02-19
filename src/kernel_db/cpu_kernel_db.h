@@ -13,7 +13,7 @@ public:
   virtual cudaError_t invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode) {}
+                                   KernelMode execMode);
   virtual cudaError_t invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,

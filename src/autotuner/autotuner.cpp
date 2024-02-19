@@ -120,8 +120,8 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   }
 
   CUDA_CHECK(cudaSetDevice(0));
-  
-  if (devicesPerProc == 1) {
+
+  if (devicesPerProc <= 1) {
     //Use temporary as input/output matrix
     //TODO: fix this
     auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
