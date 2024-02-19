@@ -52,17 +52,18 @@ public:
   T* data(uint32_t row, uint32_t col, fastKronOp op) const {
     if (op == fastKronOp_N) return data<T>((row * n() + col));
     else if (op == fastKronOp_T) return data<T>((col * m() + row));
+    return nullptr;
   }
 
   template<typename T>
   CUDA_DEVICE_HOST
-  void set(uint32_t row, uint32_t col, T val) {
-    *(data<T>(row, col)) = val;
+  void set(uint32_t row, uint32_t col, fastKronOp op, T val) {
+    *(data<T>(row, col, op)) = val;
   }
   template<typename T>
   CUDA_DEVICE_HOST
-  T at(uint32_t row, uint32_t col) {
-    return *(data<T>(row, col));
+  T at(uint32_t row, uint32_t col, fastKronOp op) {
+    return *(data<T>(row, col, op));
   }
   template<typename T>
   CUDA_DEVICE_HOST
