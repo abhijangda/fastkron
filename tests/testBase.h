@@ -261,6 +261,52 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
   return;
 }
 
+static cudaError_t backendMalloc(fastKronBackend backend, void** ptr, size_t sz) {
+  switch(backend) {
+    case fastKronBackend_CUDA:
+      return cudaMalloc(ptr, sz);
+    case fastKronBackend_ARM:
+    case fastKronBackend_X86:
+      {
+        *ptr = (void*)(new char[sz]);
+        if (*ptr == nullptr) return cudaSuccess;
+        return cudaSuccess;
+      }
+  }
+}
+
+static cudaError_t backendMemset(fastKronBackend backend, void* ptr, size_t sz, char value) {
+  switch(backend) {
+    case fastKronBackend_CUDA:
+      return cudaMemset(ptr, sz, value);
+    case fastKronBackend_ARM:
+    case fastKronBackend_X86:
+      memset(ptr, sz, value);
+      return cudaSuccess;
+  }
+}
+
+static cudaError_t backendMemcpyHostToDevice(fastKronBackend backend, void* dst, void* src, size_t sz) {
+  switch(backend) {
+    case fastKronBackend_CUDA:
+      return cudaMemcpy(dst, src, sz, cudaMemcpyHostToDevice);
+    case fastKronBackend_ARM:
+    case fastKronBackend_X86:
+      memcpy(dst, src, sz);
+      return cudaSuccess;
+  }
+}
+
+static cudaError_t backendMemcpyDeviceToHost(fastKronBackend backend, void* dst, void* src, size_t sz) {
+  switch(backend) {
+    case fastKronBackend_CUDA:
+      return cudaMemcpy(dst, src, sz, cudaMemcpyDeviceToHost);
+    case fastKronBackend_ARM:
+    case fastKronBackend_X86:
+      memcpy(dst, src, sz);
+      return cudaSuccess;
+  }
+}
 
 /**************************************************
               Test Driver
@@ -320,7 +366,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (useDistributed) {
     CUDACHECK(allocDistributedX(handle, dX, hX, M, K));
   } else {
-    CUDACHECK(cudaMalloc(&dX[0], sizeX));
+    CUDACHECK(backendMalloc(backend, (void**)&dX[0], sizeX));
   }
   
   if (verbose) printf("allocated\n");
@@ -330,13 +376,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (useDistributed) {
       for (int g = 0; g < gpus; g++) {
         CUDACHECK(cudaSetDevice(g));
-        CUDACHECK(cudaMalloc(&dKpMats[g * NUM_KP_MATS + i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+        CUDACHECK(backendMalloc(backend, (void**)&dKpMats[g * NUM_KP_MATS + i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
       }
     } else {
-      CUDACHECK(cudaMalloc(&dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
+      CUDACHECK(backendMalloc(backend, (void**)&dKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     }
     for (int g = 0; g < gpus; g++) {  
-      CUDACHECK(cudaMemcpy(dKpMats[g * NUM_KP_MATS + i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T), cudaMemcpyHostToDevice));
+      CUDACHECK(backendMemcpyHostToDevice(backend, dKpMats[g * NUM_KP_MATS + i], hKpMats[i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
     }
   }
   if (verbose) printf("memcpy\n");
@@ -346,18 +392,18 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaMalloc(&dTemp1[g], tempSize));
+    CUDACHECK(backendMalloc(backend, (void**)&dTemp1[g], tempSize));
     if (resultSize < tempSize)
-      CUDACHECK(cudaMalloc(&dTemp2[g], tempSize));
-    CUDACHECK(cudaMalloc(&dResult[g], resultSize));
-    CUDACHECK(cudaMemset(dResult[g], 0, resultSize));
+      CUDACHECK(backendMalloc(backend, (void**)&dTemp2[g], tempSize));
+    CUDACHECK(backendMalloc(backend, (void**)&dResult[g], resultSize));
+    CUDACHECK(backendMemset(backend, (void*)dResult[g], 0, resultSize));
   }
   
   if (checkResults) {
     if (useDistributed) {
       //Already done by allocDistributedX
     } else {
-      CUDACHECK(cudaMemcpy(dX[0], hX, sizeX, cudaMemcpyHostToDevice));
+      CUDACHECK(backendMemcpyHostToDevice(backend, dX[0], hX, sizeX));
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
@@ -391,7 +437,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (useDistributed) {
       CUDACHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
-      CUDACHECK(cudaMemcpy(dResultToHost, dResult[0], sizeResult, cudaMemcpyDeviceToHost));
+      CUDACHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
 
     //Check Results

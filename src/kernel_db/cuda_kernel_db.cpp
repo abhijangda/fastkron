@@ -32,6 +32,7 @@ static bool isValidKernel(CUDAKernel& cudaKernel) {
 CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
   
+  //TODO: Call KernelDatabase::loadKernels method
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKernel); i++) {
     CUDAKernel& info = AllCUDAKernels[i];
