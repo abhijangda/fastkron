@@ -21,6 +21,26 @@
     }                                                 \
   } while(0)
 
+// static double convertTimeValToDouble(struct timeval _time) {
+//   return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
+// }
+
+// static struct timeval getTimeOfDay () {
+//   struct timeval _time;
+
+//   if (gettimeofday (&_time, NULL) == -1) {
+//     fprintf (stderr, "gettimeofday returned -1\n");
+//     perror ("");
+//     abort ();
+//   }
+
+//   return _time;
+// }
+
+// static double getCurrTime() {
+//   return convertTimeValToDouble(getTimeOfDay());
+// }
+
 /**************************************************
                 Matrix Functions
 ***************************************************/
@@ -276,6 +296,18 @@ static cudaError_t backendMalloc(fastKronBackend backend, void** ptr, size_t sz)
   return cudaSuccess;
 }
 
+static cudaError_t backendFree(fastKronBackend backend, void* ptr) {
+  switch(backend) {
+    case fastKronBackend_CUDA:
+      return cudaFree(ptr);
+    case fastKronBackend_ARM:
+    case fastKronBackend_X86:
+      delete ptr;
+      return cudaSuccess;
+  }
+  return cudaSuccess;
+}
+
 static cudaError_t backendMemset(fastKronBackend backend, void* ptr, size_t sz, char value) {
   switch(backend) {
     case fastKronBackend_CUDA:
@@ -477,10 +509,15 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
     printf("390\n");
     //Run
+    double starttime = 0.0f;
     if (verbose) printf("run\n");
-    for (int g = 0; g < gpus; g++) {
-      CUDACHECK(cudaSetDevice(g));
-      CUDACHECK(cudaEventRecord(start[g], stream[g]));
+    if (backend == fastKronBackend_CUDA) {
+      for (int g = 0; g < gpus; g++) {
+        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cudaEventRecord(start[g], stream[g]));
+      }
+    } else if (backend == fastKronBackend_X86) {
+      starttime = getCurrTime();
     }
     for (uint i = 0; i < numIters; i++) {
       //printf("iter i %d\n", i);
@@ -491,14 +528,19 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       }
     }
     printf("405\n");
-    for (int g = 0; g < gpus; g++) {
-      CUDACHECK(cudaSetDevice(g));
-      CUDACHECK(cudaEventRecord(end[g], stream[g]));
-      CUDACHECK(cudaEventSynchronize(end[g]));
-      if (g == 0)
-        CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
+    if (backend == fastKronBackend_CUDA) {
+      for (int g = 0; g < gpus; g++) {
+        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cudaEventRecord(end[g], stream[g]));
+        CUDACHECK(cudaEventSynchronize(end[g]));
+        if (g == 0)
+          CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
+      }
+    } else if (backend == fastKronBackend_X86) {
+      double endtime = getCurrTime();
+      elapsedTime = (endtime - starttime)/1000.0f;
     }
-    
+
     double perCallTime = elapsedTime/numIters;
     size_t operations = 0;
     long tmpK = K;
@@ -515,12 +557,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Free GPU Memory
   for (int g = 0; g < gpus; g++) {
     CUDACHECK(cudaSetDevice(g));
-    CUDACHECK(cudaFree(dX[g]));
+    CUDACHECK(backendFree(backend, dX[g]));
     for (uint i = 0; i < NUM_KP_MATS; i++) {
-      CUDACHECK(cudaFree(dKpMats[g * NUM_KP_MATS + i]));
+      CUDACHECK(backendFree(backend, dKpMats[g * NUM_KP_MATS + i]));
     }
-    CUDACHECK(cudaFree(dTemp1[g]));
-    CUDACHECK(cudaFree(dTemp2[g]));
+    CUDACHECK(backendFree(backend, dTemp1[g]));
+    CUDACHECK(backendFree(backend, dTemp2[g]));
   }
 
   fastKronDestroy(handle);
