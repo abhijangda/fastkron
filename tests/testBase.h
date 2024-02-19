@@ -273,6 +273,7 @@ static cudaError_t backendMalloc(fastKronBackend backend, void** ptr, size_t sz)
         return cudaSuccess;
       }
   }
+  return cudaSuccess;
 }
 
 static cudaError_t backendMemset(fastKronBackend backend, void* ptr, size_t sz, char value) {
@@ -284,6 +285,7 @@ static cudaError_t backendMemset(fastKronBackend backend, void* ptr, size_t sz, 
       memset(ptr, sz, value);
       return cudaSuccess;
   }
+  return cudaSuccess;
 }
 
 static cudaError_t backendMemcpyHostToDevice(fastKronBackend backend, void* dst, void* src, size_t sz) {
@@ -295,6 +297,7 @@ static cudaError_t backendMemcpyHostToDevice(fastKronBackend backend, void* dst,
       memcpy(dst, src, sz);
       return cudaSuccess;
   }
+  return cudaSuccess;
 }
 
 static cudaError_t backendMemcpyDeviceToHost(fastKronBackend backend, void* dst, void* src, size_t sz) {
@@ -306,6 +309,7 @@ static cudaError_t backendMemcpyDeviceToHost(fastKronBackend backend, void* dst,
       memcpy(dst, src, sz);
       return cudaSuccess;
   }
+  return cudaSuccess;
 }
 
 /**************************************************
