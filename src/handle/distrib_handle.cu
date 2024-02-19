@@ -68,6 +68,9 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
   uint gpusInK_ = thArgs->gpusInK_; 
   uint currTempN;
   uint g = gr * gpusInK_ + gc;
+
+#ifdef ENABLE_CUDA
+
   CUDA_CHECK(cudaSetDevice(g));
 
   cudaError_t status = cudaSuccess;
@@ -343,6 +346,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
   end:
   thArgs->threadResult = {status, (void*)innerPrevResult};
+#endif
 }
 
 cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
@@ -356,9 +360,12 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
 
   if (result == NULL)                        return cudaErrorInvalidValue;
   if (M % gpuM != 0)                         return cudaErrorInvalidValue;
-  if (NumKronMats < handle.cudaKernels.perGPUKronBatch_) return cudaErrorInvalidValue;
   if (temp1 == nullptr)                      return cudaErrorInvalidValue;
 
+  cudaError_t status = cudaSuccess;
+
+#ifdef ENABLE_CUDA
+  if (NumKronMats < handle.cudaKernels.perGPUKronBatch_) return cudaErrorInvalidValue;
   const uint batchedKronMuls = handle.cudaKernels.perGPUKronBatch_;
 
   thread_pool<ThreadArgs*>::task tasks[handle.cudaKernels.numGPUs_];
@@ -390,11 +397,11 @@ cudaError_t distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats
   handle.cudaKernels.threads_->execute_tasks(tasks);
   handle.cudaKernels.threads_->join_tasks();
 
-  cudaError_t status;
   for (uint thread = 0; thread < handle.cudaKernels.numGPUs_; thread++) {
     status = threadArgs[thread].threadResult.status;
     // result[thread] =(T*)threadArgs[thread].threadResult.result;
   }
+#endif
 
   return status;
 }
@@ -413,6 +420,7 @@ static uint getYColumns(uint M, uint K, uint NumKronMats, uint KronMatCols[], ui
 
 cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint K) {
   //TODO: Make FastKronError type
+#ifdef ENABLE_CUDA
   if (!cudaKernels.isDistributed_) return cudaErrorInvalidValue;
 
   uint gpuM, gpuK;
@@ -444,12 +452,15 @@ cudaError_t FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint
   }
   delete gpuHostX;
   std::cout << "Distributed X " << std::endl;
+#endif
   return cudaSuccess;
 }
 
 cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   //TODO: Make FastKronError type
   typedef float T;
+
+#ifdef ENABLE_CUDA
   if (!cudaKernels.isDistributed_) return cudaErrorInvalidValue;
   //TODO: Check that hY is on host memory
   uint gpuM, gpuYCols, YCols;
@@ -478,6 +489,7 @@ cudaError_t FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uin
   delete gpuHostY;
 
   std::cout << "Gathered Y" << std::endl;
+#endif
 
   return cudaSuccess;
 }

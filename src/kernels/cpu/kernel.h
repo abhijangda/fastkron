@@ -1,3 +1,7 @@
+#include "kernels/params.h"
+
+#pragma once
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,

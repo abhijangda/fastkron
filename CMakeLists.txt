@@ -78,14 +78,20 @@ if(ENABLE_CUDA)
       ${CUDA}/kernel.cuh
       ${CUDA}/otherkernels.cuh
       ${SRC}/kernel_db/cuda_kernel_db.h
-      ${SRC}/kernel_db/cuda_kernel_db.cpp)
+      ${SRC}/kernel_db/cuda_kernel_db.cpp
+      ${CUDA_KERNELS})
 else()
   set(CUDA_HEADER_FILES)
 endif()
 
 if (ENABLE_X86)
   set(X86_HEADER_FILES
-      ${SRC}/kernel_db/cpu_kernel_db.h)
+      ${KERNELS}/cpu/x86/kron-kernels/kernels.cmake
+      ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
+      ${SRC}/kernel_db/cpu_kernel_db.cpp
+      ${SRC}/kernel_db/cpu_kernel_db.h
+      ${X86_KERNELS}
+      )
 else()
   set(X86_HEADER_FILES)
 endif()
@@ -116,7 +122,6 @@ cuda_add_library(FastKron
     ${HEADER_FILES}
     ${KERNEL_HEADER_FILES}
     ${CUDA_HEADER_FILES}
-    ${CUDA_KERNELS}
     ${X86_HEADER_FILES}
   OPTIONS
     ${NVCC_FLAGS}

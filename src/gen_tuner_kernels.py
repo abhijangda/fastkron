@@ -106,10 +106,10 @@ class CPUKernel(Kernel):
     return f"cpuKernel<{self.templateDecl()}>"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams"
+    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams)"
 
   def hostInvokeFile(self):
-    return "\n".join(['#include "../kernel.h"', "",
+    return "\n".join(['#include "../../kernel.h"', "",
                       self.getKernelFuncDecl()+"{",
                       f"  return (void*)&{self.kernelDecl()};",
                       "}",

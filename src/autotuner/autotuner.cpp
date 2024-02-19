@@ -60,6 +60,9 @@ cudaError_t Autotuner::tune(KMMProblem problem,
   //of previous iteration as input to current
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
+
+  auto kernelDb = fastKron.getBackendKernelDb();
+
   auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
                [](const KMMProblem p){return 1;},
   [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix r) {
@@ -69,7 +72,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
-      auto bestKernelWithTime = fastKron.cudaKernels.tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams);
+      auto bestKernelWithTime = kernelDb->tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams);
       if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
         tunedKernelsMap.add(secondPart, distP2PStore,
                             bestKernelWithTime);
@@ -88,7 +91,11 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   Matrix result, temp;
   fastKron.gekmmResultTemp(problem, result, temp);
   
+#ifdef ENABLE_CUDA
   uint devicesPerProc = fastKron.cudaKernels.numGPUs_;
+#else
+  uint devicesPerProc = 1;
+#endif  
   auto kernelDb = fastKron.getBackendKernelDb();
 
   Matrix temp1[devicesPerProc];
@@ -114,8 +121,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
 
   CUDA_CHECK(cudaSetDevice(0));
   
-  bool isDistributed_ = fastKron.cudaKernels.isDistributed_;
-  if (!isDistributed_) {
+  if (devicesPerProc == 1) {
     //Use temporary as input/output matrix
     //TODO: fix this
     auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
@@ -128,6 +134,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
                                   tunedKernels, tunedKernelsMap);
     fastKron.tunedKernelSeries = tunedKernels;
   } else {
+#ifdef ENABLE_CUDA
     assert (fastKron.backend == fastKronBackend_CUDA);
     if (!checkDistributedKronSizes(problem,
                                    fastKron.cudaKernels.perGPUKronBatch_, fastKron.cudaKernels.gpusInK_))
@@ -197,6 +204,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
       fastKron.cudaKernels.perGPUKronBatch_ = MaxLocalKrons;
     }
     }
+#endif
   }
 
   for (int p = 0; p < devicesPerProc; p++) {
@@ -210,6 +218,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
+#ifdef ENABLE_CUDA
     if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
         ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
         iter->start == 0)) {
@@ -218,6 +227,7 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
       std::cout << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
                    "[GM, " << fastKron.cudaKernels.gpusInK_ << "] using " << fastKron.cudaKernels.distComm_ << std::endl;
     }
+#endif
   }
   return cudaSuccess;
 }

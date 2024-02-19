@@ -57,9 +57,9 @@ struct CPUKernel : public KernelInfo {
              fastKronOp opX, fastKronOp opF) : 
              KernelInfo (invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, 
                          NumFusedKerns_, DistributeToGPUs_, elemType_, opX, opF) {}
-  std::string str() {
+  std::string str() const {
     std::stringstream info;
-    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" DistributeToGPUs_ << "_" << opX << opF;
+    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" << DistributeToGPUs_ << "_" << opX << opF;
     return info.str();
   } 
 };

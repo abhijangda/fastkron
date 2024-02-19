@@ -162,10 +162,12 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
 }
 
 cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp) {
+#ifdef ENABLE_CUDA
   if (cudaKernels.isDistributed_) {
     if (!checkDistributedKronSizes(problem, cudaKernels.perGPUKronBatch_, cudaKernels.gpusInK_))
       return cudaErrorInvalidValue;
   }
+#endif
 
   uint32_t tempCols = 0;
   uint32_t resultCols = 0;
@@ -180,10 +182,13 @@ cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, 
   
   uint gpuM;
 
+#ifdef ENABLE_CUDA
   if (cudaKernels.isDistributed_) {
     getDistributedSizes(problem.m(), tempCols,   gpuM, tempCols);
     getDistributedSizes(problem.m(), resultCols, gpuM, resultCols);
-  } else {
+  } else
+#endif 
+  {
     gpuM = problem.m();
   }
 
@@ -202,9 +207,11 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
 
   if (e == cudaSuccess) {
     *tempSize   = temp.numel();
+#ifdef ENABLE_CUDA
     if (cudaKernels.isDistributed_ and cudaKernels.distComm_ == DistComm::NCCL)
       //Include size of send and recv buffers 
       *tempSize = (*tempSize) * 2;
+#endif
     *resultSize = result.numel();
 
     *tempSize   = *tempSize   * sizeof(float);
@@ -231,17 +238,25 @@ cudaError_t FastKronHandle::initX86Backend() {
 }
 
 FastKronHandle::FastKronHandle(fastKronBackend backend) :
-  tunedKernelSeries(), backend(backend), cudaKernels() {
+  tunedKernelSeries(), backend(backend)
+#ifdef ENABLE_CUDA
+  , cudaKernels()
+#endif
+{
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
   useFusion_ = true;  
 }
 
 void FastKronHandle::free() {
+#ifdef ENABLE_CUDA
   cudaKernels.free();
+#endif
 }
 
 void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {
   //TODO: Should move to individual backends
+#ifdef ENABLE_CUDA  
   gpuM = M/cudaKernels.gpusInM_;
   gpuK = K/cudaKernels.gpusInK_;
+#endif
 }
