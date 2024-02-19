@@ -3,7 +3,16 @@
 
 #include "utils/utils.h"
 #include "kernel_db/cuda_kernel_db.h"
-#include "kernel_db/kernel_defs.h"
+
+#ifdef ENABLE_CUDA
+  #include "kernels/cuda/kron-kernels/kernel_decl.inc"
+#endif
+
+CUDAKernel AllCUDAKernels[] = {
+#ifdef ENABLE_CUDA
+  ALL_CUDA_KERNELS
+#endif
+};
 
 static bool isValidKernel(CUDAKernel& cudaKernel) {
   const uint NumThreads = cudaKernel.NumThreads;

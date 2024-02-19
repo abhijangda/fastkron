@@ -1,0 +1,8 @@
+template<typename ElemT, typename Vec2T, typename Vec4T,
+         uint MaxQ, uint MaxP, fastKronOp OpX, fastKronOp OpF>
+void cpuKernel(KernelParams<FusedFacs> params,
+               FusedParams<FusedFacs> fusedParams,
+               DistributedParams distParams,
+               EpilogueParams epilogueParams) {
+  
+}

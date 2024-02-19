@@ -1,3 +1,13 @@
+#ifdef ENABLE_X86
+  #include "kernels/cpu/x86/kron-kernels/kernel_decl.inc"
+#endif
+
+X86Kernel AllX86Kernels[] = {
+#ifdef ENABLE_X86
+  ALL_X86_KERNELS
+#endif
+};
+
 cudaError_t CPUKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
   ptr = new float[size];
   return ptr != nullptr ? cudaSuccess : cudaErrorInvalidValue; 

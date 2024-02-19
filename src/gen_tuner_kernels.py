@@ -5,7 +5,7 @@ import os
 import shutil
 import functools
 
-kernel_dir = os.path.join(os.path.dirname(__file__), "kernels/cuda/kron-kernels/")
+kernel_dir = os.path.join(os.path.dirname(__file__), "kernels/")
 
 #Device limits
 #Volta
@@ -54,27 +54,89 @@ class KronMatMulShape:
 
 WARP_SIZE=32
 
-class KernelConfig:  
+class Kernel:
+  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int,
+               FusedKernel : int, dist: int, elemType : str, allPowersOf2: int, opX : str, opF : str):
+    self.shape = shape
+    self.kron_rows = kron_rows
+    self.kron_cols = kron_cols
+    self.opX = opX
+    self.opF = opF
+    self.fused_kernels = FusedKernel
+    assert self.fused_kernels > 0
+    self.elemType = "float"
+    self.dist = dist
+
+  def kernelname(self):
+    return repr(self).replace(", ", "_")
+
+  def __eq__(self, other):
+    return repr(self) == repr(other)
+
+  def getKernelFuncName(self):
+    return f"get{self.kernelname()}"
+
+  def getKernelFuncDecl(self):
+    return f"void* {self.getKernelFuncName()}()"
+
+  def hostFuncName(self):
+    return f"invoke{self.kernelname()}"
+
+  def __hash__(self):
+    return hash(repr(self))
+
+class CPUKernel(Kernel):
+  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int,
+               FusedKernel : int, dist: int, elemType : str, allPowersOf2: int, opX : str, opF : str):
+    super().__init__(shape, kron_rows, kron_cols, FusedKernel, dist, elemType, allPowersOf2, opX, opF)
+
+  def __repr__(self):
+    return f"{self.shape.q}, {self.shape.p}, {self.fused_kernels}, {self.dist}, {self.elemType}, {self.opX}, {self.opF}"
+  
+  def isValid(self):
+    return True
+  
+  def filename(self):
+    return f"{self.kernelname()}.cpp"
+  
+  def templateDecl(self):
+    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.opX}, {self.opF}"
+
+  def kernelDecl(self):
+    return f"cpuKernel<{self.templateDecl()}>"
+
+  def hostFuncDecl(self):
+    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams"
+
+  def hostInvokeFile(self):
+    return "\n".join(['#include "../kernel.h"', "",
+                      self.getKernelFuncDecl()+"{",
+                      f"  return (void*)&{self.kernelDecl()};",
+                      "}",
+                      self.hostFuncDecl()+"{",
+                      f"  {self.kernelDecl()}(params, fusedParams, distParams, epilogueParams);",
+                      "}"])
+
+  def kernelInfo(self):
+    constructor = f"{self.shape.q}, {self.shape.p}, {self.shape.p}, {self.shape.q}, {self.shape.k}, {self.shape.m}, {self.fused_kernels}, {self.dist}, {self.elemType}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return "CPUKernel{"+\
+            f"(void*){self.hostFuncName()},"+\
+            f"get{self.kernelname()},"+\
+            constructor.replace("float", "ElementType::Float") + "}"
+
+class CUDAKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
                allPowersOf2: int, opX : str, opF : str):
-    self.shape = shape
+    super().__init__(shape, kron_rows, kron_cols, FusedKernel, dist, elemType, allPowersOf2, opX, opF)
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
-    self.kron_rows = kron_rows
-    self.kron_cols = kron_cols
     self.tileQ = tileQ
     self.tileP = tileP
     self.tileM = tileM
     self.cRegRows = cRegRows
     self.cRegCols = cRegCols
-    self.opX = opX
-    self.opF = opF
-    self.fused_kernels = FusedKernel
-    assert self.fused_kernels > 0
-    self.dist = dist
-    self.elemType = "float"
     self.aalign = aalign
     self.kalign = kalign
 
@@ -93,13 +155,10 @@ class KernelConfig:
     return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
 
   def kernelname(self):
-    return repr(self).replace(", ", "_")
+    return f"cuda_{super().kernelname()}"
 
   def filename(self):
-    return f"kernel_{self.kernelname()}.cu"
-
-  def hostFuncName(self):
-    return f"invoke{self.kernelname()}"
+    return f"{self.kernelname()}.cu"
 
   def hostFuncDecl(self):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, cudaStream_t stream)"
@@ -108,10 +167,16 @@ class KernelConfig:
     return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
   
   def kernelDecl(self):
-    return f"kronGemmKernel<{self.templateDecl()}>"
+    return f"cudaKernel<{self.templateDecl()}>"
 
-  def __eq__(self, other):
-    return repr(self) == repr(other)
+  def hostInvokeFile(self):
+    return "\n".join(['#include "../kernel.cuh"', "",
+                      self.getKernelFuncDecl()+"{",
+                      f"  return (void*)&{self.kernelDecl()};",
+                      "}",
+                      self.hostFuncDecl()+"{",
+                      f"  {self.kernelDecl()}<<<grid, block, sharedSize, stream>>>(params, fusedParams, distParams, epilogueParams);",
+                      "}"])
 
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
@@ -120,12 +185,6 @@ class KernelConfig:
             f"(void*){self.hostFuncName()},"+\
             f"get{self.kernelname()},"+\
             constructor.replace("float", "ElementType::Float") + "}"
-
-  def getKernelFuncName(self):
-    return f"get{self.kernelname()}"
-
-  def getKernelFuncDecl(self):
-    return f"void* {self.getKernelFuncName()}()"
 
   def isValid(self):
     return self.wsz > 0 and \
@@ -137,10 +196,7 @@ class KernelConfig:
            self.dist in [0, 1] and \
            self.cRegCols <= 32 and \
            self.tileM * self.cRegRows * self.cRegCols <= 64
-
-  def __hash__(self):
-    return hash(repr(self))
-
+  
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
   prevTmpK = k
@@ -163,8 +219,15 @@ def falignment(cols):
   return max([a for a in [1, 2, 4] if cols % a == 0])
 
 def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend):
+  global kernel_dir
+
   if not os.path.exists(kernel_dir):
     os.mkdir(kernel_dir)
+
+  if backend == 'cuda':
+    kernel_dir = os.path.join(kernel_dir, 'cuda/kron-kernels')
+  elif backend == 'x86':
+    kernel_dir = os.path.join(kernel_dir, 'cpu/x86/kron-kernels')
 
   empty_dir(kernel_dir)
   configs = {}
@@ -181,29 +244,34 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
       shape = KronMatMulShape(m, currK, n, p, q)
       if shape not in configs:
         configs[shape] = []
-      __configs = []  
-      for tM in TileMs:
-        for tQ in TileQs:
-          for tK in TileKs:
-            if tK < p:
-              continue
-            CRows = factors(tK//p)
-            CCols = factors(tQ)
-            aalign = xalignment(tM, tK, opX)
-            kronalign = falignment(tQ)
-            for regRows in CRows:
-              for regCols in CCols:
-                for tP in TilePs:
-                  for kEqVar in [0]:
-                    fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
-                    for numFusedKerns in fusedCases:
-                      distKernels = [0, 1] if useDistKernels else [0]
-                      for dist in distKernels: 
-                        __configs += [KernelConfig(KronMatMulShape(m, tK, n, p, q), 
-                                                                   p, q, tQ, tP, tM, 
-                                      regRows, regCols,
-                                      numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
-                                      opx, opF)]
+      __configs = []
+      if backend == 'cuda':
+        for tM in TileMs:
+          for tQ in TileQs:
+            for tK in TileKs:
+              if tK < p:
+                continue
+              CRows = factors(tK//p)
+              CCols = factors(tQ)
+              aalign = xalignment(tM, tK, opX)
+              kronalign = falignment(tQ)
+              for regRows in CRows:
+                for regCols in CCols:
+                  for tP in TilePs:
+                    for kEqVar in [0]:
+                      fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
+                      for numFusedKerns in fusedCases:
+                        distKernels = [0, 1] if useDistKernels else [0]
+                        for dist in distKernels: 
+                          __configs += [CUDAKernel(KronMatMulShape(m, tK, n, p, q), 
+                                                  p, q, tQ, tP, tM, regRows, regCols,
+                                                  numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
+                                                  opx, opF)]
+      elif backend == 'x86':
+        dist = 0
+        __configs += [CPUKernel(KronMatMulShape(m, currK, n, p, q), 
+                                p, q, 1, dist, "Float", allSameShapes, opx, opF)]
+
       configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
@@ -247,15 +315,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
     #Write host function for each config
     kernel_filename = os.path.join(kernel_dir, config.filename())
     with open(kernel_filename, "w") as f:
-      kernel_file_template = "\n".join(['#include "../kernel.cuh"',
-                                        "",
-                                        config.getKernelFuncDecl()+"{",
-                                        f"  return (void*)&{config.kernelDecl()};",
-                                        "}",
-                                        config.hostFuncDecl()+"{",
-                                        f"  {config.kernelDecl()}<<<grid, block, sharedSize, stream>>>(params, fusedParams, distParams, epilogueParams);",
-                                        "}"]);
-      f.write(kernel_file_template)
+      f.write(config.hostInvokeFile())
 
   #declare KernelInfo for each config
   host_decls = ''
@@ -263,7 +323,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
     host_decls += config.hostFuncDecl() + ";\n" + config.getKernelFuncDecl() + ";\n"
   host_decls += "\n"
   
-  kernel_infos = "#define ALL_CUDA_KERNELS \\\n"
+  kernel_infos = f"#define ALL_{backend.upper()}_KERNELS \\\n"
   for config in combinedConfigs:
     kernel_infos += config.kernelInfo() + ",\\\n"
   
@@ -274,7 +334,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
     f.write(host_decls)
     f.write(kernel_infos)
   
-  kernels_cmake = "set(CUDA_KERNELS "
+  kernels_cmake = f"set({backend.upper()}_KERNELS "
   for config in combinedConfigs:
     kernels_cmake += os.path.join(kernel_dir, config.filename()) + "\n"
 

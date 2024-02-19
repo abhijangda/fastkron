@@ -49,6 +49,21 @@ struct KernelInfo {
   virtual std::string str() const = 0;
 };
 
+struct CPUKernel : public KernelInfo {
+  CPUKernel() {}
+  CPUKernel(void* invokerFunc, void*(*getKernelFunc)(), 
+             uint Q, uint P, uint tileP, uint tileQ,
+             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, ElementType elemType_,
+             fastKronOp opX, fastKronOp opF) : 
+             KernelInfo (invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, 
+                         NumFusedKerns_, DistributeToGPUs_, elemType_, opX, opF) {}
+  std::string str() {
+    std::stringstream info;
+    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" DistributeToGPUs_ << "_" << opX << opF;
+    return info.str();
+  } 
+};
+
 struct CUDAKernel : public KernelInfo {
   uint NumThreads;
   

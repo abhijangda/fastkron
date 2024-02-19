@@ -31,10 +31,10 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
-__global__ void kronGemmKernel(KernelParams<FusedFacs> params,
-                               FusedParams<FusedFacs> fusedParams,
-                               DistributedParams distParams,
-                               EpilogueParams epilogueParams) {
+__global__ void cudaKernel(KernelParams<FusedFacs> params,
+                           FusedParams<FusedFacs> fusedParams,
+                           DistributedParams distParams,
+                           EpilogueParams epilogueParams) {
   //Alignment of X and F are correct in terms of elements of 4-bytes
   static_assert(XAlignment    == 1 || 
                 XAlignment    == 2 || 
