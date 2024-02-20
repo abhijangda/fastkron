@@ -27,29 +27,52 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t RegM = MIN(TileM, 2);
   const uint32_t RegK = MIN(TileK, 8);
   const uint32_t RegQ = MIN(TileQ, 4);
-  const uint32_t RegP = MIN(TileP, 4);
+
+  // assert (RegM * RegK * RegQ <= 16);
+  const uint32_t VectorLen = 8; //AVX256 length
 
   #pragma omp parallel for collapse(3)
   for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
   for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
   for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     Slice<ElemT, OpX> XTile(tileM, tileK, 
-                          (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
-                          P, TileP,
-                          X);
+                            (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
+                            P, TileP,
+                            X);
     for (uint32_t m = 0; m < TileM; m += RegM) {
     for (uint32_t q = 0; q < TileQ; q += RegQ) {
     for (uint32_t k = 0; k < TileK; k += RegK * P) {
+      
+      //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
 
-      ElemT yReg[TileM][RegK][RegQ] = {0};
+      _mm256 yReg[RegM][RegK][RegQ];
       // YRegisters<ElemT, > yReg;
+      for (uint32_t rm = 0; rm < RegM; rm++) {
+      for (uint32_t rq = 0; rq < RegQ; rq++) {
+      for (uint32_t rk = 0; rk < RegK; rk++) {
+        yReg[m][rk][rq] = _mm256_zeroall();
+      }}}
 
+      _mm256 XReg[RegM][RegK];
+      _mm256 FReg[RegQ];
+
+      #pragma unroll
+      for (uint32_t rm = 0; rm < RegM; rm++) {
+      #pragma unroll
+      for (uint32_t rq = 0; rq < RegQ; rq++) {
+        
+      }}
+      
+      #pragma unroll
       for (uint32_t p = 0; p < P; p++) {
+        #pragma unroll
         for (uint32_t rm = 0; rm < RegM; rm++) {
+        #pragma unroll
         for (uint32_t rq = 0; rq < RegQ; rq++) {
+        #pragma unroll
         for (uint32_t rk = 0; rk < RegK; rk++) {  
-            yReg[rm][rk][rq] += XTile.data(m + rm, k + rk*P, 0)[p] *
-                                F.at<ElemT>(p, tileQ + q + rq, OpF);
+          yReg[rm][rk][rq] += XTile.data(m + rm, k + rk*P, 0)[p] *
+                              F.at<ElemT>(p, tileQ + q + rq, OpF);
         }}}
       }
     
