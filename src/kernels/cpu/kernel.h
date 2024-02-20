@@ -1,6 +1,8 @@
 #include "kernels/params.h"
 #include "utils/utils.h"
 
+#include <immintrin.h>
+
 #pragma once
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
@@ -42,14 +44,14 @@ void cpuKernel(KernelParams<FusedFacs> params,
       ElemT yReg[TileM][RegK][RegQ] = {0};
       // YRegisters<ElemT, > yReg;
 
-      for (uint32_t rm = 0; rm < RegM; rm++) {
-      for (uint32_t rq = 0; rq < RegQ; rq++) {
-      for (uint32_t rk = 0; rk < RegK; rk++) {
-        for (uint32_t p = 0; p < P; p++) {
-          yReg[rm][rk][rq] += XTile.data(m + rm, k + rk*P, 0)[p] *
-                              F.at<ElemT>(p, tileQ + q + rq, OpF);
-        }
-      }}}
+      for (uint32_t p = 0; p < P; p++) {
+        for (uint32_t rm = 0; rm < RegM; rm++) {
+        for (uint32_t rq = 0; rq < RegQ; rq++) {
+        for (uint32_t rk = 0; rk < RegK; rk++) {  
+            yReg[rm][rk][rq] += XTile.data(m + rm, k + rk*P, 0)[p] *
+                                F.at<ElemT>(p, tileQ + q + rq, OpF);
+        }}}
+      }
     
       const uint32_t XTileSlices = TileK/P;
       const uint32_t XSlices     = K/P;
