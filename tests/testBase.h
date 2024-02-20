@@ -489,10 +489,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   float elapsedTime = 0;
 
   if (numIters > 0 || warmup > 0) {
-    for (int g = 0; g < gpus; g++) {
-      CUDACHECK(cudaSetDevice(g));
-      CUDACHECK(cudaEventCreate(&start[g]));
-      CUDACHECK(cudaEventCreate(&end[g]));
+    if (backend == fastKronBackend_CUDA) {
+      for (int g = 0; g < gpus; g++) {
+        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cudaEventCreate(&start[g]));
+        CUDACHECK(cudaEventCreate(&end[g]));
+      }
     }
     printf("warmup\n");
     //Warm Up iterations
@@ -503,9 +505,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
       }
     }
-    for (int g = 0; g < gpus; g++) {
-      CUDACHECK(cudaSetDevice(g));
-      CUDACHECK(cudaStreamSynchronize(stream[g]));
+    if (backend == fastKronBackend_CUDA) {
+      for (int g = 0; g < gpus; g++) {
+        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cudaStreamSynchronize(stream[g]));
+      }
     }
     printf("390\n");
     //Run

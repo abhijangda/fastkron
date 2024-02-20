@@ -75,10 +75,12 @@ cudaError_t CPUKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr
 
 cudaError_t CPUKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
   memset<float>(m.data<float>(0), m.numel(), val);
+  return cudaSuccess;
 }
 
 cudaError_t CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
-
+  delete ptr;
+  return cudaSuccess;
 }
 
 cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
