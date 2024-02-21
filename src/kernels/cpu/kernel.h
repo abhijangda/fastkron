@@ -19,17 +19,26 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t P = 64;//F.p();
   const uint32_t Q = 64;
 
-  const uint32_t TileM = 4;
+  const uint32_t TileM = 2;
   const uint32_t TileK = 1024;
   const uint32_t TileQ = 16;
   const uint32_t TileP = P;
 
-  const uint32_t RegM = MIN(TileM, 2);
-  const uint32_t RegK = MIN(TileK, 8);
-  const uint32_t RegQ = MIN(TileQ, 4);
+  const uint32_t RegM = TileM;
+  const uint32_t RegK = 8; //MIN(TileK, 8);
+  const uint32_t RegQ = 1; //MIN(TileQ, 8);
 
-  // assert (RegM * RegK * RegQ <= 16);
+  const uint32_t YRegs = RegM * RegK * RegQ;
+  const uint32_t XRegs = RegM * RegK;
+  const uint32_t FRegs = RegQ;
+
   const uint32_t VectorLen = 8; //AVX256 length
+
+  assert (RegK % VectorLen == 0);
+
+  const uint32_t VecRegK = RegK/VectorLen;
+  const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
+  const uint32_t VecRegQ = RegQ;
 
   #pragma omp parallel for collapse(3)
   for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
@@ -45,43 +54,51 @@ void cpuKernel(KernelParams<FusedFacs> params,
       
       //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
 
-      _mm256 yReg[RegM][RegK][RegQ];
+      __m256 yReg[VecRegM][VecRegQ][VecRegK];
+
       // YRegisters<ElemT, > yReg;
-      for (uint32_t rm = 0; rm < RegM; rm++) {
-      for (uint32_t rq = 0; rq < RegQ; rq++) {
-      for (uint32_t rk = 0; rk < RegK; rk++) {
-        yReg[m][rk][rq] = _mm256_zeroall();
+      for (uint32_t ym = 0; ym < VecRegM; ym++) {
+      for (uint32_t yk = 0; yk < VecRegK; yk++) {
+      for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+        yReg[ym][yq][yk] =  _mm256_setzero_ps();
       }}}
 
-      _mm256 XReg[RegM][RegK];
-      _mm256 FReg[RegQ];
+      __m256 XReg[VecRegM][VecRegK];
+      __m256 FReg[VecRegQ];
 
-      #pragma unroll
-      for (uint32_t rm = 0; rm < RegM; rm++) {
-      #pragma unroll
-      for (uint32_t rq = 0; rq < RegQ; rq++) {
-        
-      }}
-      
       #pragma unroll
       for (uint32_t p = 0; p < P; p++) {
         #pragma unroll
-        for (uint32_t rm = 0; rm < RegM; rm++) {
+        for (uint32_t em = 0; em < VecRegM; em++) {
+          __m256i addr;
+          #pragma unroll
+          for (uint32_t ek = 0; ek < RegK; ek++) { //TODO: += VecRegK
+            addr = _mm256_insert_epi32(addr, (XTile.data(m + em, k + ek*P, 0) + p) - XTile.ptr, ek);
+          }
+          XReg[em][0] = _mm256_i32gather_ps(XTile.ptr, addr, sizeof(float));
+        }
+
         #pragma unroll
-        for (uint32_t rq = 0; rq < RegQ; rq++) {
+        for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+          FReg[rq] = _mm256_broadcast_ss(F.data<ElemT>(p, tileQ + q + rq, OpF));
+        }
+
         #pragma unroll
-        for (uint32_t rk = 0; rk < RegK; rk++) {  
-          yReg[rm][rk][rq] += XTile.data(m + rm, k + rk*P, 0)[p] *
-                              F.at<ElemT>(p, tileQ + q + rq, OpF);
+        for (uint32_t rm = 0; rm < VecRegM; rm++) {
+        #pragma unroll
+        for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+        #pragma unroll
+        for (uint32_t rk = 0; rk < VecRegK; rk++) {
+          yReg[rm][rq][rk] = _mm256_fmadd_ps(XReg[rm][rk], FReg[rq], yReg[rm][rq][rk]);
         }}}
       }
     
       const uint32_t XTileSlices = TileK/P;
       const uint32_t XSlices     = K/P;
 
-      for (uint32_t rm = 0; rm < RegM; rm++) {
-      for (uint32_t rq = 0; rq < RegQ; rq++) {
-      for (uint32_t rk = 0; rk < RegK; rk++) {
+      for (uint32_t rm = 0; rm < VecRegM; rm++) {
+      for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+      for (uint32_t rk = 0; rk < VecRegK; rk++) {
         const uint32_t cacheK = (rq + q) * XTileSlices + rk + k/P;
         uint32_t memK = (cacheK/XTileSlices) * XSlices +
                         (tileK/TileK) * XTileSlices +
@@ -92,7 +109,9 @@ void cpuKernel(KernelParams<FusedFacs> params,
           memK += (tileQ/TileQ) * (Y.n()/QTiles);
         }
 
-        Y.set(tileM + m + rm, memK, fastKronOp_N, yReg[rm][rk][rq]);
+        __m256 reg = yReg[rm][rq][rk]; 
+        auto stPtr = Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N);
+        _mm256_storeu_ps(stPtr, reg);
       }}}
     }}}
   }}}
