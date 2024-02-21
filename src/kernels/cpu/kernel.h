@@ -5,6 +5,35 @@
 
 #pragma once
 
+inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3, __m256 &row4, __m256 &row5, __m256 &row6, __m256 &row7) {
+__m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
+__m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
+__t0 = _mm256_unpacklo_ps(row0, row1);
+__t1 = _mm256_unpackhi_ps(row0, row1);
+__t2 = _mm256_unpacklo_ps(row2, row3);
+__t3 = _mm256_unpackhi_ps(row2, row3);
+__t4 = _mm256_unpacklo_ps(row4, row5);
+__t5 = _mm256_unpackhi_ps(row4, row5);
+__t6 = _mm256_unpacklo_ps(row6, row7);
+__t7 = _mm256_unpackhi_ps(row6, row7);
+__tt0 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(1,0,1,0));
+__tt1 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(3,2,3,2));
+__tt2 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(1,0,1,0));
+__tt3 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(3,2,3,2));
+__tt4 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(1,0,1,0));
+__tt5 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(3,2,3,2));
+__tt6 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(1,0,1,0));
+__tt7 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(3,2,3,2));
+row0 = _mm256_permute2f128_ps(__tt0, __tt4, 0x20);
+row1 = _mm256_permute2f128_ps(__tt1, __tt5, 0x20);
+row2 = _mm256_permute2f128_ps(__tt2, __tt6, 0x20);
+row3 = _mm256_permute2f128_ps(__tt3, __tt7, 0x20);
+row4 = _mm256_permute2f128_ps(__tt0, __tt4, 0x31);
+row5 = _mm256_permute2f128_ps(__tt1, __tt5, 0x31);
+row6 = _mm256_permute2f128_ps(__tt2, __tt6, 0x31);
+row7 = _mm256_permute2f128_ps(__tt3, __tt7, 0x31);
+}
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint FusedFacs, fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,
@@ -24,7 +53,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t TileQ = 16;
   const uint32_t TileP = P;
 
-  const uint32_t RegM = TileM;
+  const uint32_t RegM = 1;
   const uint32_t RegK = 8; //MIN(TileK, 8);
   const uint32_t RegQ = 8; //MIN(TileQ, 8);
 
@@ -104,24 +133,24 @@ void cpuKernel(KernelParams<FusedFacs> params,
       const uint32_t XSlices     = K/P;
 
       for (uint32_t rm = 0; rm < VecRegM; rm++) {
-      for (uint32_t rk = 0; rk < RegK; rk++) {
       for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+        transpose8_ps(yReg[rm][0][rq], yReg[rm][1][rq], yReg[rm][2][rq], 
+                      yReg[rm][3][rq], yReg[rm][4][rq], yReg[rm][5][rq],
+                      yReg[rm][6][rq], yReg[rm][7][rq]);
+
+      for (uint32_t rk = 0; rk < RegK; rk++) {
         __m256 reg = yReg[rm][rk][rq];
-        float buf[8];
-        _mm256_storeu_ps(buf, reg);
-        for (uint32_t elem = 0; elem < VectorLen; elem++) {
-          const uint32_t cacheK = (rq*VectorLen + elem + q) * XTileSlices + rk + k/P;
-          uint32_t memK = (cacheK/XTileSlices) * XSlices +
-                          (tileK/TileK) * XTileSlices +
-                          cacheK % XTileSlices;
+        const uint32_t cacheK = (rq + q + rk) * XTileSlices + rk/VectorLen + k/P;
+        uint32_t memK = (cacheK/XTileSlices) * XSlices +
+                        (tileK/TileK) * XTileSlices +
+                        cacheK % XTileSlices;
 
-          if (TileQ != Q) {
-            const uint32_t QTiles = Q/TileQ;
-            memK += (tileQ/TileQ) * (Y.n()/QTiles);
-          }
-
-          Y.set<ElemT>(tileM + m + rm, memK, fastKronOp_N, buf[elem]);
+        if (TileQ != Q) {
+          const uint32_t QTiles = Q/TileQ;
+          memK += (tileQ/TileQ) * (Y.n()/QTiles);
         }
+
+        _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
       }}}
     }}}
   }}}
