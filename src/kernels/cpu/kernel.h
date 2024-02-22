@@ -2,9 +2,11 @@
 #include "utils/utils.h"
 
 #include <immintrin.h>
+#include <cstring>
 
 #pragma once
 
+// https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
 inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3, __m256 &row4, __m256 &row5, __m256 &row6, __m256 &row7) {
   __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
   __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
@@ -48,10 +50,10 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t P = 64;//F.p();
   const uint32_t Q = 64;
 
-  const uint32_t TileM = 2;
-  const uint32_t TileK = 2048;
-  const uint32_t TileQ = 32;
-  const uint32_t TileP = 32;
+  const uint32_t TileM = 1;
+  const uint32_t TileK = 4096;
+  const uint32_t TileQ = 64;
+  const uint32_t TileP = 64;
 
   const uint32_t RegM = 1;
   const uint32_t RegK = 8; //MIN(TileK, 8);
@@ -81,9 +83,17 @@ void cpuKernel(KernelParams<FusedFacs> params,
     ElemT tileBuff[TileM][TileK/P][TileQ];
 
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
+      ElemT TileX[TileM][TileK/P * TileP];
+      
+      //Load X to TileX to reduce TLB misses
+      for (uint32_t m = 0; m < TileM; m++) {
+      for (uint32_t k = 0; k < TileK; k += P) {
+        memcpy(&TileX[m][(k/P) * TileP], XTile.data(m, k + tileP, 0), TileP * sizeof(float));
+      }}
+
       for (uint32_t m = 0; m < TileM; m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
-      for (uint32_t k = 0; k < TileK; k += RegK * P) {
+      for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
         //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
         __m256 yReg[VecRegM][VecRegK][VecRegQ];
 
@@ -98,7 +108,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t ym = 0; ym < VecRegM; ym++) {
           for (uint32_t yk = 0; yk < VecRegK; yk++) {
           for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-            yReg[ym][yk][yq] = _mm256_loadu_ps(&tileBuff[m+ym][k/P+yk][q+yq*VectorLen]);
+            yReg[ym][yk][yq] = _mm256_loadu_ps(&tileBuff[m+ym][k/TileP+yk][q+yq*VectorLen]);
           }}}
         }
 
@@ -110,7 +120,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t em = 0; em < VecRegM; em++) {
             #pragma unroll
             for (uint32_t ek = 0; ek < RegK; ek++) {
-              XReg[em][ek] = _mm256_broadcast_ss(XTile.data(m + em, k + ek*P, 0) + tileP + p);
+              XReg[em][ek] = _mm256_broadcast_ss(&TileX[m + em][k + ek*TileP + p]);
           }}
 
           #pragma unroll
@@ -132,7 +142,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t ym = 0; ym < VecRegM; ym++) {
           for (uint32_t yk = 0; yk < VecRegK; yk++) {
           for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-            _mm256_storeu_ps(&tileBuff[m+ym][k/P+yk][q+yq*VectorLen], yReg[ym][yk][yq]);
+            _mm256_storeu_ps(&tileBuff[m+ym][k/TileP+yk][q+yq*VectorLen], yReg[ym][yk][yq]);
           }}}
         } else {
           const uint32_t XTileSlices = TileK/P;
@@ -146,7 +156,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
           for (uint32_t rk = 0; rk < RegK; rk++) {
             __m256 reg = yReg[rm][rk][rq];
-            const uint32_t cacheK = (rq*VectorLen + q + rk) * XTileSlices + rk/VectorLen + k/P;
+            const uint32_t cacheK = (rq*VectorLen + q + rk) * XTileSlices + rk/VectorLen + k/TileP;
             uint32_t memK = (cacheK/XTileSlices) * XSlices +
                             (tileK/TileK) * XTileSlices +
                             cacheK % XTileSlices;
