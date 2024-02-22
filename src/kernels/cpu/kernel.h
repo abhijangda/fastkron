@@ -80,11 +80,11 @@ void cpuKernel(KernelParams<FusedFacs> params,
                             P, P, //TODO: setting this to P because XTile.data is not right for GPU backend
                             X);
 
-    ElemT tileBuff[TileM][TileK/P][TileQ];
+    ElemT tileBuff[TileM][TileQ][TileK/P];
 
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       ElemT TileX[TileM][TileP][TileK/P];
-      
+
       //Load X to TileX to reduce TLB misses
       for (uint32_t m = 0; m < TileM; m++) {
       for (uint32_t k = 0; k < TileK; k += P) {
@@ -106,14 +106,14 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t yk = 0; yk < VecRegK; yk++) {
             yReg[ym][yq][yk] =  _mm256_setzero_ps();
           }}}
-        } 
-        // else {
-        //   for (uint32_t ym = 0; ym < VecRegM; ym++) {
-        //   for (uint32_t yk = 0; yk < VecRegK; yk++) {
-        //   for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-        //     yReg[ym][yk][yq] = _mm256_loadu_ps(&tileBuff[m+ym][k/TileP+yk][q+yq*VectorLen]);
-        //   }}}
-        // }
+        } else {
+          assert(false);
+          for (uint32_t ym = 0; ym < VecRegM; ym++) {
+          for (uint32_t yk = 0; yk < VecRegK; yk++) {
+          for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+            yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[m+ym][q+yq][k/TileP+yk*VectorLen]);
+          }}}
+        }
 
         #pragma unroll 2
         for (uint32_t p = 0; p < TileP; p++) {
@@ -122,8 +122,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
           #pragma unroll
           for (uint32_t em = 0; em < VecRegM; em++) {
             #pragma unroll
-            for (uint32_t ek = 0; ek < VecRegK; ek++) {
-              XReg[em][ek] = _mm256_loadu_ps(&TileX[m + em][p][k/(TileP*RegK) + ek]);
+            for (uint32_t ek = 0; ek < VecRegK; ek++) { //TODO: What if VecRegK > RegK
+              XReg[em][ek] = _mm256_loadu_ps(&TileX[m + em][p][(k/(TileP*RegK))*VectorLen + ek*VectorLen]);
           }}
 
           #pragma unroll
@@ -142,11 +142,11 @@ void cpuKernel(KernelParams<FusedFacs> params,
         }
 
         if (tileP < P - TileP) {
-          // for (uint32_t ym = 0; ym < VecRegM; ym++) {
-          // for (uint32_t yk = 0; yk < VecRegK; yk++) {
-          // for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-          //   _mm256_storeu_ps(&tileBuff[m+ym][k/TileP+yk][q+yq*VectorLen], yReg[ym][yk][yq]);
-          // }}}
+          for (uint32_t ym = 0; ym < VecRegM; ym++) {
+          for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+          for (uint32_t yk = 0; yk < VecRegK; yk++) {
+            _mm256_storeu_ps(&tileBuff[m+ym][q+yq][k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
+          }}}
         } else {
           const uint32_t XTileSlices = TileK/P;
           const uint32_t XSlices     = K/P;
