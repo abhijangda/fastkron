@@ -47,17 +47,17 @@ void cpuKernel(KernelParams<FusedFacs> params,
   Factor F = params.problem.f(0);
 
   const uint32_t K = X.n();
-  const uint32_t P = 64;//F.p();
-  const uint32_t Q = 64;
+  const uint32_t P = 128;//F.p();
+  const uint32_t Q = 128;
 
   const uint32_t TileM = 1;
   const uint32_t TileK = 4096;
-  const uint32_t TileQ = 64;
-  const uint32_t TileP = 64;
+  const uint32_t TileQ = 128;
+  const uint32_t TileP = 128;
 
   const uint32_t RegM = 1;
   const uint32_t RegK = 16; //MIN(TileK, 8);
-  const uint32_t RegQ = 4; //MIN(TileQ, 8);
+  const uint32_t RegQ = 8; //MIN(TileQ, 8);
 
   const uint32_t YRegs = RegM * RegK * RegQ;
   const uint32_t XRegs = RegM * RegK;
@@ -83,15 +83,33 @@ void cpuKernel(KernelParams<FusedFacs> params,
     ElemT tileBuff[TileM][TileQ][TileK/P];
 
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
+      //TODO: Use aligned_alloc to allocate on a page boundary of 4096 or 8192?
       ElemT TileX[TileM][TileP][TileK/P];
 
       //Load X to TileX to reduce TLB misses
       for (uint32_t m = 0; m < TileM; m++) {
-      for (uint32_t k = 0; k < TileK; k += P) {
-        for (uint32_t p = 0; p < TileP; p++)
-          TileX[m][p][k/P] = *XTile.data(m, k + tileP + p, 0);
-        // memcpy(&TileX[m][(k/P) * TileP], , TileP * sizeof(float));
-      }}
+        uint32_t NumSlices = VectorLen;
+        for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
+          for (uint32_t p = 0; p < TileP; p += VectorLen) {
+            __m256 slices[VectorLen];
+            for (uint32_t sliceIdx = 0; sliceIdx < VectorLen; sliceIdx++) {
+              slices[sliceIdx] = _mm256_loadu_ps(XTile.data(m, k + sliceIdx*P + tileP + p, 0));
+            }
+
+            transpose8_ps(slices[0], slices[1], slices[2], 
+                          slices[3], slices[4], slices[5],
+                          slices[6], slices[7]);
+
+            for (uint32_t pp = 0; pp < VectorLen; pp++) {
+              _mm256_storeu_ps(&TileX[m][p + pp][k/P], slices[pp]);
+            }
+          }
+        }
+      }
+
+      ElemT TileF[TileP][TileQ];
+      assert(TileP == P && TileQ == Q); //TODO:
+      memcpy(&TileF[0][0], F.data<ElemT>(0,0,OpF), TileP * TileQ * sizeof(ElemT));
 
       for (uint32_t m = 0; m < TileM; m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
@@ -121,13 +139,13 @@ void cpuKernel(KernelParams<FusedFacs> params,
           #pragma unroll
           for (uint32_t em = 0; em < VecRegM; em++) {
             #pragma unroll
-            for (uint32_t ek = 0; ek < VecRegK; ek++) { //TODO: What if VecRegK > RegK
+            for (uint32_t ek = 0; ek < VecRegK; ek++) {
               XReg[em][ek] = _mm256_loadu_ps(&TileX[m + em][p][k/TileP + ek*VectorLen]);
           }}
 
           #pragma unroll
           for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-            FReg[rq] = _mm256_broadcast_ss(F.data<ElemT>(tileP + p, tileQ + q + rq, OpF));
+            FReg[rq] = _mm256_broadcast_ss(&TileF[p][q+rq]);// F.data<ElemT>(tileP + p, tileQ + q + rq, OpF));
           }
 
           #pragma unroll
@@ -152,9 +170,6 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
           for (uint32_t rm = 0; rm < VecRegM; rm++) {
           for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-            // transpose8_ps(yReg[rm][0][rq], yReg[rm][1][rq], yReg[rm][2][rq], 
-            //               yReg[rm][3][rq], yReg[rm][4][rq], yReg[rm][5][rq],
-            //               yReg[rm][6][rq], yReg[rm][7][rq]);
           for (uint32_t rk = 0; rk < VecRegK; rk++) {
             __m256 reg = yReg[rm][rq][rk];
             const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;

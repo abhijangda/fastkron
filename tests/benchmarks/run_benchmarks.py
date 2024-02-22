@@ -53,8 +53,13 @@ class GPyTorchEval:
     import torch
     factors = []
     for p,q in zip(shape.ps, shape.qs):
-        factors += [torch.ones(p, q, dtype=float).cuda()]    
-    x = torch.ones(shape.m, shape.k, dtype=float).cuda()
+      f = torch.ones(p, q, dtype=float)
+      if backend == 'CUDA':
+        f = f.cuda()
+      factors += [f] 
+    x = torch.ones(shape.m, shape.k, dtype=float)
+    if backend == 'CUDA':
+      x = x.cuda()
     kp = gp.lazy.KroneckerProductLazyTensor(*factors)
     def run_case(r):
         t1 = time.time()
@@ -201,22 +206,28 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-print("------- Single GPU NN-------")
-print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-run_single_gpu_nn()
+if False:
+  print("------- Single GPU NN-------")
+  print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
+  run_single_gpu_nn()
 
-print("------- Single GPU NT-------")
-print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-run_single_gpu_nt()
+  print("------- Single GPU NT-------")
+  print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
+  run_single_gpu_nt()
 
-print("------- Single GPU TT-------")
-print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-run_single_gpu_tt()
+  print("------- Single GPU TT-------")
+  print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
+  run_single_gpu_tt()
 
-print("------- Multi GPU Weak Scaling --------")
-print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
-multi_gpu("weak")
+  print("------- Multi GPU Weak Scaling --------")
+  print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
+  multi_gpu("weak")
 
-print("------- Multi GPU Strong Scaling --------")
-print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
-multi_gpu("strong")
+  print("------- Multi GPU Strong Scaling --------")
+  print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
+  multi_gpu("strong")
+
+print("------ Multi CPU NN------")
+backend = "x86"
+gp = GPyTorchEval().run_single_gpu(Shape(1024, 3, 64, 64))
+print(gp)
