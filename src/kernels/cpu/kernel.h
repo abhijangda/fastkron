@@ -56,8 +56,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t TileP = 64;
 
   const uint32_t RegM = 1;
-  const uint32_t RegK = 8; //MIN(TileK, 8);
-  const uint32_t RegQ = 8; //MIN(TileQ, 8);
+  const uint32_t RegK = 16; //MIN(TileK, 8);
+  const uint32_t RegQ = 4; //MIN(TileQ, 8);
 
   const uint32_t YRegs = RegM * RegK * RegQ;
   const uint32_t XRegs = RegM * RegK;
@@ -107,7 +107,6 @@ void cpuKernel(KernelParams<FusedFacs> params,
             yReg[ym][yq][yk] =  _mm256_setzero_ps();
           }}}
         } else {
-          assert(false);
           for (uint32_t ym = 0; ym < VecRegM; ym++) {
           for (uint32_t yk = 0; yk < VecRegK; yk++) {
           for (uint32_t yq = 0; yq < VecRegQ; yq++) {
@@ -123,7 +122,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t em = 0; em < VecRegM; em++) {
             #pragma unroll
             for (uint32_t ek = 0; ek < VecRegK; ek++) { //TODO: What if VecRegK > RegK
-              XReg[em][ek] = _mm256_loadu_ps(&TileX[m + em][p][(k/(TileP*RegK))*VectorLen + ek*VectorLen]);
+              XReg[em][ek] = _mm256_loadu_ps(&TileX[m + em][p][k/TileP + ek*VectorLen]);
           }}
 
           #pragma unroll
