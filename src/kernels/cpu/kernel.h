@@ -3,6 +3,8 @@
 
 #include <immintrin.h>
 #include <cstring>
+#include <cstdlib>
+#include <omp.h>
 
 #pragma once
 
@@ -47,8 +49,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
   Factor F = params.problem.f(0);
 
   const uint32_t K = X.n();
-  const uint32_t P = 128;//F.p();
-  const uint32_t Q = 128;
+  const uint32_t P = F.p();
+  const uint32_t Q = F.q();
 
   const uint32_t TileM = 1;
   const uint32_t TileK = 4096;
@@ -65,11 +67,22 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
   const uint32_t VectorLen = 8; //AVX256 length
 
-  assert (RegK % VectorLen == 0);
+  static_assert(RegK % VectorLen == 0);
+  static_assert(TileK % RegK == 0);
+  static_assert(TileQ % RegQ == 0);
+  assert(TileP <= P);
 
   const uint32_t VecRegK = RegK/VectorLen;
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
   const uint32_t VecRegQ = RegQ;
+
+  uint threads = omp_get_max_threads();
+  
+  const size_t SzTileX = TileM*TileP*(TileK/P);
+  static ElemT* TileXs[96] = {nullptr};
+  if (TileXs[0] == nullptr)
+    for (int i = 0; i < 96; i++)
+      TileXs[i] = (ElemT*)aligned_alloc(8192, SzTileX * sizeof(ElemT));
 
   #pragma omp parallel for collapse(3)
   for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
@@ -84,7 +97,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       //TODO: Use aligned_alloc to allocate on a page boundary of 4096 or 8192?
-      ElemT TileX[TileM][TileP][TileK/P];
+      const uint tid = omp_get_thread_num();
+      ElemT* TileX = TileXs[tid];
 
       //Load X to TileX to reduce TLB misses
       for (uint32_t m = 0; m < TileM; m++) {
@@ -101,7 +115,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
                           slices[6], slices[7]);
 
             for (uint32_t pp = 0; pp < VectorLen; pp++) {
-              _mm256_storeu_ps(&TileX[m][p + pp][k/P], slices[pp]);
+              _mm256_storeu_ps(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P], slices[pp]);
             }
           }
         }
@@ -142,12 +156,12 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t em = 0; em < VecRegM; em++) {
             #pragma unroll
             for (uint32_t ek = 0; ek < VecRegK; ek++) {
-              XReg[em][ek] = _mm256_loadu_ps(&TileX[m + em][p][k/TileP + ek*VectorLen]);
+              XReg[em][ek] = _mm256_loadu_ps(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
           }}
 
           #pragma unroll
           for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-            FReg[rq] = _mm256_broadcast_ss(&TileF[p][q+rq]);// F.data<ElemT>(tileP + p, tileQ + q + rq, OpF));
+            FReg[rq] = _mm256_broadcast_ss(&TileF[p][q+rq]);
           }
 
           #pragma unroll
@@ -190,4 +204,6 @@ void cpuKernel(KernelParams<FusedFacs> params,
       }}}
     }
   }}}
+
+  // free(TileXs);
 }
