@@ -53,7 +53,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t TileM = 1;
   const uint32_t TileK = 4096;
   const uint32_t TileQ = 128;
-  const uint32_t TileP = 128;
+  const uint32_t TileP = 64;
 
   const uint32_t RegM = 1;
   const uint32_t RegK = 16; //MIN(TileK, 8);
@@ -108,9 +108,11 @@ void cpuKernel(KernelParams<FusedFacs> params,
       }
 
       ElemT TileF[TileP][TileQ];
-      assert(TileP == P && TileQ == Q); //TODO:
-      memcpy(&TileF[0][0], F.data<ElemT>(0,0,OpF), TileP * TileQ * sizeof(ElemT));
 
+      for (int p = 0; p < TileP; p++) {
+        memcpy(&TileF[p][0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+      }
+      
       for (uint32_t m = 0; m < TileM; m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
