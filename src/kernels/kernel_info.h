@@ -24,20 +24,25 @@ struct KernelInfo {
 
   fastKronOp opX;
   fastKronOp opF;
+
+  uint CRegRows;
+  uint CRegCols;
   
   uint NumFusedKerns_;
   ElementType elemType;
 
   bool DistributeToGPUs_;
- 
+  
   KernelInfo() {}
   KernelInfo(void* invokerFunc, void*(*getKernelFunc)(), 
              uint Q, uint P, uint tileP, uint tileQ,
-             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, ElementType elemType_,
+             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
+             uint CRegRows_, uint CRegCols_, ElementType elemType_,
              fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), kernelFunc(getKernelFunc()), factor(P, Q), tiledFactor(tileP, tileQ),
              tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
-             elemType(elemType_), opX(opX), opF(opF) {}
+             CRegRows(CRegRows_), CRegCols(CRegCols_), elemType(elemType_), opX(opX), opF(opF) {}
+  bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}
   bool canCompute(KMMProblem problem, bool p2p) {
     return Factor(factor.p(), tiledFactor.q()) == problem.f(0) &&
            problem.opFs() == opF &&
@@ -53,13 +58,15 @@ struct CPUKernel : public KernelInfo {
   CPUKernel() {}
   CPUKernel(void* invokerFunc, void*(*getKernelFunc)(), 
              uint Q, uint P, uint tileP, uint tileQ,
-             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, ElementType elemType_,
+             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
+             uint CRegRows_, uint CRegCols_, ElementType elemType_,
              fastKronOp opX, fastKronOp opF) : 
              KernelInfo (invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, 
-                         NumFusedKerns_, DistributeToGPUs_, elemType_, opX, opF) {}
+                         NumFusedKerns_, DistributeToGPUs_, CRegRows_, CRegCols_, elemType_, opX, opF) {}
+  
   std::string str() const {
     std::stringstream info;
-    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" << DistributeToGPUs_ << "_" << opX << opF;
+    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" << DistributeToGPUs_ << "_" << CRegRows << "x" << CRegCols << opX << opF;
     return info.str();
   } 
 };
@@ -67,8 +74,6 @@ struct CPUKernel : public KernelInfo {
 struct CUDAKernel : public KernelInfo {
   uint NumThreads;
   
-  uint CRegRows;
-  uint CRegCols;
   ElementType elemType;
   uint AAlignment;
   uint KronAlignment;
@@ -79,9 +84,9 @@ struct CUDAKernel : public KernelInfo {
              uint CRegRows_, uint CRegCols_, ElementType elemType_,
              uint AAlignment_, uint KronAlignment_,
              fastKronOp opX, fastKronOp opF) :
-             KernelInfo(invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, NumFusedKerns_, DistributeToGPUs_, elemType_, opX, opF),
+             KernelInfo(invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, NumFusedKerns_, DistributeToGPUs_, 
+             CRegRows_, CRegCols_, elemType_, opX, opF),
              NumThreads(NumThreads_),
-             CRegRows(CRegRows_), CRegCols(CRegCols_),
              AAlignment(AAlignment_), KronAlignment(KronAlignment_) {}
 
   bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}

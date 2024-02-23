@@ -55,17 +55,22 @@ class KronMatMulShape:
 WARP_SIZE=32
 
 class Kernel:
-  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int,
-               FusedKernel : int, dist: int, elemType : str, allPowersOf2: int, opX : str, opF : str):
+  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int, 
+               FusedKernel : int, dist: int, elemType : str, rk : int, rq : int, allPowersOf2: int, opX : str, opF : str):
     self.shape = shape
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
+    self.tileQ = tileQ
+    self.tileP = tileP
+    self.tileM = tileM 
     self.opX = opX
     self.opF = opF
     self.fused_kernels = FusedKernel
     assert self.fused_kernels > 0
     self.elemType = "float"
     self.dist = dist
+    self.rk = rk
+    self.rq = rq
 
   def kernelname(self):
     return repr(self).replace(", ", "_")
@@ -87,20 +92,18 @@ class Kernel:
 
 class CPUKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int,
+               tileQ : int, tileP : int, tileM: int, rk: int, rq: int,
                FusedKernel : int, dist: int, elemType : str, allPowersOf2: int, opX : str, opF : str):
-    super().__init__(shape, kron_rows, kron_cols, FusedKernel, dist, elemType, allPowersOf2, opX, opF)
+    super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, rk, rq, allPowersOf2, opX, opF)
 
   def __repr__(self):
-    return f"{self.shape.q}, {self.shape.p}, {self.fused_kernels}, {self.dist}, {self.elemType}, {self.opX}, {self.opF}"
-  
-  def isValid(self):
-    return True
+    return f"{self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.dist}, {self.elemType}, {self.opX}, {self.opF}"
   
   def filename(self):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.fused_kernels}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
@@ -118,11 +121,22 @@ class CPUKernel(Kernel):
                       "}"])
 
   def kernelInfo(self):
-    constructor = f"{self.shape.q}, {self.shape.p}, {self.shape.p}, {self.shape.q}, {self.shape.k}, {self.shape.m}, {self.fused_kernels}, {self.dist}, {self.elemType}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    constructor = f"{self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
     return "CPUKernel{"+\
             f"(void*){self.hostFuncName()},"+\
             f"get{self.kernelname()},"+\
             constructor.replace("float", "ElementType::Float") + "}"
+
+  def isValid(self):
+    AVXLen = 8
+    return self.shape.k <= 16*1024 and \
+           self.shape.k % self.shape.p == 0 and \
+           self.tileM * (self.shape.k//self.shape.q) * self.tileQ * 4 <= 1*1024*1024 and \
+           self.rk % AVXLen == 0 and \
+           self.rk/AVXLen < 8 and \
+           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
+           self.dist in [0, 1] and \
+           self.rq <= AVXLen
 
 class CUDAKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
@@ -130,20 +144,18 @@ class CUDAKernel(Kernel):
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
                allPowersOf2: int, opX : str, opF : str):
-    super().__init__(shape, kron_rows, kron_cols, FusedKernel, dist, elemType, allPowersOf2, opX, opF)
+    super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, cRegRows, cRegCols, elemType, allPowersOf2, opX, opF)
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.tileQ = tileQ
     self.tileP = tileP
     self.tileM = tileM
-    self.cRegRows = cRegRows
-    self.cRegCols = cRegCols
     self.aalign = aalign
     self.kalign = kalign
 
     """Compute several constants of kernel
        Corresponds to line numbers in kernel.cuh
     """
-    self.wsz = (self.shape.k//self.shape.p)//self.cRegRows 
+    self.wsz = (self.shape.k//self.shape.p)//self.rk 
     self.shared_mem_usage = (self.tileM * ((self.shape.k/self.shape.p)*self.tileP) + self.tileP * self.tileQ)*element_size(elemType)
 
   def threads(self):
@@ -152,7 +164,7 @@ class CUDAKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
+    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
 
   def kernelname(self):
     return f"cuda_{super().kernelname()}"
@@ -164,7 +176,7 @@ class CUDAKernel(Kernel):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, cudaStream_t stream)"
 
   def templateDecl(self):
-    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, 1, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, 1, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
   
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
@@ -180,7 +192,7 @@ class CUDAKernel(Kernel):
 
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
-    constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.cRegRows}, {self.cRegCols}, {self.elemType}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
     return "CUDAKernel{"+\
             f"(void*){self.hostFuncName()},"+\
             f"get{self.kernelname()},"+\
@@ -191,11 +203,11 @@ class CUDAKernel(Kernel):
            self.shape.k % self.shape.p == 0 and \
            self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
-           self.cRegRows in [1, 2, 4] and \
+           self.rk in [1, 2, 4] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.dist in [0, 1] and \
            self.cRegCols <= 32 and \
-           self.tileM * self.cRegRows * self.cRegCols <= 64
+           self.tileM * self.rk * self.rq <= 64
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
@@ -269,8 +281,21 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                                                   opx, opF)]
       elif backend == 'x86':
         dist = 0
-        __configs += [CPUKernel(KronMatMulShape(m, currK, n, p, q), 
-                                p, q, 1, dist, "Float", allSameShapes, opx, opF)]
+        for tM in TileMs:
+          for tQ in TileQs:
+            for tK in TileKs:
+              if tK < p:
+                continue
+              CRows = factors(tK//p)
+              CCols = factors(tQ)
+              for regRows in CRows:
+                for regCols in CCols:
+                  for tP in TilePs:
+                    numFusedKerns = 1
+
+                    __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q), 
+                                            p, q, tQ, tP, tM, regRows, regCols, numFusedKerns, 
+                                            dist, "Float", allSameShapes, opx, opF)]
 
       configs[shape] += __configs
 

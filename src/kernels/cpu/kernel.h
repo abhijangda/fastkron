@@ -39,7 +39,9 @@ inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3
 }
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
-         uint MaxQ, uint MaxP, uint FusedFacs, fastKronOp OpX, fastKronOp OpF>
+         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
+         uint TileM, uint FusedFacs, uint RegK, uint RegQ,
+         fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,
                FusedParams<FusedFacs> fusedParams,
                DistributedParams distParams,
@@ -52,14 +54,14 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t P = F.p();
   const uint32_t Q = F.q();
 
-  const uint32_t TileM = 1;
-  const uint32_t TileK = 4096;
-  const uint32_t TileQ = 128;
-  const uint32_t TileP = 128;
+  // const uint32_t TileM = 1;
+  // const uint32_t TileK = 4096;
+  // const uint32_t TileQ = 128;
+  // const uint32_t TileP = 128;
 
-  const uint32_t RegM = 1;
-  const uint32_t RegK = 16; //MIN(TileK, 8);
-  const uint32_t RegQ = 8; //MIN(TileQ, 8);
+  const uint32_t RegM = TileM;
+  // const uint32_t RegK = 16; //MIN(TileK, 8);
+  // const uint32_t RegQ = 8; //MIN(TileQ, 8);
 
   const uint32_t YRegs = RegM * RegK * RegQ;
   const uint32_t XRegs = RegM * RegK;
@@ -70,7 +72,6 @@ void cpuKernel(KernelParams<FusedFacs> params,
   static_assert(RegK % VectorLen == 0);
   static_assert(TileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
-  assert(TileP <= P);
 
   const uint32_t VecRegK = RegK/VectorLen;
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;

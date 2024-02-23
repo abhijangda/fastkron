@@ -83,13 +83,38 @@ cudaError_t CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
   return cudaSuccess;
 }
 
-cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
                                  KernelMode execMode, 
                                  bool distP2PStore,
                                  int warmups, int runs,
                                  float& runtime) {
-  runtime = 1.0f;
-  return cudaSuccess;
+  double startTime = 0;
+  cudaError_t status;
+  for (int r = 0; r < warmups + runs; r++) {
+    if (r == warmups) {
+      startTime = getCurrTime();
+    }
+    
+    if (distP2PStore) {
+      status = invokeP2PStoreKernel(kernel, factorIdx, problem,
+                                    distParams, epilogueParams, execMode);
+    } else {
+      status = invokeKernel(kernel, factorIdx, problem,
+                            epilogueParams, execMode);
+    }
+  }
+
+  CUDA_CHECK(status);
+  double endTime = getCurrTime();
+
+  if (status != cudaSuccess) {
+    std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
+    return status;
+  }
+
+  runtime = ((endTime - startTime)/1e3)/runs;
+  
+  return status;
 }

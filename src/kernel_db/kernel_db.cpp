@@ -6,8 +6,8 @@
 
 std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
     uint factorIdx, DistributedParams distParams) {
-  const uint runs = 5;
-  const uint warmups = 2;
+  const uint runs = 10;
+  const uint warmups = 5;
   KernelInfo* bestKernel;
   float minTime;
   bool foundProblem = false;
