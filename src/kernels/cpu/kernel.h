@@ -55,7 +55,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t TileM = 1;
   const uint32_t TileK = 4096;
   const uint32_t TileQ = 128;
-  const uint32_t TileP = 64;
+  const uint32_t TileP = 128;
 
   const uint32_t RegM = 1;
   const uint32_t RegK = 16; //MIN(TileK, 8);
