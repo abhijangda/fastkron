@@ -97,8 +97,10 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
 #ifdef ENABLE_CUDA
     devicesPerProc = fastKron.cudaKernels.numGPUs_;
 #endif
+    break;
     case fastKronBackend_X86:
       devicesPerProc = 1;
+      break;
   }
 
   auto kernelDb = fastKron.getBackendKernelDb();
@@ -107,7 +109,6 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
   Matrix temp2[devicesPerProc];
   //TODO: Make this FactorArray
   Factor Fs[devicesPerProc][problem.n()];
-
   for (uint32_t p = 0; p < devicesPerProc; p++) {
     //TODO: Init temp to 1
     fastKron.gekmmResultTemp(problem, result, temp1[p]);

@@ -20,10 +20,10 @@ gen_test_kernels = {
                     # 'gen-single-cuda-distinct-shapes'       : ['single-cuda-distinct-shapes'],
                     # 'gen-single-cuda-odd-shapes'            : ['single-cuda-odd-shapes'],
 
-                    'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests', 'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
-                    # 'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
-                    # 'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
-                    # 'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes', 'DIST_COMM=NCCL multi-cuda-distinct-shapes']
+                    # 'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests', 'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
+                    'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
+                    'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
+                    'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes', 'DIST_COMM=NCCL multi-cuda-distinct-shapes']
                   }
 
 sorted_keys = sorted(list(gen_test_kernels.keys()))
