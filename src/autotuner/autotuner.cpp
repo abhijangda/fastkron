@@ -140,7 +140,8 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     fastKron.tunedKernelSeries = tunedKernels;
   } else {
 #ifdef ENABLE_CUDA
-    assert (fastKron.backend == fastKronBackend_CUDA);
+    assert(fastKron.backend == fastKronBackend_CUDA);
+    assert(fastKron.cudaKernels.isDistributed_ == true);
     if (!checkDistributedKronSizes(problem,
                                    fastKron.cudaKernels.perGPUKronBatch_, fastKron.cudaKernels.gpusInK_))
       return cudaErrorInvalidValue;

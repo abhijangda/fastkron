@@ -232,11 +232,13 @@ cudaError_t FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpu
 }
 
 cudaError_t FastKronHandle::initX86Backend() {
+#ifdef ENABLE_X86
   if (backend != fastKronBackend_X86) return cudaErrorInvalidValue;
-
   x86Kernels.init();
-  
   return cudaSuccess;
+#else
+  return cudaErrorInvalidValue;
+#endif
 }
 
 FastKronHandle::FastKronHandle(fastKronBackend backend) :

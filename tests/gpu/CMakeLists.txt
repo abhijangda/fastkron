@@ -31,7 +31,7 @@ target_link_libraries(single-cuda-tuner-tests ${TESTS_LIBS})
 target_compile_definitions(single-cuda-tuner-tests PRIVATE ${CUDA_TEST_DEFINE})
 
 add_executable(single-cuda-non-square-tests ${TEST_SRC}/non-square-tuner-tests.cpp)
-add_custom_target(gen-non-square-test-kernels
+add_custom_target(gen-non-square-kernels
     COMMAND python ${GEN_TUNER_KERNELS_PY} -backend cuda -same-factors 4 8,16 -same-factors 3 32,16 -same-factors 3 128,32 -opX N -opF N
 )
 target_include_directories(single-cuda-non-square-tests PRIVATE ${TESTS_INCLUDES})
