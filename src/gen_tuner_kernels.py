@@ -144,7 +144,7 @@ class CUDAKernel(Kernel):
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
                allPowersOf2: int, opX : str, opF : str):
-    super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, cRegRows, cRegCols, elemType, allPowersOf2, opX, opF)
+    super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, cRegRows, cRegCols, allPowersOf2, opX, opF)
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.tileQ = tileQ
     self.tileP = tileP
@@ -206,7 +206,7 @@ class CUDAKernel(Kernel):
            self.rk in [1, 2, 4] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.dist in [0, 1] and \
-           self.cRegCols <= 32 and \
+           self.rq <= 32 and \
            self.tileM * self.rk * self.rq <= 64
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
