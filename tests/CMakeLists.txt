@@ -7,6 +7,7 @@ include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
 
 set(TESTS_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} ${SRC})
 set(TESTS_LIBS GTest::gtest_main FastKron nccl)
+set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_subdirectory(gpu)
 add_subdirectory(benchmarks)
+add_subdirectory(gpu)

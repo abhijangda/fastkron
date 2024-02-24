@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 #include "testBase.h"
 
-#define SINGLE_GPU_NO_FUSION_TUNER_TEST(M, Facs, FacSize, Type) \
-  TEST(SingleGPUNoFusionTunerTest, Type##_##M##x##Facs##x##FacSize##_) { \
+#define NO_FUSION_TUNER_TEST(M, Facs, FacSize, Type) \
+  TEST(EXPAND(TEST_BACKEND,Tuner), Type##_##M##x##Facs##x##FacSize##_) { \
   uint KP_MAT_N[Facs];\
   uint KP_MAT_K[Facs];\
   uint N = 1;\
@@ -17,9 +17,9 @@
   EXPECT_TRUE(b);\
 }
 
-SINGLE_GPU_NO_FUSION_TUNER_TEST(512, 4, 16, float)
+NO_FUSION_TUNER_TEST(512, 4, 16, float)
 
-SINGLE_GPU_NO_FUSION_TUNER_TEST(512, 3, 64, float)
+NO_FUSION_TUNER_TEST(512, 3, 64, float)
 
 // SINGLE_GPU_NO_FUSION_TUNER_TEST(1, 3, 32, float)
 

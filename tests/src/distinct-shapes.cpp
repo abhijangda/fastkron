@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #include "testBase.h"
 
-TEST(SingleGPUDistinctShapesTest, Case1) {
+TEST(EXPAND(TEST_BACKEND,DistinctShapes), Case1) {
   uint KP_MAT_N[] = {16,32,8,32};
   uint KP_MAT_K[] = {8,8,16,8};
   uint N = 1;

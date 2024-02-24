@@ -121,6 +121,33 @@ static bool check(T* ref, T* computed, uint M, uint N) {
   return true;
 }
 
+fastKronBackend getTestBackend() {
+#ifdef TEST_BACKEND_CUDA
+  return fastKronBackend_CUDA;
+#elif defined(TEST_BACKEND_HIP)
+  return fastKronBackend_HIP;
+#elif defined(TEST_BACKEND_X86)
+  return fastKronBackend_X86;
+#elif defined(TEST_BACKED_ARM)
+  return fastKronBackend_ARM;
+#endif
+}
+
+#ifdef TEST_BACKEND_CUDA
+  #define TEST_BACKEND CUDA
+#elif defined(TEST_BACKEND_HIP)
+  #define TEST_BACKEND HIP
+#elif defined(TEST_BACKEND_X86)
+  #define TEST_BACKEND X86
+#elif defined(TEST_BACKEND_ARM)
+  #define TEST_BACKEND ARM
+#endif
+
+
+#define EXPAND(X, Y) EXPAND_(X, Y)
+#define EXPAND_(X, Y) X##Y
+
+
 /**************************************************
               Serial KronGEMM Functions
 ***************************************************/

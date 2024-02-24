@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 #include "testBase.h"
 
-#define NON_SQUARE_SINGLE_GPU(M, Facs, P, Q, Type) \
-  TEST(NonSquareSingleGPU, Type##_##M##x##Facs##x##P##x##Q##_) { \
+#define NON_SQUARE(M, Facs, P, Q, Type) \
+  TEST(EXPAND(TEST_BACKEND,OddShape), Type##_##M##x##Facs##x##P##x##Q##_) { \
   uint KP_MAT_N[Facs];\
   uint KP_MAT_K[Facs];\
   uint N = 1;\
@@ -17,10 +17,6 @@
   EXPECT_TRUE(b);\
 }
 
-NON_SQUARE_SINGLE_GPU(11, 4, 8, 16, float)
-NON_SQUARE_SINGLE_GPU(12, 5, 8, 16, float)
-
-NON_SQUARE_SINGLE_GPU(12, 3, 128, 32, float)
-
-NON_SQUARE_SINGLE_GPU(11, 3, 32, 16, float)
-NON_SQUARE_SINGLE_GPU(12, 4, 32, 16, float)
+NON_SQUARE(12, 2, 31, 16, float)
+NON_SQUARE(8, 2, 16, 31, float)
+NON_SQUARE(6, 4, 31, 31, float)
