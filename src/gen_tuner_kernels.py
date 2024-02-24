@@ -319,7 +319,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
     configs = configs[:min(len(configs), numKernels)]
-    
+
     if onlySpecificConfigs != []:
         __configs = []
         for config in configs:

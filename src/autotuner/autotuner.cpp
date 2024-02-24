@@ -72,6 +72,7 @@ cudaError_t Autotuner::tune(KMMProblem problem,
       bool distP2PStore = isDistributed && rstart == 0;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
+      std::cout << "75: " << secondPart << std::endl;
       auto bestKernelWithTime = kernelDb->tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams);
       if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
         tunedKernelsMap.add(secondPart, distP2PStore,

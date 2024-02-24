@@ -17,6 +17,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
 
   if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
   for (auto kernel : allKernels) {
+    std::cout << kernel << std::endl;
     if (!kernel->canCompute(problem, distP2PStore)) continue;
     if (!foundProblem) {
       std::cout << "Tuning for shape "  << problem << std::endl;

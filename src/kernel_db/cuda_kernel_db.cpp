@@ -50,12 +50,12 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
   //do it
   //TODO: Add if debug
-  if (false) {
+  if (true) {
     uint numKernels = 0;
     std::cout << "Loading compiled kernels" << std::endl;
     for (auto iter : compiledKernels) {
       for (auto kernel : iter.second) {
-        // std::cout << kernel << std::endl;
+        std::cout << kernel->str() << std::endl;
       }
       numKernels += iter.second.size();
     }

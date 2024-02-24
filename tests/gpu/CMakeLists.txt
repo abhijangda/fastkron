@@ -85,7 +85,7 @@ target_link_libraries(multi-cuda-no-fusion-non-square-tests ${TESTS_LIBS})
 
 add_executable(multi-cuda-distinct-shapes ${TEST_SRC}/multi-cuda-distinct-shapes.cpp)
 add_custom_target(gen-multi-cuda-distinct-shapes
-    COMMAND python ${GEN_TUNER_KERNELS_PY} -backend cuda -distinct-factors 3 8,16 32,8 16,8 -match-configs 64,16,8,16,256 32,8,32,8,256 128,8,16,8,256 -dist-kernels -opX N -opF N
+    COMMAND python ${GEN_TUNER_KERNELS_PY} -backend cuda -distinct-factors 3 8,16 32,8 16,8 -match-configs 64,16,8,16,256 64,8,32,8,256 128,8,16,8,256 -dist-kernels -opX N -opF N
 )
 target_include_directories(multi-cuda-distinct-shapes PRIVATE ${TESTS_INCLUDES})
 target_link_libraries(multi-cuda-distinct-shapes ${TESTS_LIBS})
