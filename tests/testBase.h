@@ -513,7 +513,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
 
   cudaEvent_t start[gpus];
   cudaEvent_t end[gpus];
-  float elapsedTime = 0;
+  float elapsedTime = 1e10;
 
   if (numIters > 0 || warmup > 0) {
     if (backend == fastKronBackend_CUDA) {
@@ -542,34 +542,39 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //Run
     double starttime = 0.0f;
     if (verbose) printf("run\n");
-    if (backend == fastKronBackend_CUDA) {
-      for (int g = 0; g < gpus; g++) {
-        CUDACHECK(cudaSetDevice(g));
-        CUDACHECK(cudaEventRecord(start[g], stream[g]));
+    for (int sample = 0; sample < 5; sample++) {
+      if (backend == fastKronBackend_CUDA) {
+        for (int g = 0; g < gpus; g++) {
+          CUDACHECK(cudaSetDevice(g));
+          CUDACHECK(cudaEventRecord(start[g], stream[g]));
+        }
+      } else if (backend == fastKronBackend_X86) {
+        starttime = getCurrTime();
       }
-    } else if (backend == fastKronBackend_X86) {
-      starttime = getCurrTime();
-    }
-    for (uint i = 0; i < numIters; i++) {
-      //printf("iter i %d\n", i);
-      if (useDistributed) {
-        kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
-      } else {
-        kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
+      for (uint i = 0; i < numIters; i++) {
+        //printf("iter i %d\n", i);
+        if (useDistributed) {
+          kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
+        } else {
+          kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
+        }
       }
-    }
-    printf("405\n");
-    if (backend == fastKronBackend_CUDA) {
-      for (int g = 0; g < gpus; g++) {
-        CUDACHECK(cudaSetDevice(g));
-        CUDACHECK(cudaEventRecord(end[g], stream[g]));
-        CUDACHECK(cudaEventSynchronize(end[g]));
-        if (g == 0)
-          CUDACHECK(cudaEventElapsedTime(&elapsedTime, start[g], end[g]));
+      printf("405\n");
+      if (backend == fastKronBackend_CUDA) {
+        for (int g = 0; g < gpus; g++) {
+          CUDACHECK(cudaSetDevice(g));
+          CUDACHECK(cudaEventRecord(end[g], stream[g]));
+          CUDACHECK(cudaEventSynchronize(end[g]));
+          if (g == 0) {
+            float t;
+            CUDACHECK(cudaEventElapsedTime(&t, start[g], end[g]));
+            elapsedTime = min(elapsedTime, t);
+          }
+        }
+      } else if (backend == fastKronBackend_X86) {
+        double endtime = getCurrTime();
+        elapsedTime = min(elapsedTime, (endtime - starttime)/1000.0f);
       }
-    } else if (backend == fastKronBackend_X86) {
-      double endtime = getCurrTime();
-      elapsedTime = (endtime - starttime)/1000.0f;
     }
 
     double perCallTime = elapsedTime/numIters;
