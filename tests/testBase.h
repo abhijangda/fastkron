@@ -568,12 +568,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
           if (g == 0) {
             float t;
             CUDACHECK(cudaEventElapsedTime(&t, start[g], end[g]));
-            elapsedTime = min(elapsedTime, t);
+            elapsedTime = std::min(elapsedTime, t);
           }
         }
       } else if (backend == fastKronBackend_X86) {
         double endtime = getCurrTime();
-        elapsedTime = min(elapsedTime, (endtime - starttime)/1000.0f);
+        elapsedTime = std::min(elapsedTime, (float)(endtime - starttime)/1000.0f);
       }
     }
 

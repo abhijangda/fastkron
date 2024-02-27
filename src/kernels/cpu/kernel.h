@@ -72,6 +72,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
   static_assert(RegK % VectorLen == 0);
   static_assert(TileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
+  //For Transpose load loop to TileX 
+  assert ((TileK/P) % VectorLen == 0);
 
   const uint32_t VecRegK = RegK/VectorLen;
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
@@ -80,6 +82,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   uint threads = omp_get_max_threads();
   
   const size_t SzTileX = TileM*TileP*(TileK/P);
+  //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
   if (TileXs[0] == nullptr)
     for (int i = 0; i < 96; i++)
@@ -96,18 +99,18 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
     ElemT tileBuff[TileM][TileQ][TileK/P];
 
+    //Transpose X data and store to TileX to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       //TODO: Use aligned_alloc to allocate on a page boundary of 4096 or 8192?
       const uint tid = omp_get_thread_num();
       ElemT* TileX = TileXs[tid];
 
-      //Load X to TileX to reduce TLB misses
       for (uint32_t m = 0; m < XTile.m(); m++) {
         uint32_t NumSlices = VectorLen;
-        for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
-          for (uint32_t p = 0; p < TileP; p += VectorLen) {
+        for (uint32_t k = 0; k < TileK; k += NumSlices * P) { 
+          for (uint32_t p = 0; p < ROUNDDOWN(TileP, VectorLen); p += VectorLen) {
             __m256 slices[VectorLen];
-            for (uint32_t sliceIdx = 0; sliceIdx < VectorLen; sliceIdx++) {
+            for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
               slices[sliceIdx] = _mm256_loadu_ps(XTile.data(m, k + sliceIdx*P + tileP + p, 0));
             }
 
@@ -117,6 +120,13 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
             for (uint32_t pp = 0; pp < VectorLen; pp++) {
               _mm256_storeu_ps(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P], slices[pp]);
+            }
+          }
+        
+          for (uint32_t p = ROUNDDOWN(TileP, VectorLen); p < TileP; p++) {
+            for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+              ElemT elem = *XTile.data(m, k + sliceIdx*P + tileP + p, 0);
+              TileX[m*TileP*(TileK/P) + p*(TileK/P) + k/P + sliceIdx] = elem;
             }
           }
         }

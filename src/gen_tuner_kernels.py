@@ -129,9 +129,9 @@ class CPUKernel(Kernel):
 
   def isValid(self):
     AVXLen = 8
-    return self.shape.k <= 16*1024 and \
+    return self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
-           self.tileM * (self.shape.k//self.shape.q) * self.tileQ * 4 <= 1*1024*1024 and \
+           self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
            self.rk % AVXLen == 0 and \
            self.rk/AVXLen < 8 and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \

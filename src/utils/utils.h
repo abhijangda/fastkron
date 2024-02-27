@@ -47,6 +47,8 @@
 #define MAX(x,y)       (((x) > (y)) ? (x) : (y))
 #define DIVUP(x,y)     (((x) + (y) - 1)/((y)))
 #define ROUNDUP(x,y)   (DIVUP(x,y)*(y))
+#define ROUNDDOWN(x,y) (x/y)*y
+
 #define CUDA_WARP_SIZE 32U
 
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
