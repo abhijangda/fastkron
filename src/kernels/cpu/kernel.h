@@ -102,7 +102,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
       ElemT* TileX = TileXs[tid];
 
       //Load X to TileX to reduce TLB misses
-      for (uint32_t m = 0; m < TileM; m++) {
+      for (uint32_t m = 0; m < XTile.m(); m++) {
         uint32_t NumSlices = VectorLen;
         for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
           for (uint32_t p = 0; p < TileP; p += VectorLen) {
@@ -128,7 +128,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
         memcpy(&TileF[p][0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
       }
       
-      for (uint32_t m = 0; m < TileM; m += RegM) {
+      for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
         //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
@@ -198,8 +198,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
               const uint32_t QTiles = Q/TileQ;
               memK += (tileQ/TileQ) * (Y.n()/QTiles);
             }
-
-            _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
+            if (m + rm < XTile.m())
+              _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
           }}}
         }
       }}}

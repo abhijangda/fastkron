@@ -19,7 +19,7 @@ def matmulkron(input, kronmats):
         output = output.view(shape[0], (shape[1]//k.shape[0]), k.shape[0])
         output = output.transpose(1,2)
         # if i == 1:
-        #     print(output)
+        #print(output.shape)
     return output.reshape(shape)
 
 def contraction(input, kronmats):
@@ -55,7 +55,7 @@ def fackler2019toms(input, kronmats):
 #[N,4,5,3]x[3,3] = [N,4,5,3]
 
 if __name__ == "__main__":
-    npoints = 2
+    npoints = 3
     twoPower = 4
     input = initmat(npoints, twoPower**npoints)
     kronmats = []
@@ -65,8 +65,9 @@ if __name__ == "__main__":
     # print(kronmats[1])
     b = baseline(input, kronmats)
 
-    # o = matmulkron(input, kronmats)
-    o = fackler2019toms(input, kronmats)
+    o = matmulkron(input, kronmats)
+    # o = fackler2019toms(input, kronmats)
+    # o = contraction(input, kronmats)
 
     print ((b == o))
     print ((b == o).all())

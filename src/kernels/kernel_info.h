@@ -66,7 +66,7 @@ struct CPUKernel : public KernelInfo {
   
   std::string str() const {
     std::stringstream info;
-    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" << DistributeToGPUs_ << "_" << CRegRows << "x" << CRegCols << opX << opF;
+    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" << DistributeToGPUs_ << "_" << CRegRows << "x" << CRegCols << "_" << opX << opF;
     return info.str();
   } 
 };

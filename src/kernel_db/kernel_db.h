@@ -56,7 +56,7 @@ public:
     //TODO: Check that if distP2PStore is needed then there is a kernel that can 
     //do it
     //TODO: Add if debug
-    if (true) {
+    if (false) {
       uint numKernels = 0;
       std::cout << "Loading compiled kernels" << std::endl;
       for (auto iter : compiledKernels) {

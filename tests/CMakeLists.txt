@@ -11,3 +11,4 @@ set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_subdirectory(benchmarks)
 add_subdirectory(gpu)
+add_subdirectory(x86)
