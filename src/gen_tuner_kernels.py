@@ -134,7 +134,12 @@ class CPUKernel(Kernel):
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
            self.rk % AVXLen == 0 and \
            self.rk/AVXLen < 8 and \
-           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
+            (self.fused_kernels == 1 or \
+              (self.fused_kernels > 1 and self.shape.p == self.tileP and \
+              #Next fused intermediate must have atleast AVXLen slices to make sure
+              #Transpose X->TileX loads contiguous AVXLen first elements of slices of same P
+               self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
+            ) and \
            self.dist in [0, 1] and \
            self.rq <= AVXLen
 

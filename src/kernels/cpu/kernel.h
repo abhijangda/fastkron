@@ -72,6 +72,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   static_assert(RegK % VectorLen == 0);
   static_assert(TileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
+  assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q));
   //For Transpose load loop to TileX
   assert ((TileK/P) % VectorLen == 0);
 
@@ -105,119 +106,143 @@ void cpuKernel(KernelParams<FusedFacs> params,
     const uint tid = omp_get_thread_num();
     ElemT* tileBuff = TileYs[tid];
 
-    //Transpose X data and store to TileX to reduce TLB misses
-    for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
-      //TODO: Use aligned_alloc to allocate on a page boundary of 4096 or 8192?
+    for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       ElemT* TileX = TileXs[tid];
+      //Transpose X data and store to TileX to reduce TLB misses
+      for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
+        for (uint32_t m = 0; m < XTile.m(); m++) {
+          uint32_t NumSlices = VectorLen;
+          for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
+            for (uint32_t p = 0; p < ROUNDDOWN(TileP, VectorLen); p += VectorLen) {
+              __m256 slices[VectorLen];
+              for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+                const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
+                                                            &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
+                slices[sliceIdx] = _mm256_loadu_ps(ptr);
+              }
 
-      for (uint32_t m = 0; m < XTile.m(); m++) {
-        uint32_t NumSlices = VectorLen;
-        for (uint32_t k = 0; k < TileK; k += NumSlices * P) { 
-          for (uint32_t p = 0; p < ROUNDDOWN(TileP, VectorLen); p += VectorLen) {
-            __m256 slices[VectorLen];
-            for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
-              slices[sliceIdx] = _mm256_loadu_ps(XTile.data(m, k + sliceIdx*P + tileP + p, 0));
+              transpose8_ps(slices[0], slices[1], slices[2], 
+                            slices[3], slices[4], slices[5],
+                            slices[6], slices[7]);
+
+              for (uint32_t pp = 0; pp < VectorLen; pp++) {
+                _mm256_storeu_ps(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P], slices[pp]);
+              }
             }
-
-            transpose8_ps(slices[0], slices[1], slices[2], 
-                          slices[3], slices[4], slices[5],
-                          slices[6], slices[7]);
-
-            for (uint32_t pp = 0; pp < VectorLen; pp++) {
-              _mm256_storeu_ps(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P], slices[pp]);
+          
+            for (uint32_t p = ROUNDDOWN(TileP, VectorLen); p < TileP; p++) {
+              for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+                const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
+                                                            &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
+                TileX[m*TileP*(TileK/P) + p*(TileK/P) + k/P + sliceIdx] = *ptr;
+              }
             }
           }
+        }
+
+        ElemT TileF[TileP][TileQ];
+        Factor F = params.problem.f(fac);
+
+        for (int p = 0; p < TileP; p++) {
+          memcpy(&TileF[p][0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+        }
         
-          for (uint32_t p = ROUNDDOWN(TileP, VectorLen); p < TileP; p++) {
-            for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
-              ElemT elem = *XTile.data(m, k + sliceIdx*P + tileP + p, 0);
-              TileX[m*TileP*(TileK/P) + p*(TileK/P) + k/P + sliceIdx] = elem;
-            }
+        for (uint32_t m = 0; m < XTile.m(); m += RegM) {
+        for (uint32_t q = 0; q < TileQ; q += RegQ) {
+        for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
+          //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
+          __m256 yReg[VecRegM][VecRegQ][VecRegK];
+
+          if (tileP == 0) {
+            // YRegisters<ElemT, > yReg;
+            for (uint32_t ym = 0; ym < VecRegM; ym++) {
+            for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+            for (uint32_t yk = 0; yk < VecRegK; yk++) {
+              yReg[ym][yq][yk] =  _mm256_setzero_ps();
+            }}}
+          } else {
+            for (uint32_t ym = 0; ym < VecRegM; ym++) {
+            for (uint32_t yk = 0; yk < VecRegK; yk++) {
+            for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+              yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
+            }}}
           }
-        }
-      }
 
-      ElemT TileF[TileP][TileQ];
-
-      for (int p = 0; p < TileP; p++) {
-        memcpy(&TileF[p][0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
-      }
-      
-      for (uint32_t m = 0; m < XTile.m(); m += RegM) {
-      for (uint32_t q = 0; q < TileQ; q += RegQ) {
-      for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
-        //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
-        __m256 yReg[VecRegM][VecRegQ][VecRegK];
-
-        if (tileP == 0) {
-          // YRegisters<ElemT, > yReg;
-          for (uint32_t ym = 0; ym < VecRegM; ym++) {
-          for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-          for (uint32_t yk = 0; yk < VecRegK; yk++) {
-            yReg[ym][yq][yk] =  _mm256_setzero_ps();
-          }}}
-        } else {
-          for (uint32_t ym = 0; ym < VecRegM; ym++) {
-          for (uint32_t yk = 0; yk < VecRegK; yk++) {
-          for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-            yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
-          }}}
-        }
-
-        #pragma unroll 2
-        for (uint32_t p = 0; p < TileP; p++) {
-          __m256 XReg[VecRegM][VecRegK];
-          __m256 FReg[VecRegQ];
-          #pragma unroll
-          for (uint32_t em = 0; em < VecRegM; em++) {
+          #pragma unroll 2
+          for (uint32_t p = 0; p < TileP; p++) {
+            __m256 XReg[VecRegM][VecRegK];
+            __m256 FReg[VecRegQ];
             #pragma unroll
-            for (uint32_t ek = 0; ek < VecRegK; ek++) {
-              XReg[em][ek] = _mm256_loadu_ps(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
-          }}
+            for (uint32_t em = 0; em < VecRegM; em++) {
+              #pragma unroll
+              for (uint32_t ek = 0; ek < VecRegK; ek++) {
+                XReg[em][ek] = _mm256_loadu_ps(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
+            }}
 
-          #pragma unroll
-          for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-            FReg[rq] = _mm256_broadcast_ss(&TileF[p][q+rq]);
+            #pragma unroll
+            for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+              FReg[rq] = _mm256_broadcast_ss(&TileF[p][q+rq]);
+            }
+
+            #pragma unroll
+            for (uint32_t rm = 0; rm < VecRegM; rm++) {
+            #pragma unroll
+            for (uint32_t rk = 0; rk < VecRegK; rk++) {
+            #pragma unroll
+            for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+              yReg[rm][rq][rk] = _mm256_fmadd_ps(XReg[rm][rk], FReg[rq], yReg[rm][rq][rk]);
+            }}}
           }
 
-          #pragma unroll
-          for (uint32_t rm = 0; rm < VecRegM; rm++) {
-          #pragma unroll
-          for (uint32_t rk = 0; rk < VecRegK; rk++) {
-          #pragma unroll
-          for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-            yReg[rm][rq][rk] = _mm256_fmadd_ps(XReg[rm][rk], FReg[rq], yReg[rm][rq][rk]);
-          }}}
-        }
+          if (tileP < P - TileP) {
+            for (uint32_t ym = 0; ym < VecRegM; ym++) {
+            for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+            for (uint32_t yk = 0; yk < VecRegK; yk++) {
+              _mm256_storeu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
+            }}}
+          } else {
+            const uint32_t XTileSlices = TileK/P;
+            const uint32_t XSlices     = K/P;
 
-        if (tileP < P - TileP) {
-          for (uint32_t ym = 0; ym < VecRegM; ym++) {
-          for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-          for (uint32_t yk = 0; yk < VecRegK; yk++) {
-            _mm256_storeu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
-          }}}
-        } else {
-          const uint32_t XTileSlices = TileK/P;
-          const uint32_t XSlices     = K/P;
+            for (uint32_t rm = 0; rm < VecRegM; rm++) {
+            for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+            for (uint32_t rk = 0; rk < VecRegK; rk++) {
+              __m256 reg = yReg[rm][rq][rk];
+              const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
+              if (fac > 0) {
+                if (m + rm < XTile.m()) {
+                  // ElemT b[8]; _mm256_storeu_ps(b, reg); printf("%f %f %f %f\n", b[0], b[1], b[2], b[3]);
+                  _mm256_storeu_ps(&tileBuff[(m+rm)*TileK + cacheK], reg);
+                }
+              } else {
+                //TODO: Need to fix
+                uint32_t memK;
+                if (FusedFacs > 1) {
+                  uint32_t xshCol = cacheK;
+                  //Scale shared mem slice idx to global mem idx
+                  uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
+                  //Scale shared fused slice to global mem
+                  uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
+                  //Elem idx in Fused Slice
+                  uint32_t elem = (tileK/TileK) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
+                  memK = glSlice + sliceElem + elem; 
+                } else {
+                  memK = (cacheK/XTileSlices) * XSlices +
+                          (tileK/TileK) * XTileSlices +
+                          cacheK % XTileSlices;
 
-          for (uint32_t rm = 0; rm < VecRegM; rm++) {
-          for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-          for (uint32_t rk = 0; rk < VecRegK; rk++) {
-            __m256 reg = yReg[rm][rq][rk];
-            const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
-            uint32_t memK = (cacheK/XTileSlices) * XSlices +
-                            (tileK/TileK) * XTileSlices +
-                            cacheK % XTileSlices;
-
-            if (TileQ != Q) {
-              const uint32_t QTiles = Q/TileQ;
-              memK += (tileQ/TileQ) * (Y.n()/QTiles);
-            }
-            if (m + rm < XTile.m())
-              _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
-          }}}
-        }
-      }}}
+                  if (TileQ != Q) {
+                    const uint32_t QTiles = Q/TileQ;
+                    memK += (tileQ/TileQ) * (Y.n()/QTiles);
+                  }
+                }
+                if (m + rm < XTile.m())
+                  _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
+              }
+            }}}
+          }
+        }}}
+      }
     }
   }}}
 
