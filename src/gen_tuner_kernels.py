@@ -257,45 +257,33 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
       if shape not in configs:
         configs[shape] = []
       __configs = []
-      if backend == 'cuda':
-        for tM in TileMs:
-          for tQ in TileQs:
-            for tK in TileKs:
-              if tK < p:
-                continue
-              CRows = factors(tK//p)
-              CCols = factors(tQ)
-              aalign = xalignment(tM, tK, opX)
-              kronalign = falignment(tQ)
-              for regRows in CRows:
-                for regCols in CCols:
-                  for tP in TilePs:
-                    for kEqVar in [0]:
-                      fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
-                      for numFusedKerns in fusedCases:
-                        distKernels = [0, 1] if useDistKernels else [0]
-                        for dist in distKernels: 
-                          __configs += [CUDAKernel(KronMatMulShape(m, tK, n, p, q), 
-                                                  p, q, tQ, tP, tM, regRows, regCols,
-                                                  numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
-                                                  opx, opF)]
-      elif backend == 'x86':
-        dist = 0
-        for tM in TileMs:
-          for tQ in TileQs:
-            for tK in TileKs:
-              if tK < p:
-                continue
-              CRows = factors(tK//p)
-              CCols = factors(tQ)
-              for regRows in CRows:
-                for regCols in CCols:
-                  for tP in TilePs:
-                    numFusedKerns = 1
-
-                    __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q), 
-                                            p, q, tQ, tP, tM, regRows, regCols, numFusedKerns, 
-                                            dist, "Float", allSameShapes, opx, opF)]
+      for tM in TileMs:
+        for tQ in TileQs:
+          for tK in TileKs:
+            if tK < p:
+              continue
+            CRows = factors(tK//p)
+            CCols = factors(tQ)
+            for regRows in CRows:
+              for regCols in CCols:
+                for tP in TilePs:
+                  fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
+                  for numFusedKerns in fusedCases:
+                    if backend == 'cuda':
+                      aalign = xalignment(tM, tK, opX)
+                      kronalign = falignment(tQ)
+                      for kEqVar in [0]:
+                          distKernels = [0, 1] if useDistKernels else [0]
+                          for dist in distKernels: 
+                            __configs += [CUDAKernel(KronMatMulShape(m, tK, n, p, q), 
+                                                    p, q, tQ, tP, tM, regRows, regCols,
+                                                    numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
+                                                    opx, opF)]
+                    elif backend == 'x86':
+                      dist = 0
+                      __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q), 
+                                              p, q, tQ, tP, tM, regRows, regCols, numFusedKerns, 
+                                              dist, "Float", allSameShapes, opx, opF)]
 
       configs[shape] += __configs
 

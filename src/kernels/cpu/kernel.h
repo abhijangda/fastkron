@@ -72,7 +72,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   static_assert(RegK % VectorLen == 0);
   static_assert(TileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
-  //For Transpose load loop to TileX 
+  //For Transpose load loop to TileX
   assert ((TileK/P) % VectorLen == 0);
 
   const uint32_t VecRegK = RegK/VectorLen;
@@ -84,9 +84,14 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const size_t SzTileX = TileM*TileP*(TileK/P);
   //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
-  if (TileXs[0] == nullptr)
-    for (int i = 0; i < 96; i++)
+  static ElemT* TileYs[96] = {nullptr};
+
+  if (TileXs[0] == nullptr) {
+    for (int i = 0; i < 96; i++)  {
       TileXs[i] = (ElemT*)aligned_alloc(8192, SzTileX * sizeof(ElemT));
+      TileYs[i] = (ElemT*)aligned_alloc(8192, TileM * TileQ * TileK/P * sizeof(ElemT));
+    }
+  }
 
   #pragma omp parallel for collapse(3)
   for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
@@ -97,12 +102,12 @@ void cpuKernel(KernelParams<FusedFacs> params,
                             P, P, //TODO: setting this to P because XTile.data is not right for GPU backend
                             X);
 
-    ElemT tileBuff[TileM][TileQ][TileK/P];
+    const uint tid = omp_get_thread_num();
+    ElemT* tileBuff = TileYs[tid];
 
     //Transpose X data and store to TileX to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       //TODO: Use aligned_alloc to allocate on a page boundary of 4096 or 8192?
-      const uint tid = omp_get_thread_num();
       ElemT* TileX = TileXs[tid];
 
       for (uint32_t m = 0; m < XTile.m(); m++) {
@@ -155,7 +160,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t ym = 0; ym < VecRegM; ym++) {
           for (uint32_t yk = 0; yk < VecRegK; yk++) {
           for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-            yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[m+ym][q+yq][k/TileP+yk*VectorLen]);
+            yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
           }}}
         }
 
@@ -189,7 +194,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t ym = 0; ym < VecRegM; ym++) {
           for (uint32_t yq = 0; yq < VecRegQ; yq++) {
           for (uint32_t yk = 0; yk < VecRegK; yk++) {
-            _mm256_storeu_ps(&tileBuff[m+ym][q+yq][k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
+            _mm256_storeu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
           }}}
         } else {
           const uint32_t XTileSlices = TileK/P;
