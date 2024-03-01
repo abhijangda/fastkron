@@ -6,7 +6,7 @@
 
 std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem problem, bool distP2PStore, 
     uint factorIdx, DistributedParams distParams) {
-  const uint runs = 10;
+  const uint runs = 5;
   const uint warmups = 5;
   KernelInfo* bestKernel;
   float minTime;
@@ -26,7 +26,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
     float kernelTime = std::numeric_limits<float>::max();
     cudaError_t status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
-               distP2PStore, 2, 5, kernelTime);
+               distP2PStore, warmups, runs, kernelTime);
     if (status == cudaSuccess) {
       std::cout << std::fixed << std::setprecision(2) << 
                   " runs in " << kernelTime << " ms " << std::endl;

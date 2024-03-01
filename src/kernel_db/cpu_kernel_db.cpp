@@ -90,31 +90,30 @@ cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorI
                                  bool distP2PStore,
                                  int warmups, int runs,
                                  float& runtime) {
-  double startTime = 0;
+  runtime = std::numeric_limits<float>::max();
   cudaError_t status;
-  for (int r = 0; r < warmups + runs; r++) {
-    if (r == warmups) {
-      startTime = getCurrTime();
+  for (int sample = 0; sample < 10; sample++) {
+    double startTime = getCurrTime();
+    for (int r = 0; r < runs; r++) {
+      if (distP2PStore) {
+        status = invokeP2PStoreKernel(kernel, factorIdx, problem,
+                                      distParams, epilogueParams, execMode);
+      } else {
+        status = invokeKernel(kernel, factorIdx, problem,
+                              epilogueParams, execMode);
+      }
     }
-    
-    if (distP2PStore) {
-      status = invokeP2PStoreKernel(kernel, factorIdx, problem,
-                                    distParams, epilogueParams, execMode);
-    } else {
-      status = invokeKernel(kernel, factorIdx, problem,
-                            epilogueParams, execMode);
+
+    CUDA_CHECK(status);
+    double endTime = getCurrTime();
+
+    if (status != cudaSuccess) {
+      std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
+      return status;
     }
+
+    runtime = std::min((float)((endTime - startTime)/1e3)/runs, runtime);
   }
-
-  CUDA_CHECK(status);
-  double endTime = getCurrTime();
-
-  if (status != cudaSuccess) {
-    std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
-    return status;
-  }
-
-  runtime = ((endTime - startTime)/1e3)/runs;
   
   return status;
 }

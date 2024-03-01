@@ -252,7 +252,8 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
-      TilePs = [min(p, 32)] + [i for i in factors(p) if i > 32]
+      MinTile = 16 if backend == 'x86' else 32
+      TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
@@ -432,6 +433,7 @@ if __name__ == "__main__":
   print("Generating kernels for ", parsed_cases)
   assert args.opX in ["N", "T"]
   assert args.opF in ["N", "T"]
+  print(args.match_configs)
   assert (args.match_configs == None and args.match_configs_file == None) or \
          (args.match_configs != None and args.match_configs_file == None) or \
          (args.match_configs == None and args.match_configs_file != None)

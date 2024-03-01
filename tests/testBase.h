@@ -574,6 +574,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       } else if (backend == fastKronBackend_X86) {
         double endtime = getCurrTime();
         elapsedTime = std::min(elapsedTime, (float)(endtime - starttime)/1000.0f);
+        printf("elapsedTime %f\n", elapsedTime);
       }
     }
 
