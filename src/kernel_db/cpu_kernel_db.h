@@ -4,6 +4,7 @@
 #include "kernel_db/kernel_db.h"
 
 class CPUKernelDatabase : public KernelDatabase {
+  char* trash1, *trash2;
 
 public:
   CPUKernelDatabase();

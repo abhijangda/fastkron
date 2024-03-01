@@ -542,21 +542,36 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //Run
     double starttime = 0.0f;
     if (verbose) printf("run\n");
+    uint32_t l3CacheSize = 384*1024*1024;
+    float* cpuL3Trash1 = new float[l3CacheSize/4];
+    float* cpuL3Trash2 = new float[l3CacheSize/4];
+    if (backend == fastKronBackend_X86)
+      setMatrix(cpuL3Trash1, l3CacheSize/4, 1, setToI);
+    
     for (int sample = 0; sample < 5; sample++) {
       if (backend == fastKronBackend_CUDA) {
         for (int g = 0; g < gpus; g++) {
           CUDACHECK(cudaSetDevice(g));
           CUDACHECK(cudaEventRecord(start[g], stream[g]));
         }
-      } else if (backend == fastKronBackend_X86) {
-        starttime = getCurrTime();
       }
+      elapsedTime = 0.0f;
       for (uint i = 0; i < numIters; i++) {
         //printf("iter i %d\n", i);
+        if (backend == fastKronBackend_X86) 
+          memcpy(cpuL3Trash2, cpuL3Trash1, l3CacheSize);
+        if (backend == fastKronBackend_X86) {
+          starttime = getCurrTime();
+        }
         if (useDistributed) {
           kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
         } else {
           kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
+        }
+        if (backend == fastKronBackend_X86) {
+          double endtime = getCurrTime();
+          elapsedTime += (float)(endtime - starttime)/1000.0f;
+          // printf("elapsedTime %f starttime %f endtime %f\n", elapsedTime, starttime, endtime);
         }
       }
       printf("405\n");
@@ -572,8 +587,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
           }
         }
       } else if (backend == fastKronBackend_X86) {
-        double endtime = getCurrTime();
-        elapsedTime = std::min(elapsedTime, (float)(endtime - starttime)/1000.0f);
+        // double endtime = getCurrTime();
+        // elapsedTime = std::min(elapsedTime, (float)(endtime - starttime)/1000.0f);
         printf("elapsedTime %f\n", elapsedTime);
       }
     }

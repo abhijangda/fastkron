@@ -13,6 +13,11 @@ CPUKernel AllX86Kernels[] = {
 
 CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {
   loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(CPUKernel));
+  trash1 = new char[l3CacheSize()];
+  trash2 = new char[l3CacheSize()];
+  for (int i = 0; i < l3CacheSize(); i++) {
+    trash1[i] = i % std::numeric_limits<char>::max();
+  }
 }
 
 template<uint NumFusedKerns>
@@ -93,8 +98,11 @@ cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorI
   runtime = std::numeric_limits<float>::max();
   cudaError_t status;
   for (int sample = 0; sample < 10; sample++) {
-    double startTime = getCurrTime();
+    float avgtime = 0;
     for (int r = 0; r < runs; r++) {
+      if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3CacheSize())
+        trashL3Cache(trash1, trash2);
+      double startTime = getCurrTime();
       if (distP2PStore) {
         status = invokeP2PStoreKernel(kernel, factorIdx, problem,
                                       distParams, epilogueParams, execMode);
@@ -102,17 +110,17 @@ cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorI
         status = invokeKernel(kernel, factorIdx, problem,
                               epilogueParams, execMode);
       }
+      double endTime = getCurrTime();
+      CUDA_CHECK(status);
+      avgtime += (float)((endTime - startTime)/1e3);
     }
-
-    CUDA_CHECK(status);
-    double endTime = getCurrTime();
 
     if (status != cudaSuccess) {
       std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
       return status;
     }
 
-    runtime = std::min((float)((endTime - startTime)/1e3)/runs, runtime);
+    runtime = std::min(avgtime/runs, runtime);
   }
   
   return status;

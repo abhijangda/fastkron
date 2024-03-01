@@ -141,7 +141,9 @@ class CPUKernel(Kernel):
                self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen
+           self.rq <= AVXLen 
+          #  and \
+          #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
 class CUDAKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
@@ -252,7 +254,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
-      MinTile = 16 if backend == 'x86' else 32
+      MinTile = 32 if backend == 'x86' else 32
       TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)

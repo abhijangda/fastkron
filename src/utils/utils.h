@@ -2,6 +2,7 @@
 
 #include <sys/time.h>
 #include <time.h>
+#include <cstring>
 
 #pragma once
 
@@ -86,4 +87,12 @@ template<typename T>
 static void memset(T* ptr, size_t nelem, T val) {
   for (int i = 0; i < nelem; i++)
     ptr[i] = val;
+}
+
+static uint l3CacheSize() {
+  return 384*1024*1024;
+}
+
+static void trashL3Cache(char* trash1, char* trash2) {
+  memcpy(trash1, trash2, l3CacheSize());
 }

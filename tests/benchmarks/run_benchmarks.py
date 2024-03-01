@@ -129,14 +129,15 @@ class FastKronEval:
 
 def run_nn(device):
   device = device.lower()
-  M = 1024
+  M = 1024 if device == "cuda" else 256
+  M2 = 320 if device == "cuda" else 128
   cases = [
           Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
           Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
           Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
           Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
           Shape(M, 2, 128, 128), 
-          Shape(320, 3, 128, 128)]
+          Shape(M2, 3, 128, 128)]
 
   M = 16
   cases += [Shape(M, 8, 8, 8),
