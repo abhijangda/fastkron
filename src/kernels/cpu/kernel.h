@@ -168,40 +168,56 @@ void cpuKernel(KernelParams<FusedFacs> params,
             }}}
           }
 
-          for (uint32_t p = 0; p < TileP; p++) {
-            __m256 XReg[VecRegM][VecRegK];
-            __m256 FReg[VecRegQ];
+          if (VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
+            for (uint32_t p = 0; p < TileP; p+=2) {
+              {
+                ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
+                __m256 x0 = _mm256_loadu_ps(xptr);
+                __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
 
-            if (VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
-              ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
-              __m256 x0 = _mm256_loadu_ps(xptr);
-              __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
-
-              ElemT* fptr = &TileF[p][q];
-              __m256 f0 = _mm256_broadcast_ss(fptr);
-              __m256 f1 = _mm256_broadcast_ss(fptr + 1);
-              __m256 f2 = _mm256_broadcast_ss(fptr + 2);
-              __m256 f3 = _mm256_broadcast_ss(fptr + 3);
+                ElemT* fptr = &TileF[p][q];
+                __m256 f0 = _mm256_broadcast_ss(fptr);
+                __m256 f1 = _mm256_broadcast_ss(fptr + 1);
+                __m256 f2 = _mm256_broadcast_ss(fptr + 2);
+                __m256 f3 = _mm256_broadcast_ss(fptr + 3);
 
 
-              yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
-              yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
-              yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
-              yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
-              yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
-              yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
-              yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
-              yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+                yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
+                yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
+                yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
+                yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
+                yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
+                yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
+                yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
+                yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+              }
+              {
+                ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0];
+                __m256 x0 = _mm256_loadu_ps(xptr);
+                __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
 
-              // yReg[0][0][0] = y00;
-              // yReg[0][0][1] = y01;
-              // yReg[0][0][2] = y02;
-              // yReg[0][0][3] = y03;
-              // yReg[0][1][0] = y10;
-              // yReg[0][1][1] = y11;
-              // yReg[0][1][2] = y12;
-              // yReg[0][1][3] = y13;
-            } else {
+                ElemT* fptr = &TileF[p + 1][q];
+                __m256 f0 = _mm256_broadcast_ss(fptr);
+                __m256 f1 = _mm256_broadcast_ss(fptr + 1);
+                __m256 f2 = _mm256_broadcast_ss(fptr + 2);
+                __m256 f3 = _mm256_broadcast_ss(fptr + 3);
+
+
+                yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
+                yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
+                yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
+                yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
+                yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
+                yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
+                yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
+                yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+
+              }
+            }
+          } else {
+            for (uint32_t p = 0; p < TileP; p++) {
+              __m256 XReg[VecRegM][VecRegK];
+              __m256 FReg[VecRegQ];
               #pragma unroll
               for (uint32_t em = 0; em < VecRegM; em++) {
                 #pragma unroll
