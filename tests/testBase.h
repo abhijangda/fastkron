@@ -405,7 +405,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   fastKronHandle handle;
@@ -555,7 +555,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
           CUDACHECK(cudaEventRecord(start[g], stream[g]));
         }
       }
-      elapsedTime = 0.0f;
+      float iterTime = 0.0f;
       for (uint i = 0; i < numIters; i++) {
         //printf("iter i %d\n", i);
         if (backend == fastKronBackend_X86) 
@@ -570,7 +570,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         }
         if (backend == fastKronBackend_X86) {
           double endtime = getCurrTime();
-          elapsedTime += (float)(endtime - starttime)/1000.0f;
+          iterTime += (float)(endtime - starttime)/1000.0f;
           // printf("elapsedTime %f starttime %f endtime %f\n", elapsedTime, starttime, endtime);
         }
       }
@@ -588,7 +588,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         }
       } else if (backend == fastKronBackend_X86) {
         // double endtime = getCurrTime();
-        // elapsedTime = std::min(elapsedTime, (float)(endtime - starttime)/1000.0f);
+        elapsedTime = std::min(elapsedTime, iterTime);
         printf("elapsedTime %f\n", elapsedTime);
       }
     }
