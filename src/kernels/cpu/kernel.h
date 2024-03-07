@@ -41,7 +41,7 @@ inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
-         fastKronOp OpX, fastKronOp OpF>
+         int XAlignment, int FAlignment, fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,
                FusedParams<FusedFacs> fusedParams,
                DistributedParams distParams,
@@ -69,7 +69,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
   const uint32_t VectorLen = 8; //AVX256 length
 
-  static_assert(RegK % VectorLen == 0);
+  static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
   static_assert(TileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
   assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q));
@@ -86,11 +86,13 @@ void cpuKernel(KernelParams<FusedFacs> params,
   //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
   static ElemT* TileYs[96] = {nullptr};
+  static ElemT* TileFs[96] = {nullptr};
 
   if (TileXs[0] == nullptr) {
     for (int i = 0; i < 96; i++)  {
-      TileXs[i] = (ElemT*)aligned_alloc(8192, SzTileX * sizeof(ElemT));
-      TileYs[i] = (ElemT*)aligned_alloc(8192, TileM * TileQ * TileK/P * sizeof(ElemT));
+      TileXs[i] = (ElemT*)aligned_alloc(4096, SzTileX * sizeof(ElemT));
+      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * TileK/P * sizeof(ElemT));
+      TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
     }
   }
 
@@ -140,11 +142,11 @@ void cpuKernel(KernelParams<FusedFacs> params,
           }
         }
 
-        ElemT TileF[TileP][TileQ];
+        ElemT* TileF = TileFs[tid]; //[TileP][TileQ];
         Factor F = params.problem.f(fac);
 
         for (int p = 0; p < TileP; p++) {
-          memcpy(&TileF[p][0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+          memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
         }
         
         for (uint32_t m = 0; m < XTile.m(); m += RegM) {
@@ -169,18 +171,19 @@ void cpuKernel(KernelParams<FusedFacs> params,
           }
 
           if (VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
-            for (uint32_t p = 0; p < TileP; p+=2) {
+            for (uint32_t p = 0; p < TileP; p += 2) {
               {
                 ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
                 __m256 x0 = _mm256_loadu_ps(xptr);
                 __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
 
-                ElemT* fptr = &TileF[p][q];
+                ElemT* fptr = &TileF[p*TileQ + q];
                 __m256 f0 = _mm256_broadcast_ss(fptr);
                 __m256 f1 = _mm256_broadcast_ss(fptr + 1);
                 __m256 f2 = _mm256_broadcast_ss(fptr + 2);
                 __m256 f3 = _mm256_broadcast_ss(fptr + 3);
 
+                _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
 
                 yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
                 yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
@@ -196,12 +199,16 @@ void cpuKernel(KernelParams<FusedFacs> params,
                 __m256 x0 = _mm256_loadu_ps(xptr);
                 __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
 
-                ElemT* fptr = &TileF[p + 1][q];
+                ElemT* fptr = &TileF[(p + 1)*TileQ + q];
                 __m256 f0 = _mm256_broadcast_ss(fptr);
                 __m256 f1 = _mm256_broadcast_ss(fptr + 1);
                 __m256 f2 = _mm256_broadcast_ss(fptr + 2);
                 __m256 f3 = _mm256_broadcast_ss(fptr + 3);
 
+                if (p + 2 < TileP) {
+                  _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 2) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
+                  _mm_prefetch(fptr + 4, _MM_HINT_T1);
+                }
 
                 yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
                 yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
@@ -227,7 +234,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
               #pragma unroll
               for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-                FReg[rq] = _mm256_broadcast_ss(&TileF[p][q+rq]);
+                FReg[rq] = _mm256_broadcast_ss(&TileF[p*TileQ + q + rq]);
               }
 
               #pragma unroll

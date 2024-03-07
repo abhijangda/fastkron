@@ -162,7 +162,7 @@ public:
   }
 
   friend std::ostream& operator<<(std::ostream &out, const KMMProblemT &problem) {
-    out << problem.x().m() << "*(";
+    out << problem.x().m() << "x" << problem.k() << "*(";
     if (problem.sameFactorShapes()) 
       out << problem.factors[0] << "^" << problem.n();
     else

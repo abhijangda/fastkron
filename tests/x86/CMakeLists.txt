@@ -21,7 +21,7 @@ add_custom_target(gen-x86-TT-kernels
 )
 target_include_directories(x86-TT-tests PRIVATE ${TESTS_INCLUDES})
 target_link_libraries(x86-TT-tests ${TESTS_LIBS})
-target_compile_definitions(x86-TT-tests PRIVATE ${CUDA_TEST_DEFINE})
+target_compile_definitions(x86-TT-tests PRIVATE ${X86_TEST_DEFINE})
 
 add_executable(x86-non-square-tests ${TEST_SRC}/non-square-tuner-tests.cpp)
 add_custom_target(gen-x86-non-square-kernels
@@ -53,4 +53,4 @@ add_custom_target(gen-x86-odd-shapes
 )
 target_include_directories(x86-odd-shapes PRIVATE ${TESTS_INCLUDES})
 target_link_libraries(x86-odd-shapes ${TESTS_LIBS})
-target_compile_definitions(x86-odd-shapes PRIVATE ${CUDA_TEST_DEFINE})
+target_compile_definitions(x86-odd-shapes PRIVATE ${X86_TEST_DEFINE})

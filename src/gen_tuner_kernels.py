@@ -93,8 +93,10 @@ class Kernel:
 class CPUKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int, rk: int, rq: int,
-               FusedKernel : int, dist: int, elemType : str, allPowersOf2: int, opX : str, opF : str):
+               FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str):
     super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, rk, rq, allPowersOf2, opX, opF)
+    self.aalign = aalign
+    self.kalign = kalign
 
   def __repr__(self):
     return f"{self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.dist}, {self.elemType}, {self.opX}, {self.opF}"
@@ -103,7 +105,7 @@ class CPUKernel(Kernel):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"float, float2, float4, {self.shape.p}, {self.shape.q}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
@@ -132,7 +134,7 @@ class CPUKernel(Kernel):
     return self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
-           self.rk % AVXLen == 0 and \
+           (self.aalign != 8 or (self.aalign == 8 and self.rk % AVXLen == 0)) and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
               (self.fused_kernels > 1 and self.shape.p == self.tileP and \
@@ -232,10 +234,10 @@ def xalignment(m, cols, op):
     #TODO: Return Alignment based on TileM and M
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return max([a for a in [1, 2, 4] if cols % a == 0])
+    return max([a for a in [1, 2, 4, 8] if cols % a == 0])
 
 def falignment(cols):
-  return max([a for a in [1, 2, 4] if cols % a == 0])
+  return max([a for a in [1, 2, 4, 8] if cols % a == 0])
 
 def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend):
   global kernel_dir
@@ -277,9 +279,10 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                 for tP in TilePs:
                   fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
                   for numFusedKerns in fusedCases:
+                    aalign = xalignment(tM, tK, opX)
+                    kronalign = falignment(tQ)
+                      
                     if backend == 'cuda':
-                      aalign = xalignment(tM, tK, opX)
-                      kronalign = falignment(tQ)
                       for kEqVar in [0]:
                           distKernels = [0, 1] if useDistKernels else [0]
                           for dist in distKernels: 
@@ -291,7 +294,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                       dist = 0
                       __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q), 
                                               p, q, tQ, tP, tM, regRows, regCols, numFusedKerns, 
-                                              dist, "Float", allSameShapes, opx, opF)]
+                                              dist, "Float", aalign, kronalign, allSameShapes, opx, opF)]
 
       configs[shape] += __configs
 
