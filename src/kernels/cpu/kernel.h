@@ -38,6 +38,165 @@ inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3
   row7 = _mm256_permute2f128_ps(__tt3, __tt7, 0x31);
 }
 
+template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
+         uint TileP, uint TileQ, uint TileK,
+         uint TileM, uint FusedFacs, uint RegK, uint RegQ,
+         typename SliceX>
+__attribute__((always_inline)) static inline
+void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
+  //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
+  if (VectorLen == 1) {
+
+  } else if (VectorLen == 8) {
+    const uint32_t RegM = TileM;
+    const uint32_t VecRegK = RegK/VectorLen;
+    const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
+    const uint32_t VecRegQ = RegQ;
+
+    __m256 yReg[VecRegM][VecRegQ][VecRegK];
+
+    if (tileP == 0) {
+      for (uint32_t ym = 0; ym < VecRegM; ym++) {
+      for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+      for (uint32_t yk = 0; yk < VecRegK; yk++) {
+        yReg[ym][yq][yk] =  _mm256_setzero_ps();
+      }}}
+    } else {
+      for (uint32_t ym = 0; ym < VecRegM; ym++) {
+      for (uint32_t yk = 0; yk < VecRegK; yk++) {
+      for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+        yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
+      }}}
+    }
+
+    if (VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
+      for (uint32_t p = 0; p < TileP; p += 2) {
+        {
+          ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
+          __m256 x0 = _mm256_loadu_ps(xptr);
+          __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
+
+          ElemT* fptr = &TileF[p*TileQ + q];
+          __m256 f0 = _mm256_broadcast_ss(fptr);
+          __m256 f1 = _mm256_broadcast_ss(fptr + 1);
+          __m256 f2 = _mm256_broadcast_ss(fptr + 2);
+          __m256 f3 = _mm256_broadcast_ss(fptr + 3);
+
+          _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
+
+          yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
+          yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
+          yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
+          yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
+          yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
+          yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
+          yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
+          yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+        }
+        {
+          ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0];
+          __m256 x0 = _mm256_loadu_ps(xptr);
+          __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
+
+          ElemT* fptr = &TileF[(p + 1)*TileQ + q];
+          __m256 f0 = _mm256_broadcast_ss(fptr);
+          __m256 f1 = _mm256_broadcast_ss(fptr + 1);
+          __m256 f2 = _mm256_broadcast_ss(fptr + 2);
+          __m256 f3 = _mm256_broadcast_ss(fptr + 3);
+
+          if (p + 2 < TileP) {
+            _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 2) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
+            _mm_prefetch(fptr + 4, _MM_HINT_T1);
+          }
+
+          yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
+          yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
+          yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
+          yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
+          yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
+          yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
+          yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
+          yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+
+        }
+      }
+    } else {
+      for (uint32_t p = 0; p < TileP; p++) {
+        __m256 XReg[VecRegM][VecRegK];
+        __m256 FReg[VecRegQ];
+        #pragma unroll
+        for (uint32_t em = 0; em < VecRegM; em++) {
+          #pragma unroll
+          for (uint32_t ek = 0; ek < VecRegK; ek++) {
+            XReg[em][ek] = _mm256_loadu_ps(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
+        }}
+
+        #pragma unroll
+        for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+          FReg[rq] = _mm256_broadcast_ss(&TileF[p*TileQ + q + rq]);
+        }
+
+        #pragma unroll
+        for (uint32_t rm = 0; rm < VecRegM; rm++) {
+        #pragma unroll
+        for (uint32_t rk = 0; rk < VecRegK; rk++) {
+        #pragma unroll
+        for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+          yReg[rm][rq][rk] = _mm256_fmadd_ps(XReg[rm][rk], FReg[rq], yReg[rm][rq][rk]);
+        }}}
+      }
+    }
+
+    if (tileP < P - TileP) {
+      for (uint32_t ym = 0; ym < VecRegM; ym++) {
+      for (uint32_t yq = 0; yq < VecRegQ; yq++) {
+      for (uint32_t yk = 0; yk < VecRegK; yk++) {
+        _mm256_storeu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
+      }}}
+    } else {
+      const uint32_t XTileSlices = TileK/P;
+      const uint32_t XSlices     = K/P;
+
+      for (uint32_t rm = 0; rm < VecRegM; rm++) {
+      for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+      for (uint32_t rk = 0; rk < VecRegK; rk++) {
+        __m256 reg = yReg[rm][rq][rk];
+        const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
+        if (fac > 0) {
+          if (m + rm < XTile.m()) {
+            // ElemT b[8]; _mm256_storeu_ps(b, reg); printf("%f %f %f %f\n", b[0], b[1], b[2], b[3]);
+            _mm256_storeu_ps(&tileBuff[(m+rm)*TileK + cacheK], reg);
+          }
+        } else {
+          //TODO: Need to fix
+          uint32_t memK;
+          if (FusedFacs > 1) {
+            uint32_t xshCol = cacheK;
+            //Scale shared mem slice idx to global mem idx
+            uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
+            //Scale shared fused slice to global mem
+            uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
+            //Elem idx in Fused Slice
+            uint32_t elem = (tileK/TileK) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
+            memK = glSlice + sliceElem + elem; 
+          } else {
+            memK = (cacheK/XTileSlices) * XSlices +
+                    (tileK/TileK) * XTileSlices +
+                    cacheK % XTileSlices;
+
+            if (TileQ != Q) {
+              const uint32_t QTiles = Q/TileQ;
+              memK += (tileQ/TileQ) * (Y.n()/QTiles);
+            }
+          }
+          if (m + rm < XTile.m())
+            _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
+        }
+      }}}
+    }
+  }
+}
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
@@ -67,7 +226,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t XRegs = RegM * RegK;
   const uint32_t FRegs = RegQ;
 
-  const uint32_t VectorLen = 8; //AVX256 length
+  const uint32_t VectorLen = (XAlignment < 8) ? 1 : 8; //AVX256 length
 
   static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
   static_assert(TileK % RegK == 0);
@@ -75,10 +234,6 @@ void cpuKernel(KernelParams<FusedFacs> params,
   assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q));
   //For Transpose load loop to TileX
   assert ((TileK/P) % VectorLen == 0);
-
-  const uint32_t VecRegK = RegK/VectorLen;
-  const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
-  const uint32_t VecRegQ = RegQ;
 
   uint threads = omp_get_max_threads();
   
@@ -152,149 +307,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
         for (uint32_t m = 0; m < XTile.m(); m += RegM) {
         for (uint32_t q = 0; q < TileQ; q += RegQ) {
         for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
-          //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
-          __m256 yReg[VecRegM][VecRegQ][VecRegK];
-
-          if (tileP == 0) {
-            // YRegisters<ElemT, > yReg;
-            for (uint32_t ym = 0; ym < VecRegM; ym++) {
-            for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-            for (uint32_t yk = 0; yk < VecRegK; yk++) {
-              yReg[ym][yq][yk] =  _mm256_setzero_ps();
-            }}}
-          } else {
-            for (uint32_t ym = 0; ym < VecRegM; ym++) {
-            for (uint32_t yk = 0; yk < VecRegK; yk++) {
-            for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-              yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
-            }}}
-          }
-
-          if (VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
-            for (uint32_t p = 0; p < TileP; p += 2) {
-              {
-                ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
-                __m256 x0 = _mm256_loadu_ps(xptr);
-                __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
-
-                ElemT* fptr = &TileF[p*TileQ + q];
-                __m256 f0 = _mm256_broadcast_ss(fptr);
-                __m256 f1 = _mm256_broadcast_ss(fptr + 1);
-                __m256 f2 = _mm256_broadcast_ss(fptr + 2);
-                __m256 f3 = _mm256_broadcast_ss(fptr + 3);
-
-                _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
-
-                yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
-                yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
-                yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
-                yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
-                yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
-                yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
-                yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
-                yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
-              }
-              {
-                ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0];
-                __m256 x0 = _mm256_loadu_ps(xptr);
-                __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
-
-                ElemT* fptr = &TileF[(p + 1)*TileQ + q];
-                __m256 f0 = _mm256_broadcast_ss(fptr);
-                __m256 f1 = _mm256_broadcast_ss(fptr + 1);
-                __m256 f2 = _mm256_broadcast_ss(fptr + 2);
-                __m256 f3 = _mm256_broadcast_ss(fptr + 3);
-
-                if (p + 2 < TileP) {
-                  _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 2) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
-                  _mm_prefetch(fptr + 4, _MM_HINT_T1);
-                }
-
-                yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
-                yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
-                yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
-                yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
-                yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
-                yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
-                yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
-                yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
-
-              }
-            }
-          } else {
-            for (uint32_t p = 0; p < TileP; p++) {
-              __m256 XReg[VecRegM][VecRegK];
-              __m256 FReg[VecRegQ];
-              #pragma unroll
-              for (uint32_t em = 0; em < VecRegM; em++) {
-                #pragma unroll
-                for (uint32_t ek = 0; ek < VecRegK; ek++) {
-                  XReg[em][ek] = _mm256_loadu_ps(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
-              }}
-
-              #pragma unroll
-              for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-                FReg[rq] = _mm256_broadcast_ss(&TileF[p*TileQ + q + rq]);
-              }
-
-              #pragma unroll
-              for (uint32_t rm = 0; rm < VecRegM; rm++) {
-              #pragma unroll
-              for (uint32_t rk = 0; rk < VecRegK; rk++) {
-              #pragma unroll
-              for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-                yReg[rm][rq][rk] = _mm256_fmadd_ps(XReg[rm][rk], FReg[rq], yReg[rm][rq][rk]);
-              }}}
-            }
-          }
-
-          if (tileP < P - TileP) {
-            for (uint32_t ym = 0; ym < VecRegM; ym++) {
-            for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-            for (uint32_t yk = 0; yk < VecRegK; yk++) {
-              _mm256_storeu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
-            }}}
-          } else {
-            const uint32_t XTileSlices = TileK/P;
-            const uint32_t XSlices     = K/P;
-
-            for (uint32_t rm = 0; rm < VecRegM; rm++) {
-            for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-            for (uint32_t rk = 0; rk < VecRegK; rk++) {
-              __m256 reg = yReg[rm][rq][rk];
-              const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
-              if (fac > 0) {
-                if (m + rm < XTile.m()) {
-                  // ElemT b[8]; _mm256_storeu_ps(b, reg); printf("%f %f %f %f\n", b[0], b[1], b[2], b[3]);
-                  _mm256_storeu_ps(&tileBuff[(m+rm)*TileK + cacheK], reg);
-                }
-              } else {
-                //TODO: Need to fix
-                uint32_t memK;
-                if (FusedFacs > 1) {
-                  uint32_t xshCol = cacheK;
-                  //Scale shared mem slice idx to global mem idx
-                  uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
-                  //Scale shared fused slice to global mem
-                  uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
-                  //Elem idx in Fused Slice
-                  uint32_t elem = (tileK/TileK) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
-                  memK = glSlice + sliceElem + elem; 
-                } else {
-                  memK = (cacheK/XTileSlices) * XSlices +
-                          (tileK/TileK) * XTileSlices +
-                          cacheK % XTileSlices;
-
-                  if (TileQ != Q) {
-                    const uint32_t QTiles = Q/TileQ;
-                    memK += (tileQ/TileQ) * (Y.n()/QTiles);
-                  }
-                }
-                if (m + rm < XTile.m())
-                  _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
-              }
-            }}}
-          }
+          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, TileK, TileM, FusedFacs, RegK, RegQ>(tileM, tileK, tileP, tileQ,
+          m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
         }}}
       }
     }
