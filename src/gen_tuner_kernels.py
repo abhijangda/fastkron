@@ -55,14 +55,15 @@ class KronMatMulShape:
 WARP_SIZE=32
 
 class Kernel:
-  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int, 
+  def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int, 
                FusedKernel : int, dist: int, elemType : str, rk : int, rq : int, allPowersOf2: int, opX : str, opF : str):
     self.shape = shape
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
     self.tileQ = tileQ
     self.tileP = tileP
-    self.tileM = tileM 
+    self.tileM = tileM
+    self.problem = problem
     self.opX = opX
     self.opF = opF
     self.fused_kernels = FusedKernel
@@ -91,10 +92,10 @@ class Kernel:
     return hash(repr(self))
 
 class CPUKernel(Kernel):
-  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int,
+  def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int, rk: int, rq: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str):
-    super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, rk, rq, allPowersOf2, opX, opF)
+    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, rk, rq, allPowersOf2, opX, opF)
     self.aalign = aalign
 
     self.kalign = kalign
@@ -134,7 +135,11 @@ class CPUKernel(Kernel):
     AVXLen = 8
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
-    cond = (((self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0))
+    cond = ((not isPowerOfTwo(self.problem.k) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0))
+    if self.shape.p >= 32 and self.shape.q >= 32:
+      #15 YMM Registers. 
+      cond = cond and self.rk == min(16, self.shape.k//self.shape.p) and self.rq == min(4, self.tileQ)
+
     return cond and self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
@@ -151,7 +156,7 @@ class CPUKernel(Kernel):
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
 class CUDAKernel(Kernel):
-  def __init__(self, shape : KronMatMulShape, kron_rows : int, kron_cols : int, 
+  def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
@@ -290,12 +295,14 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                           distKernels = [0, 1] if useDistKernels else [0]
                           for dist in distKernels: 
                             __configs += [CUDAKernel(KronMatMulShape(m, tK, n, p, q), 
+                                                     KronMatMulShape(m, k, n, ps, qs),
                                                     p, q, tQ, tP, tM, regRows, regCols,
                                                     numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
                                                     opx, opF)]
                     elif backend == 'x86':
                       dist = 0
-                      __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q), 
+                      __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q),
+                                              KronMatMulShape(m, k, n, ps, qs),
                                               p, q, tQ, tP, tM, regRows, regCols, numFusedKerns, 
                                               dist, "Float", aalign, kronalign, allSameShapes, opx, opF)]
 
