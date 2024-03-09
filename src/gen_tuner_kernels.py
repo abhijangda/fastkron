@@ -96,6 +96,7 @@ class CPUKernel(Kernel):
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str):
     super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, rk, rq, allPowersOf2, opX, opF)
     self.aalign = aalign
+
     self.kalign = kalign
 
   def __repr__(self):
@@ -130,11 +131,12 @@ class CPUKernel(Kernel):
             constructor.replace("float", "ElementType::Float") + "}"
 
   def isValid(self):
+    print(self.kalign, self.aalign, self.shape.k , self.rk)
     AVXLen = 8
     return self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
-           ((self.aalign != 8 and self.rk*self.rq < 8) or (self.aalign == 8 and self.rk % AVXLen == 0)) and \
+           (((self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0)) and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
               (self.fused_kernels > 1 and self.shape.p == self.tileP and \
@@ -305,6 +307,8 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   for k in configs:
     validConfigs[k] = []
     for config in configs[k]:
+      if config.rk ==1:
+        print(config, config.isValid())
       if config.isValid():
         validConfigs[k] += [config]
   
@@ -438,13 +442,15 @@ if __name__ == "__main__":
   print("Generating kernels for ", parsed_cases)
   assert args.opX in ["N", "T"]
   assert args.opF in ["N", "T"]
-  print(args.match_configs)
+  if args.match_configs != None:
+    assert type(args.match_configs) == list and len(args.match_configs) == 1
   assert (args.match_configs == None and args.match_configs_file == None) or \
          (args.match_configs != None and args.match_configs_file == None) or \
          (args.match_configs == None and args.match_configs_file != None)
 
   match_configs = args.match_configs[0] if args.match_configs != None else []
-  if args.match_configs_file != None:
+
+  if args.match_configs_file != None and match_configs != []:
     contents = slurp(args.match_configs_file)
     match_configs = contents.split('\n')
   generate_kernel_decls(parsed_cases, args.opX, args.opF, not args.no_fuse, args.dist_kernels,

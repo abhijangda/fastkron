@@ -8,35 +8,12 @@
 
 #pragma once
 
-// https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
-inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3, __m256 &row4, __m256 &row5, __m256 &row6, __m256 &row7) {
-  __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
-  __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
-  __t0 = _mm256_unpacklo_ps(row0, row1);
-  __t1 = _mm256_unpackhi_ps(row0, row1);
-  __t2 = _mm256_unpacklo_ps(row2, row3);
-  __t3 = _mm256_unpackhi_ps(row2, row3);
-  __t4 = _mm256_unpacklo_ps(row4, row5);
-  __t5 = _mm256_unpackhi_ps(row4, row5);
-  __t6 = _mm256_unpacklo_ps(row6, row7);
-  __t7 = _mm256_unpackhi_ps(row6, row7);
-  __tt0 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(1,0,1,0));
-  __tt1 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(3,2,3,2));
-  __tt2 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(1,0,1,0));
-  __tt3 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(3,2,3,2));
-  __tt4 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(1,0,1,0));
-  __tt5 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(3,2,3,2));
-  __tt6 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(1,0,1,0));
-  __tt7 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(3,2,3,2));
-  row0 = _mm256_permute2f128_ps(__tt0, __tt4, 0x20);
-  row1 = _mm256_permute2f128_ps(__tt1, __tt5, 0x20);
-  row2 = _mm256_permute2f128_ps(__tt2, __tt6, 0x20);
-  row3 = _mm256_permute2f128_ps(__tt3, __tt7, 0x20);
-  row4 = _mm256_permute2f128_ps(__tt0, __tt4, 0x31);
-  row5 = _mm256_permute2f128_ps(__tt1, __tt5, 0x31);
-  row6 = _mm256_permute2f128_ps(__tt2, __tt6, 0x31);
-  row7 = _mm256_permute2f128_ps(__tt3, __tt7, 0x31);
-}
+template<uint32_t VectorLen> class FloatVectorType;
+
+template<uint32_t VectorLen>
+inline void transpose(FloatVectorType<VectorLen> rows[VectorLen]) {}
+template<> 
+inline void transpose(FloatVectorType<8> rows[8]);
 
 template<uint32_t VectorLen>
 class FloatVectorType 
@@ -47,6 +24,7 @@ public:
   void zero();
   void broadcast(const float* ptr);
   void fmadd(FloatVectorType<VectorLen>& a, FloatVectorType<VectorLen>& b);
+  friend void transpose<VectorLen>(FloatVectorType<VectorLen>[VectorLen]);
 };
 
 template<>
@@ -74,6 +52,8 @@ public:
   void fmadd(FloatVectorType<8>& a, FloatVectorType<8>& b) {
     data = _mm256_fmadd_ps(a.data, b.data, data);
   }
+
+  friend void transpose<8>(FloatVectorType<8>[8]);
 };
 
 template<>
@@ -101,7 +81,40 @@ public:
   void fmadd(FloatVectorType<1>& a, FloatVectorType<1>& b) {
     data = a.data*b.data + data;
   }
+  
+  friend void transpose<1>(FloatVectorType<1>[8]);
 };
+
+// https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
+template<>
+inline void transpose(FloatVectorType<8> rows[8]) {
+  __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
+  __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
+  __t0 = _mm256_unpacklo_ps(rows[0].data, rows[1].data);
+  __t1 = _mm256_unpackhi_ps(rows[0].data, rows[1].data);
+  __t2 = _mm256_unpacklo_ps(rows[2].data, rows[3].data);
+  __t3 = _mm256_unpackhi_ps(rows[2].data, rows[3].data);
+  __t4 = _mm256_unpacklo_ps(rows[4].data, rows[5].data);
+  __t5 = _mm256_unpackhi_ps(rows[4].data, rows[5].data);
+  __t6 = _mm256_unpacklo_ps(rows[6].data, rows[7].data);
+  __t7 = _mm256_unpackhi_ps(rows[6].data, rows[7].data);
+  __tt0 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(1,0,1,0));
+  __tt1 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(3,2,3,2));
+  __tt2 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(1,0,1,0));
+  __tt3 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(3,2,3,2));
+  __tt4 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(1,0,1,0));
+  __tt5 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(3,2,3,2));
+  __tt6 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(1,0,1,0));
+  __tt7 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(3,2,3,2));
+  rows[0].data = _mm256_permute2f128_ps(__tt0, __tt4, 0x20);
+  rows[1].data = _mm256_permute2f128_ps(__tt1, __tt5, 0x20);
+  rows[2].data = _mm256_permute2f128_ps(__tt2, __tt6, 0x20);
+  rows[3].data = _mm256_permute2f128_ps(__tt3, __tt7, 0x20);
+  rows[4].data = _mm256_permute2f128_ps(__tt0, __tt4, 0x31);
+  rows[5].data = _mm256_permute2f128_ps(__tt1, __tt5, 0x31);
+  rows[6].data = _mm256_permute2f128_ps(__tt2, __tt6, 0x31);
+  rows[7].data = _mm256_permute2f128_ps(__tt3, __tt7, 0x31);
+}
 
 template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint TileK,
@@ -293,9 +306,9 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t XRegs = RegM * RegK;
   const uint32_t FRegs = RegQ;
 
-  const uint32_t VectorLen = (XAlignment < 8) ? 1 : 8; //AVX256 length
-
-  static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
+  const uint32_t VectorLen = (XAlignment == 8 && RegK >= 8) ? 8 : 1; //AVX256 length
+  
+  // static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
   static_assert(TileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
   assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q));
@@ -345,10 +358,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
                 slices[sliceIdx].load(ptr);
               }
 
-              
-              // transpose8_ps(slices[0], slices[1], slices[2], 
-              //               slices[3], slices[4], slices[5],
-              //               slices[6], slices[7]);
+              transpose<VectorLen>(slices);
 
               for (uint32_t pp = 0; pp < VectorLen; pp++) {
                 slices[pp].store(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P]);

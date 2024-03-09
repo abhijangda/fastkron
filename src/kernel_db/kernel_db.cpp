@@ -10,18 +10,14 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   const uint warmups = 5;
   KernelInfo* bestKernel;
   float minTime;
-  bool foundProblem = false;
   std::vector<KernelInfo*> allKernels;
 
   minTime = std::numeric_limits<float>::max();
 
+  std::cout << "Tuning for shape "  << problem << std::endl;
   if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
   for (auto kernel : allKernels) {
     if (!kernel->canCompute(problem, distP2PStore)) continue;
-    if (!foundProblem) {
-      std::cout << "Tuning for shape "  << problem << std::endl;
-      foundProblem = true;
-    }
     std::cout << kernel->str();
     float kernelTime = std::numeric_limits<float>::max();
     cudaError_t status;

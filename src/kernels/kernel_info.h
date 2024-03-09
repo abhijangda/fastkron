@@ -44,7 +44,7 @@ struct KernelInfo {
              CRegRows(CRegRows_), CRegCols(CRegCols_), elemType(elemType_), opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}
   bool canCompute(KMMProblem problem, bool p2p) {
-    return Factor(factor.p(), tiledFactor.q()) == problem.f(0) &&
+    return factor == problem.f(0) && problem.f(0).q() % tiledFactor.q() == 0 &&
            problem.opFs() == opF &&
            problem.opX()  == opX &&
            problem.k() % tiledInput.n() == 0 &&
