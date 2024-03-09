@@ -38,6 +38,44 @@ inline void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2, __m256 &row3
   row7 = _mm256_permute2f128_ps(__tt3, __tt7, 0x31);
 }
 
+template<uint32_t VectorLen>
+class FloatVectorType 
+{
+public:
+  void load(float* ptr);
+  void store(float* ptr);
+  void zero();
+  void broadcast(float* ptr);
+  void fmadd(FloatVectorType<VectorLen>& a, FloatVectorType<VectorLen>& b);
+};
+
+template<>
+class FloatVectorType<8>
+{
+private:
+  __m256 data;
+public:
+  void load(float* ptr) {
+    data = _mm256_loadu_ps(ptr);
+  }
+
+  void store(float* ptr) {
+    _mm256_storeu_ps(ptr, data);  
+  }
+  
+  void zero() {
+    data = _mm256_setzero_ps();
+  }
+
+  void broadcast(float* ptr) {
+    data = _mm256_broadcast_ss(ptr);
+  }
+
+  void fmadd(FloatVectorType<8>& a, FloatVectorType<8>& b) {
+    data = _mm256_fmadd_ps(a.data, b.data, data);
+  }
+};
+
 template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint TileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
@@ -53,87 +91,93 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
     const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
     const uint32_t VecRegQ = RegQ;
 
-    __m256 yReg[VecRegM][VecRegQ][VecRegK];
+    using VectorType = FloatVectorType<VectorLen>;
+    VectorType yReg[VecRegM][VecRegQ][VecRegK];
 
     if (tileP == 0) {
       for (uint32_t ym = 0; ym < VecRegM; ym++) {
       for (uint32_t yq = 0; yq < VecRegQ; yq++) {
       for (uint32_t yk = 0; yk < VecRegK; yk++) {
-        yReg[ym][yq][yk] =  _mm256_setzero_ps();
+        yReg[ym][yq][yk].zero();
       }}}
     } else {
       for (uint32_t ym = 0; ym < VecRegM; ym++) {
       for (uint32_t yk = 0; yk < VecRegK; yk++) {
       for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-        yReg[ym][yq][yk] = _mm256_loadu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
+        yReg[ym][yq][yk].load(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
       }}}
     }
 
-    if (VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
+    if (VectorLen == 8 && VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
       for (uint32_t p = 0; p < TileP; p += 2) {
         {
           ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
-          __m256 x0 = _mm256_loadu_ps(xptr);
-          __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
+          VectorType x0, x1;
+
+          x0.load(xptr);
+          x1.load(xptr + 1*VectorLen);
 
           ElemT* fptr = &TileF[p*TileQ + q];
-          __m256 f0 = _mm256_broadcast_ss(fptr);
-          __m256 f1 = _mm256_broadcast_ss(fptr + 1);
-          __m256 f2 = _mm256_broadcast_ss(fptr + 2);
-          __m256 f3 = _mm256_broadcast_ss(fptr + 3);
+          VectorType f0, f1, f2, f3;
+          f0.broadcast(fptr);
+          f1.broadcast(fptr + 1);
+          f2.broadcast(fptr + 2);
+          f3.broadcast(fptr + 3);
 
           _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
 
-          yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
-          yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
-          yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
-          yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
-          yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
-          yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
-          yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
-          yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+          yReg[0][0][0].fmadd(x0, f0);
+          yReg[0][1][0].fmadd(x0, f1);
+          yReg[0][2][0].fmadd(x0, f2);
+          yReg[0][3][0].fmadd(x0, f3);
+          yReg[0][0][1].fmadd(x1, f0);
+          yReg[0][1][1].fmadd(x1, f1);
+          yReg[0][2][1].fmadd(x1, f2);
+          yReg[0][3][1].fmadd(x1, f3);
         }
         {
           ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0];
-          __m256 x0 = _mm256_loadu_ps(xptr);
-          __m256 x1 = _mm256_loadu_ps(xptr + 1*VectorLen);
+          VectorType x0, x1;
+          x0.load(xptr);
+          x1.load(xptr + 1*VectorLen);
 
           ElemT* fptr = &TileF[(p + 1)*TileQ + q];
-          __m256 f0 = _mm256_broadcast_ss(fptr);
-          __m256 f1 = _mm256_broadcast_ss(fptr + 1);
-          __m256 f2 = _mm256_broadcast_ss(fptr + 2);
-          __m256 f3 = _mm256_broadcast_ss(fptr + 3);
+          VectorType f0, f1, f2, f3;
+          f0.broadcast(fptr);
+          f1.broadcast(fptr + 1);
+          f2.broadcast(fptr + 2);
+          f3.broadcast(fptr + 3);
 
           if (p + 2 < TileP) {
             _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 2) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
             _mm_prefetch(fptr + 4, _MM_HINT_T1);
           }
 
-          yReg[0][0][0] = _mm256_fmadd_ps(x0, f0, yReg[0][0][0]);
-          yReg[0][1][0] = _mm256_fmadd_ps(x0, f1, yReg[0][1][0]);
-          yReg[0][2][0] = _mm256_fmadd_ps(x0, f2, yReg[0][2][0]);
-          yReg[0][3][0] = _mm256_fmadd_ps(x0, f3, yReg[0][3][0]);
-          yReg[0][0][1] = _mm256_fmadd_ps(x1, f0, yReg[0][0][1]);
-          yReg[0][1][1] = _mm256_fmadd_ps(x1, f1, yReg[0][1][1]);
-          yReg[0][2][1] = _mm256_fmadd_ps(x1, f2, yReg[0][2][1]);
-          yReg[0][3][1] = _mm256_fmadd_ps(x1, f3, yReg[0][3][1]);
+          yReg[0][0][0].fmadd(x0, f0);
+          yReg[0][1][0].fmadd(x0, f1);
+          yReg[0][2][0].fmadd(x0, f2);
+          yReg[0][3][0].fmadd(x0, f3);
+          yReg[0][0][1].fmadd(x1, f0);
+          yReg[0][1][1].fmadd(x1, f1);
+          yReg[0][2][1].fmadd(x1, f2);
+          yReg[0][3][1].fmadd(x1, f3);
 
         }
       }
     } else {
       for (uint32_t p = 0; p < TileP; p++) {
-        __m256 XReg[VecRegM][VecRegK];
-        __m256 FReg[VecRegQ];
+        FloatVectorType<8> XReg[VecRegM][VecRegK];
+        FloatVectorType<8> FReg[VecRegQ];
         #pragma unroll
         for (uint32_t em = 0; em < VecRegM; em++) {
           #pragma unroll
           for (uint32_t ek = 0; ek < VecRegK; ek++) {
-            XReg[em][ek] = _mm256_loadu_ps(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
+            XReg[em][ek].load(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
         }}
 
         #pragma unroll
         for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-          FReg[rq] = _mm256_broadcast_ss(&TileF[p*TileQ + q + rq]);
+          FReg[rq].broadcast(&TileF[p*TileQ + q + rq]);
         }
 
         #pragma unroll
@@ -142,7 +186,7 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
         for (uint32_t rk = 0; rk < VecRegK; rk++) {
         #pragma unroll
         for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-          yReg[rm][rq][rk] = _mm256_fmadd_ps(XReg[rm][rk], FReg[rq], yReg[rm][rq][rk]);
+          yReg[rm][rq][rk].fmadd(XReg[rm][rk], FReg[rq]);
         }}}
       }
     }
@@ -151,7 +195,7 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
       for (uint32_t ym = 0; ym < VecRegM; ym++) {
       for (uint32_t yq = 0; yq < VecRegQ; yq++) {
       for (uint32_t yk = 0; yk < VecRegK; yk++) {
-        _mm256_storeu_ps(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen], yReg[ym][yq][yk]);
+        yReg[ym][yq][yk].store(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
       }}}
     } else {
       const uint32_t XTileSlices = TileK/P;
@@ -160,12 +204,12 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
       for (uint32_t rm = 0; rm < VecRegM; rm++) {
       for (uint32_t rq = 0; rq < VecRegQ; rq++) {
       for (uint32_t rk = 0; rk < VecRegK; rk++) {
-        __m256 reg = yReg[rm][rq][rk];
+        auto reg = yReg[rm][rq][rk];
         const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
         if (fac > 0) {
           if (m + rm < XTile.m()) {
             // ElemT b[8]; _mm256_storeu_ps(b, reg); printf("%f %f %f %f\n", b[0], b[1], b[2], b[3]);
-            _mm256_storeu_ps(&tileBuff[(m+rm)*TileK + cacheK], reg);
+            reg.store(&tileBuff[(m+rm)*TileK + cacheK]);
           }
         } else {
           //TODO: Need to fix
@@ -190,7 +234,7 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
             }
           }
           if (m + rm < XTile.m())
-            _mm256_storeu_ps(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), reg);
+            reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N));
         }
       }}}
     }
