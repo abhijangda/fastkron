@@ -134,7 +134,7 @@ class CPUKernel(Kernel):
     return self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
-           (self.aalign != 8 or (self.aalign == 8 and self.rk % AVXLen == 0)) and \
+           ((self.aalign != 8 and self.rk*self.rq < 8) or (self.aalign == 8 and self.rk % AVXLen == 0)) and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
               (self.fused_kernels > 1 and self.shape.p == self.tileP and \
