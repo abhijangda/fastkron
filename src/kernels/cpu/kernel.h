@@ -293,14 +293,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t P = F.p();
   const uint32_t Q = F.q();
 
-  // const uint32_t TileM = 1;
-  // const uint32_t TileK = 4096;
-  // const uint32_t TileQ = 128;
-  // const uint32_t TileP = 128;
-
   const uint32_t RegM = TileM;
-  // const uint32_t RegK = 16; //MIN(TileK, 8);
-  // const uint32_t RegQ = 8; //MIN(TileQ, 8);
 
   const uint32_t YRegs = RegM * RegK * RegQ;
   const uint32_t XRegs = RegM * RegK;
@@ -377,9 +370,17 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
         ElemT* TileF = TileFs[tid]; //[TileP][TileQ];
         Factor F = params.problem.f(fac);
-
-        for (int p = 0; p < TileP; p++) {
-          memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+        if (OpF == fastKronOp_N) {
+          for (int p = 0; p < TileP; p++) {
+            memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+          }
+        } else if (OpF == fastKronOp_T) {
+          //TODO: Use Vector registers to do the transpose
+          for (int p = 0; p < TileP; p++) {
+            for (int q = 0; q < TileQ; q++) {
+              TileF[p*TileQ + q] = *F.data<ElemT>(tileP + p, tileQ + q, OpF);
+            }
+          }
         }
         
         for (uint32_t m = 0; m < XTile.m(); m += RegM) {
