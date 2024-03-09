@@ -306,7 +306,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t XRegs = RegM * RegK;
   const uint32_t FRegs = RegQ;
 
-  const uint32_t VectorLen = (XAlignment == 8 && RegK >= 8) ? 8 : 1; //AVX256 length
+  const uint32_t VectorLen = (XAlignment == 8 && RegK % 8 == 0) ? 8 : 1; //AVX256 length
   
   // static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
   static_assert(TileK % RegK == 0);

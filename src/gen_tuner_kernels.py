@@ -131,12 +131,13 @@ class CPUKernel(Kernel):
             constructor.replace("float", "ElementType::Float") + "}"
 
   def isValid(self):
-    print(self.kalign, self.aalign, self.shape.k , self.rk)
     AVXLen = 8
-    return self.shape.k * self.tileM <= 16*1024 and \
+    #After transposing of slices, TileX has element of each slice in contiguous order.
+    #So, number of slices should be multiple of vector
+    cond = (((self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0))
+    return cond and self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
-           (((self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0)) and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
               (self.fused_kernels > 1 and self.shape.p == self.tileP and \
@@ -307,8 +308,6 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   for k in configs:
     validConfigs[k] = []
     for config in configs[k]:
-      if config.rk ==1:
-        print(config, config.isValid())
       if config.isValid():
         validConfigs[k] += [config]
   
