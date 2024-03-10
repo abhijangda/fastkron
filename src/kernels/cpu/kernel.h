@@ -379,7 +379,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
                 slices[pp].store(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P]);
               }
             }
-          
+
             for (uint32_t p = ROUNDDOWN(TileP, VectorLen); p < TileP; p++) {
               for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                 const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
@@ -397,7 +397,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
             memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
           }
         } else if (OpF == fastKronOp_T) {
-          //TODO: Use Vector registers to do the transpose
+          //Access TileF in mma as transpose
           for (int q = 0; q < TileQ; q++) {
             memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), TileP * sizeof(ElemT));
           }

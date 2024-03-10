@@ -135,11 +135,11 @@ class CPUKernel(Kernel):
     AVXLen = 8
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
-    cond = ((not isPowerOfTwo(self.problem.k) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0))
+    cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k)) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
+            (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0))
     if self.shape.p >= 32 and self.shape.q >= 32:
-      #15 YMM Registers. 
+      #15 YMM Registers.
       cond = cond and self.rk == min(16, self.shape.k//self.shape.p) and self.rq == min(4, self.tileQ)
-
     return cond and self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
@@ -287,7 +287,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                 for tP in TilePs:
                   fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
                   for numFusedKerns in fusedCases:
-                    aalign = xalignment(tM, tK, opX)
+                    aalign = xalignment(tM, tK, opx)
                     kronalign = falignment(tQ)
                       
                     if backend == 'cuda':
