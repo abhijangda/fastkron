@@ -119,7 +119,7 @@ inline void transpose(FloatVectorType<8> rows[8]) {
 template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint TileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
-         typename SliceX>
+         fastKronOp OpF, typename SliceX>
 __attribute__((always_inline)) static inline
 void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
   //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
@@ -145,7 +145,7 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
     }}}
   }
 
-  if (VectorLen == 8 && VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
+  if (false && VectorLen == 8 && VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
     for (uint32_t p = 0; p < TileP; p += 2) {
       {
         ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
@@ -154,12 +154,20 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
         x0.load(xptr);
         x1.load(xptr + 1*VectorLen);
 
-        ElemT* fptr = &TileF[p*TileQ + q];
         VectorType f0, f1, f2, f3;
-        f0.broadcast(fptr);
-        f1.broadcast(fptr + 1);
-        f2.broadcast(fptr + 2);
-        f3.broadcast(fptr + 3);
+        if (OpF == fastKronOp_N) {
+          ElemT* fptr = &TileF[p*TileQ + q];
+          f0.broadcast(fptr);
+          f1.broadcast(fptr + 1);
+          f2.broadcast(fptr + 2);
+          f3.broadcast(fptr + 3);
+        } else {
+          ElemT* fptr = &TileF[q*TileP + p];
+          f0.broadcast(fptr);
+          f1.broadcast(fptr + TileP);
+          f2.broadcast(fptr + 2*TileP);
+          f3.broadcast(fptr + 3*TileP);
+        }
 
         _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
 
@@ -178,16 +186,27 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
         x0.load(xptr);
         x1.load(xptr + 1*VectorLen);
 
-        ElemT* fptr = &TileF[(p + 1)*TileQ + q];
         VectorType f0, f1, f2, f3;
-        f0.broadcast(fptr);
-        f1.broadcast(fptr + 1);
-        f2.broadcast(fptr + 2);
-        f3.broadcast(fptr + 3);
+        if (OpF == fastKronOp_N) {
+          ElemT* fptr = &TileF[(p+1)*TileQ + q];
+          f0.broadcast(fptr);
+          f1.broadcast(fptr + 1);
+          f2.broadcast(fptr + 2);
+          f3.broadcast(fptr + 3);
+        } else {
+          ElemT* fptr = &TileF[q*TileP + p+1];
+          f0.broadcast(fptr);
+          f1.broadcast(fptr + TileP);
+          f2.broadcast(fptr + 2*TileP);
+          f3.broadcast(fptr + 3*TileP);
+        }
 
         if (p + 2 < TileP) {
           _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 2) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
-          _mm_prefetch(fptr + 4, _MM_HINT_T1);
+          if (OpF == fastKronOp_N) {
+            ElemT* fptr = &TileF[(p+1)*TileQ + q];
+            _mm_prefetch(fptr + 4, _MM_HINT_T1);
+          }
         }
 
         yReg[0][0][0].fmadd(x0, f0);
@@ -214,7 +233,10 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
 
       #pragma unroll
       for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-        FReg[rq].broadcast(&TileF[p*TileQ + q + rq]);
+        if (OpF == fastKronOp_N)
+          FReg[rq].broadcast(&TileF[p*TileQ + q + rq]);
+        else
+          FReg[rq].broadcast(&TileF[(q+rq)*TileP + p]);
       }
 
       #pragma unroll
@@ -376,17 +398,15 @@ void cpuKernel(KernelParams<FusedFacs> params,
           }
         } else if (OpF == fastKronOp_T) {
           //TODO: Use Vector registers to do the transpose
-          for (int p = 0; p < TileP; p++) {
-            for (int q = 0; q < TileQ; q++) {
-              TileF[p*TileQ + q] = *F.data<ElemT>(tileP + p, tileQ + q, OpF);
-            }
+          for (int q = 0; q < TileQ; q++) {
+            memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), TileP * sizeof(ElemT));
           }
         }
         
         for (uint32_t m = 0; m < XTile.m(); m += RegM) {
         for (uint32_t q = 0; q < TileQ; q += RegQ) {
         for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
-          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, TileK, TileM, FusedFacs, RegK, RegQ>(tileM, tileK, tileP, tileQ,
+          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, TileK, TileM, FusedFacs, RegK, RegQ, OpF>(tileM, tileK, tileP, tileQ,
           m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
         }}}
       }
