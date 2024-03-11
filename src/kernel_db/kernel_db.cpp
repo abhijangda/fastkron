@@ -35,7 +35,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
 
   if (minTime < std::numeric_limits<float>::max()) {
     std::cout << std::fixed << std::setprecision(2) <<
-                "Best kernel for " << problem << ": " << bestKernel << " runs in " << minTime << " ms" << std::endl;
+                "Best kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
     return std::make_pair(bestKernel, minTime);
   }
 

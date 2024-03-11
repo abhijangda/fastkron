@@ -28,7 +28,6 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
       tunedProblem.setOpX(fastKronOp_N);
     }
     bool isP2P = isDistributed && startKron == 0;
-    std::cout << "31 " << tunedProblem << "  " << isP2P << " " <<tunedKernelsMap.hasKernel(tunedProblem, isP2P) << std::endl;
     if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
       TunedKernelsSeries epilogueKernels;
       float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
@@ -71,7 +70,6 @@ cudaError_t Autotuner::tune(KMMProblem problem,
       auto secondPart = problem.sub(rstart, endP-rstart+1);
       if (rstart + secondPart.n() < problem.n()) secondPart.setOpX(fastKronOp_N);
       bool distP2PStore = isDistributed && rstart == 0;
-      std::cout << "74: " << secondPart << "  " << tunedKernelsMap.hasKernel(secondPart, distP2PStore) << "  " << std::endl;
       if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
       if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
       auto bestKernelWithTime = kernelDb->tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams);

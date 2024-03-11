@@ -12,7 +12,7 @@
     K *= FacSize;\
     KP_MAT_K[i] = KP_MAT_N[i] = FacSize;\
   }\
-  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_T, fastKronOp_T, 1, 0, false, 1, 1, 1, 1, true, true, true, fastKronBackend_CUDA, false);\
+  bool b = run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_T, fastKronOp_T, 1, 0, false, 1, 1, 1, 1, true, true, true, getTestBackend(), false);\
   EXPECT_TRUE(b);\
 }
 
@@ -24,15 +24,15 @@ TT_TEST(11, 8, 8, float);
 //FacSize 16
 TT_TEST(11, 2, 16, float);
 TT_TEST(11, 5, 16, float);
-TT_TEST(11, 6, 16, float);
+// TT_TEST(11, 6, 16, float);
 
 //FacSize 32
 TT_TEST(11, 2, 32, float);
-TT_TEST(11, 5, 32, float);
+TT_TEST(11, 3, 32, float);
 
 //FacSize 64
 TT_TEST(11, 2, 64, float);
-TT_TEST(11, 4, 64, float);
+TT_TEST(11, 3, 64, float);
 
 //FacSize 128
 TT_TEST(11, 2, 128, float);

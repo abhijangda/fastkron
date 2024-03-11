@@ -48,9 +48,22 @@ class KronMatMulShape:
     self.n = n
     self.p = p
     self.q = q
+    self.l = k
+    if type(p) == list:
+      for i in range(len(p)):
+        self.l = (self.l//self.p[i]) * self.q[i]
 
   def __repr__(self):
     return f"{self.m}x{self.k}, {self.p}x{self.q}, {self.n}"
+
+  def __str__(self):
+    return repr(self)
+
+  def __hash__(self):
+    return hash(repr(self))
+
+  def __eq__(self, other):
+    return self.m == other.m and self.k == other.k and self.n == other.n and self.p == other.p and self.q == other.q
 
 WARP_SIZE=32
 
@@ -97,7 +110,6 @@ class CPUKernel(Kernel):
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str):
     super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, rk, rq, allPowersOf2, opX, opF)
     self.aalign = aalign
-
     self.kalign = kalign
 
   def __repr__(self):
@@ -135,17 +147,18 @@ class CPUKernel(Kernel):
     AVXLen = 8
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
-    cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k)) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
-            (self.aalign == 8 and self.kalign == 8 and self.rk % AVXLen == 0))
-    if self.shape.p >= 32 and self.shape.q >= 32:
+    cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
+            (self.aalign == 8 and self.rk % AVXLen == 0))
+    if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 32 and self.shape.q >= 32:
       #15 YMM Registers.
       cond = cond and self.rk == min(16, self.shape.k//self.shape.p) and self.rq == min(4, self.tileQ)
+    # print(self, cond, self.shape.k, self.shape.p, self.rk, self.problem.k, isPowerOfTwo(self.problem.k), (self.shape.k // self.shape.p) % 8 != 0, self.shape.k % self.rk == 0)
     return cond and self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
-              (self.fused_kernels > 1 and self.shape.p == self.tileP and \
+              (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and \
               #Next fused intermediate must have atleast AVXLen slices to make sure
               #Transpose X->TileX loads contiguous AVXLen first elements of slices of same P
                self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
@@ -271,10 +284,6 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
       TileKs = [f for f in k_factors if f % p == 0]
       TileMs = [1, 2] #[2 ** i for i in range(0, int(math.log2(m)))]
 
-      shape = KronMatMulShape(m, currK, n, p, q)
-      if shape not in configs:
-        configs[shape] = []
-      __configs = []
       for tM in TileMs:
         for tQ in TileQs:
           for tK in TileKs:
@@ -282,6 +291,8 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
               continue
             CRows = factors(tK//p)
             CCols = factors(tQ)
+            if tK == 496:
+              print(tK, p, CRows)
             for regRows in CRows:
               for regCols in CCols:
                 for tP in TilePs:
@@ -289,7 +300,10 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                   for numFusedKerns in fusedCases:
                     aalign = xalignment(tM, tK, opx)
                     kronalign = falignment(tQ)
-                      
+                    shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
+                    if shape not in configs:
+                      configs[shape] = []
+                    __configs = []
                     if backend == 'cuda':
                       for kEqVar in [0]:
                           distKernels = [0, 1] if useDistKernels else [0]
@@ -306,7 +320,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                                               p, q, tQ, tP, tM, regRows, regCols, numFusedKerns, 
                                               dist, "Float", aalign, kronalign, allSameShapes, opx, opF)]
 
-      configs[shape] += __configs
+                    configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
   
@@ -327,7 +341,6 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   combinedConfigs = []
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
-    configs = configs[:min(len(configs), numKernels)]
 
     if onlySpecificConfigs != []:
         __configs = []
@@ -338,6 +351,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
               break
 
         configs = __configs
+    configs = configs[:min(len(configs), numKernels)]
     combinedConfigs += configs
   
   combinedConfigs = list(set(combinedConfigs))
