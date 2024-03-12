@@ -16,20 +16,11 @@ CUDAKernel AllCUDAKernels[] = {
 
 CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
-  
-  //TODO: Call KernelDatabase::loadKernels method
-  //Load kernels into compiledKernels map
+  loadKernels<CUDAKernel>(AllCUDAKernels, sizeof(AllCUDAKernels)/sizeof(CUDAKernel));
   for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKernel); i++) {
     CUDAKernel& info = AllCUDAKernels[i];
     if (!info.isValid()) abort();
     CUDA_CHECK(info.setSharedMemAttr());
-    //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-    DbKey key {info.f, info.opX, info.opF};
-    auto iter = compiledKernels.find(key);
-    if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
-    }
-    compiledKernels.at(key).push_back(&info);
   }
   
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
