@@ -56,7 +56,12 @@ struct KernelInfo {
     return (tileF.numel() + Xsh.numel())*sizeof(float);
   }
 
-  virtual std::string str() const = 0;
+  virtual std::string str() const {
+    std::stringstream info;
+    info << tileF << "_" << tileX << "**" << FusedFacs << "_" << 
+            DistributeToGPUs << "_" << RegK << "x" << RegQ << "_" << opX << opF;
+    return info.str();
+  }
 };
 
 struct CPUKernel : public KernelInfo {
@@ -66,14 +71,7 @@ struct CPUKernel : public KernelInfo {
             uint RegK, uint RegQ, ElementType elemType,
             fastKronOp opX, fastKronOp opF) : 
             KernelInfo (invokerFunc, f, tileF, tileX, 
-                        FusedFacs, DistributeToGPUs, RegK, RegQ, elemType, opX, opF) {}
-  
-  std::string str() const {
-    std::stringstream info;
-    info << tileF << "_" << tileX << "**" << FusedFacs << "_" << 
-            DistributeToGPUs << "_" << RegK << "x" << RegQ << "_" << opX << opF;
-    return info.str();
-  } 
+                        FusedFacs, DistributeToGPUs, RegK, RegQ, elemType, opX, opF) {} 
 };
 
 struct CUDAKernel : public KernelInfo {
@@ -104,12 +102,9 @@ struct CUDAKernel : public KernelInfo {
     return KernelInfo::isValid() && kernelFunc != nullptr;
   }
 
-  std::string str() const {
+  virtual std::string str() const {
     std::stringstream info;
-    info << NumThreads << "_" << tileF << "_" << tileX << "**" << 
-          FusedFacs << "_"<< DistributeToGPUs << "_" <<
-          RegK << "x" << RegQ << "_" <<
-          AAlignment << "_" << KronAlignment << "_" << opX << opF;
+    info << NumThreads << "_" << KernelInfo::str();
     return info.str();
   }
 
