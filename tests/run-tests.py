@@ -18,11 +18,11 @@ assert backend in ['cuda', 'x86', 'amd', 'arm']
 
 if backend == 'cuda':
   gen_test_kernels = { #not needed 'gen-tuner-kernels'                    : ['single-cuda-tuner-tests'], 
-                      # 'gen-single-cuda-kernels'               : ['single-cuda-no-fusion-tests', 'single-cuda-fusion-tests'],
-                      # 'gen-single-cuda-non-square-TT-kernels' : ['single-cuda-non-square-TT-tests'],
-                      # 'gen-non-square-kernels'    : ['single-cuda-non-square-tests'],
-                      # 'gen-single-cuda-distinct-shapes'       : ['single-cuda-distinct-shapes'],
-                      # 'gen-single-cuda-odd-shapes'            : ['single-cuda-odd-shapes'],
+                      'gen-single-cuda-kernels'               : ['single-cuda-no-fusion-tests', 'single-cuda-fusion-tests'],
+                      'gen-single-cuda-non-square-TT-kernels' : ['single-cuda-non-square-TT-tests'],
+                      'gen-non-square-kernels'    : ['single-cuda-non-square-tests'],
+                      'gen-single-cuda-distinct-shapes'       : ['single-cuda-distinct-shapes'],
+                      'gen-single-cuda-odd-shapes'            : ['single-cuda-odd-shapes'],
 
                       'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests', 'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
                       'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
@@ -30,10 +30,9 @@ if backend == 'cuda':
                       'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes', 'DIST_COMM=NCCL multi-cuda-distinct-shapes']
                       }
 elif backend == 'x86':
-  gen_test_kernels = {
+  gen_test_kernels = {#'gen-x86-tuner-kernels'         : ['x86-tuner-tests'], # No need
                       'gen-x86-kernels'               : ['x86-fusion-tests', 'x86-no-fusion-tests'],
                       'gen-x86-non-square-TT-kernels' : ['x86-non-square-TT-tests'],
-                      # 'gen-x86-tuner-kernels'         : ['x86-tuner-tests'], # No need
                       'gen-x86-non-square-kernels'    : ['x86-non-square-tests'],
                       'gen-x86-distinct-shapes'       : ['x86-distinct-shapes'],
                       'gen-x86-odd-shapes'            : ['x86-odd-shapes'],
