@@ -14,21 +14,6 @@ CUDAKernel AllCUDAKernels[] = {
 #endif
 };
 
-static bool isValidKernel(CUDAKernel& cudaKernel) {
-  const uint NumThreads = cudaKernel.NumThreads;
-  const uint CRegRows = cudaKernel.CRegRows;
-  const uint CRegCols = cudaKernel.CRegCols;
-  const Factor& tiledFactor = cudaKernel.tiledFactor;
-
-  const uint ValidThreads = ((cudaKernel.tiledInput.n()/cudaKernel.factor.p())/CRegRows) * (tiledFactor.q()/CRegCols);
-  if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
-    std::cout << "Invalid kernel config " << cudaKernel.str() << std::endl; 
-    return false;
-  }
-
-  return true;
-}
-
 CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
   
@@ -36,10 +21,10 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
   //Load kernels into compiledKernels map
   for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKernel); i++) {
     CUDAKernel& info = AllCUDAKernels[i];
-    if (!isValidKernel(info)) abort();
+    if (!info.isValid()) abort();
     CUDA_CHECK(info.setSharedMemAttr());
     //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-    DbKey key {info.factor, info.opX, info.opF};
+    DbKey key {info.f, info.opX, info.opF};
     auto iter = compiledKernels.find(key);
     if (iter == compiledKernels.end()) {
       compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
@@ -75,7 +60,7 @@ cudaError_t invoke(CUDAKernel& kernelInfo, const uint kronIndex,
 
   //Create the grid and thread block
   KernelParams<NumFusedKerns> params (problem, kronIndex, execMode);
-  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.n());
+  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 

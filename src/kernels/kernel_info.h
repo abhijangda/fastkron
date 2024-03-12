@@ -50,6 +50,12 @@ struct KernelInfo {
            problem.n() == FusedFacs &&
            DistributeToGPUs == p2p;
   }
+
+  size_t totalTileSize() {
+    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
+    return (tileF.numel() + Xsh.numel())*sizeof(float);
+  }
+
   virtual std::string str() const = 0;
 };
 
@@ -78,18 +84,23 @@ struct CUDAKernel : public KernelInfo {
   uint KronAlignment;
 
   CUDAKernel() {}
-  CUDAKernel(void* invokerFunc, void*(*getKernelFunc)(), uint NumThreads, 
-             Factor f, Factor tileF, Matrix tileX, 
+  CUDAKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
              uint RegK, uint RegQ, ElementType elemType,
-             uint AAlignment, uint KronAlignment,
-             fastKronOp opX, fastKronOp opF) :
+             fastKronOp opX, fastKronOp opF,
+             void*(*getKernelFunc)(), uint NumThreads,
+             uint AAlignment, uint KronAlignment) :
              KernelInfo(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
              RegK, RegQ, elemType, opX, opF),
-             NumThreads(NumThreads),
+             NumThreads(NumThreads), kernelFunc(getKernelFunc()),
              AAlignment(AAlignment), KronAlignment(KronAlignment) {}
 
   bool isValid() {
+    const uint ValidThreads = ((tileX.n()/f.p())/RegK) * (tileF.q()/RegQ);
+    if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
+      std::cout << "Invalid kernel config " << str() << std::endl; 
+      return false;
+    }
     return KernelInfo::isValid() && kernelFunc != nullptr;
   }
 
@@ -115,8 +126,7 @@ struct CUDAKernel : public KernelInfo {
   }
 
   size_t sharedMemSize() {
-    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
-    return (tileF.numel() + Xsh.numel())*sizeof(float);
+    return totalTileSize();
   }
 
   cudaError_t setSharedMemAttr() {

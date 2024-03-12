@@ -104,6 +104,9 @@ class Kernel:
   def __hash__(self):
     return hash(repr(self))
 
+  def constructorArgs(self):
+    return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {'ElementType::Float'}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+
 class CPUKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int, rk: int, rq: int,
@@ -137,10 +140,7 @@ class CPUKernel(Kernel):
                       "}"])
 
   def kernelInfo(self):
-    constructor = f"Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
-    return "CPUKernel{"+\
-            f"(void*){self.hostFuncName()},"+\
-            constructor.replace("float", "ElementType::Float") + "}"
+    return "CPUKernel{" + self.constructorArgs() + "}"
 
   def isValid(self):
     AVXLen = 8
@@ -223,11 +223,10 @@ class CUDAKernel(Kernel):
 
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
-    constructor = f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
     return "CUDAKernel{"+\
-            f"(void*){self.hostFuncName()},"+\
-            f"get{self.kernelname()},"+\
-            constructor.replace("float", "ElementType::Float") + "}"
+            self.constructorArgs() + ","+\
+            f"get{self.kernelname()}, {self.threads()}, " +\
+            f"{self.aalign}, {self.kalign}" + "}"
 
   def isValid(self):
     return self.wsz > 0 and \
