@@ -40,7 +40,7 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
 }
 
 //Launch cuda kernels
-template<uint NumFusedKerns>
+template<uint FusedFacs>
 cudaError_t invoke(CUDAKernel& kernelInfo, const uint kronIndex, 
                    KMMProblem problem,
                    DistributedParams distParams,
@@ -50,11 +50,11 @@ cudaError_t invoke(CUDAKernel& kernelInfo, const uint kronIndex,
   cudaError_t status;
 
   //Create the grid and thread block
-  KernelParams<NumFusedKerns> params (problem, kronIndex, execMode);
-  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tileX.n());
+  KernelParams<FusedFacs> params (problem, kronIndex, execMode);
+  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
+  typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, 
                                         epilogueParams, kernelInfo.grid(problem), 

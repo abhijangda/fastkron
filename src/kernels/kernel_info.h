@@ -16,20 +16,15 @@ enum ElementType {
 
 struct KernelInfo {
   void* invokerFunc;
-  
   Factor f;
   Factor tileF;
   Matrix tileX;
-
   fastKronOp opX;
   fastKronOp opF;
-
   uint RegK;
   uint RegQ;
-  
   uint FusedFacs;
   ElementType elemType;
-
   bool DistributeToGPUs;
   
   KernelInfo() {}
@@ -109,11 +104,9 @@ struct CUDAKernel : public KernelInfo {
   }
 
   dim3 grid(KMMProblem problem) {
-    return dim3 {
-                  problem.k()/tileX.n() * DIVUP(problem.f(0).q(), tileF.q()),
-                  DIVUP(problem.m(), tileX.m()),
-                  1
-                };
+    return dim3(problem.k()/tileX.n() * DIVUP(problem.f(0).q(), tileF.q()),
+                DIVUP(problem.m(), tileX.m()),
+                1);
   }
 
   dim3 block() {
