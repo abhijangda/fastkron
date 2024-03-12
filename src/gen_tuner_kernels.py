@@ -137,10 +137,9 @@ class CPUKernel(Kernel):
                       "}"])
 
   def kernelInfo(self):
-    constructor = f"{self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    constructor = f"Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
     return "CPUKernel{"+\
             f"(void*){self.hostFuncName()},"+\
-            f"get{self.kernelname()},"+\
             constructor.replace("float", "ElementType::Float") + "}"
 
   def isValid(self):

@@ -45,7 +45,7 @@ public:
       if (!isValidKernel(info)) abort();
       initKernel(info); //CUDA_CHECK(info.setSharedMemAttr());
       //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
-      DbKey key {info.factor, info.opX, info.opF};
+      DbKey key {info.f, info.opX, info.opF};
       auto iter = compiledKernels.find(key);
       if (iter == compiledKernels.end()) {
         compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));

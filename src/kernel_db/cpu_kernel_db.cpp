@@ -20,7 +20,7 @@ CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {
   }
 }
 
-template<uint NumFusedKerns>
+template<uint FusedFacs>
 cudaError_t invoke(CPUKernel& kernelInfo, const uint kronIndex, 
                    KMMProblem problem,
                    DistributedParams distParams,
@@ -29,11 +29,11 @@ cudaError_t invoke(CPUKernel& kernelInfo, const uint kronIndex,
   cudaError_t status;
 
   //Create the grid and thread block
-  KernelParams<NumFusedKerns> params (problem, kronIndex, execMode);
-  FusedParams<NumFusedKerns> fusedParams (problem, kernelInfo.tiledInput.n());
+  KernelParams<FusedFacs> params (problem, kronIndex, execMode);
+  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<NumFusedKerns>, FusedParams<NumFusedKerns>, 
+  typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
   status = cudaSuccess;

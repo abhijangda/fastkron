@@ -16,94 +16,96 @@ enum ElementType {
 
 struct KernelInfo {
   void* invokerFunc;
-  void* kernelFunc;
   
-  Factor factor;
-  Factor tiledFactor;
-  Matrix tiledInput;
+  Factor f;
+  Factor tileF;
+  Matrix tileX;
 
   fastKronOp opX;
   fastKronOp opF;
 
-  uint CRegRows;
-  uint CRegCols;
+  uint RegK;
+  uint RegQ;
   
-  uint NumFusedKerns_;
+  uint FusedFacs;
   ElementType elemType;
 
-  bool DistributeToGPUs_;
+  bool DistributeToGPUs;
   
   KernelInfo() {}
-  KernelInfo(void* invokerFunc, void*(*getKernelFunc)(), 
-             uint Q, uint P, uint tileP, uint tileQ,
-             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
-             uint CRegRows_, uint CRegCols_, ElementType elemType_,
+  KernelInfo(void* invokerFunc, Factor f, Factor tileF, Matrix tileX,
+             uint FusedFacs, bool DistributeToGPUs,
+             uint RegK, uint RegQ, ElementType elemType,
              fastKronOp opX, fastKronOp opF) :
-             invokerFunc(invokerFunc), kernelFunc(getKernelFunc()), factor(P, Q), tiledFactor(tileP, tileQ),
-             tiledInput(TileM, TileK), NumFusedKerns_(NumFusedKerns_), DistributeToGPUs_(DistributeToGPUs_),
-             CRegRows(CRegRows_), CRegCols(CRegCols_), elemType(elemType_), opX(opX), opF(opF) {}
-  bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}
+             invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
+             FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
+             RegK(RegK), RegQ(RegQ), elemType(elemType), opX(opX), opF(opF) {}
+  bool isValid() {return invokerFunc != nullptr;}
   bool canCompute(KMMProblem problem, bool p2p) {
-    return factor == problem.f(0) && problem.f(0).q() % tiledFactor.q() == 0 &&
+    return f == problem.f(0) && 
+           problem.f(0).q() % tileF.q() == 0 &&
            problem.opFs() == opF &&
            problem.opX()  == opX &&
-           problem.k() % tiledInput.n() == 0 &&
-           problem.n() == NumFusedKerns_ &&
-           DistributeToGPUs_ == p2p;
+           problem.k() % tileX.n() == 0 &&
+           problem.n() == FusedFacs &&
+           DistributeToGPUs == p2p;
   }
   virtual std::string str() const = 0;
 };
 
 struct CPUKernel : public KernelInfo {
   CPUKernel() {}
-  CPUKernel(void* invokerFunc, void*(*getKernelFunc)(), 
-             uint Q, uint P, uint tileP, uint tileQ,
-             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
-             uint CRegRows_, uint CRegCols_, ElementType elemType_,
-             fastKronOp opX, fastKronOp opF) : 
-             KernelInfo (invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, 
-                         NumFusedKerns_, DistributeToGPUs_, CRegRows_, CRegCols_, elemType_, opX, opF) {}
+  CPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
+            uint FusedFacs, bool DistributeToGPUs, 
+            uint RegK, uint RegQ, ElementType elemType,
+            fastKronOp opX, fastKronOp opF) : 
+            KernelInfo (invokerFunc, f, tileF, tileX, 
+                        FusedFacs, DistributeToGPUs, RegK, RegQ, elemType, opX, opF) {}
   
   std::string str() const {
     std::stringstream info;
-    info << tiledFactor << "_" << tiledInput << "**" << NumFusedKerns_ << "_" << DistributeToGPUs_ << "_" << CRegRows << "x" << CRegCols << "_" << opX << opF;
+    info << tileF << "_" << tileX << "**" << FusedFacs << "_" << 
+            DistributeToGPUs << "_" << RegK << "x" << RegQ << "_" << opX << opF;
     return info.str();
   } 
 };
 
 struct CUDAKernel : public KernelInfo {
+  void* kernelFunc;
+
   uint NumThreads;
-  
-  ElementType elemType;
   uint AAlignment;
   uint KronAlignment;
-  CUDAKernel() {}
-  CUDAKernel(void* invokerFunc, void*(*getKernelFunc)(), uint NumThreads_, 
-             uint Q, uint P, uint tileP, uint tileQ,
-             uint TileK, uint TileM, uint NumFusedKerns_, bool DistributeToGPUs_, 
-             uint CRegRows_, uint CRegCols_, ElementType elemType_,
-             uint AAlignment_, uint KronAlignment_,
-             fastKronOp opX, fastKronOp opF) :
-             KernelInfo(invokerFunc, getKernelFunc, Q, P, tileP, tileQ, TileK, TileM, NumFusedKerns_, DistributeToGPUs_, 
-             CRegRows_, CRegCols_, elemType_, opX, opF),
-             NumThreads(NumThreads_),
-             AAlignment(AAlignment_), KronAlignment(KronAlignment_) {}
 
-  bool isValid() {return invokerFunc != nullptr && kernelFunc != nullptr;}
+  CUDAKernel() {}
+  CUDAKernel(void* invokerFunc, void*(*getKernelFunc)(), uint NumThreads, 
+             Factor f, Factor tileF, Matrix tileX, 
+             uint FusedFacs, bool DistributeToGPUs,
+             uint RegK, uint RegQ, ElementType elemType,
+             uint AAlignment, uint KronAlignment,
+             fastKronOp opX, fastKronOp opF) :
+             KernelInfo(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
+             RegK, RegQ, elemType, opX, opF),
+             NumThreads(NumThreads),
+             AAlignment(AAlignment), KronAlignment(KronAlignment) {}
+
+  bool isValid() {
+    return KernelInfo::isValid() && kernelFunc != nullptr;
+  }
 
   std::string str() const {
     std::stringstream info;
-    info << NumThreads << "_" << tiledFactor << "_" << tiledInput << "**" << 
-          NumFusedKerns_ << "_"<< DistributeToGPUs_ << "_" <<
-          CRegRows << "x" << CRegCols << "_" <<
+    info << NumThreads << "_" << tileF << "_" << tileX << "**" << 
+          FusedFacs << "_"<< DistributeToGPUs << "_" <<
+          RegK << "x" << RegQ << "_" <<
           AAlignment << "_" << KronAlignment << "_" << opX << opF;
     return info.str();
   }
 
   dim3 grid(KMMProblem problem) {
     return dim3 {
-                  problem.k()/tiledInput.n() * DIVUP(problem.f(0).q(), tiledFactor.q()),
-                  DIVUP(problem.m(), tiledInput.m()),
+                  problem.k()/tileX.n() * DIVUP(problem.f(0).q(), tileF.q()),
+                  DIVUP(problem.m(), tileX.m()),
                   1
                 };
   }
@@ -113,8 +115,8 @@ struct CUDAKernel : public KernelInfo {
   }
 
   size_t sharedMemSize() {
-    Matrix Xsh = Matrix(tiledInput.m(), (tiledInput.n()/factor.p())*tiledFactor.p());
-    return (tiledFactor.numel() + Xsh.numel())*sizeof(float);
+    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
+    return (tileF.numel() + Xsh.numel())*sizeof(float);
   }
 
   cudaError_t setSharedMemAttr() {
