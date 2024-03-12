@@ -153,10 +153,12 @@ def run_nn(device):
     gp = GPyTorchEval(device).run_single_gpu(shape)
     print(" & ".join((str(p) for p in (fk + gp))))
 
-def run_single_gpu_nt():
-  M = 1024
+def run_nt(device):
+  device = device.lower()
+  M = 1024 if device == "cuda" else 256
+  M2 = 320 if device == "cuda" else 128
   cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
-           Shape(M, 3, 64, 64), Shape(320, 3, 128, 128)]
+           Shape(M, 3, 64, 64), Shape(M2, 3, 128, 128)]
 
   M = 16
   cases += [Shape(M, 8, 8, 8),
@@ -167,13 +169,15 @@ def run_single_gpu_nt():
            ]
 
   for shape in cases:
-    fk = FastKronEval().run_single_gpu(shape,"N", "T")
+    fk = FastKronEval(device).run_single_gpu(shape,"N", "T")
     print(" & ".join((str(p) for p in (fk))))
   
-def run_single_gpu_tt():
-  M = 1024
+def run_tt(device):
+  device = device.lower()
+  M = 1024 if device == "cuda" else 256
+  M2 = 320 if device == "cuda" else 128
   cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
-           Shape(M, 3, 64, 64), Shape(320, 3, 128, 128)]
+           Shape(M, 3, 64, 64), Shape(M2, 3, 128, 128)]
 
   M = 16
   cases += [Shape(M, 8, 8, 8),
@@ -184,7 +188,7 @@ def run_single_gpu_tt():
            ]
 
   for shape in cases:
-    fk = FastKronEval().run_single_gpu(shape,"T", "T")
+    fk = FastKronEval(device).run_single_gpu(shape,"T", "T")
     print(" & ".join((str(p) for p in (fk))))
 
 def multi_gpu(scaling):
@@ -218,11 +222,11 @@ if False:
 
   print("------- Single GPU NT-------")
   print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-  run_single_gpu_nt()
+  run_nt()
 
   print("------- Single GPU TT-------")
   print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-  run_single_gpu_tt()
+  run_tt()
 
   print("------- Multi GPU Weak Scaling --------")
   print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
@@ -232,5 +236,11 @@ if False:
   print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
   multi_gpu("strong")
 
-print("------ x86 NN------")
-run_nn("x86")
+# print("------ x86 NN------")
+# run_nn("x86")
+
+# print("------ x86 NT------")
+# run_nt("x86")
+
+print("------ x86 TT------")
+run_tt("x86")

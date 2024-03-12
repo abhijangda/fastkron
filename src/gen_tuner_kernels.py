@@ -149,7 +149,7 @@ class CPUKernel(Kernel):
     #So, number of slices should be multiple of vector
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
             (self.aalign == 8 and self.rk % AVXLen == 0))
-    if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 32 and self.shape.q >= 32:
+    if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
       cond = cond and self.rk == min(16, self.shape.k//self.shape.p) and self.rq == min(4, self.tileQ)
     # print(self, cond, self.shape.k, self.shape.p, self.rk, self.problem.k, isPowerOfTwo(self.problem.k), (self.shape.k // self.shape.p) % 8 != 0, self.shape.k % self.rk == 0)
@@ -174,7 +174,9 @@ class CUDAKernel(Kernel):
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
                allPowersOf2: int, opX : str, opF : str):
-    super().__init__(shape, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, cRegRows, cRegCols, allPowersOf2, opX, opF)
+    aalign = min(4, aalign)
+    kalign = min(4, kalign)
+    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, cRegRows, cRegCols, allPowersOf2, opX, opF)
     self.num_threads = ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.tileQ = tileQ
     self.tileP = tileP
@@ -234,7 +236,7 @@ class CUDAKernel(Kernel):
            self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
            self.rk in [1, 2, 4] and \
-           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
+           (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
            self.tileM * self.rk * self.rq <= 64
@@ -291,8 +293,6 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
               continue
             CRows = factors(tK//p)
             CCols = factors(tQ)
-            if tK == 496:
-              print(tK, p, CRows)
             for regRows in CRows:
               for regCols in CCols:
                 for tP in TilePs:

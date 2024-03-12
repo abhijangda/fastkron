@@ -10,5 +10,5 @@ set(TESTS_LIBS GTest::gtest_main FastKron nccl)
 set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_subdirectory(benchmarks)
-add_subdirectory(gpu)
+add_subdirectory(cuda)
 add_subdirectory(x86)
