@@ -91,7 +91,6 @@ if(ENABLE_CUDA)
       ${CUDA}/otherkernels.cuh
       ${SRC}/kernel_db/cuda_kernel_db.h
       ${SRC}/kernel_db/cuda_kernel_db.cpp
-      ${SRC}/handle/distrib_handle.cu
       ${CUDA_KERNELS})
 else()
   set(CUDA_HEADER_FILES)
@@ -127,7 +126,8 @@ set(SOURCES
     ${SRC}/handle/handle.cpp
     ${SRC}/kernel_db/kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
-    ${SRC}/kmm/matrix.cpp)
+    ${SRC}/kmm/matrix.cpp
+    ${SRC}/handle/distrib_handle.cu)
 
 cuda_add_library(FastKron 
   SHARED
