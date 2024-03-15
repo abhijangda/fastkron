@@ -144,7 +144,6 @@ target_link_libraries(FastKron nccl)
 target_include_directories(FastKron 
                            PRIVATE 
                               ${SRC}/
-                              ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
                               ${HIP_INCLUDE_PATH}
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
