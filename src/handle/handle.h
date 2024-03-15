@@ -116,7 +116,7 @@ struct FastKronHandle {
 
   fastKronError distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
-                                  void* streams[]);
+                                  void* streams);
   fastKronError gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp);
 

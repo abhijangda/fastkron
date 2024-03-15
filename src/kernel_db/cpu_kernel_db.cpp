@@ -21,13 +21,11 @@ CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {
 }
 
 template<uint FusedFacs>
-cudaError_t invoke(CPUKernel& kernelInfo, const uint kronIndex, 
+fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex, 
                    KMMProblem problem,
                    DistributedParams distParams,
                    EpilogueParams epilogueParams,
                    KernelMode execMode) {
-  cudaError_t status;
-
   //Create the grid and thread block
   KernelParams<FusedFacs> params (problem, kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
@@ -36,12 +34,10 @@ cudaError_t invoke(CPUKernel& kernelInfo, const uint kronIndex,
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
-  status = cudaSuccess;
-  CUDA_CHECK(status);
-  return status;
+  return fastKronSuccess;
 }
 
-cudaError_t CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronIndex, 
+fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronIndex, 
                                             KMMProblem problem,
                                             EpilogueParams epilogueParams,
                                             KernelMode execMode) {
@@ -69,26 +65,27 @@ cudaError_t CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronI
                        distParams, epilogueParams, execMode);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
-      return cudaErrorInvalidValue;
+      return fastKronKernelNotFound;
   }
 }
 
-cudaError_t CPUKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
+fastKronError CPUKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
   ptr = new float[size];
-  return ptr != nullptr ? cudaSuccess : cudaErrorInvalidValue; 
+  return ptr != nullptr ? fastKronSuccess : fastKronInvalidArgument; 
 }
 
-cudaError_t CPUKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
+fastKronError CPUKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
   memset<float>(m.data<float>(0), m.numel(), val);
-  return cudaSuccess;
+  return fastKronSuccess;
 }
 
-cudaError_t CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
+fastKronError CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
+  if (ptr == NULL) fastKronInvalidArgument;
   delete ptr;
-  return cudaSuccess;
+  return fastKronSuccess;
 }
 
-cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
+fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
                                  KernelMode execMode, 
@@ -96,7 +93,7 @@ cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorI
                                  int warmups, int runs,
                                  float& runtime) {
   runtime = std::numeric_limits<float>::max();
-  cudaError_t status;
+  fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
     for (int r = 0; r < runs; r++) {
@@ -111,12 +108,11 @@ cudaError_t CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorI
                               epilogueParams, execMode);
       }
       double endTime = getCurrTime();
-      CUDA_CHECK(status);
       avgtime += (float)((endTime - startTime)/1e3);
     }
 
-    if (status != cudaSuccess) {
-      std::cout << "Error: " << cudaGetErrorString(status) << std::endl;
+    if (status != fastKronSuccess) {
+      std::cout << "Error: " << status << std::endl;
       return status;
     }
 

@@ -265,15 +265,15 @@ template<typename T>
 static void kronGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* result,
                      uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2) {
   if (std::is_same<T, float>::value) {
-    CUDACHECK(sgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+    FastKronCHECK(sgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (float*)x, opx, (float**)kpMats, opfs, (float*)result,
                      1, 0, nullptr, (float*)temp1, (float*)temp2));
   } else if (std::is_same<T, int>::value) {
-    CUDACHECK(igekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+    FastKronCHECK(igekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (int*)x, opx, (int**)kpMats, opfs, (int*)result,
                      1, 0, nullptr, (int*)temp1, (int*)temp2));
   } else if (std::is_same<T, double>::value) {
-    CUDACHECK(dgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+    FastKronCHECK(dgekmm(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (double*)x, opx, (double**)kpMats, opfs, (double*)result,
                      1, 0, nullptr, (double*)temp1, (double*)temp2));
   } else {
@@ -289,11 +289,11 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], 
             T* temp1[], T* temp2[], cudaStream_t stream[]) {
   if (std::is_same<T, float>::value) {
-    CUDACHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
+    FastKronCHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
                                   (float**)x, (float**)kpMats, (float**)result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, 
                                   (float**)temp1, (float**)temp2, 
-                                  stream));
+                                  (void*)stream));
   } else if (std::is_same<T, int>::value) {
     // CUDACHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
     //                               (int**)x, (int**)kpMats, (int**)&result,
@@ -410,16 +410,16 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Allocate GPU data
   fastKronHandle handle;
   if (verbose) printf("allocating\n");
-  CUDA_CHECK(fastKronInit(&handle, backend));
+  FastKronCHECK(fastKronInit(&handle, backend));
   handle->setUseFusion(useFusion);
   if (backend == fastKronBackend_CUDA)
-    CUDA_CHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
+    FastKronCHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
   else if (backend == fastKronBackend_X86)
-    CUDA_CHECK(fastKronInitX86(handle));
+    FastKronCHECK(fastKronInitX86(handle));
   size_t resultSize = 0;
   size_t tempSize = 0;
-  CUDACHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
-                       &resultSize, &tempSize));
+  FastKronCHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
+                           &resultSize, &tempSize));
   T* dX[gpus];
   T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
@@ -427,7 +427,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T *dTemp2[gpus] = {nullptr};
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
-    CUDACHECK(allocDistributedX(handle, dX, hX, M, K));
+    FastKronCHECK(allocDistributedX(handle, dX, hX, M, K));
   } else {
     CUDACHECK(backendMalloc(backend, (void**)&dX[0], sizeX));
   }
@@ -450,7 +450,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("memcpy\n");
   if (tune) {
-    CUDACHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
+    FastKronCHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
   }
     
   for (int g = 0; g < gpus; g++) {
@@ -500,7 +500,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     T* dResultToHost = (T*)malloc(sizeResult);
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaDeviceSynchronize());
     if (useDistributed) {
-      CUDACHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+      FastKronCHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
       CUDACHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }

@@ -45,6 +45,25 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
+const char* fastKronGetErrorString(fastKronError err) {
+  switch(err) {
+    case fastKronSuccess:
+      return "fastKronSuccess";
+    case fastKronBackendNotAvailable:
+      return "fastKronBackendNotAvailable";
+    case fastKronInvalidMemoryAccess:
+      return "fastKronInvalidMemoryAccess";
+    case fastKronKernelNotFound:
+      return "fastKronKernelNotFound";
+    case fastKronInvalidArgument:
+      return "fastKronInvalidArgument";
+    case fastKronOtherError:
+      return "fastKronOtherError";
+    default:
+      return NULL;
+  }
+}
+
 fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   return handlePtr->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
@@ -96,7 +115,7 @@ fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint 
 
 fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
-                                 void* streams[]) {
+                                 void* streams) {
   return handle->distributedsgekmm(NumKronMats, x, kronMats, result, M, N, K, 
                                    KronMatCols, KronMatRows, temp1, temp2, streams);
 }

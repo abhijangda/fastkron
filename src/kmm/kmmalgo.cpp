@@ -85,12 +85,12 @@ fastKronError executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
     if (i < nextF) problem = KMMProblem(problem.x(), problem.opX(), problem.n(), 
                                         problem.fs(), problem.opFs(), result);
     err = func(problem.rsub(i, nextF), i, tmps, result);
-    if (err != cudaSuccess) break;
+    if (err != fastKronSuccess) break;
     if (tmps != nullptr)
       problem.swap(tmps[0], tmps[1]);
   }
 
-  return cudaSuccess;
+  return fastKronSuccess;
 }
 
 //TODO: Change to forwardGeKMM
@@ -105,10 +105,10 @@ fastKronError reverseExecuteGeKMM(KMMProblem problem, void* tmps[2], Matrix resu
       problem = KMMProblem(problem.x(), problem.opX(), problem.n(), 
                            problem.fs(), problem.opFs(), result);
     err = func(problem.rsub(i, nextF), i, tmps, result);
-    if (err != cudaSuccess) break;
+    if (err != fastKronSuccess) break;
     if (tmps != nullptr)
       problem.swap(tmps[0], tmps[1]);
   }
 
-  return cudaSuccess;
+  return fastKronSuccess;
 }

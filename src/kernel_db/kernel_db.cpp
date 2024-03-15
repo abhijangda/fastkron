@@ -23,7 +23,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
     fastKronError status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
                distP2PStore, warmups, runs, kernelTime);
-    if (status == cudaSuccess) {
+    if (status == fastKronSuccess) {
       std::cout << std::fixed << std::setprecision(2) << 
                   " runs in " << kernelTime << " ms " << std::endl;
       if (kernelTime < minTime) {
@@ -46,7 +46,7 @@ fastKronError KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
   void* ptr = nullptr;
   fastKronError e = procMalloc(proc, m.numel() * sizeof(float), ptr);
 
-  if (e == cudaSuccess) {
+  if (e == fastKronSuccess) {
     m.ptr = ptr;
   }
 

@@ -1,5 +1,14 @@
 #pragma once
 
+#define FastKronCHECK(cmd) do {                        \
+  fastKronError e = cmd;                              \
+  if(e != fastKronSuccess) {      \
+    printf("Failed: FastKron error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,fastKronGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)                                          \
+
 enum fastKronOp {
   fastKronOp_N = 1,
   fastKronOp_T = 2
@@ -15,10 +24,15 @@ enum fastKronBackend {
 
 enum fastKronError {
   fastKronSuccess = 0,
+  //FastKron not compiled with requested backend
   fastKronBackendNotAvailable = 1,
+  //Invalid memory access occurred
   fastKronInvalidMemoryAccess = 2,
+  //Kernel not found for requested case
   fastKronKernelNotFound = 3,
+  //An argument to the API function is invalid
   fastKronInvalidArgument = 4,
+  //Undefined Error
   fastKronOtherError = 5,
 };
 
@@ -27,6 +41,8 @@ typedef struct FastKronHandle* fastKronHandle;
 
 fastKronError fastKronInit(fastKronHandle* handle, fastKronBackend backend);
 void fastKronDestroy(fastKronHandle handle);
+
+const char* fastKronGetErrorString(fastKronError err);
 
 fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
 fastKronError fastKronInitX86(fastKronHandle handlePtr);
@@ -62,7 +78,7 @@ fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint 
 //TODO: modify such that the results are always written to the supplied result pointer 
 fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
-                                 float* temp1[], float* temp2[], void* stream[]);
+                                 float* temp1[], float* temp2[], void* stream);
 
 fastKronError allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K);
 fastKronError gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
