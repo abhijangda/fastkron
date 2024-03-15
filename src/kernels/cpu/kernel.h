@@ -299,10 +299,10 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
   }
 }
 
-template<typename ElemT, typename Vec2T, typename Vec4T,
-         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
-         uint TileM, uint FusedFacs, uint RegK, uint RegQ,
-         int XAlignment, int FAlignment, fastKronOp OpX, fastKronOp OpF>
+template<typename ElemT, uint MaxQ, uint MaxP, uint TileP, 
+         uint TileQ, uint TileK, uint TileM, uint FusedFacs, 
+         uint RegK, uint RegQ, int XAlignment, int FAlignment,
+         fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,
                FusedParams<FusedFacs> fusedParams,
                DistributedParams distParams,

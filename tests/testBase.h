@@ -187,25 +187,6 @@ void baselineKPThenMatmul(uint NUM_KP_MATS, int* result, int* x, int* kpout[], i
   // printMatrix(result, M, N, 4, 4);
 }
 
-template<typename T>
-T* transpose(uint M, uint N, T* data) {
-  T* Trdata = new T[M * N];
-
-  for (int m = 0; m < M; m++) {
-    for (int n = 0; n < N; n++) {
-      Trdata[n*M + m] = data[m*N + n];
-    }
-  }
-
-  return Trdata;
-}
-
-void swap(uint& X, uint& Y) {
-  uint Temp = X;
-  X = Y;
-  Y = Temp;
-}
-
 //Serial implementation of the new Kron GEMM implementation
 template<typename T>
 void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[],

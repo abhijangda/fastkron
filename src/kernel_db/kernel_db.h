@@ -1,8 +1,5 @@
 #include <functional>
 
-#include <cuda_runtime.h>
-#include <cuda.h>
-
 #include "kmm/kmmalgo.h"
 #include "kernels/kernel_info.h"
 #include "kernels/params.h"

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "kmm/kmmalgo.h"
+#include "config.h"
 
 enum KernelMode {
   KernelModeTuning,
@@ -17,20 +18,20 @@ union AllTypes {
   float f;
   double d;
 
-  __host__ __device__
+  CUDA_DEVICE_HOST
   AllTypes()                {}
   AllTypes(float  f) : f(f) {}
   AllTypes(long   l) : l(l) {}
   AllTypes(int    i) : i(i) {}
   AllTypes(double d) : d(d) {}
 
-  __device__
+  CUDA_DEVICE
   float  get(float  p) const {return f;}
-  __device__
+  CUDA_DEVICE
   long   get(long   p) const {return l;}
-  __device__
+  CUDA_DEVICE
   int    get(int    p) const {return i;}
-  __device__
+  CUDA_DEVICE
   double get(double p) const {return d;}
 };
 
@@ -61,15 +62,15 @@ struct EpilogueParams {
   }
 
   template<typename ElemT>
-  __device__
+  CUDA_DEVICE
   ElemT        getAlpha() const {return alpha.get((ElemT)0);}
   
   template<typename ElemT>
-  __device__
+  CUDA_DEVICE
   ElemT        getBeta()  const {return beta.get((ElemT)0);}
   
   template<typename ElemT>
-  __device__
+  CUDA_DEVICE
   const ElemT* getD()     const {return (const ElemT*)glD;}
 };
 
@@ -174,7 +175,7 @@ struct DistributedParams {
       thisResults = nullptr;
   }
 
-  __device__ __forceinline__ void* getLocalGPUResult(uint gc) const {
+  CUDA_DEVICE void* getLocalGPUResult(uint gc) const {
     switch(gc) {
       case 0: return gpuResults0;
       case 1: return gpuResults1;

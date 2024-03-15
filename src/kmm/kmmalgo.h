@@ -3,9 +3,6 @@
 #include <iostream>
 #include <numeric>
 
-#include <cuda_runtime.h>
-#include <cuda.h>
-
 #include "kmm/matrix.h"
 #include "config.h"
 #include "fastkron.h"

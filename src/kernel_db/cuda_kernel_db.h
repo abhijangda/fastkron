@@ -6,7 +6,7 @@
 #include <nccl.h>
 
 #include "kmm/kmmalgo.h"
-#include "kernels/kernel_info.h"
+#include "kernels/cuda_kernel_info.h"
 #include "kernels/params.h"
 #include "kernel_db/kernel_db.h"
 #include "env/env.h"
