@@ -44,16 +44,16 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
     [](const KMMProblem kmm) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, int, void* t1, Matrix result) {
       correct = correct && (kmm.l() % gpusInK == 0);
-      return cudaSuccess;
+      return fastKronSuccess;
     });
 
   return correct;
 }
 
 //TODO: Change to backwardGeKMM
-cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
+fastKronError executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<cudaError_t (const KMMProblem, int rstart, void*[2], Matrix)> func) {
+                         std::function<fastKronError (const KMMProblem, int rstart, void*[2], Matrix)> func) {
   int nextF = 1;
 
   void* firstIterOut;
@@ -76,7 +76,7 @@ cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
   Matrix result = problem.y();
   problem = KMMProblem(problem.x(), problem.opX(), problem.n(), problem.fs(),
                        problem.opFs(), Matrix(problem.m(), problem.l(), firstIterOut));
-  cudaError_t err;
+  fastKronError err;
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     fastKronOp opX;
     nextF = next(problem);
@@ -94,11 +94,11 @@ cudaError_t executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
 }
 
 //TODO: Change to forwardGeKMM
-cudaError_t reverseExecuteGeKMM(KMMProblem problem, void* tmps[2], Matrix result,
+fastKronError reverseExecuteGeKMM(KMMProblem problem, void* tmps[2], Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<cudaError_t (const KMMProblem, int start, void*[2], Matrix)> func) {
+                                std::function<fastKronError (const KMMProblem, int start, void*[2], Matrix)> func) {
   int nextF = 1;
-  cudaError_t err;
+  fastKronError err;
   for (int i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
     if (i - (problem.n() - 1) < nextF) 

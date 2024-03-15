@@ -1,12 +1,17 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.25)
 set(CMAKE_DEBUG_POSTFIX d)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_HIP_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CUDA_STANDARD_REQUIRED True)
+set(CMAKE_HIP_STANDARD_REQUIRED True)
+
 project(FastKron 
   VERSION 1.0
-  LANGUAGES CUDA CXX)
+  LANGUAGES CUDA CXX HIP)
+
+find_package(HIP 5.7 REQUIRED)
 find_package(CUDA 12.0 REQUIRED)
 find_package(OpenMP REQUIRED)
 
@@ -14,6 +19,7 @@ if(OpenMP_CXX_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set (CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_HIP_FLAGS "${CMAKE_CUDA_FLAGS} ${OpenMP_CXX_FLAGS}")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
@@ -21,7 +27,7 @@ endif()
 option(ENABLE_CUDA "Enable CUDA" OFF)
 option(ENABLE_X86  "Enable X86" OFF)
 option(ENABLE_ARM  "Enable ARM" OFF)
-option(ENABLE_ROCM "Enable ROCM/HIP" OFF)
+option(ENABLE_HIP "Enable ROCM/HIP" OFF)
 
 if(ENABLE_CUDA)
   add_definitions(-DENABLE_CUDA)
@@ -32,15 +38,20 @@ endif()
 if(ENABLE_ARM)
   add_definitions(-DENABLE_ARM)
 endif()
-if(ENABLE_ROCM)
-  add_definitions(-DENABLE_ROCM)
+if(ENABLE_HIP)
+  add_definitions(-DENABLE_HIP -D__HIP_PLATFORM_AMD__)
+  #TODO: Fix this
+  set(HIP_INCLUDE_PATH /opt/rocm/include)
 endif()
 ################
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_HIP_STANDARD 17)
+
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CUDA_STANDARD_REQUIRED True)
+set(CMAKE_HIP_STANDARD_REQUIRED True)
 
 # TODO set these as RELEASE flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mfma -march=native -O3")
@@ -67,9 +78,7 @@ set(KERNELS ${SRC}/kernels)
 ##### FastKron ################
 set(KERNEL_HEADER_FILES 
     ${KERNELS}/kernel_info.h
-    ${KERNELS}/params.h
-    #TODO Fix this
-    ${SRC}/handle/distrib_handle.cu)
+    ${KERNELS}/params.h)
 
 if(ENABLE_CUDA)
   include(${CUDA}/kron-kernels/kernels.cmake)
@@ -82,6 +91,7 @@ if(ENABLE_CUDA)
       ${CUDA}/otherkernels.cuh
       ${SRC}/kernel_db/cuda_kernel_db.h
       ${SRC}/kernel_db/cuda_kernel_db.cpp
+      ${SRC}/handle/distrib_handle.cu
       ${CUDA_KERNELS})
 else()
   set(CUDA_HEADER_FILES)
@@ -135,6 +145,7 @@ target_include_directories(FastKron
                            PRIVATE 
                               ${SRC}/
                               ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+                              ${HIP_INCLUDE_PATH}
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)

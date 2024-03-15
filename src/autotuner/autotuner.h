@@ -44,11 +44,11 @@ class Autotuner {
   FastKronHandle& fastKron;
   TunedKernelsMap tunedKernelsMap;
 
-  cudaError_t tune(KMMProblem problem, bool isDistributed, DistributedParams distParams);
+  fastKronError tune(KMMProblem problem, bool isDistributed, DistributedParams distParams);
 
 public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
   {}
 
-  cudaError_t tune(KMMProblem problem);
+  fastKronError tune(KMMProblem problem);
 };

@@ -42,7 +42,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
       }
     }
 
-    return cudaSuccess;
+    return fastKronSuccess;
   });
 
   tunedKernels = minEpilogueKernels;
@@ -51,7 +51,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   return minTime;
 }
 
-cudaError_t Autotuner::tune(KMMProblem problem,
+fastKronError Autotuner::tune(KMMProblem problem,
                             bool isDistributed, DistributedParams distParams) {
   //Only row major layout of all matrics is supported.
   //For performance eval we do not need these to contain any value
@@ -79,13 +79,13 @@ cudaError_t Autotuner::tune(KMMProblem problem,
       }
     }
 
-    return cudaSuccess;
+    return fastKronSuccess;
   });
 
   return err;
 }
 
-cudaError_t Autotuner::tune(KMMProblem problem) {
+fastKronError Autotuner::tune(KMMProblem problem) {
   //Only row major layout of all matrics is supported.
   float minTime = 0;
   Matrix result, temp;
@@ -239,5 +239,5 @@ cudaError_t Autotuner::tune(KMMProblem problem) {
     }
 #endif
   }
-  return cudaSuccess;
+  return fastKronSuccess;
 }

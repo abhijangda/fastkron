@@ -122,7 +122,7 @@ std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
   return os;
 }
 
-cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
+fastKronError FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
                                    EpilogueParams epilogueParams) {
   TunedKernelsSeries kernelSeries;
   if (tunedKernelSeries.size() > 0) {
@@ -133,19 +133,19 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   //   const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
   //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
   // }
-  if (problem.y().data() == nullptr) return cudaErrorInvalidValue;
-  if (temp1              == nullptr) return cudaErrorInvalidValue;
+  if (problem.y().data() == nullptr) return fastKronInvalidArgument;
+  if (temp1              == nullptr) return fastKronInvalidArgument;
 
   void* temps[2] = {temp1, temp2};
 
   auto kernelDb = getKernelDb(backend);
   auto kernelSeriesIter = kernelSeries.begin();
 
-  cudaError_t err = executeGeKMM(problem, temps, kernelSeries.size(),
+  fastKronError err = executeGeKMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel->FusedFacs;},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
       (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
-        cudaError_t err;
+        fastKronError err;
         auto kernel = *kernelSeriesIter;
 
         KernelInfo* selectedKernel = kernel.kernel;
@@ -153,7 +153,6 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
         err = kernelDb->invokeKernel(selectedKernel, rstart, 
                                      subProblem, epilogueParams,
                                      KernelModeNormal);
-        CUDA_CHECK(err);
         kernelSeriesIter++;
         return err;
     });
@@ -161,11 +160,11 @@ cudaError_t FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* 
   return err;
 }
 
-cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp) {
+fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp) {
 #ifdef ENABLE_CUDA
   if (cudaKernels.isDistributed_) {
     if (!checkDistributedKronSizes(problem, cudaKernels.perGPUKronBatch_, cudaKernels.gpusInK_))
-      return cudaErrorInvalidValue;
+      return fastKronInvalidArgument;
   }
 #endif
 
@@ -177,7 +176,7 @@ cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, 
     (const KMMProblem kmm, int rstart, void* temps[2], Matrix result) {
       tempCols = std::max(tempCols, std::max(kmm.k(), kmm.l()));
       resultCols = kmm.l();
-      return cudaSuccess;
+      return fastKronSuccess;
     });
   
   uint gpuM;
@@ -197,15 +196,15 @@ cudaError_t FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result, 
   return e;
 }
 
-cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize) {
-  if (resultSize == nullptr) return cudaErrorInvalidValue;
-  if (tempSize   == nullptr) return cudaErrorInvalidValue;
+fastKronError FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize) {
+  if (resultSize == nullptr) return fastKronInvalidArgument;
+  if (tempSize   == nullptr) return fastKronInvalidArgument;
 
   Matrix result, temp;
   //TODO: Should move to individual backend
-  cudaError_t e = gekmmResultTemp(problem, result, temp);
+  fastKronError e = gekmmResultTemp(problem, result, temp);
 
-  if (e == cudaSuccess) {
+  if (e == fastKronSuccess) {
     *tempSize   = temp.numel();
 #ifdef ENABLE_CUDA
     if (cudaKernels.isDistributed_ and cudaKernels.distComm_ == DistComm::NCCL)
@@ -221,23 +220,33 @@ cudaError_t FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize, s
   return e;
 }
 
-cudaError_t FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  if (backend != fastKronBackend_CUDA) return cudaErrorInvalidValue;
+fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
+  if (backend != fastKronBackend_CUDA) return fastKronBackendNotAvailable;
 #ifdef ENABLE_CUDA
   cudaKernels.init((cudaStream_t*)ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
-  return cudaSuccess;
+  return fastKronSuccess;
 #else
-  return cudaErrorInvalidValue;
+  return fastKronBackendNotAvailable;
 #endif
 }
 
-cudaError_t FastKronHandle::initX86Backend() {
-#ifdef ENABLE_X86
-  if (backend != fastKronBackend_X86) return cudaErrorInvalidValue;
-  x86Kernels.init();
-  return cudaSuccess;
+fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
+  if (backend != fastKronBackend_HIP) return fastKronInvalidArgument;
+#ifdef ENABLE_CUDA
+  hipKernels.init((cudaStream_t*)ptrToStream);
+  return fastKronSuccess;
 #else
-  return cudaErrorInvalidValue;
+  return fastKronBackendNotAvailable;
+#endif
+}
+
+fastKronError FastKronHandle::initX86Backend() {
+  if (backend != fastKronBackend_X86) return fastKronBackendNotAvailable;
+#ifdef ENABLE_X86
+  x86Kernels.init();
+  return fastKronSuccess;
+#else
+  return fastKronBackendNotAvailable;
 #endif
 }
 

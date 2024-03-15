@@ -20,7 +20,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
     if (!kernel->canCompute(problem, distP2PStore)) continue;
     std::cout << kernel->str();
     float kernelTime = std::numeric_limits<float>::max();
-    cudaError_t status;
+    fastKronError status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
                distP2PStore, warmups, runs, kernelTime);
     if (status == cudaSuccess) {
@@ -42,9 +42,9 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   return std::make_pair(bestKernel, minTime);
 }
 
-cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
+fastKronError KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
   void* ptr = nullptr;
-  cudaError_t e = procMalloc(proc, m.numel() * sizeof(float), ptr);
+  fastKronError e = procMalloc(proc, m.numel() * sizeof(float), ptr);
 
   if (e == cudaSuccess) {
     m.ptr = ptr;
@@ -53,6 +53,6 @@ cudaError_t KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
   return e;
 }
 
-cudaError_t KernelDatabase::procFree(uint32_t proc, Matrix m) {
+fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
   return procFree(proc, m.data());
 }

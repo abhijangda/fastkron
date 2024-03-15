@@ -183,13 +183,13 @@ struct std::hash<KMMProblem> {
   std::size_t operator()(const KMMProblem& k) const;
 };
 
-cudaError_t executeGeKMM(const KMMProblem problem, void* temps[2],
+fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
                          uint32_t swaps,
                          std::function<uint (const KMMProblem)> next,
-                         std::function<cudaError_t (const KMMProblem, int, void*[2], Matrix)> func);
-cudaError_t reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
+                         std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
+fastKronError reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
                                 Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<cudaError_t (const KMMProblem, int, void*[2], Matrix)> func);
+                                std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
 bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);

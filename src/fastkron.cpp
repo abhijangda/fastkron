@@ -9,35 +9,35 @@
 /**************************************************
           Library Functions
 ***************************************************/
-cudaError_t fastKronInit(fastKronHandle* handle, fastKronBackend backend) {
+fastKronError fastKronInit(fastKronHandle* handle, fastKronBackend backend) {
   switch (backend) {
     case fastKronBackend_CUDA:
       #ifndef ENABLE_CUDA
-        return cudaErrorInvalidValue;
+        return fastKronBackendNotAvailable;
       #endif
       break;
-    case fastKronBackend_ROCM:
+    case fastKronBackend_HIP:
       #ifndef ENABLE_ROCM 
-        return cudaErrorInvalidValue;
+        return fastKronBackendNotAvailable;
       #endif
       break;
     case fastKronBackend_X86:
       #ifndef ENABLE_X86
-        return cudaErrorInvalidValue;
+        return fastKronBackendNotAvailable;
       #endif
       break;
     case fastKronBackend_ARM:
       #ifndef ENABLE_ARM
-        return cudaErrorInvalidValue;
+        return fastKronBackendNotAvailable;
       #endif
       break;
     default:
-      return cudaErrorInvalidValue;
+      return fastKronBackendNotAvailable;
   }
 
   FastKronHandle* h = new FastKronHandle(backend);
   *handle = h;
-  return cudaSuccess;
+  return fastKronSuccess;
 }
 
 void fastKronDestroy(fastKronHandle handle) {
@@ -45,35 +45,35 @@ void fastKronDestroy(fastKronHandle handle) {
   delete handle;
 }
 
-cudaError_t fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   return handlePtr->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
-cudaError_t fastKronInitX86(fastKronHandle handlePtr) {
+fastKronError fastKronInitX86(fastKronHandle handlePtr) {
   return handlePtr->initX86Backend();
 }
 
-cudaError_t gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
                        size_t* resultSize, size_t* tempSize) {
   KMMProblem problem(M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);
   return handlePtr->gekmmSizes(problem, resultSize, tempSize);
 }
 
-cudaError_t sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, 
+fastKronError sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, 
                    fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
                    float alpha, float beta, float *Z, float* temp1, float* temp2) {
   KMMProblem problem(M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return handle->xgekmm(problem, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
-cudaError_t igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, 
+fastKronError igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, 
                    fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, int *Z, int* temp1, int* temp2) {
   KMMProblem problem(M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
-cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, 
+fastKronError dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, 
                    fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2) {
   KMMProblem problem(M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
@@ -81,43 +81,43 @@ cudaError_t dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
                         EpilogueParams::create<double>(alpha, beta, Z));
 }
 
-cudaError_t sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
                        fastKronOp opX, fastKronOp opFs) {
   return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs));
 }
-cudaError_t dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
                        fastKronOp opX, fastKronOp opFs) {
   return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs));
 }
-cudaError_t igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
                        fastKronOp opX, fastKronOp opFs) {
   return Autotuner(*handle).tune(KMMProblem(M, N, Ps, Qs, opX, opFs));
 }
 
-cudaError_t kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
+fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
-                                 cudaStream_t streams[]) {
+                                 void* streams[]) {
   return handle->distributedsgekmm(NumKronMats, x, kronMats, result, M, N, K, 
                                    KronMatCols, KronMatRows, temp1, temp2, streams);
 }
 
-cudaError_t allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K) {
+fastKronError allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K) {
   return handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
-cudaError_t gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+fastKronError gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   return handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 
-// cudaError_t allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K) {
+// fastKronError allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K) {
 //   assert(false); handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 // }
-// cudaError_t gatherDistributedY(fastKronHandle handle, int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+// fastKronError gatherDistributedY(fastKronHandle handle, int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
 //   assert(false); handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 // }
 
-// cudaError_t allocDistributedX(fastKronHandle handle, double* dX[], double* hX, uint M, uint K) {
+// fastKronError allocDistributedX(fastKronHandle handle, double* dX[], double* hX, uint M, uint K) {
 //   assert(false);handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 // }
-// cudaError_t gatherDistributedY(fastKronHandle handle, double* dY[], double* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+// fastKronError gatherDistributedY(fastKronHandle handle, double* dY[], double* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
 //   assert(false);handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 // }

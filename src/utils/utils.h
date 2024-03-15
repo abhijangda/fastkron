@@ -25,6 +25,15 @@
   }                                                 \
 } while(0)                                          \
 
+#define HIP_CHECK(cmd) do {                        \
+  hipError_t e = cmd;                              \
+  if(e != hipSuccess and                           \
+     e != hipErrorPeerAccessAlreadyEnabled) {      \
+    printf("Failed: HIP error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)                                          \
 
 #define NCCLCHECK(cmd) do {                         \
   ncclResult_t r = cmd;                             \
