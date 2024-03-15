@@ -454,7 +454,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
     
   for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
+    if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     CUDACHECK(backendMalloc(backend, (void**)&dTemp1[g], tempSize));
     if (resultSize < tempSize)
       CUDACHECK(backendMalloc(backend, (void**)&dTemp2[g], tempSize));
@@ -489,14 +489,16 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
     }
     for (int g = 0; g < gpus; g++) {
-      CUDACHECK(cudaSetDevice(g));
-      CUDACHECK(cudaDeviceSynchronize());
+      if (backend == fastKronBackend_CUDA) { 
+        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cudaDeviceSynchronize());
+      }
     }
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     printf("sizeResult %ld resultSize %ld\n", sizeResult, resultSize * sizeof(T));
     T* dResultToHost = (T*)malloc(sizeResult);
-    CUDACHECK(cudaDeviceSynchronize());
+    if (backend == fastKronBackend_CUDA) CUDACHECK(cudaDeviceSynchronize());
     if (useDistributed) {
       CUDACHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
@@ -608,7 +610,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
 
   //Free GPU Memory
   for (int g = 0; g < gpus; g++) {
-    CUDACHECK(cudaSetDevice(g));
+    if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     CUDACHECK(backendFree(backend, dX[g]));
     for (uint i = 0; i < NUM_KP_MATS; i++) {
       CUDACHECK(backendFree(backend, dKpMats[g * NUM_KP_MATS + i]));
