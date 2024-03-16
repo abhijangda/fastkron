@@ -2,6 +2,19 @@
 
 #include <hip/hip_runtime_api.h>
 
+#ifdef ENABLE_HIP
+  #include "kernels/hip/kron-kernels/kernel_decl.inc"
+#endif
+
+HIPKernel AllHIPKernels[] = {
+#ifdef ENABLE_HIP
+  ALL_HIP_KERNELS
+#endif
+};
+
+HIPKernelDatabase::HIPKernelDatabase() : KernelDatabase() {
+  loadKernels<HIPKernel>(AllHIPKernels, sizeof(AllHIPKernels)/sizeof(HIPKernel));
+}
 
 //Launch cuda kernels
 template<uint FusedFacs>

@@ -108,8 +108,11 @@ else()
 endif()
 
 if(ENABLE_HIP)
+  include(${KERNELS}/hip/kron-kernels/kernels.cmake)
   set(HIP_HEADER_FILES 
-      ${SRC}/kernel_db/hip_kernel_db.hip)
+      ${KERNELS}/hip/kron-kernels/kernels.cmake
+      ${SRC}/kernel_db/hip_kernel_db.hip
+      ${SRC}/kernel_db/hip_kernel_db.h)
 else()
   set(HIP_HEADER_FILES)
 endif()
@@ -140,7 +143,7 @@ else()
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cpp)
 endif()
 
-cuda_add_library(FastKron 
+cuda_add_library(FastKron
   SHARED
     ${SOURCES}
     ${HEADER_FILES}

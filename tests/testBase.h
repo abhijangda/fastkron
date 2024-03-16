@@ -452,16 +452,22 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (verbose) printf("allocating\n");
   FastKronCHECK(fastKronInit(&handle, backend));
   handle->setUseFusion(useFusion);
-  if (backend == fastKronBackend_CUDA) {
-  #ifdef TEST_BACKEND_CUDA
-    FastKronCHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
-  #endif
-  } else if (backend == fastKronBackend_X86)
-    FastKronCHECK(fastKronInitX86(handle));
-  else if (backend == fastKronBackend_HIP) {
-  #ifdef TEST_BACKEND_HIP
-    FastKronCHECK(fastKronInitHIP(handle, &stream[0]));
-  #endif
+  switch (backend) {
+    case fastKronBackend_CUDA:
+      #ifdef TEST_BACKEND_CUDA
+        FastKronCHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
+      #endif
+      break;
+    case fastKronBackend_X86:
+      FastKronCHECK(fastKronInitX86(handle));
+      break;
+    case fastKronBackend_HIP:
+      #ifdef TEST_BACKEND_HIP
+        FastKronCHECK(fastKronInitHIP(handle, &stream[0]));
+      #endif
+      break;
+    default:
+      exit(EXIT_SUCCESS);
   }
   size_t resultSize = 0;
   size_t tempSize = 0;

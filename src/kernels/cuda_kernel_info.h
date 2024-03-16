@@ -3,13 +3,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-struct CUDAKernel : public KernelInfo {
-  void* kernelFunc;
-
-  uint NumThreads;
-  uint AAlignment;
-  uint KronAlignment;
-
+struct CUDAKernel : public GPUKernel {
   CUDAKernel() {}
   CUDAKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
@@ -17,39 +11,8 @@ struct CUDAKernel : public KernelInfo {
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
-             KernelInfo(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
-             RegK, RegQ, elemType, opX, opF),
-             NumThreads(NumThreads), kernelFunc(getKernelFunc()),
-             AAlignment(AAlignment), KronAlignment(KronAlignment) {}
-
-  bool isValid() {
-    const uint ValidThreads = ((tileX.n()/f.p())/RegK) * (tileF.q()/RegQ);
-    if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
-      std::cout << "Invalid kernel config " << str() << std::endl; 
-      return false;
-    }
-    return KernelInfo::isValid() && kernelFunc != nullptr;
-  }
-
-  virtual std::string str() const {
-    std::stringstream info;
-    info << NumThreads << "_" << KernelInfo::str();
-    return info.str();
-  }
-
-  dim3 grid(KMMProblem problem) {
-    return dim3(problem.k()/tileX.n() * DIVUP(problem.f(0).q(), tileF.q()),
-                DIVUP(problem.m(), tileX.m()),
-                1);
-  }
-
-  dim3 block() {
-    return dim3{NumThreads, 1, 1};
-  }
-
-  size_t sharedMemSize() {
-    return totalTileSize();
-  }
+             GPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegK, RegQ, 
+                       elemType, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment) {}
 
   cudaError_t setSharedMemAttr() {
     cudaError_t err = cudaSuccess;

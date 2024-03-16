@@ -167,8 +167,8 @@ class CPUKernel(Kernel):
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
-class CUDAKernel(Kernel):
-  def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
+class GPUKernel(Kernel):
+  def __init__(self, gpu_type : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
                cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, aalign: int, kalign: int,
@@ -182,6 +182,8 @@ class CUDAKernel(Kernel):
     self.tileM = tileM
     self.aalign = aalign
     self.kalign = kalign
+    self.gpu_type = gpu_type
+    assert gpu_type in ["cuda", "hip"]
 
     """Compute several constants of kernel
        Corresponds to line numbers in kernel.cuh
@@ -198,19 +200,19 @@ class CUDAKernel(Kernel):
     return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
 
   def kernelname(self):
-    return f"cuda_{super().kernelname()}"
+    return f"{self.gpu_type}_{super().kernelname()}"
 
   def filename(self):
-    return f"{self.kernelname()}.cu"
+    return f"{self.kernelname()}.{self.gpu_type[0:3]}"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, cudaStream_t stream)"
+    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, {self.gpu_type}Stream_t stream)"
 
   def templateDecl(self):
     return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, 1, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
   
   def kernelDecl(self):
-    return f"cudaKernel<{self.templateDecl()}>"
+    return f"{self.gpu_type}Kernel<{self.templateDecl()}>"
 
   def hostInvokeFile(self):
     return "\n".join(['#include "../kernel.cuh"', "",
@@ -223,7 +225,7 @@ class CUDAKernel(Kernel):
 
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
-    return "CUDAKernel{"+\
+    return f"{self.gpu_type.upper()}Kernel{{"+\
             self.constructorArgs() + ","+\
             f"get{self.kernelname()}, {self.threads()}, " +\
             f"{self.aalign}, {self.kalign}" + "}"
@@ -270,6 +272,8 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
     kernel_dir = os.path.join(kernel_dir, 'cuda/kron-kernels')
   elif backend == 'x86':
     kernel_dir = os.path.join(kernel_dir, 'cpu/x86/kron-kernels')
+  elif backend == 'hip':
+    kernel_dir = os.path.join(kernel_dir, 'hip/kron-kernels')
 
   empty_dir(kernel_dir)
   configs = {}
@@ -302,11 +306,11 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                     if shape not in configs:
                       configs[shape] = []
                     __configs = []
-                    if backend == 'cuda':
+                    if backend in ['cuda', 'hip']:
                       for kEqVar in [0]:
                           distKernels = [0, 1] if useDistKernels else [0]
                           for dist in distKernels: 
-                            __configs += [CUDAKernel(KronMatMulShape(m, tK, n, p, q), 
+                            __configs += [GPUKernel(backend, KronMatMulShape(m, tK, n, p, q), 
                                                      KronMatMulShape(m, k, n, ps, qs),
                                                     p, q, tQ, tP, tM, regRows, regCols,
                                                     numFusedKerns, dist, "Float", aalign, kronalign, allSameShapes,
@@ -453,7 +457,7 @@ if __name__ == "__main__":
         print(e)
         sys.exit(0)
   
-  if args.backend is None or args.backend.lower() not in ['cuda', 'x86', 'rocm', 'arm']:
+  if args.backend is None or args.backend.lower() not in ['cuda', 'x86', 'hip', 'arm']:
     print(f"Invalid backend: {args.backend}")
     sys.exit(0)
 
