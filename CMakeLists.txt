@@ -126,8 +126,13 @@ set(SOURCES
     ${SRC}/handle/handle.cpp
     ${SRC}/kernel_db/kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
-    ${SRC}/kmm/matrix.cpp
-    ${SRC}/handle/distrib_handle.cu)
+    ${SRC}/kmm/matrix.cpp)
+
+if (ENABLE_CUDA)
+  set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cu)
+else()
+  set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cpp)
+endif()
 
 cuda_add_library(FastKron 
   SHARED
@@ -144,7 +149,6 @@ target_link_libraries(FastKron nccl)
 target_include_directories(FastKron 
                            PRIVATE 
                               ${SRC}/
-                              ${HIP_INCLUDE_PATH}
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)

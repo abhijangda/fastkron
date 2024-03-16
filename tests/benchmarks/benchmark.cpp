@@ -118,8 +118,8 @@ int main(int argc, char* argv[]) {
     char* backendStr = opt->getValue("backend");
     if (strcmp(strupr(backendStr), "CUDA") == 0) {
       backend = fastKronBackend_CUDA;
-    } else if (strcmp(strupr(backendStr), "ROCM") == 0) {
-      backend = fastKronBackend_ROCM;
+    } else if (strcmp(strupr(backendStr), "HIP") == 0) {
+      backend = fastKronBackend_HIP;
     } else if (strcmp(strupr(backendStr), "X86") == 0) {
       backend = fastKronBackend_X86;
     } else if (strcmp(strupr(backendStr), "ARM") == 0) {

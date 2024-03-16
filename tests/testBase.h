@@ -28,6 +28,11 @@
 #else
 #define CUDACHECK(cmd) ;
 #endif
+
+#ifdef TEST_BACKEND_HIP
+  
+#endif
+
 // static double convertTimeValToDouble(struct timeval _time) {
 //   return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
 // }
