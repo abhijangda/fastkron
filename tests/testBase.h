@@ -429,8 +429,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   hipStream_t stream[gpus];
   if (backend == fastKronBackend_HIP) {
     for (int g = 0; g < gpus; g++) {
-      CUDACHECK(hipSetDevice(g));
-      CUDACHECK(hipStreamCreate(&stream[g]));
+      HIPCHECK(hipSetDevice(g));
+      HIPCHECK(hipStreamCreate(&stream[g]));
     }
   }
 #endif
@@ -491,7 +491,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //TODO: Add alloc distributed for KpMats
     if (useDistributed) {
       for (int g = 0; g < gpus; g++) {
-        CUDACHECK(cudaSetDevice(g));
+        CUDACHECK(cuif (backend == fastKronBackend_CUDA) CUDACHECK(cudaDeviceSynchronize());daSetDevice(g));
         FastKronCHECK(backendMalloc(backend, (void**)&dKpMats[g * NUM_KP_MATS + i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
       }
     } else {
@@ -547,6 +547,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       if (backend == fastKronBackend_CUDA) { 
         CUDACHECK(cudaSetDevice(g));
         CUDACHECK(cudaDeviceSynchronize());
+      } else if (backend == fastKronBackend_HIP) {
+        CUDACHECK(hipSetDevice(g));
+        CUDACHECK(hipDeviceSynchronize());
       }
     }
     if (verbose) printf("checking results\n");
@@ -554,6 +557,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     printf("sizeResult %ld resultSize %ld\n", sizeResult, resultSize * sizeof(T));
     T* dResultToHost = (T*)malloc(sizeResult);
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaDeviceSynchronize());
+    if (backend == fastKronBackend_HIP) HIPCHECK(hipDeviceSynchronize());
     if (useDistributed) {
       FastKronCHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
@@ -573,6 +577,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   cudaEvent_t end[gpus];
 #endif
 
+#ifdef TEST_BACKEND_HIP
+  hipEvent_t start[gpus];
+  hipEvent_t end[gpus];
+#endif
+
   float elapsedTime = 1e10;
 
   if (numIters > 0 || warmup > 0) {
@@ -581,6 +590,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         CUDACHECK(cudaSetDevice(g));
         CUDACHECK(cudaEventCreate(&start[g]));
         CUDACHECK(cudaEventCreate(&end[g]));
+      }
+    } else if (backend == fastKronBackend_HIP) {
+      for (int g = 0; g < gpus; g++) {
+        HIPCHECK(hipSetDevice(g));
+        HIPCHECK(hipEventCreate(&start[g]));
+        HIPCHECK(hipEventCreate(&end[g]));
       }
     }
     printf("warmup\n");
@@ -599,6 +614,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         CUDACHECK(cudaSetDevice(g));
         CUDACHECK(cudaStreamSynchronize(stream[g]));
       }
+    } else if (backend == fastKronBackend_HIP) {
+      for (int g = 0; g < gpus; g++) {
+        HIPCHECK(hipSetDevice(g));
+        HIPCHECK(hipStreamSynchronize(stream[g]));
+      }
     }
     printf("390\n");
     //Run
@@ -615,6 +635,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         for (int g = 0; g < gpus; g++) {
           CUDACHECK(cudaSetDevice(g));
           CUDACHECK(cudaEventRecord(start[g], stream[g]));
+        }
+      } else if (backend == fastKronBackend_HIP) {
+        for (int g = 0; g < gpus; g++) {
+          HIPCHECK(hipSetDevice(g));
+          HIPCHECK(hipEventRecord(start[g], stream[g]));
         }
       }
       float iterTime = 0.0f;
@@ -650,6 +675,17 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
             elapsedTime = std::min(elapsedTime, t);
           }
         }
+      } else if (backend == fastKronBackend_HIP) {
+        for (int g = 0; g < gpus; g++) {
+          HIPCHECK(hipSetDevice(g));
+          HIPCHECK(hipEventRecord(end[g], stream[g]));
+          HIPCHECK(hipEventSynchronize(end[g]));
+          if (g == 0) {
+            float t;
+            HIPCHECK(hipEventElapsedTime(&t, start[g], end[g]));
+            elapsedTime = std::min(elapsedTime, t);
+          }
+        }
       } else if (backend == fastKronBackend_X86) {
         // double endtime = getCurrTime();
         elapsedTime = std::min(elapsedTime, iterTime);
@@ -673,6 +709,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   //Free GPU Memory
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
+    if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
     FastKronCHECK(backendFree(backend, dX[g]));
     for (uint i = 0; i < NUM_KP_MATS; i++) {
       FastKronCHECK(backendFree(backend, dKpMats[g * NUM_KP_MATS + i]));

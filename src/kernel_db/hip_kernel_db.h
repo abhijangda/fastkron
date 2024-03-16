@@ -25,7 +25,8 @@ public:
   ~HIPKernelDatabase() {}
 
   fastKronError init(void* ptrToStream){
-    streams[0] = ptrToStream;
+    streams.clear();
+    streams.push_back(ptrToStream);
     return fastKronSuccess;
   }
   
@@ -61,7 +62,7 @@ public:
                                  KernelMode execMode, 
                                  bool distP2PStore,
                                  int warmups, int runs,
-                                 float& runtime){return fastKronSuccess;}
+                                 float& runtime){runtime = 1.0f; return fastKronSuccess;}
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
   virtual fastKronError procFree(uint32_t proc, void* ptr);
