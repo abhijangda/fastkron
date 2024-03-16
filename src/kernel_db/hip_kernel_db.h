@@ -24,7 +24,10 @@ public:
   HIPKernelDatabase() {}
   ~HIPKernelDatabase() {}
 
-  fastKronError init(void* ptrToStream){return fastKronSuccess;}
+  fastKronError init(void* ptrToStream){
+    streams[0] = ptrToStream;
+    return fastKronSuccess;
+  }
   
   void free() {
     streams.clear();
@@ -45,9 +48,9 @@ public:
   }
 
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                   KMMProblem problem,
-                                   EpilogueParams epilogueParams,
-                                   KernelMode execMode) {return fastKronSuccess;}
+                                     KMMProblem problem,
+                                     EpilogueParams epilogueParams,
+                                     KernelMode execMode);
   virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
@@ -60,6 +63,6 @@ public:
                                  int warmups, int runs,
                                  float& runtime){return fastKronSuccess;}
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
-  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val){return fastKronSuccess;}
-  virtual fastKronError procFree(uint32_t proc, void* ptr){return fastKronSuccess;}
+  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
+  virtual fastKronError procFree(uint32_t proc, void* ptr);
 };
