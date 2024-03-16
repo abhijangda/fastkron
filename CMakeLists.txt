@@ -96,7 +96,7 @@ else()
   set(CUDA_HEADER_FILES)
 endif()
 
-if (ENABLE_X86)
+if(ENABLE_X86)
   include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
   set(X86_HEADER_FILES
       ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
@@ -110,9 +110,10 @@ endif()
 if(ENABLE_HIP)
   include(${KERNELS}/hip/kron-kernels/kernels.cmake)
   set(HIP_HEADER_FILES 
-      ${KERNELS}/hip/kron-kernels/kernels.cmake
+      ${KERNELS}/hip/kron-kernels/kernel_decl.inc
       ${SRC}/kernel_db/hip_kernel_db.hip
-      ${SRC}/kernel_db/hip_kernel_db.h)
+      ${SRC}/kernel_db/hip_kernel_db.h
+      ${HIP_KERNELS})
 else()
   set(HIP_HEADER_FILES)
 endif()

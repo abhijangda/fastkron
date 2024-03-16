@@ -212,10 +212,10 @@ class GPUKernel(Kernel):
     return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, 1, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
   
   def kernelDecl(self):
-    return f"{self.gpu_type}Kernel<{self.templateDecl()}>"
+    return f"cudaKernel<{self.templateDecl()}>"
 
   def hostInvokeFile(self):
-    return "\n".join(['#include "../kernel.cuh"', "",
+    return "\n".join(['#include "kernels/cuda/kernel.cuh"', "",
                       self.getKernelFuncDecl()+"{",
                       f"  return (void*)&{self.kernelDecl()};",
                       "}",

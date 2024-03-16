@@ -1,3 +1,8 @@
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#include <hip/amd_detail/host_defines.h>
+#endif
+
 #include "config.h"
 
 #include "kernels/params.h"
@@ -103,7 +108,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   XShared Xsh(&sharedStorage[0]);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
-  register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
+  /*register*/ YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
@@ -124,8 +129,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if (FusedFacs > 1) yReg.zero();
 
       if (isThreadValid) {
-        register XRegisters<ElemT, TileM, RegK, TileP> Xr;
-        register FRegisters<ElemT, TileP, RegQ> Fr;
+        /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
+        /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
         mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }

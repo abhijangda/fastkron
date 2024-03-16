@@ -103,7 +103,7 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  T& add(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
+  void add(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
     set(data, i, j, k, at(data, i, j, k) + val);
   }
 
@@ -131,8 +131,8 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  T& add(uint32_t i, uint32_t j, uint32_t k, T val) {
-    return Base::add(data, i, j, k, val);
+  void add(uint32_t i, uint32_t j, uint32_t k, T val) {
+    Base::add(data, i, j, k, val);
   }
 
   CUDA_DEVICE_HOST

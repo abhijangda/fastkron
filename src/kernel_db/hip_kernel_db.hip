@@ -1,6 +1,8 @@
-#include "hip_kernel_db.h"
+#include "kernel_db/hip_kernel_db.h"
 
 #include <hip/hip_runtime_api.h>
+
+#include "kernels/hip_kernel_info.h"
 
 #ifdef ENABLE_HIP
   #include "kernels/hip/kron-kernels/kernel_decl.inc"
@@ -18,7 +20,7 @@ HIPKernelDatabase::HIPKernelDatabase() : KernelDatabase() {
 
 //Launch cuda kernels
 template<uint FusedFacs>
-fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex, 
+fastKronError invoke(HIPKernel& kernelInfo, const uint kronIndex, 
                    KMMProblem problem,
                    DistributedParams distParams,
                    EpilogueParams epilogueParams,
@@ -45,7 +47,7 @@ fastKronError HIPKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
                                              KMMProblem problem, EpilogueParams epilogueParams,
                                              KernelMode execMode) {
   DistributedParams distParams;
-  hipStream_t stream = (hipStream_t*)streams[0];
+  hipStream_t stream = *(hipStream_t*)streams[0];
   HIPKernel& hipKernel = dynamic_cast<HIPKernel&>(*kernel);
 
   switch(problem.n()) {
@@ -69,7 +71,7 @@ fastKronError HIPKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
                        distParams, epilogueParams, execMode, stream);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
-      return fastKronErrorKernelNotFound;
+      return fastKronKernelNotFound;
   }
 }
 

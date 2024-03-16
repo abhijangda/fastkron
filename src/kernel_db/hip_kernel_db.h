@@ -21,7 +21,7 @@ public:
   // thread_pool<ThreadArgs*>* threads_;
 
 public:
-  HIPKernelDatabase() {}
+  HIPKernelDatabase();
   ~HIPKernelDatabase() {}
 
   fastKronError init(void* ptrToStream){
