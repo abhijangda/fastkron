@@ -24,6 +24,7 @@ endif()
 
 if (ENABLE_HIP)
   add_executable(benchmark_hip benchmark.cpp)
+  set_source_files_properties(benchmark.cpp PROPERTIES LANGUAGE HIP)
   add_dependencies(benchmark_hip anyoption)
   target_compile_definitions(benchmark_hip PUBLIC TEST_BACKEND_HIP)
   target_include_directories(benchmark_hip PRIVATE AnyOption ${HIP_INCLUDE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/../ ${SRC}/)

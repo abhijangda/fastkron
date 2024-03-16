@@ -221,9 +221,9 @@ fastKronError FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize,
 }
 
 fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  if (backend != fastKronBackend_CUDA) return fastKronBackendNotAvailable;
+  if (backend != fastKronBackend_CUDA) return fastKronInvalidArgument;
 #ifdef ENABLE_CUDA
-  cudaKernels.init((cudaStream_t*)ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
+  cudaKernels.init(ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
   return fastKronSuccess;
 #else
   return fastKronBackendNotAvailable;
@@ -232,8 +232,8 @@ fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int g
 
 fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
   if (backend != fastKronBackend_HIP) return fastKronInvalidArgument;
-#ifdef ENABLE_CUDA
-  hipKernels.init((cudaStream_t*)ptrToStream);
+#ifdef ENABLE_HIP
+  hipKernels.init(ptrToStream);
   return fastKronSuccess;
 #else
   return fastKronBackendNotAvailable;
@@ -241,7 +241,7 @@ fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
 }
 
 fastKronError FastKronHandle::initX86Backend() {
-  if (backend != fastKronBackend_X86) return fastKronBackendNotAvailable;
+  if (backend != fastKronBackend_X86) return fastKronInvalidArgument;
 #ifdef ENABLE_X86
   x86Kernels.init();
   return fastKronSuccess;

@@ -30,7 +30,7 @@
   if(e != hipSuccess and                           \
      e != hipErrorPeerAccessAlreadyEnabled) {      \
     printf("Failed: HIP error %s:%d '%s'\n",       \
-        __FILE__,__LINE__,cudaGetErrorString(e));   \
+        __FILE__,__LINE__,hipGetErrorString(e));   \
     exit(EXIT_FAILURE);                             \
   }                                                 \
 } while(0)                                          \

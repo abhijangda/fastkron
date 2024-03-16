@@ -17,7 +17,7 @@ fastKronError fastKronInit(fastKronHandle* handle, fastKronBackend backend) {
       #endif
       break;
     case fastKronBackend_HIP:
-      #ifndef ENABLE_ROCM 
+      #ifndef ENABLE_HIP
         return fastKronBackendNotAvailable;
       #endif
       break;
@@ -66,6 +66,11 @@ const char* fastKronGetErrorString(fastKronError err) {
 
 fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   return handlePtr->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
+}
+
+fastKronError fastKronInitHIP(fastKronHandle handlePtr, void *ptrToStream) {
+  //TODO: remove Backend
+  return handlePtr->initHIPBackend(ptrToStream);
 }
 
 fastKronError fastKronInitX86(fastKronHandle handlePtr) {

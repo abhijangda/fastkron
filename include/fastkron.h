@@ -45,6 +45,7 @@ void fastKronDestroy(fastKronHandle handle);
 const char* fastKronGetErrorString(fastKronError err);
 
 fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream);
 fastKronError fastKronInitX86(fastKronHandle handlePtr);
 
 //TODO: A different function for setting stream of handle 

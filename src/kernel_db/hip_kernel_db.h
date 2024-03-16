@@ -24,7 +24,7 @@ public:
   HIPKernelDatabase() {}
   ~HIPKernelDatabase() {}
 
-  fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons){}
+  fastKronError init(void* ptrToStream){return fastKronSuccess;}
   
   void free() {
     streams.clear();
@@ -47,19 +47,19 @@ public:
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode) {}
+                                   KernelMode execMode) {return fastKronSuccess;}
   virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
-                                           KernelMode execMode){}
+                                           KernelMode execMode){return fastKronSuccess;}
   virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
                                  KernelMode execMode, 
                                  bool distP2PStore,
                                  int warmups, int runs,
-                                 float& runtime){}
+                                 float& runtime){return fastKronSuccess;}
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
-  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val){}
-  virtual fastKronError procFree(uint32_t proc, void* ptr){}
+  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val){return fastKronSuccess;}
+  virtual fastKronError procFree(uint32_t proc, void* ptr){return fastKronSuccess;}
 };

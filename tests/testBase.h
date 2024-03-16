@@ -30,7 +30,19 @@
 #endif
 
 #ifdef TEST_BACKEND_HIP
-  
+  #include <hip/hip_common.h>
+  #include <hip/hip_runtime.h>
+
+  #define HIPCHECK(cmd) do {                         \
+    hipError_t e = cmd;                    \
+    if( e != hipSuccess ) {                          \
+      printf("Failed: Cuda error %s:%d '%s'\n",             \
+          __FILE__,__LINE__,hipGetErrorString(e));   \
+      abort();                             \
+    }                                                 \
+  } while(0)
+#else
+#define HIPCHECK(cmd) ;
 #endif
 
 // static double convertTimeValToDouble(struct timeval _time) {
@@ -305,10 +317,10 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
 
 static fastKronError backendMalloc(fastKronBackend backend, void** ptr, size_t sz) {
   switch(backend) {
-#ifdef TEST_BACKEND_CUDA
     case fastKronBackend_CUDA:
       CUDACHECK(cudaMalloc(ptr, sz)); return fastKronSuccess;
-#endif
+    case fastKronBackend_HIP:
+      HIPCHECK(hipMalloc(ptr, sz));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
       {
@@ -316,62 +328,72 @@ static fastKronError backendMalloc(fastKronBackend backend, void** ptr, size_t s
         if (*ptr == nullptr) return fastKronSuccess;
         return fastKronSuccess;
       }
+    default:
+      return fastKronInvalidArgument;
   }
   return fastKronSuccess;
 }
 
 static fastKronError backendFree(fastKronBackend backend, void* ptr) {
   switch(backend) {
-#ifdef TEST_BACKEND_CUDA
     case fastKronBackend_CUDA:
       CUDACHECK(cudaFree(ptr)); return fastKronSuccess;
-#endif
+    case fastKronBackend_HIP:
+      HIPCHECK(hipFree(ptr));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
       delete ptr;
       return fastKronSuccess;
+    default:
+      return fastKronInvalidArgument;
   }
   return fastKronSuccess;
 }
 
 static fastKronError backendMemset(fastKronBackend backend, void* ptr, size_t sz, char value) {
   switch(backend) {
-#ifdef TEST_BACKEND_CUDA
     case fastKronBackend_CUDA:
       CUDACHECK(cudaMemset(ptr, sz, value)); return fastKronSuccess;
-#endif
+    case fastKronBackend_HIP:
+      HIPCHECK(hipMemset(ptr, sz, value));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
       memset(ptr, sz, value);
       return fastKronSuccess;
+    default:
+      return fastKronInvalidArgument;
   }
   return fastKronSuccess;
 }
 
 static fastKronError backendMemcpyHostToDevice(fastKronBackend backend, void* dst, void* src, size_t sz) {
   switch(backend) {
-#ifdef TEST_BACKEND_CUDA
     case fastKronBackend_CUDA:
       CUDACHECK(cudaMemcpy(dst, src, sz, cudaMemcpyHostToDevice)); return fastKronSuccess;
-#endif
+    case fastKronBackend_HIP:
+      HIPCHECK(hipMemcpy(dst, src, sz, hipMemcpyHostToDevice));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
       memcpy(dst, src, sz);
       return fastKronSuccess;
+    default:
+      return fastKronInvalidArgument;
   }
   return fastKronSuccess;
 }
 
 static fastKronError backendMemcpyDeviceToHost(fastKronBackend backend, void* dst, void* src, size_t sz) {
   switch(backend) {
-#ifdef TEST_BACKEND_CUDA
     case fastKronBackend_CUDA:
-      cudaMemcpy(dst, src, sz, cudaMemcpyDeviceToHost); return fastKronSuccess;
-#endif
+      CUDACHECK(cudaMemcpy(dst, src, sz, cudaMemcpyDeviceToHost)); return fastKronSuccess;
+    case fastKronBackend_HIP:
+      HIPCHECK(hipMemcpy(dst, src, sz, hipMemcpyDeviceToHost));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
       memcpy(dst, src, sz);
       return fastKronSuccess;
+    default:
+      return fastKronInvalidArgument;
   }
   return fastKronSuccess;
 }
@@ -403,6 +425,16 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
 #endif
 
+#ifdef TEST_BACKEND_HIP
+  hipStream_t stream[gpus];
+  if (backend == fastKronBackend_HIP) {
+    for (int g = 0; g < gpus; g++) {
+      CUDACHECK(hipSetDevice(g));
+      CUDACHECK(hipStreamCreate(&stream[g]));
+    }
+  }
+#endif
+
   //Allocate host data
   T* hX;
   T* hKpMats[NUM_KP_MATS];
@@ -426,6 +458,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   #endif
   } else if (backend == fastKronBackend_X86)
     FastKronCHECK(fastKronInitX86(handle));
+  else if (backend == fastKronBackend_HIP) {
+  #ifdef TEST_BACKEND_HIP
+    FastKronCHECK(fastKronInitHIP(handle, &stream[0]));
+  #endif
+  }
   size_t resultSize = 0;
   size_t tempSize = 0;
   FastKronCHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
@@ -433,8 +470,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T* dX[gpus];
   T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
-  T* dTemp1[gpus] = {nullptr};
-  T *dTemp2[gpus] = {nullptr};
+  T* dTemp1[gpus];// = {nullptr};
+  T *dTemp2[gpus];// = {nullptr};
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
     FastKronCHECK(allocDistributedX(handle, dX, hX, M, K));
