@@ -102,10 +102,16 @@ if (ENABLE_X86)
       ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
       ${SRC}/kernel_db/cpu_kernel_db.cpp
       ${SRC}/kernel_db/cpu_kernel_db.h
-      ${X86_KERNELS}
-      )
+      ${X86_KERNELS})
 else()
   set(X86_HEADER_FILES)
+endif()
+
+if(ENABLE_HIP)
+  set(HIP_HEADER_FILES 
+      ${SRC}/kernel_db/hip_kernel_db.hip)
+else()
+  set(HIP_HEADER_FILES)
 endif()
 
 set(HEADER_FILES 
@@ -141,6 +147,7 @@ cuda_add_library(FastKron
     ${KERNEL_HEADER_FILES}
     ${CUDA_HEADER_FILES}
     ${X86_HEADER_FILES}
+    ${HIP_HEADER_FILES}
   OPTIONS
     ${NVCC_FLAGS}
 )
