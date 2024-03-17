@@ -31,7 +31,6 @@ fastKronError invoke(HIPKernel& kernelInfo, const uint kronIndex,
   //Create the grid and thread block
   KernelParams<FusedFacs> params (problem, kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
-
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, hipStream_t);
@@ -40,6 +39,7 @@ fastKronError invoke(HIPKernel& kernelInfo, const uint kronIndex,
                                         kernelInfo.block(), kernelInfo.sharedMemSize(), stream);
   status = hipGetLastError();
   HIP_CHECK(status);
+
   return fastKronSuccess;
 }
 

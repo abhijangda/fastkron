@@ -36,7 +36,8 @@
   #define HIPCHECK(cmd) do {                         \
     hipError_t e = cmd;                    \
     if( e != hipSuccess ) {                          \
-      printf("Failed: Cuda error %s:%d '%s'\n",             \
+      printf("39\n");\
+      printf("Failed: HIP error %s:%d '%s'\n",             \
           __FILE__,__LINE__,hipGetErrorString(e));   \
       abort();                             \
     }                                                 \
@@ -476,8 +477,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T* dX[gpus];
   T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];
-  T* dTemp1[gpus];// = {nullptr};
-  T *dTemp2[gpus];// = {nullptr};
+  T* dTemp1[gpus];
+  T *dTemp2[gpus];
+  for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = nullptr;}
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
     FastKronCHECK(allocDistributedX(handle, dX, hX, M, K));
@@ -491,7 +493,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //TODO: Add alloc distributed for KpMats
     if (useDistributed) {
       for (int g = 0; g < gpus; g++) {
-        CUDACHECK(cuif (backend == fastKronBackend_CUDA) CUDACHECK(cudaDeviceSynchronize());daSetDevice(g));
+        if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
         FastKronCHECK(backendMalloc(backend, (void**)&dKpMats[g * NUM_KP_MATS + i], KP_MAT_K[i] * KP_MAT_N[i] * sizeof(T)));
       }
     } else {
@@ -508,6 +510,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
+    if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
     FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], tempSize));
     if (resultSize < tempSize)
       FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], tempSize));
@@ -541,6 +544,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
     } else {
+      printf("546: %p %p %p\n", dX[0], dResult[0], dTemp1[0]);
       kronGEMM<T>(handle, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dResult[0], M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
     }
     for (int g = 0; g < gpus; g++) {
@@ -548,16 +552,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
         CUDACHECK(cudaSetDevice(g));
         CUDACHECK(cudaDeviceSynchronize());
       } else if (backend == fastKronBackend_HIP) {
-        CUDACHECK(hipSetDevice(g));
-        CUDACHECK(hipDeviceSynchronize());
+        HIPCHECK(hipSetDevice(g));
+        HIPCHECK(hipDeviceSynchronize());
       }
     }
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
-    printf("sizeResult %ld resultSize %ld\n", sizeResult, resultSize * sizeof(T));
     T* dResultToHost = (T*)malloc(sizeResult);
-    if (backend == fastKronBackend_CUDA) CUDACHECK(cudaDeviceSynchronize());
-    if (backend == fastKronBackend_HIP) HIPCHECK(hipDeviceSynchronize());
     if (useDistributed) {
       FastKronCHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {

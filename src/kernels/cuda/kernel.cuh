@@ -114,7 +114,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
     shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
-                                              tileP, tid, XTile, Xsh);
+                                                   tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
