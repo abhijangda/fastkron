@@ -1,5 +1,5 @@
 #if defined(__NVCC__) || defined(__CUDACC__) || defined(__HIPCC__)
-    #if defined(__HIPCC__) && !defined(__forceinline__)
+    #if !defined(__forceinline__)
         #define __forceinline__ inline
     #endif
 

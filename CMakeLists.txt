@@ -71,6 +71,8 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
 endif()
 ################################
 
+set(CMAKE_HIP_FLAGS "-O3")
+
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(CUDA ${SRC}/kernels/cuda)
 set(KERNELS ${SRC}/kernels)
