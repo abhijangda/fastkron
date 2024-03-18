@@ -203,7 +203,7 @@ class GPUKernel(Kernel):
     return f"{self.gpu_type}_{super().kernelname()}"
 
   def filename(self):
-    return f"{self.kernelname()}.{self.gpu_type[0:3]}"
+    return f"{self.kernelname()}.{'cu' if self.gpu_type == 'cuda' else 'hip'}"
 
   def hostFuncDecl(self):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, {self.gpu_type}Stream_t stream)"

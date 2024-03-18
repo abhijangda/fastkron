@@ -2,6 +2,7 @@ add_subdirectory(AnyOption EXCLUDE_FROM_ALL)
 
 if (ENABLE_CUDA)
   add_executable(benchmark_cuda benchmark.cpp)
+  set_source_files_properties(benchmark.cpp PROPERTIES LANGUAGE CUDA)
   add_dependencies(benchmark_cuda anyoption)
   target_compile_definitions(benchmark_cuda PUBLIC TEST_BACKEND_CUDA)
   target_include_directories(benchmark_cuda PRIVATE AnyOption ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} ${CMAKE_CURRENT_SOURCE_DIR}/../ ${SRC}/)

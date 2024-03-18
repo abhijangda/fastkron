@@ -127,7 +127,7 @@ fastKronError Autotuner::tune(KMMProblem problem) {
 
 #ifdef ENABLE_CUDA
   //TODO: Move this into cuda kernel db 
-  CUDA_CHECK(cudaSetDevice(0));
+  // CUDA_CHECK(cudaSetDevice(0));
 #endif
 
   if (devicesPerProc <= 1) {
@@ -148,7 +148,7 @@ fastKronError Autotuner::tune(KMMProblem problem) {
     assert(fastKron.cudaKernels.isDistributed_ == true);
     if (!checkDistributedKronSizes(problem,
                                    fastKron.cudaKernels.perGPUKronBatch_, fastKron.cudaKernels.gpusInK_))
-      return cudaErrorInvalidValue;
+      return fastKronInvalidKMMProblem;
 
     //In distributed case run every LocalKron series on a single GPU    
     minTime = std::numeric_limits<float>::max();

@@ -1,7 +1,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "gpu_kernel_info.h"
+#include "kernels/gpu_kernel_info.h"
 
 struct CUDAKernel : public GPUKernel {
   CUDAKernel() {}

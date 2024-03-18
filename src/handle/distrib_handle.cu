@@ -1,9 +1,12 @@
 #include <cassert>
 #include <cstring>
 
+#include <nccl.h>
+
 #include "handle/handle.h"
 #include "utils/utils.h"
 #include "kernels/cuda/otherkernels.cuh"
+#include "kernels/cuda_kernel_info.h"
 
 struct ThreadArgs {
   ThreadArgs() {}
@@ -236,12 +239,12 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         distParams.updateGPUResults((void**)gpuResults);
 
         //TODO: a single switch case for FusedKernels?
-        cudaError_t status;
+        fastKronError status;
         KMMProblem subProblem(gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
                               fastKronOp_N, (void**)krons, fastKronOp_N, (void*)innerCurrResult, prevTempN, currTempN);
         status = handle.cudaKernels.invokeP2PStoreKernel(kernel.kernel, kernel.end, subProblem, distParams, 
                                                          EpilogueParams::create<float>(), KernelModeNormal);
-        assert(status == cudaSuccess);
+        assert(status == fastKronSuccess);
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
         
         // if (gc == 0 and kernel.end == 1) {
@@ -302,7 +305,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
               // printf("g %d dst %d src %d\n", g, dst, src);
               if (src == dst) {
               } else {
-                NCCLCHECK(ncclRecv(recvTemp, sendRecvSize, ncclFloat, gr * handle.cudaKernels.gpusInK_ + src, handle.cudaKernels.ncclComms[g], stream[g]));
+                NCCLCHECK(ncclRecv(recvTemp, sendRecvSize, ncclFloat, gr * handle.cudaKernels.gpusInK_ + src, (ncclComm_t)handle.cudaKernels.ncclComms[g], stream[g]));
                 CUDA_CHECK(cudaStreamSynchronize(stream[g]));
                 dim3 grid = {gpuM, 1,1};
                 dim3 block = {256, 1, 1};
@@ -324,7 +327,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
             //    printGPUArray<float>(SliceRows, SliceCols, (float*)handle.cudaKernels.sendTemps_[g], stream[g]);
             //    printf("699 dst %d g %d\n", dst, g);
             // }
-            NCCLCHECK(ncclSend(sendTemp, sendRecvSize, ncclFloat, gr * handle.cudaKernels.gpusInK_ + dst, handle.cudaKernels.ncclComms[g], stream[g]));
+            NCCLCHECK(ncclSend(sendTemp, sendRecvSize, ncclFloat, gr * handle.cudaKernels.gpusInK_ + dst, (ncclComm_t)handle.cudaKernels.ncclComms[g], stream[g]));
             CUDA_CHECK(cudaStreamSynchronize(stream[g]));
           }
         }
@@ -363,7 +366,7 @@ fastKronError distributedKronMatmul(FastKronHandle& handle, const uint NumKronMa
   cudaError_t status = cudaSuccess;
 
 #ifdef ENABLE_CUDA
-  if (NumKronMats < handle.cudaKernels.perGPUKronBatch_) return cudaErrorInvalidValue;
+  if (NumKronMats < handle.cudaKernels.perGPUKronBatch_) return fastKronInvalidArgument;
   const uint batchedKronMuls = handle.cudaKernels.perGPUKronBatch_;
 
   thread_pool<ThreadArgs*>::task tasks[handle.cudaKernels.numGPUs_];

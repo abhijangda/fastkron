@@ -1,12 +1,7 @@
 #include <functional>
 #include <vector>
 
-#include <cuda_runtime.h>
-#include <cuda.h>
-#include <nccl.h>
-
 #include "kmm/kmmalgo.h"
-#include "kernels/cuda_kernel_info.h"
 #include "kernels/params.h"
 #include "kernel_db/kernel_db.h"
 #include "env/env.h"
@@ -19,14 +14,14 @@ struct ThreadArgs;
 //TODO: Change name to Executor?
 class CUDAKernelDatabase : public KernelDatabase {
 public:
-  std::vector<cudaStream_t> streams;
+  std::vector<void*> streams;
   uint numGPUs_;
   uint gpusInM_;
   uint gpusInK_;
   uint perGPUKronBatch_;
   bool isDistributed_;
   DistComm distComm_;
-  std::vector<ncclComm_t> ncclComms;
+  std::vector<void*> ncclComms;
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
 
@@ -34,42 +29,26 @@ public:
   CUDAKernelDatabase();
   ~CUDAKernelDatabase() {}
 
-  cudaError_t init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
+  fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   
-  void free() {
-    streams.clear();
-    if (isDistributed_) {
-      for (uint g = 0; g < gpusInM_; g++) {
-        int s = pthread_barrier_destroy(&barriers_[g]);
-        PTHREAD_BARRIER_CHECK(s);
-      }
+  void free();
 
-      delete threads_;
-      delete barriers_;
-
-      if (distComm_ == DistComm::NCCL) {
-        for (int i=0; i<ncclComms.size(); i++)
-          ncclCommDestroy(ncclComms[i]);
-      }
-    }
-  }
-
-  virtual cudaError_t invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
                                    KernelMode execMode);
-  virtual cudaError_t invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
                                            KernelMode execMode);
-  virtual cudaError_t timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
                                  KernelMode execMode, 
                                  bool distP2PStore,
                                  int warmups, int runs,
                                  float& runtime);
-  virtual cudaError_t procMalloc(uint32_t proc, size_t size, void*& ptr);
-  virtual cudaError_t procMemset(uint32_t proc, Matrix& m, float val);
-  virtual cudaError_t procFree(uint32_t proc, void* ptr);
+  virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
+  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
+  virtual fastKronError procFree(uint32_t proc, void* ptr);
 };

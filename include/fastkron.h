@@ -32,8 +32,10 @@ enum fastKronError {
   fastKronKernelNotFound = 3,
   //An argument to the API function is invalid
   fastKronInvalidArgument = 4,
+  
+  fastKronInvalidKMMProblem = 5, 
   //Undefined Error
-  fastKronOtherError = 5,
+  fastKronOtherError = 6,
 };
 
 extern "C" {

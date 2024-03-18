@@ -9,10 +9,8 @@ set(CMAKE_HIP_STANDARD_REQUIRED True)
 
 project(FastKron 
   VERSION 1.0
-  LANGUAGES CUDA CXX HIP)
+  LANGUAGES CXX)
 
-find_package(HIP 5.7 REQUIRED)
-find_package(CUDA 12.0 REQUIRED)
 find_package(OpenMP REQUIRED)
 
 if(OpenMP_CXX_FOUND)
@@ -31,27 +29,32 @@ option(ENABLE_HIP "Enable ROCM/HIP" OFF)
 
 if(ENABLE_CUDA)
   add_definitions(-DENABLE_CUDA)
+  enable_language(CUDA)
+  find_package(CUDA 12.0 REQUIRED)
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_STANDARD_REQUIRED True)
 endif()
+
 if(ENABLE_X86)
   add_definitions(-DENABLE_X86)
 endif()
+
 if(ENABLE_ARM)
   add_definitions(-DENABLE_ARM)
 endif()
+
 if(ENABLE_HIP)
+  find_package(HIP 5.7 REQUIRED)
   add_definitions(-DENABLE_HIP -D__HIP_PLATFORM_AMD__)
   #TODO: Fix this
   set(HIP_INCLUDE_PATH /opt/rocm/include)
+  set(CMAKE_HIP_STANDARD 17)
+  set(CMAKE_HIP_STANDARD_REQUIRED True)
 endif()
 ################
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_HIP_STANDARD 17)
-
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CUDA_STANDARD_REQUIRED True)
-set(CMAKE_HIP_STANDARD_REQUIRED True)
 
 # TODO set these as RELEASE flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mfma -march=native -O3")
@@ -92,7 +95,7 @@ if(ENABLE_CUDA)
       ${CUDA}/kernel.cuh
       ${CUDA}/otherkernels.cuh
       ${SRC}/kernel_db/cuda_kernel_db.h
-      ${SRC}/kernel_db/cuda_kernel_db.cpp
+      ${SRC}/kernel_db/cuda_kernel_db.cu
       ${CUDA_KERNELS})
 else()
   set(CUDA_HEADER_FILES)
@@ -146,7 +149,7 @@ else()
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cpp)
 endif()
 
-cuda_add_library(FastKron
+add_library(FastKron
   SHARED
     ${SOURCES}
     ${HEADER_FILES}
@@ -154,8 +157,6 @@ cuda_add_library(FastKron
     ${CUDA_HEADER_FILES}
     ${X86_HEADER_FILES}
     ${HIP_HEADER_FILES}
-  OPTIONS
-    ${NVCC_FLAGS}
 )
 
 target_link_libraries(FastKron nccl)
