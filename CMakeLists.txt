@@ -71,7 +71,7 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
 endif()
 ################################
 
-set(CMAKE_HIP_FLAGS "-O3")
+set(CMAKE_HIP_FLAGS "-O3 -Rpass-analysis=kernel-resource-usage --save-temps")
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(CUDA ${SRC}/kernels/cuda)

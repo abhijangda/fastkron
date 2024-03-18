@@ -177,7 +177,7 @@ class FactorArray : public StackArray<Factor, MaxSize> {
 public:
   FactorArray(uint32_t n, const uint32_t* ps, const uint32_t* qs, void* const* ptrs) : 
     Base(nullptr, n) {
-    assert (n < MaxSize);
+    // assert (n < MaxSize);
     for (uint32_t i = 0; i < n; i++) {
       Base::array[i] = Factor(ps[i], qs[i], ptrs ? ptrs[i] : nullptr);
     }
@@ -187,7 +187,7 @@ public:
 
   CUDA_DEVICE_HOST
   Factor& operator[](int index) {
-  #if defined(__NVCC__) || defined(__CUDACC__)
+  #if defined(__NVCC__) || defined(__CUDACC__) || defined(__HIPCC__)
   #else
     assert (index < Base::n && index >= 0);
   #endif
@@ -196,7 +196,7 @@ public:
 
   CUDA_DEVICE_HOST
   const Factor& operator[](int index) const {
-  #if defined(__NVCC__) || defined(__CUDACC__)
+  #if defined(__NVCC__) || defined(__CUDACC__) || defined(__HIPCC__)
   #else
     assert (index < Base::n && index >= 0);
   #endif
