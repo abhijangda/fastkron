@@ -33,6 +33,15 @@ if(ENABLE_CUDA)
   find_package(CUDA 12.0 REQUIRED)
   set(CMAKE_CUDA_STANDARD 17)
   set(CMAKE_CUDA_STANDARD_REQUIRED True)
+  if (DEFINED NVCC_GENCODE_FLAGS)
+  else()
+  set(NVCC_GENCODE_FLAGS "-gencode arch=compute_70,code=sm_70 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90")
+  endif()
+
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${NVCC_GENCODE_FLAGS}")
+  if (CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
+  endif()
 endif()
 
 if(ENABLE_X86)
@@ -60,19 +69,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mfma -march=native -O3")
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
-set(CMAKE_CUDA_FLAGS_DEBUG "-G")
-
-########NVCC FLAGS###############
-if (DEFINED NVCC_GENCODE_FLAGS)
-else()
-set(NVCC_GENCODE_FLAGS "-gencode arch=compute_70,code=sm_70 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90")
-endif()
-
-set(NVCC_FLAGS "${NVCC_FLAGS} -std=c++17 ${NVCC_GENCODE_FLAGS}")
-if (CMAKE_BUILD_TYPE MATCHES "Debug")
-    set(NVCC_FLAGS "${NVCC_FLAGS} -G")
-endif()
-################################
 
 set(CMAKE_HIP_FLAGS "-O3 -Rpass-analysis=kernel-resource-usage --save-temps")
 
