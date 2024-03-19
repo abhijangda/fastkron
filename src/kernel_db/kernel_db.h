@@ -66,6 +66,7 @@ public:
     }
   }
 
+  virtual fastKronError initTune() {return fastKronSuccess;}
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,

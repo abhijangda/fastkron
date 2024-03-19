@@ -111,6 +111,12 @@ fastKronError HIPKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
   HIP_CHECK(hipEventDestroy(endEvent));
   return fastKronSuccess;
 }
+
+fastKronError HIPKernelDatabase::initTune() {
+  HIP_CHECK(hipSetDevice(0));
+  return fastKronSuccess;
+}
+
 fastKronError HIPKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr){
   HIP_CHECK(hipSetDevice(proc));
   HIP_CHECK(hipMalloc(&ptr, size));

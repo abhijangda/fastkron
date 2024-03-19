@@ -25,21 +25,9 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
     if (!info.isValid()) abort();
     CUDA_CHECK(info.setSharedMemAttr());
   }
-  
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
   //do it
   //TODO: Add if debug
-  if (true) {
-    uint numKernels = 0;
-    std::cout << "Loading compiled kernels" << std::endl;
-    for (auto iter : compiledKernels) {
-      for (auto kernel : iter.second) {
-        std::cout << kernel->str() << std::endl;
-      }
-      numKernels += iter.second.size();
-    }
-    std::cout << "Number of kernels loaded: " << numKernels << std::endl;
-  }
 }
 
 void CUDAKernelDatabase::free() {
@@ -58,6 +46,11 @@ void CUDAKernelDatabase::free() {
         ncclCommDestroy((ncclComm_t)ncclComms[i]);
     }
   }
+}
+
+fastKronError CUDAKernelDatabase::initTune() {
+  CUDA_CHECK(cudaSetDevice(0));
+  return fastKronSuccess;
 }
 
 //Launch cuda kernels

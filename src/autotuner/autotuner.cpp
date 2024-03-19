@@ -125,10 +125,7 @@ fastKronError Autotuner::tune(KMMProblem problem) {
     }
   }
 
-#ifdef ENABLE_CUDA
-  //TODO: Move this into cuda kernel db 
-  // CUDA_CHECK(cudaSetDevice(0));
-#endif
+  kernelDb->initTune();
 
   if (devicesPerProc <= 1) {
     //Use temporary as input/output matrix

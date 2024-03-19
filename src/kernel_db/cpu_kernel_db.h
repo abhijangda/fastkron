@@ -10,7 +10,7 @@ public:
   CPUKernelDatabase();
 
   void init() {}
-  
+  virtual fastKronError initTune() {}
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,

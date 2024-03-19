@@ -32,7 +32,7 @@ public:
   fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   
   void free();
-
+  virtual fastKronError initTune();
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
