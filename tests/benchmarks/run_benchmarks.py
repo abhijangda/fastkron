@@ -51,17 +51,18 @@ class GPyTorchEval:
     import torch
     factors = []
     for p,q in zip(shape.ps, shape.qs):
-      f = torch.ones(p, q, dtype=float)
-      if self.backend == 'cuda':
+      f = torch.ones(p, q, dtype=torch.float)
+      if self.backend == 'cuda' or self.backend == "hip":
         f = f.cuda()
-      factors += [f] 
-    x = torch.ones(shape.m, shape.k, dtype=float)
-    if self.backend == 'cuda':
+      factors += [f]
+    x = torch.ones(shape.m, shape.k, dtype=torch.float)
+    if self.backend == 'cuda' or self.backend == "hip":
       x = x.cuda()
     kp = gp.lazy.KroneckerProductLazyTensor(*factors)
     def run_case(r):
         t1 = time.time()
         for i in range(r):
+            # y = x.reshape((shape.m*shape.k//shape.ps[0],shape.qs[0])) @ factors[0] 
             y = x @ kp
         torch.cuda.synchronize()
         t2 = time.time()
@@ -129,8 +130,8 @@ class FastKronEval:
 
 def run_nn(device):
   device = device.lower()
-  M = 1024 if device == "cuda" else 256
-  M2 = 320 if device == "cuda" else 128
+  M = 1024 if device == "cuda" or device == "hip" else 256
+  M2 = 320 if device == "cuda" or device == "hip" else 128
   cases = [
           Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
           Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
@@ -149,9 +150,9 @@ def run_nn(device):
     
 
   for shape in cases:
-    fk = FastKronEval(device).run_single_gpu(shape, "N", "N")
+    fk = (1,) #FastKronEval(device).run_single_gpu(shape, "N", "N")
     gp = GPyTorchEval(device).run_single_gpu(shape)
-    print(" & ".join((str(p) for p in (fk + gp))))
+    print(" & ".join([str(shape)] + [str(p) for p in (fk + gp)]))
 
 def run_nt(device):
   device = device.lower()
@@ -236,11 +237,16 @@ if False:
   print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
   multi_gpu("strong")
 
-# print("------ x86 NN------")
-# run_nn("x86")
+if False:
+  print("------ x86 NN------")
+  run_nn("x86")
 
-# print("------ x86 NT------")
-# run_nt("x86")
+  print("------ x86 NT------")
+  run_nt("x86")
 
-print("------ x86 TT------")
-run_tt("x86")
+  print("------ x86 TT------")
+  run_tt("x86")
+
+if True:
+  print("------ HIP NN------")
+  run_nn("hip")
