@@ -51,11 +51,11 @@ class GPyTorchEval:
     import torch
     factors = []
     for p,q in zip(shape.ps, shape.qs):
-      f = torch.ones(p, q, dtype=float)
+      f = torch.ones(p, q, dtype=torch.float)
       if self.backend == 'cuda':
         f = f.cuda()
       factors += [f] 
-    x = torch.ones(shape.m, shape.k, dtype=float)
+    x = torch.ones(shape.m, shape.k, dtype=torch.float)
     if self.backend == 'cuda':
       x = x.cuda()
     kp = gp.lazy.KroneckerProductLazyTensor(*factors)
@@ -149,7 +149,7 @@ def run_nn(device):
     
 
   for shape in cases:
-    fk = FastKronEval(device).run_single_gpu(shape, "N", "N")
+    fk = (1,) #FastKronEval(device).run_single_gpu(shape, "N", "N")
     gp = GPyTorchEval(device).run_single_gpu(shape)
     print(" & ".join((str(p) for p in (fk + gp))))
 
@@ -215,7 +215,7 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-if False:
+if True:
   print("------- Single GPU NN-------")
   print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
   run_nn("cuda")
