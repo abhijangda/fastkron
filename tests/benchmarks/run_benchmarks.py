@@ -216,7 +216,7 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-if False:
+if True:
   print("------- Single GPU NN-------")
   print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
   run_nn("cuda")
@@ -247,6 +247,11 @@ if False:
   print("------ x86 TT------")
   run_tt("x86")
 
+<<<<<<< HEAD
 if True:
   print("------ HIP NN------")
   run_nn("hip")
+=======
+print("------ x86 TT------")
+run_tt("x86")
+>>>>>>> 2de79c7cb0bc518368b72a64e89ad75b57ff3b9f
