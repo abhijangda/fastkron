@@ -2,6 +2,20 @@
 set(CUDA_TEST_DEFINE -D TEST_BACKEND_CUDA)
 set(CUDA_TESTS_INCLUDES ${TESTS_INCLUDES})
 
+set_source_files_properties(${TEST_SRC}/no-fusion-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/fusion-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/TT-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/tuner-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/non-square-tuner-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/non-square-TT-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/distinct-shapes.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/odd-shapes.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/no-fusion-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/multi-cuda-no-fusion-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/multi-cuda-tuner-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/multi-cuda-no-fusion-non-square-tests.cpp PROPERTIES LANGUAGE CUDA)
+set_source_files_properties(${TEST_SRC}/multi-cuda-distinct-shapes.cpp PROPERTIES LANGUAGE CUDA)
+
 add_executable(single-cuda-no-fusion-tests ${TEST_SRC}/no-fusion-tests.cpp)
 add_executable(single-cuda-fusion-tests    ${TEST_SRC}/fusion-tests.cpp)
 add_custom_target(gen-single-cuda-kernels
