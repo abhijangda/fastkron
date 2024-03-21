@@ -281,12 +281,12 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   for (m, k, n, ps, qs) in cases:
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
-      MinTile = 32 if backend == 'x86' else 32
+      MinTile = 32 if backend == 'x86' or backend == 'cuda' else 16
       TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
-      TileMs = [1, 2] #[2 ** i for i in range(0, int(math.log2(m)))]
+      TileMs = [1] #[2 ** i for i in range(0, int(math.log2(m)))]
 
       for tM in TileMs:
         for tQ in TileQs:

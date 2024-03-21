@@ -1,6 +1,10 @@
 #include "kmm/matrix.h"
 #include "kernels/cuda/register-loads.cuh"
 
+#ifdef __HIP_PLATFORM_AMD__
+#include "kernels/hip/amd_buffer_loads.hip"
+#endif
+
 template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
@@ -13,7 +17,15 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
+#ifndef __HIP_PLATFORM_AMD__
+      uint32_t pp = (tid/64) * 64 * VecTLen;
+      const ElemT* warp_ptr = XTile.data(row, (tid/64) * 64 * VecTLen, tileP); //XTile.data(row, (k / (64 * VecTLen)) * 64 * VecTLen, tileP);
+      uint32_t lane_offset = ((k - pp)/TileP)*128 + k%TileP - pp%TileP;//XTile.data(row, k, tileP) - warp_ptr;
+      uint32_t width = 16 * 128; //XTile.data(row, (k / (64 * VecTLen) + 1) * 64 * VecTLen, tileP) - warp_ptr;
+      amd_buffer_load<ElemT, VecT>(warp_ptr, lane_offset, width, regs);
+#else
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+#endif
       Xsh.store(row, k, TileP, RegK, VecTLen, regs);
     }}
   } else if (OpX == fastKronOp_T) {
@@ -52,8 +64,14 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
         if (opF == fastKronOp_N) {
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
-
+#ifndef __HIP_PLATFORM_AMD__
+          // const ElemT* warp_ptr = F.data<ElemT>(tileP + (swid/2)*2, col, opF);
+          // uint32_t lane_offset = (swid % 2)*128 + col;
+          // uint32_t width = 128*2;
+          // amd_buffer_load<ElemT, VecT>(warp_ptr, lane_offset, width, regs);  
+#else
           ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
+#endif
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;

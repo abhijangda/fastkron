@@ -11,16 +11,6 @@ project(FastKron
   VERSION 1.0
   LANGUAGES CXX)
 
-find_package(OpenMP REQUIRED)
-
-if(OpenMP_CXX_FOUND)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set (CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set (CMAKE_HIP_FLAGS "${CMAKE_CUDA_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
-
 #### Options ####
 option(ENABLE_CUDA "Enable CUDA" OFF)
 option(ENABLE_X86  "Enable X86" OFF)
@@ -55,12 +45,24 @@ endif()
 if(ENABLE_HIP)
   find_package(HIP 5.7 REQUIRED)
   add_definitions(-DENABLE_HIP -D__HIP_PLATFORM_AMD__)
+  enable_language(HIP)
   #TODO: Fix this
   set(HIP_INCLUDE_PATH /opt/rocm/include)
   set(CMAKE_HIP_STANDARD 17)
   set(CMAKE_HIP_STANDARD_REQUIRED True)
 endif()
 ################
+
+find_package(OpenMP REQUIRED)
+
+if(OpenMP_CXX_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_HIP_FLAGS "${CMAKE_CUDA_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -70,7 +72,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mfma -march=native -O3")
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 
-set(CMAKE_HIP_FLAGS "-O3 -Rpass-analysis=kernel-resource-usage --save-temps")
+set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -O3 -Rpass-analysis=kernel-resource-usage") #--save-temps")
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(CUDA ${SRC}/kernels/cuda)

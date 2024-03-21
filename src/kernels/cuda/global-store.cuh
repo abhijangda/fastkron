@@ -77,10 +77,7 @@ void stVecYReg(ElemT* addr, YReg& Yr, int numValues, int row, int i, int j) {
                     "f"(Yr.at(row, i  , j)), "f"(Yr.at(row, i+1, j)), 
                     "f"(Yr.at(row, i+2, j)), "f"(Yr.at(row, i+3, j)));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i+0, j);
-      *(addr + 1) = Yr.at(row, i+1, j);
-      *(addr + 2) = Yr.at(row, i+2, j);
-      *(addr + 3) = Yr.at(row, i+3, j);
+      *(float4*)addr = float4 {Yr.at(row, i+0, j), Yr.at(row, i+1, j), Yr.at(row, i+2, j), Yr.at(row, i+3, j)};
     #endif
       break;
   }

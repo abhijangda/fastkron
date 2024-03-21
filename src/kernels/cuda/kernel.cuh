@@ -104,7 +104,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   
   using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, ShTileK>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
-  
+
   XShared Xsh(&sharedStorage[0]);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 

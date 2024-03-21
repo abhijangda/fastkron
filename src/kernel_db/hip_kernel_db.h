@@ -29,7 +29,8 @@ public:
     streams.push_back(ptrToStream);
     return fastKronSuccess;
   }
-  
+
+  fastKronError initTune();
   void free() {
     streams.clear();
     // if (isDistributed_) {
