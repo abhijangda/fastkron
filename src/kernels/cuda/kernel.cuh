@@ -126,7 +126,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    const int nextStage = currStage ^ 1 ? NumStages == 2 : 0;
+    const int nextStage = NumStages == 2 ? currStage ^ 1 : 0;
     if (NumStages == 2 && tileP < P - TileP) {
       shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
                                                         nextStage, tileP + TileP, tid, XTile, Xsh);
@@ -170,7 +170,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       __syncthreads();
     }
 
-    currStage = currStage ^ 1;
+    if (NumStages == 2) currStage = currStage ^ 1;
+    else                currStage = 0;
   }
 
   if (!isThreadValid) return;
