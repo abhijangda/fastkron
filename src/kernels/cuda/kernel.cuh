@@ -91,7 +91,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   
   const YElem yElem(yQ, yK);
 
-  bool isThreadValid = (yElem.q() + RegQ <= TileQ);
+  bool isThreadValid = true; //(yElem.q() + RegQ <= TileQ);
 
   const uint tileM = blockIdx.y* TileM;
 
@@ -102,7 +102,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
 
-  const uint32_t NumStages = MaxP > TileP && FusedFacs == 1? 2 : 1;
+  const uint32_t NumStages = MaxP > TileP && FusedFacs == 1? 1 : 1;
   // if (threadIdx.x == 0) printf("NumPipelines %d MaxP %d TileP %d FusedFacs %d\n", NumPipelines, MaxP, TileP, FusedFacs);
   using XShared = ShiftShared<fastKronOp_N, ElemT, NumStages, TileM, ShTileK>;
   using FShared = DirectShared<OpF, ElemT, NumStages, TileP, TileQ>;
@@ -155,7 +155,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(currStage, XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(currStage, XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 1 && blockIdx.x == 0 && blockIdx.y == 0);
       }
 
       if (FusedFacs > 1 && fac > 0) {
