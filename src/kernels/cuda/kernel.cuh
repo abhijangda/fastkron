@@ -101,27 +101,55 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                           X);
   
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
-  
+
+  const uint32_t NumPipelines = MaxP > TileP && FusedFacs == 1? 2 : 1;
+  // if (threadIdx.x == 0) printf("NumPipelines %d MaxP %d TileP %d FusedFacs %d\n", NumPipelines, MaxP, TileP, FusedFacs);
   using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, ShTileK>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
-  XShared Xsh(&sharedStorage[0]);
-  FShared Fsh(&sharedStorage[Xsh.numel()]);
+  XShared Xsh[NumPipelines];
+  FShared Fsh[NumPipelines];
+
+  for (int i = 0; i < NumPipelines; i++) {
+    Xsh[i] = XShared(&sharedStorage[XShared::numel() * i]);
+    Fsh[i] = FShared(&sharedStorage[XShared::numel() * NumPipelines + FShared::numel() * i]);
+  }
 
   /*register*/ YRegisters<ElemT, TileM, RegK, RegQ> yReg;
+
+  if (NumPipelines == 2) {
+    const Factor F(P, Q, params.problem.f(0).data());
+    shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh[0])>(TileP, NumThreads, RegK,
+                                                   0, tid, XTile, Xsh[0]);
+    directFgToFsh<ElemT, FVecT, decltype(Fsh[0])>(NumThreads, tid, OpF, 0, tileQ,
+                                               F, Fsh[0]);
+    __syncthreads();
+  }
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(TileP, NumThreads, RegK,
-                                                   tileP, tid, XTile, Xsh);
+    const int nextStage = ((tileP + TileP)/TileP) % 2;
+    const int currStage = (nextStage ^ 1) ? NumPipelines == 2 : 0;
+    if (NumPipelines == 2 && tileP < P - TileP) {
+      shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh[0])>(TileP, NumThreads, RegK,
+                                                     tileP + TileP, tid, XTile, Xsh[nextStage]);
+    } else if (NumPipelines == 1) {
+      shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh[0])>(TileP, NumThreads, RegK,
+                                                     tileP, tid, XTile, Xsh[currStage]);
+    }
+
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
-      directFgToFsh<ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, OpF, tileP, tileQ,
-                                                 F, Fsh);
+      if (NumPipelines == 1)
+        directFgToFsh<ElemT, FVecT, decltype(Fsh[0])>(NumThreads, tid, OpF, tileP, tileQ,
+                                                   F, Fsh[currStage]);
+      else if (NumPipelines == 2 && tileP < P - TileP)
+        directFgToFsh<ElemT, FVecT, decltype(Fsh[0])>(NumThreads, tid, OpF, tileP + TileP, tileQ,
+                                                   F, Fsh[nextStage]);
 
       __syncthreads();
 
@@ -132,14 +160,14 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(XTile.m(), Xsh[currStage], Fsh[currStage], yReg, Xr, Fr, yElem);
       }
 
       if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
         if (isThreadValid) {
           //Store C to shared memory using shift method
-          fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg, yElem);
+          fusionYrToXSh(XTile.m(), F, Fsh[currStage], Xsh[currStage], yReg, yElem);
         }
       }
 
@@ -172,7 +200,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       uint32_t cIdx;
 
       if (FusedFacs > 1) {
-        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
+        glK = fusedYColumn(fusedParams, Y, Xsh[0], tileK, P, Q, shK);
       } else {
         //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
         //number of loads as store also requires reading Y.n()

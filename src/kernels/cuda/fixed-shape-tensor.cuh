@@ -148,6 +148,9 @@ class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> 
   T* data;
 
 public:
+  CUDA_DEVICE
+  DirectShared() : data(nullptr) {}
+
   CUDA_DEVICE_HOST
   DirectShared(T* data) : data(data) {}
 
@@ -188,6 +191,8 @@ class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
   T* data;
 
 public:
+  CUDA_DEVICE
+  ShiftShared() : data(nullptr) {}
   CUDA_DEVICE_HOST
   ShiftShared(T* data) : data(data) {}
 

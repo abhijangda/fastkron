@@ -34,17 +34,19 @@ struct GPUKernel : public KernelInfo {
     return info.str();
   }
 
-  dim3 grid(KMMProblem problem) {
+  dim3 grid(KMMProblem problem) const {
     return dim3(problem.k()/tileX.n() * DIVUP(problem.f(0).q(), tileF.q()),
                 DIVUP(problem.m(), tileX.m()),
                 1);
   }
 
-  dim3 block() {
+  dim3 block() const {
     return dim3{NumThreads, 1, 1};
   }
+  
+  size_t pipelines() const {return 2;}
 
   size_t sharedMemSize() {
-    return totalTileSize();
+    return totalTileSize() * pipelines();
   }
 };
