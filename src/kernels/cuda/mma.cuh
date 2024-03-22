@@ -17,14 +17,14 @@ template<typename XShared, typename FShared,
 CUDA_DEVICE
 void mainMMA(uint32_t stage, uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
   //Load shared memory Xsh to registers Xr
-  if (true) {
+  if (false) {
     #pragma unroll
     for (uint rm = 0; rm < Yr.m(); rm++) {
     if (rm < m) {
       #pragma unroll
       for (uint rk = 0; rk < Xr.k(); rk++) {
         uint shXk = yElem.k() + rk;
-        uint shift = (yElem.k() / Yr.k())%Xr.p();
+        uint shift = 0;//(yElem.k() / Yr.k())%Xr.p();
 
         #pragma unroll
         for (uint p = 0; p < Xr.p(); p++) {
@@ -46,9 +46,7 @@ void mainMMA(uint32_t stage, uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, X
     #pragma unroll
     for (uint rm = 0; rm < Yr.m(); rm++)
       slicedMMA(rm, Xr, Fr, Yr);
-  }
-
-  if (false) {
+  } else {
     const uint32_t RegP = 4;
     const uint32_t RegK = 4;
     const uint32_t RegQ = 1;
@@ -59,25 +57,26 @@ void mainMMA(uint32_t stage, uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, X
     float4 regY = {0,0,0,0};
 
     const uint32_t lane = threadIdx.x % 64;
+    const uint32_t warp = threadIdx.x / 64;
 
     for (int rp = 0; rp < Xr.p(); rp += RegP) {
       for (uint rm = 0; rm < Yr.m(); rm++) {
         if (rm < m) {
-          uint slice = lane / RegP;
-          uint elem = lane % RegP;
+          uint slice = warp * 64 * 4 + lane % 16;
+          uint elem = lane / 16;
 
-          uint shift = (slice / RegK) % Xr.p();
+          uint shift = 0;//(slice / RegK) % Xr.p();
 
           regX[0][0] = Xsh.at(stage, rm, slice * Xr.p() + (rp + elem + shift)%Xr.p());
-          if (canPrint and regX[0][0] != 1.0f) printf("%f\n", regX[0][0]);
+          // if (canPrint and regX[0][0] != 1.0f) printf("%f\n", regX[0][0]);
           // regX[0][0] = 1;
       }}
 
       {
-        uint row = lane / RegP;
-        uint col = lane % RegP;
+        uint row = lane / 16;
+        uint col = lane % 16;
 
-        regF[0][0] = 1; //Fsh.at(stage, col + rp, row);  
+        regF[0][0] = Fsh.at(stage, row + rp, col);  
       }
 
       {
@@ -89,8 +88,8 @@ void mainMMA(uint32_t stage, uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, X
     Yr.add(0, 1, 0, regY[1]);
     Yr.add(0, 2, 0, regY[2]);
     Yr.add(0, 3, 0, regY[3]);
-    if (canPrint and Yr.at(0,0,0) != 128.0f) {
-      printf("%f %f %f %f %d\n", Yr.at(0,0,0), Yr.at(0,1,0), Yr.at(0,2,0), Yr.at(0,3,0), Xr.p());
-    }
+    // if (canPrint and Yr.at(0,0,0) != 128.0f) {
+    //   printf("%f %f %f %f %d\n", Yr.at(0,0,0), Yr.at(0,1,0), Yr.at(0,2,0), Yr.at(0,3,0), Xr.p());
+    // }
   }
 }

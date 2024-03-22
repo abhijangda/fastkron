@@ -86,13 +86,13 @@ static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
 }
 
 template<typename T>
-void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], int (*fnvalue)(int i, int j))
+void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], int (*xfn)(int i, int j), int(*ffn)(int i, int j))
 {
   for (uint i = 0; i < NUM_KP_MATS; i++) {
-    setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], fnvalue);
+    setMatrix(kpMats[i], KP_MAT_K[i], KP_MAT_N[i], ffn);
   }
 
-  setMatrix(x, M, K, fnvalue);
+  setMatrix(x, M, K, xfn);
 }
 
 // static void printMatrix(int* mat, int M, int N, int max_rows = -1, int max_cols = -1) {
@@ -446,7 +446,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod, one);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   fastKronHandle handle;

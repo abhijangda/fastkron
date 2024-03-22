@@ -85,10 +85,27 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint tileK = getTileK<MaxQ, TileQ>();
 
   const uint tid      = threadIdx.x;
+#ifdef __HIP_PLATFORM_AMD__
+  const uint WARP_SIZE = 64;
+#else //CUDA
+  const uint WARP_SIZE = 32;
+#endif
+
+  const uint lane     = tid % WARP_SIZE;
+  const uint warp     = tid / WARP_SIZE;
+#ifdef USE_MATRIX_CORES
+  const uint MC_M = 16;
+  const uint MC_N = 16;
+  const uint MC_K = 4;
+
+  const uint yQ       = 0;
+  const uint yK       = warp * WARP_SIZE * RegK + lane * RegK;
+#else
   const uint QThreads = (TileK / MaxP)     / RegK;
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
-  
+#endif
+
   const YElem yElem(yQ, yK);
 
   bool isThreadValid = true; //(yElem.q() + RegQ <= TileQ);

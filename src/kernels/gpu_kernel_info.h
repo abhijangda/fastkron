@@ -44,7 +44,7 @@ struct GPUKernel : public KernelInfo {
     return dim3{NumThreads, 1, 1};
   }
   
-  size_t pipelines() const {return 2;}
+  size_t pipelines() const {return 1;}
 
   size_t sharedMemSize() {
     return totalTileSize() * pipelines();

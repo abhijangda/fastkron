@@ -200,7 +200,7 @@ public:
       uint32_t shCol = startCol + i;
       uint32_t elem  = shCol%TileP;
       uint32_t slice = shCol/TileP;
-      uint32_t shift = slice/RegK;
+      uint32_t shift = 0;//slice/RegK;
 
       Base::set(data + stage * Base::numel(), row, slice*TileP + (shift + elem)%TileP, elems[i]);
     }
