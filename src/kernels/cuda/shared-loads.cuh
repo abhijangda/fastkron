@@ -8,8 +8,8 @@
 template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
-                  const uint tileP, const uint tid, const Slice<ElemT, OpX> XTile,
-                  XShared& Xsh) {
+                  const uint stage, const uint tileP, const uint tid, 
+                  const Slice<ElemT, OpX> XTile, XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   if (OpX == fastKronOp_N) {
     for (uint row = 0; row < XTile.m(); row += 1) {
@@ -26,7 +26,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
 #else
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
 #endif
-      Xsh.store(row, k, TileP, RegK, VecTLen, regs);
+      Xsh.store(stage, row, k, TileP, RegK, VecTLen, regs);
     }}
   } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?
@@ -41,7 +41,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
       const uint k = swid;
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-      Xsh.store(row, k, TileP, RegK, VecTLen, regs);
+      Xsh.store(stage, row, k, TileP, RegK, VecTLen, regs);
     }}
   }
 }
@@ -49,7 +49,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
 template<typename ElemT, typename VecT, typename FShared>
 CUDA_DEVICE
 void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF, 
-                   const uint tileP, const uint tileQ,
+                   const uint stage, const uint tileP, const uint tileQ,
                    const Factor& F, FShared& Fsh) {
   const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
 
@@ -65,10 +65,10 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
 #ifndef __HIP_PLATFORM_AMD__
-          // const ElemT* warp_ptr = F.data<ElemT>(tileP + (swid/2)*2, col, opF);
-          // uint32_t lane_offset = (swid % 2)*128 + col;
-          // uint32_t width = 128*2;
-          // amd_buffer_load<ElemT, VecT>(warp_ptr, lane_offset, width, regs);  
+          const ElemT* warp_ptr = F.data<ElemT>(tileP + (swid/2)*2, col, opF);
+          uint32_t lane_offset = (swid % 2)*128 + col;
+          uint32_t width = 128*2;
+          amd_buffer_load<ElemT, VecT>(warp_ptr, lane_offset, width, regs);  
 #else
           ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
 #endif
@@ -79,7 +79,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
         }
 
-        Fsh.store(swid, elem * VecTLen, VecTLen, regs);
+        Fsh.store(stage, swid, elem * VecTLen, VecTLen, regs);
 
         //This condition avoids generating this loop giving better performance
         if (Vecs == NumThreads/ThGroups) break;
@@ -92,7 +92,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
       ElemT regs[VecTLen];
 
       ldGlobalVec(F.data<ElemT>(eIdx), regs, VecTLen);
-      Fsh.store(eIdx, VecTLen, regs);
+      Fsh.store(stage, eIdx, VecTLen, regs);
 }}}
 
 template<typename FShared, typename XShared, typename YReg>
@@ -106,6 +106,6 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
         const uint32_t MaxXSlices = Xsh.n()/F.p();
         uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
         
-        Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, tk, tq));
+        Xsh.store(0, tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, tk, tq));
   }}}}
 }

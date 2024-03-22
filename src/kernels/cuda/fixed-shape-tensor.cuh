@@ -142,41 +142,39 @@ public:
 };
 
 //Shared Memory Tensors
-template<fastKronOp Layout, typename T, uint32_t TileP, uint32_t TileQ>
+template<fastKronOp Layout, typename T, uint32_t NumStages, uint32_t TileP, uint32_t TileQ>
 class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> {
+  //TODO: Use AbstractFixedShapeTensor3D
   using Base = AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ>;
   T* data;
 
 public:
-  CUDA_DEVICE
-  DirectShared() : data(nullptr) {}
-
   CUDA_DEVICE_HOST
   DirectShared(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
-  void store(uint32_t eIdx, uint32_t num, const T* elems) {
+  void store(uint32_t stage, uint32_t eIdx, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint idx = eIdx + ve;
-      Base::set(data, idx, elems[ve]);
+      Base::set(data + stage * Base::numel(), idx, elems[ve]);
     }
   }
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord2D
-  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
+  void store(uint32_t stage, uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint32_t idx = row * Base::shape(1) + col + ve;
-      Base::set(data, idx, elems[ve]);
+      Base::set(data + stage * Base::numel(), idx, elems[ve]);
     }
   }
   
   CUDA_DEVICE_HOST
-  T& at(uint32_t row, uint32_t col) {
-    return Base::at(data, row, col);
+  T& at(uint32_t stage, uint32_t row, uint32_t col) {
+    return Base::at(data + stage * Base::numel(), row, col);
   }
 
   CUDA_DEVICE_HOST
@@ -185,19 +183,17 @@ public:
   uint32_t q() const {return TileQ;}
 };
 
-template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
+template<fastKronOp Layout, typename T, uint32_t NumStages, uint32_t M, uint32_t N>
 class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
   T* data;
 
 public:
-  CUDA_DEVICE
-  ShiftShared() : data(nullptr) {}
   CUDA_DEVICE_HOST
   ShiftShared(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
+  void store(uint32_t stage, uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
              uint32_t numElems, T* elems) {
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
@@ -206,13 +202,13 @@ public:
       uint32_t slice = shCol/TileP;
       uint32_t shift = slice/RegK;
 
-      Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
+      Base::set(data + stage * Base::numel(), row, slice*TileP + (shift + elem)%TileP, elems[i]);
     }
   }
 
   CUDA_DEVICE_HOST
-  T& at(uint32_t row, uint32_t col) {
-    return Base::at(data, row, col);
+  T& at(uint32_t stage, uint32_t row, uint32_t col) {
+    return Base::at(data + stage * Base::numel(), row, col);
   }
 
   CUDA_DEVICE_HOST
