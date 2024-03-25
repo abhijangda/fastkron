@@ -20,6 +20,10 @@ def slurp(file):
     return f.read()
 
 def empty_dir(dir):
+  if not os.path.exists(kernel_dir):
+    os.makedirs(kernel_dir, exist_ok=True)
+    return
+
   for filename in os.listdir(dir):
     file_path = os.path.join(dir, filename)
     try:
