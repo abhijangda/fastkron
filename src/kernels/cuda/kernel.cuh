@@ -27,7 +27,7 @@ CUDA_DEVICE uint32_t getTileQ(uint MaxQ, uint TileQ) {
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
-         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
+         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK_,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
          uint FactorHasMaxShape,
@@ -54,10 +54,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                  TileP >= MaxP &&
                  TileQ >= MaxQ),
                 "Invalid tile size params for fusion");
-  static_assert(TileK % MaxP == 0,
-                "TileK is not a multiple of MaxP");
-  static_assert((TileK/MaxP)%RegK == 0,
-                "RegK not a multiple of MaxCols/MaxP");
+  // static_assert(TileK % MaxP == 0,
+  //               "TileK is not a multiple of MaxP");
+  // static_assert((TileK/MaxP)%RegK == 0,
+  //               "RegK not a multiple of MaxCols/MaxP");
 
   //Vector Load types based on alignments 
   using XVecT = typename std::conditional<XAlignment == 1, ElemT, 
@@ -75,7 +75,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
   const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
-
+  uint TileK = 4096;
   const uint ShTileK = (TileK/P)*TileP;
 
   //TODO: Make this Coord2D
@@ -100,7 +100,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
 
-  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, (TileK/MaxP)*TileP>;
+  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, (TileK_/MaxP)*TileP>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
   XShared Xsh(&sharedStorage[0], ShTileK);

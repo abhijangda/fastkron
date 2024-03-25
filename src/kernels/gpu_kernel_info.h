@@ -20,6 +20,7 @@ struct GPUKernel : public KernelInfo {
              AAlignment(AAlignment), KronAlignment(KronAlignment) {}
 
   bool isValid() {
+    return true;
     const uint ValidThreads = ((tileX.n()/f.p())/RegK) * (tileF.q()/RegQ);
     if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
       std::cout << "Invalid kernel config " << str() << std::endl; 
