@@ -17,22 +17,20 @@
 #include <type_traits>
 #include <typeinfo>
 
-template<uint MaxQ, uint TileQ>
-CUDA_DEVICE uint32_t getTileK() {
+CUDA_DEVICE uint32_t getTileK(uint MaxQ, uint TileQ) {
   return blockIdx.x/DIVUP(MaxQ, TileQ);
 }
 
-template<uint MaxQ, uint TileQ>
-CUDA_DEVICE uint32_t getTileQ() {
+CUDA_DEVICE uint32_t getTileQ(uint MaxQ, uint TileQ) {
   return blockIdx.x%DIVUP(MaxQ, TileQ);
 }
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
-         uint NumThreads, 
+         uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK,
-         uint TileM, uint FusedFacs, bool DistributeToGPUs, 
+         uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
-         uint FactorHasMaxShape, 
+         uint FactorHasMaxShape,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
@@ -41,9 +39,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                            DistributedParams distParams,
                            EpilogueParams epilogueParams) {
   //Alignment of X and F are correct in terms of elements of 4-bytes
-  static_assert(XAlignment    == 1 || 
-                XAlignment    == 2 || 
-                XAlignment    == 4,
+  static_assert(XAlignment == 1 ||
+                XAlignment == 2 ||
+                XAlignment == 4,
                 "Alignment of X should be 1, 2 or 4");
   static_assert(FAlignment == 1 || 
                 FAlignment == 2 ||
@@ -60,19 +58,17 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                 "TileK is not a multiple of MaxP");
   static_assert((TileK/MaxP)%RegK == 0,
                 "RegK not a multiple of MaxCols/MaxP");
-  
+
   //Vector Load types based on alignments 
   using XVecT = typename std::conditional<XAlignment == 1, ElemT, 
                 typename std::conditional<XAlignment == 2, Vec2T, 
                                           Vec4T>::type>::type;
-  
+
   const bool LoadFullFactor = TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
   using FVecT = typename std::conditional<LoadFullFactor , Vec4T,
                 typename std::conditional<FAlignment == 1, ElemT,
                 typename std::conditional<FAlignment == 2, Vec2T,
                                           Vec4T>::type>::type>::type;
-
-  const uint ShTileK = TileK/(MaxP/TileP);
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
@@ -80,33 +76,35 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
   const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
 
+  const uint ShTileK = (TileK/P)*TileP;
+
   //TODO: Make this Coord2D
-  const uint tileQ = getTileQ<MaxQ, TileQ>();
-  const uint tileK = getTileK<MaxQ, TileQ>();
+  const uint tileQ = getTileQ(Q, TileQ);
+  const uint tileK = getTileK(Q, TileQ);
 
   const uint tid      = threadIdx.x;
-  const uint QThreads = (TileK / MaxP)     / RegK;
+  const uint QThreads = (TileK / P)        / RegK;
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
-  
+
   const YElem yElem(yQ, yK);
 
-  bool isThreadValid = (yElem.q() + RegQ <= TileQ);
+  bool isThreadValid = true; //(yElem.q() + RegQ <= TileQ);
 
-  const uint tileM = blockIdx.y* TileM;
+  const uint tileM = blockIdx.y * TileM;
 
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK, 
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
                           P, TileP,
                           X);
-  
+
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
-  
-  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, ShTileK>;
+
+  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, (TileK/MaxP)*TileP>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
-  
-  XShared Xsh(&sharedStorage[0]);
-  FShared Fsh(&sharedStorage[Xsh.numel()]);
+
+  XShared Xsh(&sharedStorage[0], ShTileK);
+  FShared Fsh(&sharedStorage[Xsh.numel()], Factor(P, Q));
 
   /*register*/ YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
@@ -132,7 +130,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -151,7 +149,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
   if (rm < XTile.m()) {
-    constexpr uint32_t StLen = storeVectorLen<FusedFacs, XAlignment, RegK>();
+    constexpr uint32_t StLen = 1; //storeVectorLen<FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
@@ -182,8 +180,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               XSlices             + //Scale the index to global column
               tileK * XTileSlices + //Index of XTileSlices elems produced by a tileK 
               shK % XTileSlices;    //The element index within consecutive elems
-        if (TileQ != Q) {
-          const uint32_t tileQ     = getTileQ<MaxQ, TileQ>();
+        if (TileQ < Q) {
+          const uint32_t tileQ     = getTileQ(MaxQ, TileQ);
           const uint32_t NumQTiles = Q/TileQ;
 
           glK += tileQ*(Y.n()/NumQTiles);
@@ -201,6 +199,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
+      // if (params.kp_idx == 1) {
+      //   if (yReg.at(rm, tk, tq) != 64*64) printf("%d %d %d %f\n", rm, tk, tq, yReg.at(rm, tk ,tq));
+      // } 
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }

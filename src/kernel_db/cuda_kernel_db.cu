@@ -56,11 +56,11 @@ fastKronError CUDAKernelDatabase::initTune() {
 //Launch cuda kernels
 template<uint FusedFacs>
 fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex, 
-                   KMMProblem problem,
-                   DistributedParams distParams,
-                   EpilogueParams epilogueParams,
-                   KernelMode execMode,
-                   cudaStream_t stream) {
+                     KMMProblem problem,
+                     DistributedParams distParams,
+                     EpilogueParams epilogueParams,
+                     KernelMode execMode,
+                     cudaStream_t stream) {
   cudaError_t status;
 
   //Create the grid and thread block
@@ -72,9 +72,24 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, 
                                         epilogueParams, kernelInfo.grid(problem), 
-                                        kernelInfo.block(), kernelInfo.sharedMemSize(), stream);
+                                        kernelInfo.block(), kernelInfo.sharedMemSize(problem.f(0)), stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
+
+  // if (kronIndex == 1) {
+  //   printf("80\n");
+  //   cudaDeviceSynchronize();
+  //   float* m = new float[problem.x().numel()];
+  //   cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
+  //   for (int i = 0; i < problem.x().numel(); i++) {
+  //     if (m[i] != 64*64.0f) {
+  //       printf("%f %d %d\n", m[i], i/(64*64*64), i%(64*64*64));
+  //       break;
+  //     }
+  //   }
+  //   // exit(EXIT_SUCCESS);
+  // }
+
   return fastKronSuccess;
 }
 

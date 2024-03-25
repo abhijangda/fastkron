@@ -27,7 +27,7 @@ public:
   bool isValidKernel(KernelInfo& info) {return true;} //TODO:
   void initKernel(KernelInfo& info) {return;} //TODO:
   
-protected:
+public:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
 
 public:
