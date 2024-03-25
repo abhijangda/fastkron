@@ -9,9 +9,9 @@ This repository provides the source code of FastKron, Makefile, test cases, and 
 
 ### Build
 FastKron requires generating CUDA kernels for one or more problem sizes using
-`src/gen_tuner_kernels.py`. For example, generating kernels for M = 1024, N = 5, P = 8.
+`src/gen_tuner_kernels.py`. For example, generating CUDA kernels for M = 1024, N = 5, P = 8 with OpX and OpF set to N.
 
-`python src/gen_tuner_kernels.py -same-factors 5 8,8`
+`python src/gen_tuner_kernels.py -same-factors 5 8,8 -backend cuda -opX N -opF N`
 
 Then we can build `libFastKron.so` using 
 
