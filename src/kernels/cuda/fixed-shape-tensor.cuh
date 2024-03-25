@@ -146,10 +146,11 @@ template<fastKronOp Layout, typename T, uint32_t TileP, uint32_t TileQ>
 class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ>;
   T* data;
+  Factor f;
 
 public:
   CUDA_DEVICE_HOST
-  DirectShared(T* data) : data(data) {}
+  DirectShared(T* data, Factor f) : data(data), f(f) {}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
@@ -166,30 +167,32 @@ public:
   void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
-      uint32_t idx = row * Base::shape(1) + col + ve;
+      uint32_t idx = row * f.q() + col + ve;
       Base::set(data, idx, elems[ve]);
     }
   }
   
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    return Base::at(data, row, col);
+    return data[row * f.q() + col];
+    // return Base::at(data, row, col);
   }
 
   CUDA_DEVICE_HOST
   uint32_t p() const {return TileP;}
   CUDA_DEVICE_HOST
-  uint32_t q() const {return TileQ;}
+  uint32_t q() const {return f.q();}
 };
 
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
 class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
   T* data;
+  uint32_t ShTileK;
 
 public:
   CUDA_DEVICE_HOST
-  ShiftShared(T* data) : data(data) {}
+  ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
 
   CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
@@ -201,19 +204,24 @@ public:
       uint32_t slice = shCol/TileP;
       uint32_t shift = slice/RegK;
 
-      Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
+      // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
+      data[row * n() + slice*TileP + (shift + elem)%TileP] = elems[i];
     }
   }
 
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    return Base::at(data, row, col);
+    return data[row * n() + col];
+    // return Base::at(data, row, col);
   }
+
+  CUDA_DEVICE_HOST
+  uint32_t numel() {return M*ShTileK;}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return M;}
   CUDA_DEVICE_HOST
-  uint32_t n() const {return N;}
+  uint32_t n() const {return ShTileK;}
 };
 
 //Register Tensors

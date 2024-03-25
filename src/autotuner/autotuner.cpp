@@ -87,6 +87,8 @@ fastKronError Autotuner::tune(KMMProblem problem,
 
 fastKronError Autotuner::tune(KMMProblem problem) {
   //Only row major layout of all matrics is supported.
+  if (!env::getTune()) return fastKronSuccess;
+
   float minTime = 0;
   Matrix result, temp;
   fastKron.gekmmResultTemp(problem, result, temp);

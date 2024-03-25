@@ -9,4 +9,5 @@ enum DistComm {
 namespace env {
   DistComm getDistComm();
   bool getFusion();
+  bool getTune();
 }

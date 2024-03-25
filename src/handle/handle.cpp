@@ -124,21 +124,32 @@ std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
 
 fastKronError FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
                                    EpilogueParams epilogueParams) {
-  TunedKernelsSeries kernelSeries;
-  if (tunedKernelSeries.size() > 0) {
-    kernelSeries = tunedKernelSeries;
-  } 
-  // else {
-  //   const uint K = std::reduce(Ps, Ps + N, 1, std::multiplies<uint>());
-  //   const uint L = std::reduce(Qs, Qs + N, 1, std::multiplies<uint>());
-  //   kernelSeries = selectKernelSeries(N, M, L, K, Qs, Ps, false);
-  // }
   if (problem.y().data() == nullptr) return fastKronInvalidArgument;
   if (temp1              == nullptr) return fastKronInvalidArgument;
 
   void* temps[2] = {temp1, temp2};
 
   auto kernelDb = getKernelDb(backend);
+
+  TunedKernelsSeries kernelSeries;
+  if (env::getTune() && tunedKernelSeries.size() > 0) {
+    kernelSeries = tunedKernelSeries;
+  } 
+  else {
+    auto kernelInfo = kernelDb->compiledKernels.begin()->second;
+    fastKronError err = executeGeKMM(problem, temps, problem.n(),
+    [](const KMMProblem) {return 1;},
+    [&kernelInfo, &kernelSeries, epilogueParams, kernelDb, this]
+      (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+        fastKronError err;
+        auto tk = TunedKernelFromStart(kernelInfo[0], rstart, rstart, subProblem.k(), 0.0f);
+        kernelSeries.push_back(tk);
+        return fastKronSuccess;
+    });
+
+    std::cout << "150: FILLED with " << kernelSeries[0].kernel->str() << std::endl;
+  }
+
   auto kernelSeriesIter = kernelSeries.begin();
 
   fastKronError err = executeGeKMM(problem, temps, kernelSeries.size(),

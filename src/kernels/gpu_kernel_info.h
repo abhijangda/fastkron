@@ -10,12 +10,12 @@ struct GPUKernel : public KernelInfo {
   GPUKernel() {}
   GPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegK, uint RegQ, ElementType elemType,
+             uint RegK, uint RegQ, ElementType elemType, bool MaxShapeEq,
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
              KernelInfo(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
-             RegK, RegQ, elemType, opX, opF),
+             RegK, RegQ, elemType, MaxShapeEq, opX, opF),
              NumThreads(NumThreads), kernelFunc(getKernelFunc()),
              AAlignment(AAlignment), KronAlignment(KronAlignment) {}
 
@@ -46,5 +46,9 @@ struct GPUKernel : public KernelInfo {
 
   size_t sharedMemSize() {
     return totalTileSize();
+  }
+
+  size_t sharedMemSize(Factor otherFactor) {
+    return totalTileSize(otherFactor);
   }
 };

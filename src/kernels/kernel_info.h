@@ -25,16 +25,17 @@ struct KernelInfo {
   uint RegQ;
   uint FusedFacs;
   ElementType elemType;
+  bool MaxShapeEq;
   bool DistributeToGPUs;
   
   KernelInfo() {}
   KernelInfo(void* invokerFunc, Factor f, Factor tileF, Matrix tileX,
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegK, uint RegQ, ElementType elemType,
+             uint RegK, uint RegQ, ElementType elemType, bool MaxShapeEq,
              fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
              FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
-             RegK(RegK), RegQ(RegQ), elemType(elemType), opX(opX), opF(opF) {}
+             RegK(RegK), RegQ(RegQ), MaxShapeEq(MaxShapeEq), elemType(elemType), opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
   bool canCompute(KMMProblem problem, bool p2p) {
     return f == problem.f(0) && 
@@ -51,6 +52,12 @@ struct KernelInfo {
     return (tileF.numel() + Xsh.numel())*sizeof(float);
   }
 
+  size_t totalTileSize(Factor otherFactor) {
+    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/otherFactor.p())*tileF.p());
+    Factor otherTileF = Factor(tileF.p(), otherFactor.q());
+    return (otherTileF.numel() + Xsh.numel())*sizeof(float);
+  }
+
   virtual std::string str() const {
     std::stringstream info;
     info << tileF << "_" << tileX << "**" << FusedFacs << "_" << 
@@ -63,8 +70,8 @@ struct CPUKernel : public KernelInfo {
   CPUKernel() {}
   CPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
             uint FusedFacs, bool DistributeToGPUs, 
-            uint RegK, uint RegQ, ElementType elemType,
+            uint RegK, uint RegQ, ElementType elemType, bool MaxShapeEq,
             fastKronOp opX, fastKronOp opF) : 
             KernelInfo (invokerFunc, f, tileF, tileX, 
-                        FusedFacs, DistributeToGPUs, RegK, RegQ, elemType, opX, opF) {} 
+                        FusedFacs, DistributeToGPUs, RegK, RegQ, elemType, MaxShapeEq, opX, opF) {} 
 };

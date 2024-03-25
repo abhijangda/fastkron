@@ -7,6 +7,16 @@
 namespace env {
   static char DIST_COMM[] = "DIST_COMM";
   static char FUSION[]    = "FUSION";
+  static char TUNE[]      = "TUNE";
+
+  bool boolFromIntEnv(char* env, bool defaultVal) {
+    char* val = getenv(env);
+    if (val == nullptr) return defaultVal;
+    if (strcmp(val, "0") == 0) return false;
+    if (strcmp(val, "1") == 0) return true;
+    std::cout << "Invalid value " << env << "=" << val << std::endl;
+    return defaultVal;
+  }
 
   DistComm getDistComm() {
     char* val = getenv(DIST_COMM);
@@ -18,12 +28,12 @@ namespace env {
   }
 
   bool getFusion() {
-    char* val = getenv(FUSION);
     //Use fusion by default
-    if (val == nullptr) return true;
-    if (strcmp(val, "0") == 0) return false;
-    if (strcmp(val, "1") == 0) return true;
-    std::cout << "Invalid value for FUSION=" << val << std::endl;
-    return true;
+    return boolFromIntEnv(FUSION, true);
+  }
+
+  bool getTune() {
+    //DO tuning by default
+    return boolFromIntEnv(TUNE, true);
   }
 }
