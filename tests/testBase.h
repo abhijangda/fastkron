@@ -351,7 +351,7 @@ static fastKronError backendFree(fastKronBackend backend, void* ptr) {
   return fastKronSuccess;
 }
 
-static fastKronError backendMemset(fastKronBackend backend, void* ptr, size_t sz, char value) {
+static fastKronError backendMemset(fastKronBackend backend, void* ptr, char value, size_t sz) {
   switch(backend) {
     case fastKronBackend_CUDA:
       CUDACHECK(cudaMemset(ptr, sz, value)); return fastKronSuccess;
@@ -446,7 +446,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod, one);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod, randMod);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   fastKronHandle handle;
@@ -507,17 +507,16 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (tune) {
     FastKronCHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
   }
-    
+  printf("resultSize %d tempSize %d\n", resultSize, tempSize);
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
     FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], tempSize));
-    if (resultSize < tempSize)
-      FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], tempSize));
+    if (resultSize < tempSize) FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], tempSize));
     FastKronCHECK(backendMalloc(backend, (void**)&dResult[g], resultSize));
     FastKronCHECK(backendMemset(backend, (void*)dResult[g], 0, resultSize));
   }
-  
+  printf("520 sizeX %d\n", sizeX);
   if (checkResults) {
     if (useDistributed) {
       //Already done by allocDistributedX
@@ -526,6 +525,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
+  printf("529\n");
   if (checkResults) {
     T* hResult;
     {
@@ -537,6 +537,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, M, N, K, KP_MAT_N, KP_MAT_K, opx, opfs);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
     }
+    printf("540\n");
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
     if (useDistributed) {
