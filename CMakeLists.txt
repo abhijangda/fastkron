@@ -22,7 +22,7 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 #### Options ####
-option(ENABLE_CUDA "Enable CUDA" OFF)
+option(ENABLE_CUDA "Enable CUDA" ON)
 option(ENABLE_X86  "Enable X86" OFF)
 option(ENABLE_ARM  "Enable ARM" OFF)
 option(ENABLE_HIP "Enable ROCM/HIP" OFF)
