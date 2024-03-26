@@ -184,11 +184,16 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               shK % XTileSlices;    //The element index within consecutive elems
         if (TileQ < Q) {
           const uint32_t tileQ     = getTileQ(Q, TileQ);
-          const uint32_t NumQTiles = Q/TileQ;
           // if (blockIdx.x % 2 == 1 && threadIdx.x == 0) printf("tileQ %d\n", tileQ);
-          glK += tileQ*(Y.n()/NumQTiles);
+          if (Q % TileQ == 0) {
+            const uint32_t NumQTiles = Q/TileQ;
+            glK += tileQ*(Y.n()/NumQTiles);
+          } else {
+            //TODO: This version is more general than previous version
+            glK += tileQ * (Y.n()/Q) * TileQ;
+          }
       }}
-
+      //TODO: glK is writing out of Y.n(). 
       if (DistributeToGPUs) {
         outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
@@ -201,10 +206,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
-      if (params.kp_idx == 1) {
-        // if (glK == 32768) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
-        //     threadIdx.x, blockIdx.x, rm, yElem.k(), tk, yElem.q(), tq, yReg.at(rm, tk ,tq));
-      }
+      // if (params.kp_idx == 1) {
+      //   if (glK == 16384) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
+      //       threadIdx.x, blockIdx.x, rm, yElem.k(), tk, yElem.q(), tq, yReg.at(rm, tk ,tq));
+      // }
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }
