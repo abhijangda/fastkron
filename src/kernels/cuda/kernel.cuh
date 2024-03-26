@@ -77,7 +77,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
   const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
-  uint TileK = (8192/127)*127;
+  const uint TileK = params.tileX.n();
+
   const uint ShTileK = (TileK/P)*TileP;
 
   //TODO: Make this Coord2D

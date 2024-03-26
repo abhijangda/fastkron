@@ -36,8 +36,10 @@ struct GPUKernel : public KernelInfo {
   }
 
   dim3 grid(KMMProblem problem) {
-    return dim3(DIVUP(problem.k(), tileX.n()) * DIVUP(problem.f(0).q(), tileF.q()),
-                DIVUP(problem.m(), tileX.m()),
+    Matrix tileX_ = getTileX(problem);
+    Factor tileF_ = getTileF(problem);
+    return dim3(DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
+                DIVUP(problem.m(), tileX_.m()),
                 1);
   }
 
@@ -49,7 +51,7 @@ struct GPUKernel : public KernelInfo {
     return totalTileSize();
   }
 
-  size_t sharedMemSize(Factor otherFactor) {
-    return totalTileSize(otherFactor);
+  size_t sharedMemSize(KMMProblem problem) {
+    return totalTileSize(problem);
   }
 };

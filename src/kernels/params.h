@@ -79,9 +79,12 @@ struct KernelParams {
   KMMProblemT<Fused> problem;
   const uint kp_idx;
   KernelMode execMode;
+  
+  Matrix tileX;
+  Factor tileF;
 
-  KernelParams(KMMProblem problem_, uint kp_idx, KernelMode execMode) :
-               problem(problem_), kp_idx(kp_idx), execMode(execMode) {}
+  KernelParams(KMMProblem problem_, Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
+               problem(problem_), tileX(tileX), tileF(tileF), kp_idx(kp_idx), execMode(execMode) {}
 };
 
 template<uint Fused>
