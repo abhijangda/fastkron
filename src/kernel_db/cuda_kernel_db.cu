@@ -208,8 +208,13 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
 
 fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
   streams.clear();
+  cudaStream_t* t = new cudaStream_t;
+  *t = 0;
   for (int i = 0; i < gpus; i++) {
-    streams.push_back(((cudaStream_t*)ptrToStream) + i);
+    if (ptrToStream != NULL)
+	  streams.push_back(((cudaStream_t*)ptrToStream) + i);
+    else
+	    streams.push_back(t);
   }
   numGPUs_ = gpus;
   isDistributed_ = gpus > 1;
