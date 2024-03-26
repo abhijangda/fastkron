@@ -60,22 +60,24 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   //               "RegK not a multiple of MaxCols/MaxP");
 
   //Vector Load types based on alignments 
-  using XVecT = typename std::conditional<XAlignment == 1, ElemT, 
-                typename std::conditional<XAlignment == 2, Vec2T, 
-                                          Vec4T>::type>::type;
+  using XVecT = ElemT;
+                // typename std::conditional<XAlignment == 1, ElemT, 
+                // typename std::conditional<XAlignment == 2, Vec2T, 
+                //                           Vec4T>::type>::type;
 
   const bool LoadFullFactor = TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
-  using FVecT = typename std::conditional<LoadFullFactor , Vec4T,
-                typename std::conditional<FAlignment == 1, ElemT,
-                typename std::conditional<FAlignment == 2, Vec2T,
-                                          Vec4T>::type>::type>::type;
+  using FVecT = ElemT; 
+                // typename std::conditional<LoadFullFactor , Vec4T,
+                // typename std::conditional<FAlignment == 1, ElemT,
+                // typename std::conditional<FAlignment == 2, Vec2T,
+                //                           Vec4T>::type>::type>::type;
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
 
   const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
   const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
-  uint TileK = 4096;
+  uint TileK = (8192/127)*127;
   const uint ShTileK = (TileK/P)*TileP;
 
   //TODO: Make this Coord2D
@@ -130,7 +132,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
+        mainMMA(XTile.m(), MIN(TileP, P - tileP), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -154,6 +156,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
+      if (yElem.k() + tk >= MIN(TileK, params.problem.x().n() - tileK * TileK)/P) continue;
       const uint glM = rm + tileM;
       const uint32_t XTileSlices = TileK/P;
       //Total elements produced from TileK are (TileK/P) * Q
@@ -199,9 +202,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
-      // if (params.kp_idx == 1) {
-      //   if (yReg.at(rm, tk, tq) != 64*64) printf("%d %d %d %f\n", rm, tk, tq, yReg.at(rm, tk ,tq));
-      // } 
+      if (params.kp_idx == 1) {
+        // if (glK == 127) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
+        //     threadIdx.x, blockIdx.x, rm, yElem.k(), tk, yElem.q(), tq, yReg.at(rm, tk ,tq));
+      }
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }

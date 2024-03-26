@@ -9,13 +9,16 @@ void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
   #pragma unroll
   for (uint p = 0; p < Xr.p(); p++) {
     Yr.add(m, i, j, Xr.at(m, i, p) * Fr.at(p, j));
+    // if (threadIdx.x == 15 && blockIdx.x == 1 && blockIdx.y == 0 && i == 2 && j == 0) {
+    //   printf("%f %f %f\n", Yr.at(0, 2, 0), Xr.at(0, 2, p), Fr.at(p, 0));
+    // }
   }
 }
 
 template<typename XShared, typename FShared, 
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
-void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
+void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
   //Load shared memory Xsh to registers Xr 
   #pragma unroll
   for (uint rm = 0; rm < Yr.m(); rm++) {
@@ -28,8 +31,14 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
         //TODO: bring shift calculation in Xsh.at
-        auto temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
-        Xr.set(rm, rk, p, temp);
+        if (p < remainingP) {
+          auto temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
+          // if (threadIdx.x == 15 && blockIdx.x == 1 && blockIdx.y == 0 && rk == 2)
+          //   printf("37: %f at %d %d\n", temp, p, remainingP);
+          Xr.set(rm, rk, p, temp);
+        } else {
+          Xr.set(rm, rk, p, 0);
+        }
       }
   }}}
   
@@ -38,9 +47,11 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
     uint shFcol = yElem.q() + rq;
     #pragma unroll
     for (uint p = 0; p < Xr.p(); p++) {
-      Fr.set(p, rq, Fsh.at(p, shFcol));
-    }
-  }
+      if (p < remainingP)
+        Fr.set(p, rq, 1); //Fsh.at(p, shFcol));
+      else
+        Fr.set(p, rq, 0);
+  }}
 
   #pragma unroll
   for (uint rm = 0; rm < Yr.m(); rm++)
