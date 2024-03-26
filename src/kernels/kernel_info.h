@@ -33,7 +33,7 @@ struct KernelInfo {
              uint FusedFacs, bool DistributeToGPUs,
              uint RegK, uint RegQ, ElementType elemType, bool MaxShapeEq,
              fastKronOp opX, fastKronOp opF) :
-             invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(Matrix(tileX.m(), 8128)),
+             invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
              FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
              RegK(RegK), RegQ(RegQ), MaxShapeEq(MaxShapeEq), elemType(elemType), opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
@@ -52,10 +52,23 @@ struct KernelInfo {
     return (tileF.numel() + Xsh.numel())*sizeof(float);
   }
 
-  size_t totalTileSize(Factor otherFactor) {
-    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/otherFactor.p())*tileF.p());
-    Factor otherTileF = Factor(tileF.p(), otherFactor.q());
-    return (otherTileF.numel() + Xsh.numel())*sizeof(float);
+  Factor getTileF(KMMProblem problem) {
+    Factor f_ = problem.f(0);
+    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
+  }
+
+  Matrix getTileX(KMMProblem problem) {
+    Factor f_ = problem.f(0);
+    Factor tileF_ = getTileF(problem);
+
+    uint32_t slices = tileX.n()/f.p();
+    return Matrix(tileX.m(), slices * f_.p());
+  }
+
+  size_t totalTileSize(KMMProblem problem) {
+    Matrix tileX_ = getTileX(problem);
+    Factor tileF_ = getTileF(problem);
+    return (tileF_.numel() + tileX_.numel())*sizeof(float);
   }
 
   virtual std::string str() const {
