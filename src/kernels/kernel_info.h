@@ -68,7 +68,10 @@ struct KernelInfo {
   size_t totalTileSize(KMMProblem problem) {
     Matrix tileX_ = getTileX(problem);
     Factor tileF_ = getTileF(problem);
-    return (tileF_.numel() + tileX_.numel())*sizeof(float);
+    Factor f_ = problem.f(0);
+
+    Matrix Xsh = Matrix(tileX_.m(), (tileX_.n()/f_.p()) * tileF_.p()); 
+    return (tileF_.numel() + Xsh.numel())*sizeof(float);
   }
 
   virtual std::string str() const {

@@ -69,6 +69,9 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                                   kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
+  std::cout << "72: " << kernelInfo.grid(problem).x << " " << kernelInfo.grid(problem).y << std::endl;
+  std::cout << "73: " << kernelInfo.getTileX(problem) << std::endl;
+  std::cout << "74: " << kernelInfo.getTileF(problem) << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
@@ -78,19 +81,19 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
   status = cudaGetLastError();
   CUDA_CHECK(status);
 
-  // if (kronIndex == 1) {
-  //   printf("80\n");
-  //   cudaDeviceSynchronize();
-  //   float* m = new float[problem.x().numel()];
-  //   cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
-  //   for (int i = 0; i < problem.x().numel(); i++) {
-  //     if (m[i] != 127) {
-  //       printf("%f %d %d\n", m[i], i/(127*127), i%(127*127));
-  //       // break;
-  //     }
-  //   }
-  //   exit(EXIT_SUCCESS);
-  // }
+  if (false && kronIndex == 1) {
+    printf("80\n");
+    CUDA_CHECK(cudaDeviceSynchronize());
+    float* m = new float[problem.x().numel()];
+    cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < problem.y().numel(); i++) {
+      if (m[i] != 256) {
+        printf("%f %d %d\n", m[i], i/(problem.y().n()), i%(problem.y().n()));
+        break;
+      }
+    }
+    exit(EXIT_SUCCESS);
+  }
 
   return fastKronSuccess;
 }

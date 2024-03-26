@@ -17,12 +17,12 @@
 #include <type_traits>
 #include <typeinfo>
 
-CUDA_DEVICE uint32_t getTileK(uint MaxQ, uint TileQ) {
-  return blockIdx.x/DIVUP(MaxQ, TileQ);
+CUDA_DEVICE uint32_t getTileK(uint Q, uint TileQ) {
+  return blockIdx.x/DIVUP(Q, TileQ);
 }
 
-CUDA_DEVICE uint32_t getTileQ(uint MaxQ, uint TileQ) {
-  return blockIdx.x%DIVUP(MaxQ, TileQ);
+CUDA_DEVICE uint32_t getTileQ(uint Q, uint TileQ) {
+  return blockIdx.x%DIVUP(Q, TileQ);
 }
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
@@ -30,7 +30,7 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK_,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
-         uint FactorHasMaxShape,
+         uint FactorHasMaxShape_,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
@@ -74,17 +74,17 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
-
+  bool FactorHasMaxShape = false;
   const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
   const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
   const uint TileK = params.tileX.n();
-
+  // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
   const uint ShTileK = (TileK/P)*TileP;
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(Q, TileQ);
   const uint tileK = getTileK(Q, TileQ);
-
+  // if (threadIdx.x == 0) printf("Q %d tileQ %d blockIdx.x %d\n", Q, tileQ, blockIdx.x);
   const uint tid      = threadIdx.x;
   const uint QThreads = (TileK / P)        / RegK;
   const uint yQ       = (tid   / QThreads) * RegQ;
@@ -107,7 +107,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
   XShared Xsh(&sharedStorage[0], ShTileK);
-  FShared Fsh(&sharedStorage[Xsh.numel()], Factor(P, Q));
+  FShared Fsh(&sharedStorage[Xsh.numel()], Factor(P, MIN(Q, TileQ)));
 
   /*register*/ YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
@@ -147,8 +147,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       __syncthreads();
   }}
 
-  if (!isThreadValid) return;
-
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
   if (rm < XTile.m()) {
@@ -185,9 +183,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               tileK * XTileSlices + //Index of XTileSlices elems produced by a tileK 
               shK % XTileSlices;    //The element index within consecutive elems
         if (TileQ < Q) {
-          const uint32_t tileQ     = getTileQ(MaxQ, TileQ);
+          const uint32_t tileQ     = getTileQ(Q, TileQ);
           const uint32_t NumQTiles = Q/TileQ;
-
+          // if (blockIdx.x % 2 == 1 && threadIdx.x == 0) printf("tileQ %d\n", tileQ);
           glK += tileQ*(Y.n()/NumQTiles);
       }}
 
@@ -204,7 +202,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       }}}
 
       if (params.kp_idx == 1) {
-        // if (glK == 127) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
+        // if (glK == 32768) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
         //     threadIdx.x, blockIdx.x, rm, yElem.k(), tk, yElem.q(), tq, yReg.at(rm, tk ,tq));
       }
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
