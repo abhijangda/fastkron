@@ -61,7 +61,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
         }
 
-        // Fsh.store(swid, elem * VecTLen, VecTLen, regs);
+        Fsh.store(swid, elem * VecTLen, VecTLen, regs);
 
         //This condition avoids generating this loop giving better performance
         if (Vecs == NumThreads/ThGroups) break;
@@ -74,7 +74,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
       ElemT regs[VecTLen];
 
       ldGlobalVec(F.data<ElemT>(eIdx), regs, VecTLen);
-      // Fsh.store(eIdx, VecTLen, regs);
+      Fsh.store(eIdx, VecTLen, regs);
 }}}
 
 template<typename FShared, typename XShared, typename YReg>

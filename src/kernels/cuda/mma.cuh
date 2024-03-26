@@ -48,7 +48,7 @@ void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, 
     #pragma unroll
     for (uint p = 0; p < Xr.p(); p++) {
       if (p < remainingP)
-        Fr.set(p, rq, 1); //Fsh.at(p, shFcol));
+        Fr.set(p, rq, Fsh.at(p, shFcol));
       else
         Fr.set(p, rq, 0);
   }}
