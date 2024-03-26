@@ -82,12 +82,12 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
   //   float* m = new float[problem.x().numel()];
   //   cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
   //   for (int i = 0; i < problem.x().numel(); i++) {
-  //     if (m[i] != 64*64.0f) {
-  //       printf("%f %d %d\n", m[i], i/(64*64*64), i%(64*64*64));
-  //       break;
+  //     if (m[i] != 127) {
+  //       printf("%f %d %d\n", m[i], i/(127*127), i%(127*127));
+  //       // break;
   //     }
   //   }
-  //   // exit(EXIT_SUCCESS);
+  //   exit(EXIT_SUCCESS);
   // }
 
   return fastKronSuccess;

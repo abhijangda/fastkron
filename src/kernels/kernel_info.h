@@ -33,7 +33,7 @@ struct KernelInfo {
              uint FusedFacs, bool DistributeToGPUs,
              uint RegK, uint RegQ, ElementType elemType, bool MaxShapeEq,
              fastKronOp opX, fastKronOp opF) :
-             invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(Matrix(tileX.m(), 4096)),
+             invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(Matrix(tileX.m(), 8128)),
              FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
              RegK(RegK), RegQ(RegQ), MaxShapeEq(MaxShapeEq), elemType(elemType), opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}

@@ -36,7 +36,7 @@ struct GPUKernel : public KernelInfo {
   }
 
   dim3 grid(KMMProblem problem) {
-    return dim3(problem.k()/tileX.n() * DIVUP(problem.f(0).q(), tileF.q()),
+    return dim3(DIVUP(problem.k(), tileX.n()) * DIVUP(problem.f(0).q(), tileF.q()),
                 DIVUP(problem.m(), tileX.m()),
                 1);
   }
