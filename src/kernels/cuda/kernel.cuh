@@ -185,7 +185,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if (yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
       const uint glM = rm + tileM;
       //Total elements produced from TileK are (TileK/P) * Q
-      //No. of elems produced by slice-multiply of TileK with 
+      //No. of elems produced by slice-multiply of TileK with
       //the same col of F are: TileK/P, i.e, XshSlices.
       //These elems are stored consecutively.
 
@@ -208,7 +208,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         if (TileQ < Q) {
           const uint32_t tileQ     = getTileQ(Q, TileQ);
           // if (blockIdx.x % 2 == 1 && threadIdx.x == 0) printf("tileQ %d\n", tileQ);
-          if (Q % TileQ == 0) {
+          if (kExactShapes && Q % TileQ == 0) {
             const uint32_t NumQTiles = Q/TileQ;
             glK += tileQ*(Y.n()/NumQTiles);
           } else {
