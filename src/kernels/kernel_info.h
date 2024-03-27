@@ -61,7 +61,7 @@ struct KernelInfo {
     Factor f_ = problem.f(0);
     Factor tileF_ = getTileF(problem);
 
-    uint32_t slices = tileX.n()/f.p();
+    uint32_t slices = MIN(tileX.n()/f.p(), problem.x().n()/f_.p());
     return Matrix(tileX.m(), slices * f_.p());
   }
 

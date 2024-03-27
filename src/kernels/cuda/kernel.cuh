@@ -96,7 +96,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint tileM = blockIdx.y * TileM;
 
-  Slice<ElemT, OpX> XTile(tileM, tileK * TileK, 
+  Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
                           P, TileP,
                           X);
@@ -156,6 +156,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
       if (yElem.k() + tk >= MIN(TileK, params.problem.x().n() - tileK * TileK)/P) continue;
+      if (yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
       const uint glM = rm + tileM;
       const uint32_t XTileSlices = TileK/P;
       //Total elements produced from TileK are (TileK/P) * Q
@@ -206,6 +207,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
+      if (glK >= Y.n()) printf("210: glK %d\n", glK);
+      // if (threadIdx.x == 0 && glK >= 64*64*64*64) printf("glK %d tid %d tileK %d tileQ %d\n", glK, tid, tileK, tileQ);
       // if (params.kp_idx == 1) {
       //   if (glK == 16384) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
       //       threadIdx.x, blockIdx.x, rm, yElem.k(), tk, yElem.q(), tq, yReg.at(rm, tk ,tq));

@@ -45,7 +45,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
     const uint Vecs    = Fsh.shape(1)/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
-
+    if (threadIdx.x == 0) printf("Vecs %d %d\n", Vecs, Fsh.shape(0));
     for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += blockDim.x/ThGroups) {
         ElemT regs[VecTLen];
