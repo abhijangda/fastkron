@@ -18,7 +18,7 @@ void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
 template<typename XShared, typename FShared, 
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
-void mainMMA(uint32_t m, uint TileP, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
+void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
   //Load shared memory Xsh to registers Xr 
   #pragma unroll
   for (uint rm = 0; rm < Yr.m(); rm++) {
@@ -33,11 +33,11 @@ void mainMMA(uint32_t m, uint TileP, uint remainingP, XShared& Xsh, FShared& Fsh
         //TODO: bring shift calculation in Xsh.at
         float temp = 0.0f;
         if (p < remainingP and shXk < Xsh.slices()) {
-          temp = Xsh.at(rm, shXk * TileP + (p + shift)%TileP);
+          temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
         } else {
           temp = 0.0f;
         }
-
+        
         Xr.set(rm, rk, p, temp);
       }
   }}}

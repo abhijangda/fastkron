@@ -72,6 +72,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
   std::cout << "72: " << kernelInfo.grid(problem).x << " " << kernelInfo.grid(problem).y << std::endl;
   std::cout << "73: " << kernelInfo.getTileX(problem) << std::endl;
   std::cout << "74: " << kernelInfo.getTileF(problem) << std::endl;
+  std::cout << "75: " << kernelInfo.sharedMemSize(problem) << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
@@ -87,7 +88,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
     float* m = new float[problem.x().numel()];
     cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
     for (int i = 0; i < problem.y().numel(); i++) {
-      if (m[i] != 128) {
+      if (m[i] != 31) {
         printf("%f %d %d\n", m[i], i/(problem.y().n()), i%(problem.y().n()));
         break;
       }
