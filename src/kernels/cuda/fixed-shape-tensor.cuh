@@ -36,6 +36,7 @@ public:
 
   CUDA_DEVICE_HOST
   T& at(T data[], uint32_t i, uint32_t j) {
+    assert(linearIdx(i, j) < numel());
     return data[linearIdx(i, j)];
   }
 
@@ -46,6 +47,7 @@ public:
 
   CUDA_DEVICE_HOST
   void set(T data[], uint32_t i, uint32_t j, T val) {
+    assert(linearIdx(i, j) < numel());
     data[linearIdx(i, j)] = val;
   }
 };
@@ -167,16 +169,13 @@ public:
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
       uint32_t idx = row * q() + col + ve;
-      assert(row * q() + col + ve < TileP * TileQ);
       Base::set(data, idx, elems[ve]);
     }
   }
   
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    assert(row * q() + col < TileP * TileQ);
-    return data[row * q() + col];
-    // return Base::at(data, row, col);
+    return Base::at(data, row, col);
   }
   
   CUDA_DEVICE_HOST
