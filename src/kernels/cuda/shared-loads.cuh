@@ -3,7 +3,7 @@
 
 template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
-void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
+void shiftXgToXsh(const uint NumThreads, const uint RegK,
                   const uint tileP, const uint tid, const Slice<ElemT, OpX> XTile,
                   XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
@@ -14,7 +14,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
       ElemT regs[VecTLen];
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-      Xsh.store(row, k, TileP, RegK, VecTLen, regs);
+      Xsh.store(row, k, RegK, VecTLen, regs);
     }}
   } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?
@@ -29,7 +29,7 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
       const uint k = swid;
 
       ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-      Xsh.store(row, k, TileP, RegK, VecTLen, regs);
+      Xsh.store(row, k, RegK, VecTLen, regs);
     }}
   }
 }
@@ -96,6 +96,6 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
         const uint32_t MaxXSlices = Xsh.n()/F.p();
         uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
         
-        Xsh.store(tm, shXk, Fsh.p(), Yr.k(), 1, &Yr.at(tm, tk, tq));
+        Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
   }}}}
 }

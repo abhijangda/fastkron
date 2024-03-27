@@ -184,29 +184,29 @@ public:
   uint32_t q() const {return TileQ;}
 };
 
-template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
-class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
-  using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
+template<fastKronOp Layout, typename T, uint32_t kM, uint32_t kSlices, uint32_t kP>
+class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
   T* data;
   uint32_t ShTileK;
-  uint32_t TileP;
+  uint32_t P;
 
 public:
   CUDA_DEVICE_HOST
-  ShiftShared(T* data, uint32_t ShTileK, uint32_t TileP) : data(data), ShTileK(ShTileK), TileP(TileP) {}
+  ShiftShared(T* data, uint32_t ShTileK, uint32_t P) : data(data), ShTileK(ShTileK), P(P) {}
 
   CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
+  void store(uint32_t row, uint32_t startCol, uint32_t RegK, 
              uint32_t numElems, T* elems) {
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
       uint32_t shCol = startCol + i;
-      uint32_t elem  = shCol%TileP;
-      uint32_t slice = shCol/TileP;
+      uint32_t elem  = shCol%P;
+      uint32_t slice = shCol/P;
       uint32_t shift = slice/RegK;
 
       // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
-      uint32_t col = slice*TileP + (shift + elem)%TileP;
+      uint32_t col = slice*kP + (shift + elem)%kP;
       assert(row * n() + col < numel());
       data[row * n() + col] = elems[i];
     }
@@ -220,13 +220,13 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t numel() {return M*ShTileK;}
+  uint32_t numel() {return kM*(ShTileK/P)*kP;}
   
   CUDA_DEVICE_HOST
-  uint32_t slices() {return ShTileK/TileP;}
+  uint32_t slices() {return ShTileK/P;}
 
   CUDA_DEVICE_HOST
-  uint32_t m() const {return M;}
+  uint32_t m() const {return kM;}
   CUDA_DEVICE_HOST
   uint32_t n() const {return ShTileK;}
 };

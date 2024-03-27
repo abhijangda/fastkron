@@ -122,15 +122,15 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
-                          P, MIN(P, TileP),
+                          P, TileP,
                           X);
 
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
 
-  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, (kTileK/MaxP)*TileP>;
+  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, kTileK/MaxP, TileP>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
-  XShared Xsh(&sharedStorage[0], ShTileK, MIN(TileP, P));
+  XShared Xsh(&sharedStorage[0], ShTileK, MIN(P, TileP));
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
   /*register*/ YRegisters<ElemT, TileM, RegK, RegQ> yReg;
@@ -138,7 +138,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(MIN(P, TileP), NumThreads, RegK,
+    shiftXgToXsh<ElemT, XVecT, OpX, decltype(Xsh)>(NumThreads, RegK,
                                                    tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
@@ -157,7 +157,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), MIN(P, TileP), MIN(TileP, P - tileP), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
+        mainMMA(XTile.m(), MIN(TileP, P - tileP), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
       }
 
       if (FusedFacs > 1 && fac > 0) {

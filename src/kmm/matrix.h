@@ -124,7 +124,7 @@ public:
     //TODO: get common parts out
     if (Op == fastKronOp_N) {
       uint32_t idx = row * parent.n();
-      if (TileP == P) {
+      if (P <= TileP) {
         idx += col;
       } else {
         idx += (col/TileP)*P + tileP + col%TileP;
@@ -132,7 +132,7 @@ public:
       return &ptr[idx];
     } else if (Op == fastKronOp_T) {
       uint32_t idx = 0;
-      if (TileP == P) {
+      if (P <= TileP) {
         idx = col;
       } else {
         idx += (col/TileP)*P + tileP + col%TileP;
