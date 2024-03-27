@@ -85,8 +85,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint tileQ = getTileQ(Q, TileQ);
   const uint tileK = getTileK(Q, TileQ);
   // if (threadIdx.x == 0) printf("Q %d tileQ %d blockIdx.x %d\n", Q, tileQ, blockIdx.x);
+  //TODO: The kernel requires atleast RegK=4 slices otherwise 
+  //QThreads is 0 leading to undefined behavior  
   const uint tid      = threadIdx.x;
-  const uint QThreads = (TileK / P)        / RegK;
+  const uint QThreads = DIVUP((TileK / P)   , RegK);
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
 
@@ -107,7 +109,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
   XShared Xsh(&sharedStorage[0], ShTileK, MIN(TileP, P));
-  FShared Fsh(&sharedStorage[Xsh.numel()], Factor(P, MIN(Q, TileQ)));
+  FShared Fsh(&sharedStorage[Xsh.numel()], Factor(MIN(P, TileP), MIN(Q, TileQ)));
 
   /*register*/ YRegisters<ElemT, TileM, RegK, RegQ> yReg;
 
