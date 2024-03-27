@@ -21,8 +21,8 @@
   EXPECT_TRUE(result);\
 }
 
-FUSION_TEST(1, 4, 10, 2, 2, float); //TODO: Kernel requires 4 slices. so setting min to 4
-FUSION_TEST(1, 3, 8, 3, 3, float); //TODO: Kernel requires 4 slices. so setting min to 4
+FUSION_TEST(1, 2, 10, 2, 2, float);
+FUSION_TEST(1, 2, 8, 3, 3, float);
 FUSION_TEST(1, 2, 8, 4, 4, float);
 FUSION_TEST(1, 2, 7, 5, 5, float);
 FUSION_TEST(1, 2, 7, 6, 6, float);

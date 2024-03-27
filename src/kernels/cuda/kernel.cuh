@@ -108,8 +108,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint tileQ = getTileQ(Q, TileQ);
   const uint tileK = getTileK(Q, TileQ);
   // if (threadIdx.x == 0) printf("Q %d tileQ %d blockIdx.x %d\n", Q, tileQ, blockIdx.x);
-  //TODO: The kernel requires atleast RegK=4 slices otherwise 
-  //QThreads is 0 leading to undefined behavior  
+
   const uint tid      = threadIdx.x;
   const uint QThreads = DIVUP(XshSlices, RegK);
   const uint yQ       = (tid   / QThreads) * RegQ;
@@ -206,9 +205,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               tileK * XshSlices + //Index of XshSlices elems produced by a tileK 
               shK % XshSlices;    //The element index within consecutive elems
         if (TileQ < Q) {
-          const uint32_t tileQ     = getTileQ(Q, TileQ);
-          // if (blockIdx.x % 2 == 1 && threadIdx.x == 0) printf("tileQ %d\n", tileQ);
-          if (kExactShapes && Q % TileQ == 0) {
+          if (kExactShapes) {
             const uint32_t NumQTiles = Q/TileQ;
             glK += tileQ*(Y.n()/NumQTiles);
           } else {
