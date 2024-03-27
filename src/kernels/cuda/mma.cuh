@@ -31,14 +31,14 @@ void mainMMA(uint32_t m, uint TileP, uint remainingP, XShared& Xsh, FShared& Fsh
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
         //TODO: bring shift calculation in Xsh.at
+        float temp = 0.0f;
         if (p < remainingP and shXk < Xsh.slices()) {
-          auto temp = Xsh.at(rm, shXk * TileP + (p + shift)%TileP);
-          // if (threadIdx.x == 15 && blockIdx.x == 1 && blockIdx.y == 0 && rk == 2)
-          //   printf("37: %f at %d %d\n", temp, p, remainingP);
-          Xr.set(rm, rk, p, temp);
+          temp = Xsh.at(rm, shXk * TileP + (p + shift)%TileP);
         } else {
-          Xr.set(rm, rk, p, 0);
+          temp = 0.0f;
         }
+
+        Xr.set(rm, rk, p, temp);
       }
   }}}
   
