@@ -34,12 +34,21 @@ void shiftXgToXsh(const uint TileP, const uint NumThreads, const uint RegK,
   }
 }
 
-template<typename ElemT, typename VecT, typename FShared>
+template<bool kExactShapes, typename ElemT, typename VecT, typename FShared>
 CUDA_DEVICE
 void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF, 
                    const uint tileP, const uint tileQ,
                    const Factor& F, FShared& Fsh) {
   const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
+
+  if (!kExactShapes && (F.p() - tileP < Fsh.p() || F.q() < Fsh.q())) {
+    //Zero out Fsh when remaining P is not equal to Fsh.p
+    for (uint e = tid; e < Fsh.numel(); e += NumThreads) {
+      ElemT regs[1] = {0};
+      Fsh.store(e, 1, regs);
+    }
+    __syncthreads();
+  }
 
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements

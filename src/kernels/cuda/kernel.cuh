@@ -145,8 +145,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
-      directFgToFsh<ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, OpF, tileP, tileQ,
-                                                 F, Fsh);
+      directFgToFsh<kExactShapes, ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, OpF, tileP, tileQ,
+                                                               F, Fsh);
 
       __syncthreads();
 
