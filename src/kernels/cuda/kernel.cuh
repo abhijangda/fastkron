@@ -25,12 +25,23 @@ CUDA_DEVICE uint32_t getTileQ(uint Q, uint TileQ) {
   return blockIdx.x%DIVUP(Q, TileQ);
 }
 
-template<uint kExactShapes, uint kTileK, uint kMaxP, typename KernelParams> 
-CUDA_DEVICE uint32_t getXshSlices(KernelParams& params) {
+template<uint kExactShapes, uint kTileK, uint kP, typename KernelParams> 
+CUDA_DEVICE uint32_t getXshSlices(const KernelParams& params) {
   if (kExactShapes) {
-    return kTileK/kMaxP;
+    return kTileK/kP;
   } else {
     return params.XshSlices;
+  }
+}
+
+template<uint kExactShapes, uint kQ, typename KernelParams> 
+CUDA_DEVICE uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
+  //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
+  //number of loads as store also requires reading Y.n()
+  if (kExactShapes) {
+    return Y.n()/kQ;
+  } else {
+    return params.XSlices;
   }
 }
 
@@ -89,8 +100,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint TileK = params.tileX.n();
   // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
-  const uint Slices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
-  const uint ShTileK = Slices*MIN(P, TileP);
+  const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
+  const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
+  const uint ShTileK = XshSlices*MIN(P, TileP);
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(Q, TileQ);
@@ -99,7 +111,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   //TODO: The kernel requires atleast RegK=4 slices otherwise 
   //QThreads is 0 leading to undefined behavior  
   const uint tid      = threadIdx.x;
-  const uint QThreads = DIVUP(Slices, RegK);
+  const uint QThreads = DIVUP(XshSlices, RegK);
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
 
@@ -172,15 +184,14 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if (yElem.k() + tk >= MIN(TileK, params.problem.x().n() - tileK * TileK)/P) continue;
       if (yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
       const uint glM = rm + tileM;
-      const uint32_t XTileSlices = TileK/P;
       //Total elements produced from TileK are (TileK/P) * Q
       //No. of elems produced by slice-multiply of TileK with 
-      //the same col of F are: TileK/P, i.e, XTileSlices.
+      //the same col of F are: TileK/P, i.e, XshSlices.
       //These elems are stored consecutively.
 
       //Compute element location inside the tile
       const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
-                            XTileSlices +       // Index of first element produced by this F's col
+                            XshSlices +       // Index of first element produced by this F's col
                             yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
       uint glK;
       ElemT* outputArray;
@@ -189,14 +200,11 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if (FusedFacs > 1) {
         glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
       } else {
-        //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
-        //number of loads as store also requires reading Y.n()
-        uint32_t XSlices = (Y.n()/Q);
         //Scale element location from within tile to global
-        glK = (shK/XTileSlices)   * //The index of XTileSlices elems in TileK
+        glK = (shK/XshSlices)   * //The index of XshSlices elems in TileK
               XSlices             + //Scale the index to global column
-              tileK * XTileSlices + //Index of XTileSlices elems produced by a tileK 
-              shK % XTileSlices;    //The element index within consecutive elems
+              tileK * XshSlices + //Index of XshSlices elems produced by a tileK 
+              shK % XshSlices;    //The element index within consecutive elems
         if (TileQ < Q) {
           const uint32_t tileQ     = getTileQ(Q, TileQ);
           // if (blockIdx.x % 2 == 1 && threadIdx.x == 0) printf("tileQ %d\n", tileQ);
@@ -205,7 +213,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
             glK += tileQ*(Y.n()/NumQTiles);
           } else {
             //TODO: This version is more general than previous version
-            glK += tileQ * (Y.n()/Q) * TileQ;
+            glK += tileQ * XSlices * TileQ;
           }
       }}
       //TODO: glK is writing out of Y.n(). 
@@ -221,7 +229,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
-      if (glK >= Y.n()) printf("210: glK %d\n", glK);
+      // if (glK >= Y.n()) printf("210: glK %d\n", glK);
       // if (threadIdx.x == 0 && glK >= 64*64*64*64) printf("glK %d tid %d tileK %d tileQ %d\n", glK, tid, tileK, tileQ);
       // if (params.kp_idx == 1) {
       //   if (glK == 16384) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
