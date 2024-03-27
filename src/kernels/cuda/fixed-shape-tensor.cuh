@@ -146,11 +146,10 @@ template<fastKronOp Layout, typename T, uint32_t TileP, uint32_t TileQ>
 class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ>;
   T* data;
-  Factor f;
 
 public:
   CUDA_DEVICE_HOST
-  DirectShared(T* data, Factor f) : data(data), f(f) {}
+  DirectShared(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
@@ -167,38 +166,23 @@ public:
   void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
-      uint32_t idx = row * f.q() + col + ve;
+      uint32_t idx = row * q() + col + ve;
+      assert(row * q() + col + ve < TileP * TileQ);
       Base::set(data, idx, elems[ve]);
     }
   }
   
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    return data[row * f.q() + col];
+    assert(row * q() + col < TileP * TileQ);
+    return data[row * q() + col];
     // return Base::at(data, row, col);
-  }
-
-  CUDA_DEVICE_HOST
-  uint32_t shape(uint32_t dim) const {
-    if (Layout == fastKronOp_N) {
-      switch(dim) {
-        case  0: return f.p();
-        case  1: return f.q();
-        default: return 0;
-      }
-    } else if (Layout == fastKronOp_T) {
-      switch(dim) {
-        case  0: return f.q();
-        case  1: return f.p();
-        default: return 0;
-      }
-    }
   }
   
   CUDA_DEVICE_HOST
-  uint32_t p() const {return MIN(f.p(), TileP);}
+  uint32_t p() const {return TileP;}
   CUDA_DEVICE_HOST
-  uint32_t q() const {return f.q();}
+  uint32_t q() const {return TileQ;}
 };
 
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
@@ -223,12 +207,15 @@ public:
       uint32_t shift = slice/RegK;
 
       // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
-      data[row * n() + slice*TileP + (shift + elem)%TileP] = elems[i];
+      uint32_t col = slice*TileP + (shift + elem)%TileP;
+      assert(row * n() + col < numel());
+      data[row * n() + col] = elems[i];
     }
   }
 
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
+    assert(row * n() + col < numel());
     return data[row * n() + col];
     // return Base::at(data, row, col);
   }

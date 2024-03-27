@@ -62,7 +62,6 @@ struct KernelInfo {
     Factor tileF_ = getTileF(problem);
 
     uint32_t slices = MIN(tileX.n()/f.p(), tileX.n()/f_.p());
-    // std::cout << "65 "<< slices << " " << tileX.n()/f.p() << " " << problem.x().n()/f_.p() << std::endl;
     return Matrix(tileX.m(), slices * f_.p());
   }
 
@@ -71,9 +70,11 @@ struct KernelInfo {
     Factor tileF_ = getTileF(problem);
     Factor f_ = problem.f(0);
 
+    //Pad Xsh to TileP
+    //Pad Fsh to TileP x TileQ
     Matrix Xsh = Matrix(tileX_.m(), 
-                        (tileX_.n()/f_.p()) * tileF.p()); //Pad Xsh to TileP 
-    return (tileF_.numel() + Xsh.numel())*sizeof(float);
+                        (tileX_.n()/f_.p()) * tileF.p());
+    return (tileF.numel() + Xsh.numel())*sizeof(float);
   }
 
   virtual std::string str() const {
