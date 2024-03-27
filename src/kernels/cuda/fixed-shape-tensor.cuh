@@ -206,10 +206,11 @@ class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
   T* data;
   uint32_t ShTileK;
+  uint32_t TileP;
 
 public:
   CUDA_DEVICE_HOST
-  ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
+  ShiftShared(T* data, uint32_t ShTileK, uint32_t TileP) : data(data), ShTileK(ShTileK), TileP(TileP) {}
 
   CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t TileP, uint32_t RegK, 
@@ -234,6 +235,9 @@ public:
 
   CUDA_DEVICE_HOST
   uint32_t numel() {return M*ShTileK;}
+  
+  CUDA_DEVICE_HOST
+  uint32_t slices() {return ShTileK/TileP;}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return M;}
