@@ -179,7 +179,24 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t p() const {return TileP;}
+  uint32_t shape(uint32_t dim) const {
+    if (Layout == fastKronOp_N) {
+      switch(dim) {
+        case  0: return f.p();
+        case  1: return f.q();
+        default: return 0;
+      }
+    } else if (Layout == fastKronOp_T) {
+      switch(dim) {
+        case  0: return f.q();
+        case  1: return f.p();
+        default: return 0;
+      }
+    }
+  }
+  
+  CUDA_DEVICE_HOST
+  uint32_t p() const {return MIN(f.p(), TileP);}
   CUDA_DEVICE_HOST
   uint32_t q() const {return f.q();}
 };
