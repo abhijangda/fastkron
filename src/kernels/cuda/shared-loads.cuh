@@ -43,7 +43,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
 
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
-    const uint Vecs    = Fsh.shape(1)/VecTLen;
+    const uint Vecs     = Fsh.shape(1)/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
     for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += blockDim.x/ThGroups) {
