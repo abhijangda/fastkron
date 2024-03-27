@@ -507,7 +507,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (tune) {
     FastKronCHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
   }
-  printf("resultSize %d tempSize %d\n", resultSize, tempSize);
+  printf("resultSize %lu tempSize %lu\n", resultSize, tempSize);
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
@@ -516,7 +516,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     FastKronCHECK(backendMalloc(backend, (void**)&dResult[g], resultSize));
     FastKronCHECK(backendMemset(backend, (void*)dResult[g], 0, resultSize));
   }
-  printf("520 sizeX %d\n", sizeX);
+  printf("520 sizeX %lu\n", sizeX);
   if (checkResults) {
     if (useDistributed) {
       //Already done by allocDistributedX
