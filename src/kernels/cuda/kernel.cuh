@@ -30,7 +30,7 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK_,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
-         uint FactorHasMaxShape_,
+         uint FactorHasMaxShape,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
@@ -74,9 +74,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
-  bool FactorHasMaxShape = false;
+
   const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
   const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
+
   const uint TileK = params.tileX.n();
   // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
   const uint ShTileK = (TileK/P)*MIN(P, TileP);
