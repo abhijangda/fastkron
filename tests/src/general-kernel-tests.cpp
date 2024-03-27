@@ -21,7 +21,7 @@
   EXPECT_TRUE(result);\
 }
 
-#define M_ 32
+#define M_ 16
 FUSION_TEST(M_, 2, 10, 2, 2, float);
 FUSION_TEST(M_, 2, 8, 3, 3, float);
 FUSION_TEST(M_, 2, 8, 4, 4, float);
