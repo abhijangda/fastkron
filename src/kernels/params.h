@@ -82,9 +82,12 @@ struct KernelParams {
   
   Matrix tileX;
   Factor tileF;
+  
+  uint32_t XshSlices;
 
   KernelParams(KMMProblem problem_, Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
-               problem(problem_), tileX(tileX), tileF(tileF), kp_idx(kp_idx), execMode(execMode) {}
+               problem(problem_), tileX(tileX), tileF(tileF), XshSlices(tileX.n()/problem_.f(0).p()), 
+               kp_idx(kp_idx), execMode(execMode) {}
 };
 
 template<uint Fused>

@@ -25,12 +25,21 @@ CUDA_DEVICE uint32_t getTileQ(uint Q, uint TileQ) {
   return blockIdx.x%DIVUP(Q, TileQ);
 }
 
+template<uint kExactShapes, uint kTileK, uint kMaxP, typename KernelParams> 
+CUDA_DEVICE uint32_t getXshSlices(KernelParams& params) {
+  if (kExactShapes) {
+    return kTileK/kMaxP;
+  } else {
+    return params.XshSlices;
+  }
+}
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
-         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint TileK_,
+         uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
-         uint FactorHasMaxShape,
+         uint kExactShapes,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
@@ -75,12 +84,13 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
 
-  const uint Q = (FactorHasMaxShape) ? MaxQ : params.problem.f(0).q();
-  const uint P = (FactorHasMaxShape) ? MaxP : params.problem.f(0).p();
+  const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
+  const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
 
   const uint TileK = params.tileX.n();
   // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
-  const uint ShTileK = (TileK/P)*MIN(P, TileP);
+  const uint Slices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
+  const uint ShTileK = Slices*MIN(P, TileP);
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(Q, TileQ);
@@ -89,7 +99,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   //TODO: The kernel requires atleast RegK=4 slices otherwise 
   //QThreads is 0 leading to undefined behavior  
   const uint tid      = threadIdx.x;
-  const uint QThreads = DIVUP((TileK / P)   , RegK);
+  const uint QThreads = DIVUP(Slices, RegK);
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
 
@@ -106,7 +116,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
 
-  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, (TileK_/MaxP)*TileP>;
+  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, (kTileK/MaxP)*TileP>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
   XShared Xsh(&sharedStorage[0], ShTileK, MIN(TileP, P));
