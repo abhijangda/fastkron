@@ -106,3 +106,8 @@ add_custom_target(gen-multi-cuda-distinct-shapes
 )
 target_include_directories(multi-cuda-distinct-shapes PRIVATE ${TESTS_INCLUDES})
 target_link_libraries(multi-cuda-distinct-shapes ${TESTS_LIBS})
+
+add_executable(general-kernel-tests ${TEST_SRC}/general-kernel-tests.cpp)
+target_include_directories(general-kernel-tests PRIVATE ${TESTS_INCLUDES})
+target_link_libraries(general-kernel-tests ${TESTS_LIBS})
+target_compile_definitions(general-kernel-tests PRIVATE ${CUDA_TEST_DEFINE})
