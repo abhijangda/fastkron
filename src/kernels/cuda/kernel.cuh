@@ -146,7 +146,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<kExactShapes, ElemT, XVecT, OpX, decltype(Xsh)>(NumThreads, RegK,
+    shiftXgToXsh<kXshSlicesSame, kPMultipleOfTileP, ElemT, XVecT, OpX, decltype(Xsh)>(NumThreads, RegK,
                                                    tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {

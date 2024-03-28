@@ -1,7 +1,8 @@
 #include "kmm/matrix.h"
 #include "kernels/cuda/register-loads.cuh"
 
-template<bool kExactShapes, typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
+template<bool kXshSlicesSame, bool kPMultipleOfTileP, 
+         typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint NumThreads, const uint RegK,
                   const uint tileP, const uint tid, const Slice<ElemT, OpX> XTile,
@@ -13,7 +14,7 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
-      if (kExactShapes) {
+      if (kPMultipleOfTileP && kXshSlicesSame) {
         ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
         Xsh.store(row, k, RegK, VecTLen, regs);
       } else {
@@ -22,14 +23,14 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
         uint32_t elem = k%Xsh.p();
 
         uint32_t xidx = XTile.data(row, slice, elem, tileP);
-        if (tileP + elem < XTile.P) {
+        if (kPMultipleOfTileP || tileP + elem < XTile.P) {
           // if (xidx > 505*505) printf("xidx %d\n", xidx);
           ldGlobalVec(XTile.data(xidx), regs, VecTLen);  
         } else {
           //TODO:
           regs[0] = 0;
         }
-        
+
         Xsh.store(row, slice, elem, RegK, VecTLen, regs);
       }
     }}
