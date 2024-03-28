@@ -15,7 +15,7 @@ void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
   }
 }
 
-template<typename XShared, typename FShared, 
+template<bool kExactShapes, typename XShared, typename FShared, 
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
 void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
@@ -32,7 +32,7 @@ void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, 
       for (uint p = 0; p < Xr.p(); p++) {
         //TODO: bring shift calculation in Xsh.at
         float temp = 0.0f;
-        if (p < remainingP and shXk < Xsh.slices()) {
+        if (kExactShapes || shXk < Xsh.slices()) {
           temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
         } else {
           temp = 0.0f;
@@ -47,8 +47,10 @@ void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, 
     uint shFcol = yElem.q() + rq;
     #pragma unroll
     for (uint p = 0; p < Xr.p(); p++) {
-      if (shFcol < Fsh.q()) //TODO: Need to add these conditions outside of mainMMA
+      if (kExactShapes || shFcol < Fsh.q()) //TODO: Need to add these conditions outside of mainMMA
         Fr.set(p, rq, Fsh.at(p, shFcol));
+      else
+        Fr.set(p, rq, 0);
   }}
 
   #pragma unroll

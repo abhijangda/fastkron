@@ -189,11 +189,10 @@ class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * k
   using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
   T* data;
   uint32_t ShTileK;
-  uint32_t P;
 
 public:
   CUDA_DEVICE_HOST
-  ShiftShared(T* data, uint32_t ShTileK, uint32_t P) : data(data), ShTileK(ShTileK), P(P) {}
+  ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
 
   CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t RegK, 
@@ -201,10 +200,25 @@ public:
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
       uint32_t shCol = startCol + i;
-      uint32_t elem  = shCol%P;
-      uint32_t slice = shCol/P;
+      uint32_t elem  = shCol%kP;
+      uint32_t slice = shCol/kP;
       uint32_t shift = slice/RegK;
 
+      // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
+      uint32_t col = slice*kP + (shift + elem)%kP;
+      assert(row * n() + col < numel());
+      data[row * n() + col] = elems[i];
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  void store(uint32_t row, uint32_t slice, uint32_t elem, uint32_t RegK, 
+             uint32_t numElems, T* elems) {
+    //Only works for numElems == 1
+    #pragma unroll
+    for (uint i = 0; i < numElems; i++) {
+      // uint32_t shCol = startCol + i;
+      uint32_t shift = slice/RegK;
       // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
       uint32_t col = slice*kP + (shift + elem)%kP;
       assert(row * n() + col < numel());
@@ -220,15 +234,17 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t numel() {return kM*(ShTileK/P)*kP;}
+  uint32_t numel() {return kM*ShTileK;}
   
   CUDA_DEVICE_HOST
-  uint32_t slices() {return ShTileK/P;}
+  uint32_t slices() {return ShTileK/kP;}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return kM;}
   CUDA_DEVICE_HOST
   uint32_t n() const {return ShTileK;}
+  CUDA_DEVICE_HOST
+  uint32_t p() const {return kP;}
 };
 
 //Register Tensors

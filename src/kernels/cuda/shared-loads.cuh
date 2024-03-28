@@ -1,7 +1,7 @@
 #include "kmm/matrix.h"
 #include "kernels/cuda/register-loads.cuh"
 
-template<typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
+template<bool kExactShapes, typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint NumThreads, const uint RegK,
                   const uint tileP, const uint tid, const Slice<ElemT, OpX> XTile,
@@ -13,8 +13,24 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
       ElemT regs[VecTLen];
 
-      ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-      Xsh.store(row, k, RegK, VecTLen, regs);
+      if (kExactShapes) {
+        ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+        Xsh.store(row, k, RegK, VecTLen, regs);
+      } else {
+        //TODO: Valid only when VecTLen == 1
+        uint32_t slice = k/Xsh.p();
+        uint32_t elem = k%Xsh.p();
+
+        uint32_t xidx = XTile.data(row, slice, elem, tileP);
+        if (tileP + elem < XTile.P) {
+          ldGlobalVec(XTile.data(xidx), regs, VecTLen);  
+        } else {
+          //TODO:
+          regs[0] = 0;
+        }
+        
+        Xsh.store(row, slice, elem, RegK, VecTLen, regs);
+      }
     }}
   } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?

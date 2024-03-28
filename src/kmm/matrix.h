@@ -144,7 +144,28 @@ public:
   }
 
   CUDA_DEVICE_HOST
+  const uint32_t data(uint32_t row, uint32_t slice, uint32_t elem, uint32_t tileP) const {
+    //TODO: get common parts out
+    if (Op == fastKronOp_N) {
+      uint32_t idx = row * parent.n();
+      idx += slice*P + tileP + elem;
+      return idx;
+    } else if (Op == fastKronOp_T) {
+      uint32_t idx = slice*P + tileP + elem;
+      idx = idx * parent.m() + row;
+      return idx;
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  const T* data(uint32_t idx) const {
+    return &ptr[idx];
+  }
+
+  CUDA_DEVICE_HOST
   uint32_t m() const {return rows;}
+  CUDA_DEVICE_HOST
+  uint32_t numel() const {return rows * cols;}
 };
 
 class Factor : public Matrix {
