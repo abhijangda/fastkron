@@ -135,7 +135,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
 
-  using XShared = ShiftShared<fastKronOp_N, ElemT, TileM, kTileK/MaxP, TileP>;
+  using XShared = ShiftShared<fastKronOp_N, ElemT, kXshSlicesSame, 
+                              TileM, kTileK/MaxP, TileP>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
 
   XShared Xsh(&sharedStorage[0], ShTileK);
@@ -146,8 +147,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<kXshSlicesSame, kPMultipleOfTileP, ElemT, XVecT, OpX, decltype(Xsh)>(NumThreads, RegK,
-                                                   tileP, tid, XTile, Xsh);
+    shiftXgToXsh<kXshSlicesSame, kPMultipleOfTileP, ElemT, XVecT, OpX, decltype(Xsh)>
+                (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, params.problem.f(fac).data());
@@ -187,12 +188,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
-      //TODO: Use these conditions in mma to avoid computation and shared mem loading?
-      if (!kExactShapes) {
-        //TODO: This is required only when XshSlices < 64
-        if ((!kTileKMultipleOfK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
-            (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
-      }
+      if ((!kTileKMultipleOfK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
+          (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
 
       const uint glM = rm + tileM;
       uint glK;

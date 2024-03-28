@@ -184,7 +184,8 @@ public:
   uint32_t q() const {return TileQ;}
 };
 
-template<fastKronOp Layout, typename T, uint32_t kM, uint32_t kSlices, uint32_t kP>
+template<fastKronOp Layout, typename T, bool kXshSlicesSame, 
+         uint32_t kM, uint32_t kSlices, uint32_t kP>
 class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
   T* data;
@@ -234,15 +235,15 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t numel() {return kM*ShTileK;}
+  uint32_t numel() const {return m() * n();}
   
   CUDA_DEVICE_HOST
-  uint32_t slices() {return ShTileK/kP;}
+  uint32_t slices() const {return (kXshSlicesSame) ? kSlices : ShTileK/kP;}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return kM;}
   CUDA_DEVICE_HOST
-  uint32_t n() const {return ShTileK;}
+  uint32_t n() const {return slices() * p();}
   CUDA_DEVICE_HOST
   uint32_t p() const {return kP;}
 };
