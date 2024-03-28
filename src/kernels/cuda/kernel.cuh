@@ -103,12 +103,15 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
   const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
   const bool kXshSlicesSame = false;
+  const bool kQMultipleOfTileQ = true;
+  const bool kTileKMultipleOfK = true;
 
   const uint TileK = params.tileX.n();
   // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
   const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
   const uint QThreads  = getQThreads <kExactShapes || kXshSlicesSame, RegK>(XshSlices);
+
   const uint ShTileK   = XshSlices*TileP;
 
   //TODO: Make this Coord2D
@@ -157,7 +160,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
       if (kExactShapes ||
-          (yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) //TODO: This is required only when XshSlices < 64
+          ((kTileKMultipleOfK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
+           (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ))) //TODO: This is required only when XshSlices < 64
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
@@ -185,8 +189,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       //TODO: Use these conditions in mma to avoid computation and shared mem loading?
       if (!kExactShapes) {
         //TODO: This is required only when XshSlices < 64
-        if (yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices) || 
-            yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
+        if ((!kTileKMultipleOfK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
+            (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
       }
 
       const uint glM = rm + tileM;

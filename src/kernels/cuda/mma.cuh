@@ -32,12 +32,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
       for (uint p = 0; p < Xr.p(); p++) {
         //TODO: bring shift calculation in Xsh.at
         float temp = 0.0f;
-        if (kExactShapes || shXk < Xsh.slices()) {
-          temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
-        } else {
-          temp = 0.0f;
-        }
-        
+        temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
         Xr.set(rm, rk, p, temp);
       }
   }}}
