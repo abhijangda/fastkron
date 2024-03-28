@@ -104,7 +104,7 @@ class PyFastKronWrapper:
                              opX.op, opFs.op, stream)
 
   def __del__(self):
-    self.destroyFn(self.cpp_handle)
+    #TODO: self.destroyFn(self.cpp_handle)
     self.cpp_handle = ctypes.c_ulong(0)
 
 try:
