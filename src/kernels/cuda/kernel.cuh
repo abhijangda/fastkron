@@ -45,6 +45,11 @@ CUDA_DEVICE uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
   }
 }
 
+template<uint kXshSlicesSame, uint RegK> 
+CUDA_DEVICE uint32_t getQThreads(uint XshSlices) {
+  return XshSlices/RegK;
+}
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
@@ -97,12 +102,14 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
   const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
+  const bool kXshSlicesSame = false;
 
   const uint TileK = params.tileX.n();
   // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
   const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
-  const uint ShTileK = XshSlices*TileP;
+  const uint QThreads  = getQThreads <kExactShapes || kXshSlicesSame, RegK>(XshSlices);
+  const uint ShTileK   = XshSlices*TileP;
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(Q, TileQ);
@@ -110,13 +117,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   // if (threadIdx.x == 0) printf("Q %d tileQ %d blockIdx.x %d\n", Q, tileQ, blockIdx.x);
 
   const uint tid      = threadIdx.x;
-  const uint QThreads = DIVUP(XshSlices, RegK);
   const uint yQ       = (tid   / QThreads) * RegQ;
   const uint yK       = (tid   % QThreads) * RegK;
 
   const YElem yElem(yQ, yK);
-
-  bool isThreadValid = true; //(yElem.q() + RegQ <= TileQ);
 
   const uint tileM = blockIdx.y * TileM;
 
@@ -152,8 +156,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
-      if (kExactShapes || 
-          (yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) //True when XshSlices == 64
+      if (kExactShapes ||
+          (yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) //TODO: This is required only when XshSlices < 64
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
@@ -163,10 +167,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
       if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
-        if (isThreadValid) {
-          //Store C to shared memory using shift method
-          fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg, yElem);
-        }
+        //Store C to shared memory using shift method
+        fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg, yElem);
       }
 
       __syncthreads();
@@ -182,6 +184,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     for (uint tk = 0; tk < RegK; tk += StLen) {
       //TODO: Use these conditions in mma to avoid computation and shared mem loading?
       if (!kExactShapes) {
+        //TODO: This is required only when XshSlices < 64
         if (yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices) || 
             yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
       }
