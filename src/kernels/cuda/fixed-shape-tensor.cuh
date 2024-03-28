@@ -201,14 +201,13 @@ public:
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
       uint32_t shCol = startCol + i;
-      uint32_t elem  = shCol%kP;
-      uint32_t slice = shCol/kP;
+      uint32_t elem  = shCol%p();
+      uint32_t slice = shCol/p();
       uint32_t shift = slice/RegK;
 
-      // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
-      uint32_t col = slice*kP + (shift + elem)%kP;
+      uint32_t col = slice*p() + (shift + elem)%p();
       assert(row * n() + col < numel());
-      data[row * n() + col] = elems[i];
+      Base::set(data, row, col, elems[i]);
     }
   }
 
@@ -220,18 +219,16 @@ public:
     for (uint i = 0; i < numElems; i++) {
       // uint32_t shCol = startCol + i;
       uint32_t shift = slice/RegK;
-      // Base::set(data, row, slice*TileP + (shift + elem)%TileP, elems[i]);
-      uint32_t col = slice*kP + (shift + elem)%kP;
+      uint32_t col = slice*p() + (shift + elem)%p();
       assert(row * n() + col < numel());
-      data[row * n() + col] = elems[i];
+      Base::set(data, row, col, elems[i]);
     }
   }
 
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
     assert(row * n() + col < numel());
-    return data[row * n() + col];
-    // return Base::at(data, row, col);
+    return Base::at(data, row, col);
   }
 
   CUDA_DEVICE_HOST

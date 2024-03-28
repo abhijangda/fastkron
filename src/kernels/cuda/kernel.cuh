@@ -106,9 +106,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const bool kQMultipleOfTileQ = false;
   const bool kPMultipleOfTileP = false;
   const bool kTileKMultipleOfK = false;
+  const bool k = false;
 
   const uint TileK = params.tileX.n();
-  // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
   const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
   const uint QThreads  = getQThreads <kExactShapes || kXshSlicesSame, RegK>(XshSlices);
