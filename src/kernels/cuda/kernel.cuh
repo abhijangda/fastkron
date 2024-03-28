@@ -103,8 +103,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
   const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
   const bool kXshSlicesSame = false;
-  const bool kQMultipleOfTileQ = true;
-  const bool kTileKMultipleOfK = true;
+  const bool kQMultipleOfTileQ = false;
+  const bool kPMultipleOfTileP = false;
+  const bool kTileKMultipleOfK = false;
 
   const uint TileK = params.tileX.n();
   // if (threadIdx.x == 0) printf("TileK %d\n", TileK);
@@ -152,8 +153,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
-      directFgToFsh<kExactShapes, ElemT, FVecT, decltype(Fsh)>(NumThreads, tid, OpF, tileP, tileQ,
-                                                               F, Fsh);
+      directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, decltype(Fsh)>
+                    (NumThreads, tid, OpF, tileP, tileQ, F, Fsh);
 
       __syncthreads();
 

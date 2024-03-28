@@ -51,14 +51,16 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
   }
 }
 
-template<bool kExactShapes, typename ElemT, typename VecT, typename FShared>
+template<bool kPMultipleOfTileP, bool kQMultipleOfTileQ,
+         typename ElemT, typename VecT, typename FShared>
 CUDA_DEVICE
 void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF, 
                    const uint tileP, const uint tileQ,
                    const Factor& F, FShared& Fsh) {
   const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
 
-  if (!kExactShapes && (F.p() - tileP < Fsh.p() || F.q() < Fsh.q())) {
+  if ((!kQMultipleOfTileQ && F.q() < Fsh.q()) || 
+      (!kPMultipleOfTileP && (F.p() - tileP < Fsh.p()))) {
     //Zero out Fsh when remaining P is not equal to Fsh.p
     for (uint e = tid; e < Fsh.numel(); e += NumThreads) {
       ElemT regs[1] = {0};
@@ -77,7 +79,8 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
         if (opF == fastKronOp_N) {
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
-          if (kExactShapes || (col < F.q() && tileP + row < F.p()))
+          if ((kQMultipleOfTileQ || col < F.q()) &&
+              (kPMultipleOfTileP || tileP + row < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
