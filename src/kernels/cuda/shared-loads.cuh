@@ -23,6 +23,7 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
 
         uint32_t xidx = XTile.data(row, slice, elem, tileP);
         if (tileP + elem < XTile.P) {
+          // if (xidx > 505*505) printf("xidx %d\n", xidx);
           ldGlobalVec(XTile.data(xidx), regs, VecTLen);  
         } else {
           //TODO:
@@ -68,16 +69,16 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
 
   if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
-    const uint Vecs     = MIN(F.q(), Fsh.shape(1))/VecTLen;
+    const uint Vecs     = Fsh.shape(1)/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
-    for (uint swid = tid/Vecs; swid < MIN(F.p(), Fsh.shape(0)); swid += ThGroups) {
+    for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += blockDim.x/ThGroups) {
-        ElemT regs[VecTLen];
+        ElemT regs[VecTLen] = {0};
         if (opF == fastKronOp_N) {
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
-
-          ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
+          if (kExactShapes || (col < F.q() && tileP + row < F.p()))
+            ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;
