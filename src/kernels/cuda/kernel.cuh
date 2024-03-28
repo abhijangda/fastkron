@@ -186,27 +186,26 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       }
 
       const uint glM = rm + tileM;
-      //Total elements produced from TileK are (TileK/P) * Q
-      //No. of elems produced by slice-multiply of TileK with
-      //the same col of F are: TileK/P, i.e, XshSlices.
-      //These elems are stored consecutively.
-
-      //Compute element location inside the tile
-      const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
-                            XshSlices +       // Index of first element produced by this F's col
-                            yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
       uint glK;
       ElemT* outputArray;
       uint32_t cIdx;
 
+      //Total elements produced from TileK are (TileK/P) * Q
+      //No. of elems produced by slice-multiply of TileK with
+      //the same col of F are: TileK/P, i.e, XshSlices.
+      //These elems are stored consecutively.
       if (FusedFacs > 1) {
+        //Compute element location inside the tile
+        const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
+                              XshSlices +       // Index of first element produced by this F's col
+                              yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
         glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
       } else {
         //Scale element location from within tile to global
-        glK = (shK/XshSlices)   * //The index of XshSlices elems in TileK
-              XSlices             + //Scale the index to global column
-              tileK * XshSlices + //Index of XshSlices elems produced by a tileK 
-              shK % XshSlices;    //The element index within consecutive elems
+        glK = (yElem.q()   + tq) * //The index of elems by one column in TileK
+              XSlices            + //Scale the index to global column
+              tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
+              yElem.k()   + tk;    //The element index within consecutive elems
         if (TileQ < Q) {
           if (kExactShapes) {
             const uint32_t NumQTiles = Q/TileQ;
