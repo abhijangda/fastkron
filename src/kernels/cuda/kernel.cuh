@@ -17,12 +17,12 @@
 #include <type_traits>
 #include <typeinfo>
 
-CUDA_DEVICE uint32_t getTileK(uint Q, uint TileQ) {
-  return blockIdx.x/DIVUP(Q, TileQ);
+CUDA_DEVICE uint32_t getTileK(uint QByTileQ) {
+  return blockIdx.x/QByTileQ;
 }
 
-CUDA_DEVICE uint32_t getTileQ(uint Q, uint TileQ) {
-  return blockIdx.x%DIVUP(Q, TileQ);
+CUDA_DEVICE uint32_t getTileQ(uint QByTileQ) {
+  return blockIdx.x%QByTileQ;
 }
 
 template<uint kExactShapes, uint kTileK, uint kP, typename KernelParams> 
@@ -48,6 +48,14 @@ CUDA_DEVICE uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
 template<uint kXshSlicesSame, uint RegK> 
 CUDA_DEVICE uint32_t getQThreads(uint XshSlices) {
   return DIVUP(XshSlices, RegK);
+}
+
+template<uint kQLeTileQ, uint TileQ> 
+CUDA_DEVICE uint32_t getQByTileQ(uint Q) {
+  if (kQLeTileQ) {
+    return 1;
+  }
+  return DIVUP(Q, TileQ);
 }
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
@@ -106,18 +114,19 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const bool kQMultipleOfTileQ = false;
   const bool kPMultipleOfTileP = false;
   const bool kTileKMultipleOfK = false;
-  const bool k = false;
+  const bool kQLeTileQ = false;
 
   const uint TileK = params.tileX.n();
   const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
   const uint QThreads  = getQThreads <kExactShapes || kXshSlicesSame, RegK>(XshSlices);
+  const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
 
   const uint ShTileK   = XshSlices*TileP;
 
   //TODO: Make this Coord2D
-  const uint tileQ = getTileQ(Q, TileQ);
-  const uint tileK = getTileK(Q, TileQ);
+  const uint tileQ = getTileQ(QByTileQ);
+  const uint tileK = getTileK(QByTileQ);
   // if (threadIdx.x == 0) printf("Q %d tileQ %d blockIdx.x %d\n", Q, tileQ, blockIdx.x);
 
   const uint tid      = threadIdx.x;
