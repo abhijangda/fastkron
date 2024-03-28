@@ -105,7 +105,8 @@ class PyFastKronWrapper:
 
   def __del__(self):
     #TODO: self.destroyFn(self.cpp_handle)
-    self.cpp_handle = ctypes.c_ulong(0)
+    #self.cpp_handle = ctypes.c_ulong(0)
+    pass
 
 try:
   import torch
