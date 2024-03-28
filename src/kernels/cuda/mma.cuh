@@ -47,10 +47,10 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
     uint shFcol = yElem.q() + rq;
     #pragma unroll
     for (uint p = 0; p < Xr.p(); p++) {
-      if (kExactShapes || shFcol < Fsh.q()) //TODO: Need to add these conditions outside of mainMMA
+      // if (kExactShapes || shFcol < Fsh.q()) //TODO: Need to add these conditions outside of mainMMA
         Fr.set(p, rq, Fsh.at(p, shFcol));
-      else
-        Fr.set(p, rq, 0);
+      // else
+        // Fr.set(p, rq, 0);
   }}
 
   #pragma unroll

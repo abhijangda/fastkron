@@ -152,8 +152,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
-
-      if (isThreadValid) {
+      if (kExactShapes || 
+          (yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) //True when XshSlices == 64
+          ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
@@ -202,10 +203,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
       } else {
         //Scale element location from within tile to global
-        glK = (yElem.q()   + tq) * //The index of elems by one column in TileK
-              XSlices            + //Scale the index to global column
-              tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
-              yElem.k()   + tk;    //The element index within consecutive elems
+        glK = (yElem.q()   + tq)  * //The index of elems by one column in TileK
+               XSlices            + //Scale the index to global column
+               tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
+               yElem.k()    + tk;   //The element index within consecutive elems
         if (TileQ < Q) {
           if (kExactShapes) {
             const uint32_t NumQTiles = Q/TileQ;
@@ -215,7 +216,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
             glK += tileQ * XSlices * TileQ;
           }
       }}
-      //TODO: glK is writing out of Y.n(). 
+
       if (DistributeToGPUs) {
         outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
@@ -228,12 +229,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
       }}}
 
-      assert(glK < Y.n());
-      // if (threadIdx.x == 0 && glK >= 64*64*64*64) printf("glK %d tid %d tileK %d tileQ %d\n", glK, tid, tileK, tileQ);
-      // if (params.kp_idx == 1) {
-      //   if (glK == 16384) printf("tid %d %d, %d (%d, %d) (%d, %d) %f\n",
-      //       threadIdx.x, blockIdx.x, rm, yElem.k(), tk, yElem.q(), tq, yReg.at(rm, tk ,tq));
-      // }
+      // if(glK >= Y.n()) printf("glK %d\n", glK);
       stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }
