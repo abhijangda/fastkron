@@ -47,7 +47,7 @@ CUDA_DEVICE uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
 
 template<uint kXshSlicesSame, uint RegK> 
 CUDA_DEVICE uint32_t getQThreads(uint XshSlices) {
-  return XshSlices/RegK;
+  return DIVUP(XshSlices, RegK);
 }
 
 template<typename ElemT, typename Vec2T, typename Vec4T,
