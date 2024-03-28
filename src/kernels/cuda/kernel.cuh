@@ -157,7 +157,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA<kExactShapes>(XTile.m(), MIN(TileP, P - tileP), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
+        mainMMA<kExactShapes>(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, params.kp_idx == 2);
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -180,8 +180,11 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
       //TODO: Use these conditions in mma to avoid computation and shared mem loading?
-      if (yElem.k() + tk >= MIN(TileK, params.problem.x().n() - tileK * TileK)/P) continue;
-      if (yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
+      if (!kExactShapes) {
+        if (yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices) || 
+            yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ)) continue;
+      }
+
       const uint glM = rm + tileM;
       //Total elements produced from TileK are (TileK/P) * Q
       //No. of elems produced by slice-multiply of TileK with

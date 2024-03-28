@@ -18,7 +18,7 @@ void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
 template<bool kExactShapes, typename XShared, typename FShared, 
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
-void mainMMA(uint32_t m, uint remainingP, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
+void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, bool canPrint) {
   //Load shared memory Xsh to registers Xr 
   #pragma unroll
   for (uint rm = 0; rm < Yr.m(); rm++) {
