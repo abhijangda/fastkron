@@ -78,6 +78,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
         if (opF == fastKronOp_N) {
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
+
           if ((kQMultipleOfTileQ || col < F.q()) &&
               (kPMultipleOfTileP || tileP + row < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
@@ -85,7 +86,9 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;
 
-          ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
+          if ((kPMultipleOfTileP || tileP + col < F.p()) &&
+              (kQMultipleOfTileQ || row < F.q()))
+            ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
         }
 
         Fsh.store(swid, elem * VecTLen, VecTLen, regs);
