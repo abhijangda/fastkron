@@ -9,9 +9,6 @@ void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
   #pragma unroll
   for (uint p = 0; p < Xr.p(); p++) {
     Yr.add(m, i, j, Xr.at(m, i, p) * Fr.at(p, j));
-    // if (threadIdx.x == 15 && blockIdx.x == 1 && blockIdx.y == 0 && i == 2 && j == 0) {
-    //   printf("%f %f %f\n", Yr.at(0, 2, 0), Xr.at(0, 2, p), Fr.at(p, 0));
-    // }
   }
 }
 

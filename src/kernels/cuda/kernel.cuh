@@ -109,8 +109,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
   const bool kExactShapes = false;
-  const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
-  const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
   const bool kXshSlicesSame = false;
   const bool kQMultipleOfTileQ = false;
   const bool kPMultipleOfTileP = false;
@@ -118,18 +116,20 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const bool kQLeTileQ = false;
   const bool kTileKSame = false;
 
+  const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
+  const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
+
   const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
   const uint QThreads  = getQThreads <kExactShapes || kXshSlicesSame, RegK>(XshSlices);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = (kTileKSame) ? kTileK : params.tileX.n();
-  
+
   const uint ShTileK   = XshSlices*TileP;
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(QByTileQ);
   const uint tileK = getTileK(QByTileQ);
-  // if (threadIdx.x == 0) printf("Q %d tileQ %d blockIdx.x %d\n", Q, tileQ, blockIdx.x);
 
   const uint tid      = threadIdx.x;
   const uint yQ       = (tid   / QThreads) * RegQ;
@@ -174,7 +174,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if (FusedFacs > 1) yReg.zero();
       if (kExactShapes ||
           ((kTileKMultipleOfK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
-           (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ))) //TODO: This is required only when XshSlices < 64
+           (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)))
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
@@ -194,7 +194,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
   if (rm < XTile.m()) {
-    constexpr uint32_t StLen = 1;//storeVectorLen<FusedFacs, XAlignment, RegK>();
+    constexpr uint32_t StLen = 1; //storeVectorLen<FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
@@ -224,13 +224,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
                yElem.k()    + tk;   //The element index within consecutive elems
         if (TileQ < Q) {
-          if (kExactShapes) {
-            const uint32_t NumQTiles = Q/TileQ;
-            glK += tileQ*(Y.n()/NumQTiles);
-          } else {
-            //TODO: This version is more general than previous version
-            glK += tileQ * XSlices * TileQ;
-          }
+          glK += tileQ * XSlices * TileQ;
       }}
 
       if (DistributeToGPUs) {
@@ -247,7 +241,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       }
     }
 
-      // if(glK >= Y.n()) printf("glK %d\n", glK);
-      stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
+    stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }

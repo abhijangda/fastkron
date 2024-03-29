@@ -12,7 +12,7 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
     for (uint row = 0; row < XTile.m(); row += 1) {
     //Use NumThreads in the loop adder instead of blockDim.x for better perf
     for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
-      ElemT regs[VecTLen];
+      ElemT regs[VecTLen] = {0};
 
       if (kPMultipleOfTileP && kXshSlicesSame) {
         ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
@@ -24,11 +24,9 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
 
         uint32_t xidx = XTile.data(row, slice, elem, tileP);
         if (kPMultipleOfTileP || tileP + elem < XTile.P) {
-          // if (xidx > 505*505) printf("xidx %d\n", xidx);
           ldGlobalVec(XTile.data(xidx), regs, VecTLen);  
         } else {
-          //TODO:
-          regs[0] = 0;
+          //TODO: Remaining less than VecTLen elems
         }
 
         Xsh.store(row, slice, elem, RegK, VecTLen, regs);
