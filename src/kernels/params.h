@@ -15,49 +15,94 @@ enum KernelSpecialization {
   XshSlicesSame    = 1 << 0,
   QMultipleOfTileQ = 1 << 1,
   PMultipleOfTileP = 1 << 2,
-  TileKMultipleOfK = 1 << 3,
+  KMultipleOfTileK = 1 << 3,
   QLeTileQ         = 1 << 4,
   TileKSame        = 1 << 5,
-  kFactorShapeSame = 1 << 6,
+  FactorShapeSame = 1 << 6,
 };
 
 struct KernelOptimizations {
-  
   CUDA_DEVICE_HOST
-  static bool IsXshSlicesSame(KernelSpecialization specl) {
-    return specl | XshSlicesSame;
+  static constexpr uint OptLevel0() {
+    return KernelSpecialization::None;
   }
 
   CUDA_DEVICE_HOST
-  static bool IsQMultipleOfTileQ(KernelSpecialization specl) {
-    return specl | QMultipleOfTileQ;
+  static constexpr uint OptLevel1() {
+    return OptLevel0()                         |
+           KernelSpecialization::XshSlicesSame |
+           KernelSpecialization::TileKSame
+           ;
   }
 
   CUDA_DEVICE_HOST
-  static bool IsPMultipleOfTileP(KernelSpecialization specl) {
-    return specl | PMultipleOfTileP;
+  static constexpr uint OptLevel2() {
+    return OptLevel1()                            | 
+           KernelSpecialization::KMultipleOfTileK |
+           KernelSpecialization::QMultipleOfTileQ |
+           KernelSpecialization::PMultipleOfTileP
+           ;
   }
 
   CUDA_DEVICE_HOST
-  static bool IsTileKMultipleOfK(KernelSpecialization specl) {
-    return specl | TileKMultipleOfK;
+  static constexpr uint OptLevel3() {
+    return OptLevel2()                            |
+           KernelSpecialization::FactorShapeSame
+           ;
+  }
+  CUDA_DEVICE_HOST
+  static constexpr uint Optimizations(uint optLevel) {
+    switch(optLevel) {
+      case 0: return OptLevel0();
+      case 1: return OptLevel1();
+      case 2: return OptLevel2();
+      case 3: return OptLevel3();
+      default:
+        return 0;
+    }
+
   }
 
   CUDA_DEVICE_HOST
-  static bool IsQLeTileQ(KernelSpecialization specl) {
-    return specl | QLeTileQ;
+  static constexpr bool isEnabled(uint optLevel, KernelSpecialization specl) {
+    return (Optimizations(optLevel) & specl) == specl;
   }
 
   CUDA_DEVICE_HOST
-  static bool IsTileKSame(KernelSpecialization specl) {
-    return specl | TileKSame;
+  static constexpr bool IsXshSlicesSame(uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::XshSlicesSame);
   }
 
   CUDA_DEVICE_HOST
-  static bool IsExactShapes(KernelSpecialization specl) {
-    return specl | ExactShapes;
-  } 
-}
+  static constexpr bool IsQMultipleOfTileQ(uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::QMultipleOfTileQ);
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr bool IsPMultipleOfTileP(uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::PMultipleOfTileP);
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr bool IsKMultipleOfTileK(uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::KMultipleOfTileK);
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr bool IsQLeTileQ        (uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::QLeTileQ);
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr bool IsTileKSame       (uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::TileKSame);
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr bool IsFactorShapeSame (uint optLevel) {
+    return isEnabled(optLevel, KernelSpecialization::FactorShapeSame);
+  }
+};
 
 #pragma once
 

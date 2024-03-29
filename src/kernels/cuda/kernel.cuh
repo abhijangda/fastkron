@@ -59,12 +59,18 @@ CUDA_DEVICE uint32_t getQByTileQ(uint Q) {
   return DIVUP(Q, TileQ);
 }
 
+template<uint kTileKSame, uint kTileK, typename KernelParams> 
+CUDA_DEVICE uint32_t getXTileK(KernelParams& params) {
+  if (kTileKSame) return kTileK;
+  return params.tileX.n();
+}
+
 template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
-         uint kFactorShapeSame_,
+         uint OptLevel_,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
@@ -88,10 +94,10 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                  TileP >= MaxP &&
                  TileQ >= MaxQ),
                 "Invalid tile size params for fusion");
-  // static_assert(TileK % MaxP == 0,
-  //               "TileK is not a multiple of MaxP");
-  // static_assert((TileK/MaxP)%RegK == 0,
-  //               "RegK not a multiple of MaxCols/MaxP");
+  static_assert(kTileK % MaxP == 0,
+                "TileK is not a multiple of MaxP");
+  static_assert((kTileK/MaxP)%RegK == 0,
+                "RegK not a multiple of MaxCols/MaxP");
 
   //Vector Load types based on alignments 
   using XVecT = ElemT;
@@ -100,7 +106,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                 //                           Vec4T>::type>::type;
 
   const bool LoadFullFactor = TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
-  using FVecT = ElemT; 
+  using FVecT = ElemT;
                 // typename std::conditional<LoadFullFactor , Vec4T,
                 // typename std::conditional<FAlignment == 1, ElemT,
                 // typename std::conditional<FAlignment == 2, Vec2T,
@@ -108,14 +114,17 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
+  const uint OptLevel = 0;
+  constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
+  constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
+  constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
+  constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
+  constexpr bool kKMultipleOfTileK = KernelOptimizations::IsFactorShapeSame (OptLevel);
+  constexpr bool kQLeTileQ         = KernelOptimizations::IsQLeTileQ        (OptLevel);
+  constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
-  const bool kFactorShapeSame = false;
-  const bool kXshSlicesSame = false;
-  const bool kQMultipleOfTileQ = false;
-  const bool kPMultipleOfTileP = false;
-  const bool kTileKMultipleOfK = false;
-  const bool kQLeTileQ = false;
-  const bool kTileKSame = false;
+  static_assert(!(kQLeTileQ && kQMultipleOfTileQ),
+                "Both QLeTileQ and QMultipleOfTileQ cannot be true at same time");
 
   const uint Q = (kFactorShapeSame) ? MaxQ : params.problem.f(0).q();
   const uint P = (kFactorShapeSame) ? MaxP : params.problem.f(0).p();
@@ -124,7 +133,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
-  const uint TileK     = (kTileKSame) ? kTileK : params.tileX.n();
+  const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
 
   const uint ShTileK   = XshSlices*TileP;
 
@@ -174,7 +183,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
       if (kFactorShapeSame ||
-          ((kTileKMultipleOfK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
+          ((kKMultipleOfTileK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
            (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)))
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
@@ -195,12 +204,12 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
   if (rm < XTile.m()) {
-    constexpr uint32_t StLen = 1; //storeVectorLen<FusedFacs, XAlignment, RegK>();
+    constexpr uint32_t StLen = 1;//storeVectorLen<FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
-      if ((!kTileKMultipleOfK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
+      if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
           (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
 
       const uint glM = rm + tileM;
