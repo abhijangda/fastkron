@@ -10,6 +10,55 @@ enum KernelMode {
   KernelModeNormal,
 };
 
+enum KernelSpecialization {
+  None = 0,
+  XshSlicesSame    = 1 << 0,
+  QMultipleOfTileQ = 1 << 1,
+  PMultipleOfTileP = 1 << 2,
+  TileKMultipleOfK = 1 << 3,
+  QLeTileQ         = 1 << 4,
+  TileKSame        = 1 << 5,
+  kFactorShapeSame = 1 << 6,
+};
+
+struct KernelOptimizations {
+  
+  CUDA_DEVICE_HOST
+  static bool IsXshSlicesSame(KernelSpecialization specl) {
+    return specl | XshSlicesSame;
+  }
+
+  CUDA_DEVICE_HOST
+  static bool IsQMultipleOfTileQ(KernelSpecialization specl) {
+    return specl | QMultipleOfTileQ;
+  }
+
+  CUDA_DEVICE_HOST
+  static bool IsPMultipleOfTileP(KernelSpecialization specl) {
+    return specl | PMultipleOfTileP;
+  }
+
+  CUDA_DEVICE_HOST
+  static bool IsTileKMultipleOfK(KernelSpecialization specl) {
+    return specl | TileKMultipleOfK;
+  }
+
+  CUDA_DEVICE_HOST
+  static bool IsQLeTileQ(KernelSpecialization specl) {
+    return specl | QLeTileQ;
+  }
+
+  CUDA_DEVICE_HOST
+  static bool IsTileKSame(KernelSpecialization specl) {
+    return specl | TileKSame;
+  }
+
+  CUDA_DEVICE_HOST
+  static bool IsExactShapes(KernelSpecialization specl) {
+    return specl | ExactShapes;
+  } 
+}
+
 #pragma once
 
 union AllTypes {

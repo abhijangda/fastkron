@@ -56,10 +56,6 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
         } else {
           //TODO: Remaining less than VecTLen elems
         }
-        // if (blockIdx.x == 0 && blockIdx.y == 0)
-        //   printf("60: %f %f %f xidx %d tileP + elem %d data %p parent %p P %d\n",
-        //          regs[0], *XTile.data(xidx), ((float*)XTile.parent.data())[xidx],
-        //          xidx, tileP + elem, XTile.ptr, XTile.parent.data(), XTile.P);
         Xsh.store(row, slice, elem, RegK, VecTLen, regs);
       }
     }}

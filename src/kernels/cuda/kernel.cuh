@@ -25,20 +25,20 @@ CUDA_DEVICE uint32_t getTileQ(uint QByTileQ) {
   return blockIdx.x%QByTileQ;
 }
 
-template<uint kExactShapes, uint kTileK, uint kP, typename KernelParams> 
+template<uint kFactorShapeSame, uint kTileK, uint kP, typename KernelParams> 
 CUDA_DEVICE uint32_t getXshSlices(const KernelParams& params) {
-  if (kExactShapes) {
+  if (kFactorShapeSame) {
     return kTileK/kP;
   } else {
     return params.XshSlices;
   }
 }
 
-template<uint kExactShapes, uint kQ, typename KernelParams> 
+template<uint kFactorShapeSame, uint kQ, typename KernelParams> 
 CUDA_DEVICE uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
   //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
   //number of loads as store also requires reading Y.n()
-  if (kExactShapes) {
+  if (kFactorShapeSame) {
     return Y.n()/kQ;
   } else {
     return params.XSlices;
@@ -64,7 +64,7 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
          uint RegK, uint RegQ,
-         uint kExactShapes_,
+         uint kFactorShapeSame_,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 __launch_bounds__(NumThreads)
@@ -108,7 +108,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const Matrix X = params.problem.x();
   const Matrix Y = params.problem.y();
-  const bool kExactShapes = false;
+
+  const bool kFactorShapeSame = false;
   const bool kXshSlicesSame = false;
   const bool kQMultipleOfTileQ = false;
   const bool kPMultipleOfTileP = false;
@@ -116,12 +117,12 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const bool kQLeTileQ = false;
   const bool kTileKSame = false;
 
-  const uint Q = (kExactShapes) ? MaxQ : params.problem.f(0).q();
-  const uint P = (kExactShapes) ? MaxP : params.problem.f(0).p();
+  const uint Q = (kFactorShapeSame) ? MaxQ : params.problem.f(0).q();
+  const uint P = (kFactorShapeSame) ? MaxP : params.problem.f(0).p();
 
-  const uint XshSlices = getXshSlices<kExactShapes, kTileK, MaxP>(params);
-  const uint XSlices   = getXSlices  <kExactShapes, MaxQ>(Y, params);
-  const uint QThreads  = getQThreads <kExactShapes || kXshSlicesSame, RegK>(XshSlices);
+  const uint XshSlices = getXshSlices<kFactorShapeSame, kTileK, MaxP>(params);
+  const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
+  const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = (kTileKSame) ? kTileK : params.tileX.n();
 
@@ -172,14 +173,14 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
       //Zero out register results for fusion iterations
       if (FusedFacs > 1) yReg.zero();
-      if (kExactShapes ||
+      if (kFactorShapeSame ||
           ((kTileKMultipleOfK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
            (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)))
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA<kExactShapes>(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }
 
       if (FusedFacs > 1 && fac > 0) {
