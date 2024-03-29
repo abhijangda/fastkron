@@ -1,7 +1,7 @@
 #include "kmm/matrix.h"
 #include "kernels/cuda/register-loads.cuh"
 
-template<bool kXshSlicesSame, bool kPMultipleOfTileP, 
+template<bool kXshSlicesSame, bool kPMultipleOfTileP, uint32_t TileP,
          typename ElemT, typename VecT, fastKronOp OpX, typename XShared>
 CUDA_DEVICE
 void shiftXgToXsh(const uint NumThreads, const uint RegK,
@@ -75,7 +75,7 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
     const uint Vecs     = Fsh.shape(1)/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
     for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
-      for (uint elem = tid%Vecs; elem < Vecs; elem += blockDim.x/ThGroups) {
+      for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
         ElemT regs[VecTLen] = {0};
         if (opF == fastKronOp_N) {
           const uint col = tileQ*Fsh.q() + elem*VecTLen;

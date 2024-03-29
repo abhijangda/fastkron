@@ -1,5 +1,8 @@
 #include "kmm/coord.h"
 
+#define CUDA_DEVICE_ASSERT(x) ;
+// assert(x)
+
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
 class AbstractFixedShapeTensor2D {
 public:
@@ -36,7 +39,7 @@ public:
 
   CUDA_DEVICE_HOST
   T& at(T data[], uint32_t i, uint32_t j) {
-    assert(linearIdx(i, j) < numel());
+    // CUDA_DEVICE_ASSERT(linearIdx(i, j) < numel());
     return data[linearIdx(i, j)];
   }
 
@@ -47,7 +50,7 @@ public:
 
   CUDA_DEVICE_HOST
   void set(T data[], uint32_t i, uint32_t j, T val) {
-    assert(linearIdx(i, j) < numel());
+    // CUDA_DEVICE_ASSERT(linearIdx(i, j) < numel());
     data[linearIdx(i, j)] = val;
   }
 };
@@ -168,7 +171,7 @@ public:
   void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
     #pragma unroll
     for (uint ve = 0; ve < num; ve++) {
-      uint32_t idx = row * q() + col + ve;
+      uint32_t idx = row * Base::shape(1) + col + ve;
       Base::set(data, idx, elems[ve]);
     }
   }
@@ -206,7 +209,7 @@ public:
       uint32_t shift = slice/RegK;
 
       uint32_t col = slice*p() + (shift + elem)%p();
-      assert(row * n() + col < numel());
+      // CUDA_DEVICE_ASSERT(row * n() + col < numel());
       Base::set(data, row, col, elems[i]);
     }
   }
@@ -220,14 +223,14 @@ public:
       // uint32_t shCol = startCol + i;
       uint32_t shift = slice/RegK;
       uint32_t col = slice*p() + (shift + elem)%p();
-      assert(row * n() + col < numel());
+      // CUDA_DEVICE_ASSERT(row * n() + col < numel());
       Base::set(data, row, col, elems[i]);
     }
   }
 
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
-    assert(row * n() + col < numel());
+    // CUDA_DEVICE_ASSERT(row * n() + col < numel());
     return Base::at(data, row, col);
   }
 
