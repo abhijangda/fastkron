@@ -31,6 +31,10 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
         float temp = 0.0f;
         temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
         Xr.set(rm, rk, p, temp);
+        // if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 && 
+            // rm == 0 && shXk == 0) {
+          // printf("p %d tempp %f\n", p, temp);
+        // }
       }
   }}}
   

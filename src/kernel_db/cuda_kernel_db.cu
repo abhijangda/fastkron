@@ -88,7 +88,8 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
     float* m = new float[problem.x().numel()];
     cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
     for (int i = 0; i < problem.y().numel(); i++) {
-      if (m[i] != 128) {
+      uint row = i/(problem.y().n());
+      if ((row % 2 == 0 && m[i] != 0) || (row%2 == 1 and m[i] != 128)) {
         printf("%f %d %d\n", m[i], i/(problem.y().n()), i%(problem.y().n()));
         break;
       }

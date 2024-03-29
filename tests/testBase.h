@@ -71,6 +71,7 @@
 ***************************************************/
 int one(int i, int j) {return 1;}
 int zeroOne(int i, int j) {return i % 2;}
+int zeroOneJ(int i, int j) {return j % 2;}
 int setToI(int i, int j) {return i;}
 int setToJ(int i, int j) {return j;}
 int iPlusJ(int i, int j) {return i + j;}

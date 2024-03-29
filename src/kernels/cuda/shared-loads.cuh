@@ -39,13 +39,29 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
 
     for (uint swid = tid/Vecs; swid < Xsh.n(); swid += ThGroups) {
     for (uint elem = tid%Vecs; elem < Vecs;    elem += NumThreads/ThGroups) {
-      ElemT regs[VecTLen];
+      ElemT regs[VecTLen] = {0};
 
       const uint row = elem*VecTLen;
       const uint k = swid;
+      if (kPMultipleOfTileP && kXshSlicesSame) {
+        ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+        Xsh.store(row, k, RegK, VecTLen, regs);
+      } else {
+        uint32_t slice = k/Xsh.p();
+        uint32_t elem  = k%Xsh.p();
 
-      ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-      Xsh.store(row, k, RegK, VecTLen, regs);
+        uint32_t xidx = XTile.data(row, slice, elem, tileP);
+        if (kPMultipleOfTileP || tileP + elem < XTile.P) {
+          ldGlobalVec(XTile.data(xidx), regs, VecTLen);  
+        } else {
+          //TODO: Remaining less than VecTLen elems
+        }
+        // if (blockIdx.x == 0 && blockIdx.y == 0)
+        //   printf("60: %f %f %f xidx %d tileP + elem %d data %p parent %p P %d\n",
+        //          regs[0], *XTile.data(xidx), ((float*)XTile.parent.data())[xidx],
+        //          xidx, tileP + elem, XTile.ptr, XTile.parent.data(), XTile.P);
+        Xsh.store(row, slice, elem, RegK, VecTLen, regs);
+      }
     }}
   }
 }

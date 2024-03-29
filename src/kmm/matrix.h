@@ -121,7 +121,7 @@ public:
 
   CUDA_DEVICE_HOST
   const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
-    //TODO: get common parts out
+    //TODO: use the other data method
     if (Op == fastKronOp_N) {
       uint32_t idx = row * parent.n();
       if (P <= TileP) {
