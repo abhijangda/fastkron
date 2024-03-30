@@ -123,7 +123,7 @@ std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
 }
 
 fastKronError FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
-                                   EpilogueParams epilogueParams) {
+                                     EpilogueParams epilogueParams) {
   if (problem.y().data() == nullptr) return fastKronInvalidArgument;
   if (temp1              == nullptr) return fastKronInvalidArgument;
 
@@ -136,18 +136,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void
     kernelSeries = tunedKernelSeries;
   } 
   else {
-    auto kernelInfo = kernelDb->compiledKernels.begin()->second;
-    fastKronError err = executeGeKMM(problem, temps, problem.n(),
-    [](const KMMProblem) {return 1;},
-    [&kernelInfo, &kernelSeries, epilogueParams, kernelDb, this]
-      (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
-        fastKronError err;
-        auto tk = TunedKernelFromStart(kernelInfo[0], rstart, rstart, subProblem.k(), 0.0f);
-        kernelSeries.push_back(tk);
-        return fastKronSuccess;
-    });
-
-    std::cout << "150: FILLED with " << kernelSeries[0].kernel->str() << std::endl;
+    kernelSeries = kernelDb->kernelSeriesForProblem(problem);
   }
 
   auto kernelSeriesIter = kernelSeries.begin();

@@ -92,6 +92,13 @@ static bool isPowerOf2(uint x) {
     return (x & (x - 1)) == 0;
 }
 
+static int ffs(uint x) {
+  for (int i = 0; i < 32; i++) {
+    if ((x >> i) & 1 == 1) return i;
+  }
+  return -1;
+}
+
 template<typename T>
 static void memset(T* ptr, size_t nelem, T val) {
   for (int i = 0; i < nelem; i++)

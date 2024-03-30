@@ -228,6 +228,45 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
   return fastKronSuccess;
 }
 
+KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
+  using Opts = KernelOptimizations::Optimization;
+
+  for (auto iter : compiledKernels) {
+    for (int optlevel = KernelOptimizations::MaxOptLevel();
+         optlevel >= 0; optlevel--) {
+      for (auto kernelInfo : iter.second) {
+        if (kernelInfo->OptLevel != optlevel) continue;
+        bool followsAllOpts = true;
+        uint lg = 0;
+        for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
+          if ((KernelOptimizations::getOptimizations(optlevel) & opt) == opt) {
+            followsAllOpts = followsAllOpts && kernelInfo->validOptFor(subProblem, opt);
+          }
+        }
+        if (followsAllOpts) return kernelInfo;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
+  TunedKernelsSeries kernelSeries;
+  fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
+  [](const KMMProblem) {return 1;},
+  [&kernelSeries, this]
+    (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+      auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem), rstart, rstart, subProblem.k(), 0.0f);
+      kernelSeries.push_back(tk);
+      return fastKronSuccess;
+  });
+
+  std::cout << "150: FILLED with " << kernelSeries[0].kernel->str() << std::endl;
+
+  return kernelSeries;
+}
+
 fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
   streams.clear();
   cudaStream_t* t = new cudaStream_t;

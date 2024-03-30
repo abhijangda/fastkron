@@ -97,6 +97,8 @@ public:
   }
 
   std::pair<KernelInfo*, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
+  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem) = 0;
+
   void free() {
     compiledKernels.clear();
   }

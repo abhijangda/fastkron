@@ -10,48 +10,55 @@ enum KernelMode {
   KernelModeNormal,
 };
 
-enum KernelSpecialization {
-  None = 0,
-  XshSlicesSame    = 1 << 0,
-  QMultipleOfTileQ = 1 << 1,
-  PMultipleOfTileP = 1 << 2,
-  KMultipleOfTileK = 1 << 3,
-  QLeTileQ         = 1 << 4,
-  TileKSame        = 1 << 5,
-  FactorShapeSame = 1 << 6,
-};
-
 struct KernelOptimizations {
+  enum Optimization {
+    None = 0,
+    XshSlicesSame    = 1 << 0,
+    QMultipleOfTileQ = 1 << 1,
+    PMultipleOfTileP = 1 << 2,
+    KMultipleOfTileK = 1 << 3,
+    QLeTileQ         = 1 << 4,
+    TileKSame        = 1 << 5,
+    FactorShapeSame  = 1 << 6,
+    NumOptimizations = 1 << 7
+  };
+
   CUDA_DEVICE_HOST
   static constexpr uint OptLevel0() {
-    return KernelSpecialization::None;
+    return Optimization::None;
   }
 
   CUDA_DEVICE_HOST
   static constexpr uint OptLevel1() {
-    return OptLevel0()                         |
-           KernelSpecialization::XshSlicesSame |
-           KernelSpecialization::TileKSame
+    return OptLevel0()                 |
+           Optimization::XshSlicesSame
            ;
   }
 
   CUDA_DEVICE_HOST
   static constexpr uint OptLevel2() {
-    return OptLevel1()                            | 
-           KernelSpecialization::KMultipleOfTileK |
-           KernelSpecialization::QMultipleOfTileQ |
-           KernelSpecialization::PMultipleOfTileP
+    return OptLevel1()                    | 
+           Optimization::KMultipleOfTileK |
+           Optimization::QMultipleOfTileQ |
+           Optimization::PMultipleOfTileP
            ;
   }
 
   CUDA_DEVICE_HOST
   static constexpr uint OptLevel3() {
-    return OptLevel2()                            |
-           KernelSpecialization::FactorShapeSame
+    return OptLevel2()                   |
+           Optimization::FactorShapeSame |
+           Optimization::TileKSame
            ;
   }
+
   CUDA_DEVICE_HOST
-  static constexpr uint Optimizations(uint optLevel) {
+  static constexpr uint MaxOptLevel() {
+    return 3;
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr uint getOptimizations(uint optLevel) {
     switch(optLevel) {
       case 0: return OptLevel0();
       case 1: return OptLevel1();
@@ -60,47 +67,46 @@ struct KernelOptimizations {
       default:
         return 0;
     }
-
   }
 
   CUDA_DEVICE_HOST
-  static constexpr bool isEnabled(uint optLevel, KernelSpecialization specl) {
-    return (Optimizations(optLevel) & specl) == specl;
+  static constexpr bool isEnabled(uint optLevel, Optimization specl) {
+    return (getOptimizations(optLevel) & specl) == specl;
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsXshSlicesSame(uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::XshSlicesSame);
+    return isEnabled(optLevel, Optimization::XshSlicesSame);
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsQMultipleOfTileQ(uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::QMultipleOfTileQ);
+    return isEnabled(optLevel, Optimization::QMultipleOfTileQ);
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsPMultipleOfTileP(uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::PMultipleOfTileP);
+    return isEnabled(optLevel, Optimization::PMultipleOfTileP);
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsKMultipleOfTileK(uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::KMultipleOfTileK);
+    return isEnabled(optLevel, Optimization::KMultipleOfTileK);
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsQLeTileQ        (uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::QLeTileQ);
+    return isEnabled(optLevel, Optimization::QLeTileQ);
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsTileKSame       (uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::TileKSame);
+    return isEnabled(optLevel, Optimization::TileKSame);
   }
 
   CUDA_DEVICE_HOST
   static constexpr bool IsFactorShapeSame (uint optLevel) {
-    return isEnabled(optLevel, KernelSpecialization::FactorShapeSame);
+    return isEnabled(optLevel, Optimization::FactorShapeSame);
   }
 };
 
