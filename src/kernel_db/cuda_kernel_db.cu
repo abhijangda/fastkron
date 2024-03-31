@@ -69,10 +69,6 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                                   kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
-  std::cout << "72: " << kernelInfo.grid(problem).x << " " << kernelInfo.grid(problem).y << std::endl;
-  std::cout << "73: " << kernelInfo.getTileX(problem) << std::endl;
-  std::cout << "74: " << kernelInfo.getTileF(problem) << std::endl;
-  std::cout << "75: " << kernelInfo.sharedMemSize(problem) << std::endl;
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
@@ -261,8 +257,6 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       kernelSeries.push_back(tk);
       return fastKronSuccess;
   });
-
-  std::cout << "150: FILLED with " << kernelSeries[0].kernel->str() << std::endl;
 
   return kernelSeries;
 }
