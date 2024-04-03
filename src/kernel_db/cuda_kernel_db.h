@@ -11,6 +11,40 @@
 
 struct ThreadArgs;
 
+class CUDAArchDetail {
+  uint32_t numSMs;
+  uint32_t maxBlocksPerSM;
+  uint32_t maxThreadsPerBlock;
+  uint32_t maxThreadsPerSM;
+  uint32_t regsPerSM;
+  uint32_t sharedMemPerSM;
+  std::string name;
+  uint32_t computeMajor;
+  uint32_t computeMinor;
+
+public:
+  // CUDAArchDetail(uint32_t numSMs, uint32_t maxBlocksPerSM, uint32_t maxThreadsPerBlock,
+  //                uint32_t maxThreadsPerSM, uint32_t regsPerSM, uint32_t sharedMemPerSM) :
+  //                numSMs(numSMs), maxBlocksPerSM(maxBlocksPerSM), 
+  //                maxThreadsPerBlock(maxThreadsPerBlock),
+  //                maxThreadsPerSM(maxThreadsPerSM), 
+  //                regsPerSM(regsPerSM), sharedMemPerSM(sharedMemPerSM) {}
+  CUDAArchDetail(int dev);
+  
+  friend std::ostream& operator<<(std::ostream &out, const CUDAArchDetail &detail) {
+    std::string indent = "    ";
+    out << detail.name << std::endl <<
+          indent << "Compute Capability   :" << (detail.computeMajor*10 + detail.computeMinor) << std::endl <<
+          indent << "SMs                  :" << detail.numSMs       << std::endl <<
+          indent << "Max Blocks per SM    :" << detail.maxBlocksPerSM << std::endl <<
+          indent << "Max Threads per SM   :" << detail.maxThreadsPerSM << std::endl <<
+          indent << "Registers Per SM     :" << detail.regsPerSM << std::endl <<
+          indent << "Shared Memory per SM :" << detail.sharedMemPerSM << std::endl;
+
+    return out;
+  }
+};
+
 //TODO: Change name to Executor?
 class CUDAKernelDatabase : public KernelDatabase {
 public:
@@ -24,13 +58,16 @@ public:
   std::vector<void*> ncclComms;
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
+  std::vector<CUDAArchDetail> gpusDetail;
 
 public:
   CUDAKernelDatabase();
   ~CUDAKernelDatabase() {}
 
   fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
-  
+  static int numDevices();
+  CUDAArchDetail parseDeviceProperties(int dev);
+
   void free();
   virtual fastKronError initTune();
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 

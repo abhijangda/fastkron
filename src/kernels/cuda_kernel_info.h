@@ -12,7 +12,18 @@ struct CUDAKernel : public GPUKernel {
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
              GPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegK, RegQ, 
-                       elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment) {}
+                       elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment) {
+  }
+  uint32_t localSize() const {
+    cudaFuncAttributes attr;
+    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
+    return attr.localSizeBytes;
+  }
+  uint32_t numRegs()   const {
+    cudaFuncAttributes attr;
+    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
+    return attr.numRegs;
+  }
 
   cudaError_t setSharedMemAttr() {
     cudaError_t err = cudaSuccess;

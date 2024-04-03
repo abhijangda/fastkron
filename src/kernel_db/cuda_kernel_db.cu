@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <limits>
 
 #include <nccl.h>
 
@@ -168,6 +169,12 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
                                            bool distP2PStore,
                                            int warmups, int runs,
                                            float& runtime) {
+  if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0) {
+    //skip probably slow kernels
+    runtime = std::numeric_limits<float>::max();
+    return fastKronSuccess;
+  }
+
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
   cudaEvent_t startEvent, endEvent;
@@ -261,6 +268,27 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
   return kernelSeries;
 }
 
+int CUDAKernelDatabase::numDevices() {
+  int devs;
+  CUDA_CHECK(cudaGetDeviceCount(&devs));
+  return devs;
+}
+
+CUDAArchDetail::CUDAArchDetail(int dev) {
+  cudaDeviceProp prop;
+
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, dev));
+  numSMs             = prop.multiProcessorCount;
+  maxBlocksPerSM     = prop.maxBlocksPerMultiProcessor;
+  maxThreadsPerBlock = prop.maxThreadsPerBlock;
+  maxThreadsPerSM    = prop.maxThreadsPerMultiProcessor;
+  regsPerSM          = prop.regsPerMultiprocessor;
+  sharedMemPerSM     = prop.sharedMemPerMultiprocessor;
+  name               = std::string(prop.name);
+  computeMajor       = prop.major;
+  computeMinor       = prop.minor;
+}
+
 fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
   streams.clear();
   cudaStream_t* t = new cudaStream_t;
@@ -271,8 +299,19 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
     else
 	    streams.push_back(t);
   }
+
   numGPUs_ = gpus;
+  if (numGPUs_ > numDevices()) return fastKronInvalidArgument;
   isDistributed_ = gpus > 1;
+
+  for (int i = 0; i < numGPUs_; i++) {
+    auto detail = CUDAArchDetail(i);
+    gpusDetail.push_back(detail);
+    //TODO: If verbose
+    std::cout << "Found GPU " << i << std::endl;
+    std::cout << detail;
+  }
+
   if (isDistributed_) {
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {
