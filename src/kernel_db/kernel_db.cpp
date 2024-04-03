@@ -18,14 +18,14 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   if (findAllKernels(problem.f(0), problem.opX(), problem.opFs(), allKernels)) {
   for (auto kernel : allKernels) {
     if (!kernel->canCompute(problem, distP2PStore)) continue;
-    std::cout << kernel->str();
+    std::cout << kernel->str() << std::endl;
     float kernelTime = std::numeric_limits<float>::max();
     fastKronError status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
                distP2PStore, warmups, runs, kernelTime);
     if (status == fastKronSuccess) {
-      std::cout << std::fixed << std::setprecision(2) << 
-                  " runs in " << kernelTime << " ms " << std::endl;
+      std::cout << "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
+                   occupancyDetails(kernel, problem) << std::endl;
       if (kernelTime < minTime) {
         bestKernel = kernel;
         minTime = kernelTime;
@@ -34,8 +34,8 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   }}
 
   if (minTime < std::numeric_limits<float>::max()) {
-    std::cout << std::fixed << std::setprecision(2) <<
-                "Best kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
+    std::cout << std::fixed << std::setprecision(4) <<
+                "Fastest kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
     return std::make_pair(bestKernel, minTime);
   }
 

@@ -12,17 +12,20 @@
 struct ThreadArgs;
 
 class CUDAArchDetail {
+public:
   uint32_t numSMs;
   uint32_t maxBlocksPerSM;
   uint32_t maxThreadsPerBlock;
   uint32_t maxThreadsPerSM;
   uint32_t regsPerSM;
+  uint32_t maxRegsPerThread;
   uint32_t sharedMemPerSM;
+  uint32_t sharedMemPerBlock;
   std::string name;
   uint32_t computeMajor;
   uint32_t computeMinor;
 
-public:
+
   // CUDAArchDetail(uint32_t numSMs, uint32_t maxBlocksPerSM, uint32_t maxThreadsPerBlock,
   //                uint32_t maxThreadsPerSM, uint32_t regsPerSM, uint32_t sharedMemPerSM) :
   //                numSMs(numSMs), maxBlocksPerSM(maxBlocksPerSM), 
@@ -34,12 +37,13 @@ public:
   friend std::ostream& operator<<(std::ostream &out, const CUDAArchDetail &detail) {
     std::string indent = "    ";
     out << detail.name << std::endl <<
-          indent << "Compute Capability   :" << (detail.computeMajor*10 + detail.computeMinor) << std::endl <<
-          indent << "SMs                  :" << detail.numSMs       << std::endl <<
-          indent << "Max Blocks per SM    :" << detail.maxBlocksPerSM << std::endl <<
-          indent << "Max Threads per SM   :" << detail.maxThreadsPerSM << std::endl <<
-          indent << "Registers Per SM     :" << detail.regsPerSM << std::endl <<
-          indent << "Shared Memory per SM :" << detail.sharedMemPerSM << std::endl;
+          indent << "Compute Capability      : " << (detail.computeMajor*10 + detail.computeMinor) << std::endl <<
+          indent << "SMs                     : " << detail.numSMs       << std::endl <<
+          indent << "Max Blocks per SM       : " << detail.maxBlocksPerSM << std::endl <<
+          indent << "Max Threads per SM      : " << detail.maxThreadsPerSM << std::endl <<
+          indent << "Registers Per SM        : " << detail.regsPerSM << std::endl <<
+          indent << "Shared Memory per SM    : " << detail.sharedMemPerSM << std::endl<<
+          indent << "Shared Memory Per Block : " << detail.sharedMemPerBlock << std::endl;
 
     return out;
   }
@@ -85,6 +89,8 @@ public:
                                  bool distP2PStore,
                                  int warmups, int runs,
                                  float& runtime);
+
+  virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem);
   virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
   virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem);
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);

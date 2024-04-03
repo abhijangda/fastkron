@@ -98,8 +98,8 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
 }
 
 fastKronError CUDAKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronIndex, 
-                                             KMMProblem problem, EpilogueParams epilogueParams,
-                                             KernelMode execMode) {
+                                               KMMProblem problem, EpilogueParams epilogueParams,
+                                               KernelMode execMode) {
   DistributedParams distParams;
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDAKernel& cudaKernel = dynamic_cast<CUDAKernel&>(*kernel);
@@ -130,9 +130,9 @@ fastKronError CUDAKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kr
 }
 
 fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo* kernel, const uint kronIndex, 
-                                                     KMMProblem problem, DistributedParams distParams, 
-                                                     EpilogueParams epilogueParams,
-                                                     KernelMode execMode) {
+                                                       KMMProblem problem, DistributedParams distParams, 
+                                                       EpilogueParams epilogueParams,
+                                                       KernelMode execMode) {
   cudaStream_t stream = *(cudaStream_t*)streams[distParams.proc()];
   CUDAKernel& cudaKernel = dynamic_cast<CUDAKernel&>(*kernel);
 
@@ -205,6 +205,28 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
   CUDA_CHECK(cudaEventDestroy(startEvent));
   CUDA_CHECK(cudaEventDestroy(endEvent));
   return status;
+}
+
+// float occupancy(const CUDAArchDetail gpu, CUDAKernel* kernel, dim3 grid) {
+//   uint32_t regOcc = gpu.regsPerSM / (32 * kernelInfo->numRegs()); //32 is warp size
+//   uint32_t shmemOcc = gpu.sharedMemPerMultiprocessor / kernel->sharedMemSize();
+//   shmemOcc = kernel->block().x / 32;//TODO: Only considering x dim
+// }
+
+std::string CUDAKernelDatabase::occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) {
+  CUDAKernel* cudaKernel = dynamic_cast<CUDAKernel*>(kernelInfo);
+  std::stringstream ss;
+  dim3 grid = cudaKernel->grid(problem);
+  dim3 block = cudaKernel->block();
+  std::string indent = "  ";
+
+  ss << indent << "Grid: {" << grid.x << ", " << grid.y << ", " << grid.z << "}" << std::endl
+     << indent << "Block: {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
+     << indent << "Shared Mem: " << cudaKernel->sharedMemSize() << std::endl 
+     << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl;
+    //  << indent << "Occupancy: " << 1.0f << std::endl;
+
+  return ss.str();
 }
 
 fastKronError CUDAKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
@@ -283,7 +305,9 @@ CUDAArchDetail::CUDAArchDetail(int dev) {
   maxThreadsPerBlock = prop.maxThreadsPerBlock;
   maxThreadsPerSM    = prop.maxThreadsPerMultiProcessor;
   regsPerSM          = prop.regsPerMultiprocessor;
+  maxRegsPerThread      = 256; 
   sharedMemPerSM     = prop.sharedMemPerMultiprocessor;
+  sharedMemPerBlock  = prop.sharedMemPerBlock;
   name               = std::string(prop.name);
   computeMajor       = prop.major;
   computeMinor       = prop.minor;

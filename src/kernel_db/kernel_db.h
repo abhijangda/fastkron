@@ -82,6 +82,7 @@ public:
                                  bool distP2PStore,
                                  int warmups, int runs,
                                  float& runtime) = 0;
+  virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) = 0;
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
   virtual fastKronError procFree(uint32_t proc, void* ptr) = 0;
