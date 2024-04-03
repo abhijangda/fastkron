@@ -13,16 +13,21 @@
 struct ThreadArgs;
 
 class OptimizedKernelForShape {
-  std::map<KMMProblem, KernelInfo*, KMMProblemComparator> shapeToKernel;
+  std::unordered_map<Factor, std::map<Matrix, KernelInfo*, MatrixComparator>> shapeToKernel;
 public:
-  void init(KernelDatabase* db, std::unordered_map<KMMProblem, std::string> shapeToKernelStr) {
-    for (auto iter : shapeToKernelStr) {
-      shapeToKernel[iter.first] = db->getKernel(iter.second);
+  void init(KernelDatabase* db, std::unordered_map<Factor, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr) {
+    for (auto factorIter : shapeToKernelStr) {
+      shapeToKernel[factorIter.first] = {};
+      for (auto iter : factorIter.second) {
+        shapeToKernel[factorIter.first][iter.first] = db->getKernel(iter.second);
+      }
     }
 
     if (true) {
-      for (auto iter : shapeToKernel) {
-        std::cout << iter.second->str() << std::endl;
+      for (auto factorIter : shapeToKernel) {
+        for (auto iter : factorIter.second) {
+          std::cout << iter.second->str() << std::endl;
+        }
       }
     }
   }

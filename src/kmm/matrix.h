@@ -235,3 +235,10 @@ template<>
 struct std::hash<Factor> {
   std::size_t operator()(const Factor& m) const;
 };
+
+struct MatrixComparator {
+  bool operator()(const Matrix& a, const Matrix& b) const {
+    if (a.m() < b.m()) return true;
+    return a.n() < b.n(); 
+  }
+}; 
