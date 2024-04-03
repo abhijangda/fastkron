@@ -203,7 +203,7 @@ class GPUKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.opt_level}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
+    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.opt_level}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
 
   def kernelname(self):
     return f"{self.gpu_type}_{super().kernelname()}"
@@ -343,7 +343,7 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
   uniqueConfigs = {k : list(set(validConfigs[k])) for k in validConfigs}
 
   print("Unique configs", sum([len(uniqueConfigs[k]) for k in uniqueConfigs]))
-
+  
   combinedConfigs = []
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
@@ -476,8 +476,11 @@ if __name__ == "__main__":
 
   match_configs = args.match_configs[0] if args.match_configs != None else []
 
-  if args.match_configs_file != None and match_configs != []:
+  if args.match_configs_file != None and match_configs == []:
     contents = slurp(args.match_configs_file)
-    match_configs = contents.split('\n')
+    contents = contents.split('\n')
+    for line in contents:
+      if line.strip() != "":
+        match_configs += [line]
   generate_kernel_decls(parsed_cases, args.opX, args.opF, not args.no_fuse, args.dist_kernels,
                         args.num_kernels, match_configs, args.backend)
