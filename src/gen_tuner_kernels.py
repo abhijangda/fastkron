@@ -203,7 +203,7 @@ class GPUKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.elemType}, {self.opt_level}, {self.aalign}, {self.kalign}, {self.opX}, {self.opF}"
+    return f"{self.threads()}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.tileM}x{self.shape.k}^{self.fused_kernels}_{self.rk}x{self.rq}_{self.opt_level}_{self.opX}{self.opF}_{self.dist}_{self.elemType}_{self.aalign}_{self.kalign}"
 
   def kernelname(self):
     return f"{self.gpu_type}_{super().kernelname()}"
@@ -215,6 +215,7 @@ class GPUKernel(Kernel):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, {self.gpu_type}Stream_t stream)"
 
   def templateDecl(self):
+    #TODO: repr and this should be same
     return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
