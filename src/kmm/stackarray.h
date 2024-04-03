@@ -1,3 +1,5 @@
+#include <initializer_list>
+
 #include "config.h"
 
 #pragma once
@@ -20,6 +22,17 @@ public:
       for (uint32_t i = 0; i < n; i++) {
         array[i] = ptrs[i];
       }
+    }
+
+    for (uint32_t i = n; i < MaxSize; i++) {
+      array[i] = T();
+    }
+  }
+
+  StackArray(std::initializer_list<T> initList) : n(initList.size()) {
+    int len = 0;
+    for (auto elem : initList) {
+      array[len++] = elem;
     }
 
     for (uint32_t i = n; i < MaxSize; i++) {

@@ -1,5 +1,6 @@
 #include <functional>
 #include <vector>
+#include <map>
 
 #include "kmm/kmmalgo.h"
 #include "kernels/params.h"
@@ -10,6 +11,16 @@
 #pragma once
 
 struct ThreadArgs;
+
+class OptimizedKernelForShape {
+  std::map<KMMProblem, KernelInfo*, KMMProblemComparator> shapeToKernel;
+public:
+  void init(KernelDatabase* db, std::unordered_map<KMMProblem, std::string> shapeToKernelStr) {
+    for (auto iter : shapeToKernelStr) {
+      shapeToKernel[iter.first] = db->getKernel(iter.second);
+    }
+  }
+};
 
 class CUDAArchDetail {
 public:
@@ -63,6 +74,7 @@ public:
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
   std::vector<CUDAArchDetail> gpusDetail;
+  OptimizedKernelForShape fastestKernelForShape;
 
 public:
   CUDAKernelDatabase();

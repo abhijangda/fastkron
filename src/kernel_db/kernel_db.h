@@ -86,6 +86,15 @@ public:
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
   virtual fastKronError procFree(uint32_t proc, void* ptr) = 0;
+  KernelInfo* getKernel(std::string repr) {
+    for (auto iter : compiledKernels) {
+      for (auto kernel : iter.second) {
+        if (kernel->str() == repr)
+          return kernel;
+      }
+    }
+    return nullptr;
+  }
 
   fastKronError procMalloc(uint32_t proc, Matrix& m);
   fastKronError procFree(uint32_t proc, Matrix m);

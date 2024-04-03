@@ -2,6 +2,7 @@
 #include <cassert>
 #include <iostream>
 #include <numeric>
+#include <initializer_list>
 
 #include "kmm/matrix.h"
 #include "config.h"
@@ -28,6 +29,9 @@ public:
 
   KMMProblemT(Matrix x, fastKronOp opX, int n, const Factor* fs, fastKronOp opFs, Matrix y) :
     in(x), opIn(opX), factors(fs, n), opFactors(opFs), out(y) {}
+
+  KMMProblemT(Matrix x, fastKronOp opX, std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
+    KMMProblemT(x, opX, Factors(fs), opFs, y) {}
 
   KMMProblemT(const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
               void* xptr, fastKronOp opX, void* const* fsptr, fastKronOp opFs, void* yptr, const int k, const int l) : 
@@ -178,6 +182,12 @@ using KMMProblem = KMMProblemT<64>;
 template<>
 struct std::hash<KMMProblem> {
   std::size_t operator()(const KMMProblem& k) const;
+};
+
+struct KMMProblemComparator {
+  bool operator()(const KMMProblem& a, const KMMProblem& b) const {
+    return std::hash<KMMProblem>()(a) < std::hash<KMMProblem>()(b);
+  }
 };
 
 fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],

@@ -10,8 +10,8 @@ def run_command(command):
   return o
 
 def tune(ms, n, p, q, opX, opF, backend):
-  run_command(f'python gen_tuner_kernels.py -backend {backend} -same-factors {n} {p},{q} -opX {opX} -opF {opF}')
-  run_command(f'cd ../build/ && make benchmark_{backend} -j')
+  # run_command(f'python gen_tuner_kernels.py -backend {backend} -same-factors {n} {p},{q} -opX {opX} -opF {opF}')
+  # run_command(f'cd ../build/ && make benchmark_{backend} -j')
   for m in ms:
     o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} --fuse')
     o = o[o.find('Minimum Time'):]
@@ -51,13 +51,8 @@ if __name__ == "__main__":
         print(e)
         sys.exit(0)
   else:
-    for n in range(2, 9):
-      for p in [16, 32, 64, 128, 256, 512, 1024]:
-        for q in [16, 32, 64, 128, 256, 512, 1024]:
-          if p == q or q ** n < 64 or q**n > (1<<20) or p**n > (1<<20):
-            continue
-          if n == 2:
-            continue
+    for n in range(2, 4):
+      for p,q in zip([32,64,128], [32,64,128]):
           parsed_cases += [(n, p, q)]
     print(len(parsed_cases), parsed_cases)
 
@@ -72,6 +67,6 @@ if __name__ == "__main__":
   for case in parsed_cases:
     ms = list(args.m[0])
     if case[0] == 1024:
-      ms = [16, 32, 64, 128, 256]
+      ms = [1,2,4,8,16, 32, 64, 128, 256,512,1024,2048,4096]
     # print (m, case)
     tune(ms, case[0], case[1], case[2], args.opX, args.opF, args.backend)

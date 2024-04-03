@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <functional>
+#include <initializer_list> 
 
 #include "fastkron.h"
 #include "kmm/stackarray.h"
@@ -205,6 +206,7 @@ public:
   }
 
   FactorArray(const Factor* factors, uint32_t n) : Base(factors, n) {}
+  FactorArray(std::initializer_list<Factor> facList) : Base(facList) {}
 
   CUDA_DEVICE_HOST
   Factor& operator[](int index) {

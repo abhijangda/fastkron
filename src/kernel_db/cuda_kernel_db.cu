@@ -18,6 +18,10 @@ CUDAKernel AllCUDAKernels[] = {
 #endif
 };
 
+static std::unordered_map<KMMProblem, std::string> shapeToKernelStr {
+  {KMMProblem(Matrix(1, 128*128), fastKronOp_N, {Factor(128,128)}, fastKronOp_N, Matrix(1, 128*128)), ""}
+};
+
 CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
   loadKernels<CUDAKernel>(AllCUDAKernels, sizeof(AllCUDAKernels)/sizeof(CUDAKernel));
@@ -26,6 +30,8 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
     if (!info.isValid()) abort();
     CUDA_CHECK(info.setSharedMemAttr());
   }
+  //TODO: initialize in constructor
+  fastestKernelForShape.init(this, shapeToKernelStr);
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
   //do it
   //TODO: Add if debug
