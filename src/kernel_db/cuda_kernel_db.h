@@ -19,6 +19,12 @@ public:
     for (auto iter : shapeToKernelStr) {
       shapeToKernel[iter.first] = db->getKernel(iter.second);
     }
+
+    if (true) {
+      for (auto iter : shapeToKernel) {
+        std::cout << iter.second->str() << std::endl;
+      }
+    }
   }
 };
 

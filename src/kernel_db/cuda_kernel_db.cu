@@ -19,7 +19,8 @@ CUDAKernel AllCUDAKernels[] = {
 };
 
 static std::unordered_map<KMMProblem, std::string> shapeToKernelStr {
-  {KMMProblem(Matrix(1, 128*128), fastKronOp_N, {Factor(128,128)}, fastKronOp_N, Matrix(1, 128*128)), ""}
+  {KMMProblem(Matrix(16, 128*128), fastKronOp_N, {Factor(128,128)}, fastKronOp_N, Matrix(1, 128*128)), "128_128x128_32x64_1_1x1024_2x2_3_NN_0"},
+  {KMMProblem(Matrix(512, 128*128), fastKronOp_N, {Factor(128,128)}, fastKronOp_N, Matrix(1, 128*128)), "128_128x128_32x128_1_1x8192_4x16_3_NN_0"},
 };
 
 CUDAKernelDatabase::CUDAKernelDatabase() {

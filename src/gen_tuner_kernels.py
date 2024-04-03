@@ -203,7 +203,7 @@ class GPUKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.tileM}x{self.shape.k}^{self.fused_kernels}_{self.rk}x{self.rq}_{self.opt_level}_{self.opX}{self.opF}_{self.dist}_{self.elemType}_{self.aalign}_{self.kalign}"
+    return f"{self.threads()}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rk}x{self.rq}_{self.opt_level}_{self.opX}{self.opF}_{self.dist}_{self.elemType}_{self.aalign}_{self.kalign}"
 
   def kernelname(self):
     return f"{self.gpu_type}_{super().kernelname()}"

@@ -90,7 +90,7 @@ struct KernelInfo {
 
   virtual std::string str() const {
     std::stringstream info;
-    info << f << "_" << tileF << "_" << tileX << "^" << FusedFacs << "_" << 
+    info << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
             RegK << "x" << RegQ << "_" << OptLevel << "_" << opX << opF << "_" << DistributeToGPUs;
     return info.str();
   }
