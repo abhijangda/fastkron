@@ -312,13 +312,14 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
                       configs[shape] = []
                     __configs = []
                     for opt_level in range(0, 4):
+                      new_aalign = 1 if (opt_level <= 1) else (kronalign if (opt_level == 2) else aalign) 
                       if backend in ['cuda', 'hip']:
                             distKernels = [0, 1] if useDistKernels else [0]
                             for dist in distKernels: 
                               __configs += [GPUKernel(backend, KronMatMulShape(m, tK, n, p, q), 
                                                       KronMatMulShape(m, k, n, ps, qs),
                                                       p, q, tQ, tP, tM, regRows, regCols,
-                                                      numFusedKerns, dist, "Float", opt_level, 1 if (opt_level <= 1) else aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
+                                                      numFusedKerns, dist, "Float", opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
                                                       opx, opF)]
                       elif backend == 'x86':
                         dist = 0
