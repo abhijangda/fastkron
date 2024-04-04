@@ -12,10 +12,16 @@
 
 struct ThreadArgs;
 
+
+template<>
+struct std::hash<std::pair<Factor, uint32_t>> {
+  std::size_t operator()(const std::pair<Factor, uint32_t>& m) const;
+};
+
 class OptimizedKernelForShape {
-  std::unordered_map<Factor, std::map<Matrix, KernelInfo*, MatrixComparator>> shapeToKernel;
+  std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, KernelInfo*, MatrixComparator>> shapeToKernel;
 public:
-  void init(KernelDatabase* db, std::unordered_map<Factor, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr) {
+  void init(KernelDatabase* db, std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr) {
     for (auto factorIter : shapeToKernelStr) {
       shapeToKernel[factorIter.first] = {};
       for (auto iter : factorIter.second) {
