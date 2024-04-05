@@ -195,7 +195,6 @@ struct KernelParams {
 
 template<uint Fused>
 struct FusedParams {
-  uint KronColsPower;
   uint XShFusedSlices;
   uint XglFusedSlices;
   

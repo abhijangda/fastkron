@@ -123,7 +123,7 @@ public:
 
   virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem);
   virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
-  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem);
+  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
   virtual fastKronError procFree(uint32_t proc, void* ptr);

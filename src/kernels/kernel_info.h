@@ -39,11 +39,11 @@ struct KernelInfo {
              RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
              opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
-  bool canCompute(KMMProblem problem, bool p2p) {
+  bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
     using Opts = KernelOptimizations::Optimization;
 
     bool ret = problem.opFs() == opF && problem.opX() == opX && 
-               DistributeToGPUs == p2p && problem.n() == FusedFacs &&
+               DistributeToGPUs == p2p && ((exactFuse && problem.n() == FusedFacs) || (!exactFuse && problem.n() >= FusedFacs)) &&
                tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
 
     if (!ret) return false;

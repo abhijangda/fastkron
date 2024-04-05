@@ -10,7 +10,7 @@ def run_command(command):
   return o
 
 def tune(m, n, p, q, opX, opF, backend, fuse):
-  o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} {"--fuse" if fuse else ""}')
+  o = run_command(f'TUNE=0 ../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} {"--fuse" if fuse else ""}')
   o = o[o.find('Minimum Time'):]
   
   kernelSeries = re.findall(r'\s*\[(\d+), (\d+)\] = (\d+) (.+) runs', o)
@@ -35,14 +35,14 @@ if __name__ == "__main__":
 
   assert args.opX in ["N", "T"]
   assert args.opF in ["N", "T"]
-  run_command(f'python ./gen_tuner_kernels.py -backend {args.backend} -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 6 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N -opF N -match-configs-file kernels/best-kernels/a100-kernels')
+  run_command(f'python ./gen_tuner_kernels.py -backend {args.backend} -same-factors 3 128,128 -same-factors 3 64,64 -same-factors 4 32,32 -same-factors 5 16,16 -same-factors 6 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N -opF N -match-configs-file kernels/best-kernels/a100-kernels')
   run_command(f'cd ../build/ && make benchmark_{args.backend} -j')
 
   shapeToKernel = {}
 
-  for p in [4,8,16,32,64,128]:
-    for q in [4,8,16,32,64,128]:
-      for n in range(1,20):
+  for p in [8,16,32,64,128]:
+    for q in [8,16,32,64,128]:
+      for n in range(2,20):
         for m in [1,4,16,64,256,1024]:
           if m*(p**n) > 2*1024*1024*1024 or m*(q**n) > 2*1024*1024*1024:
             continue

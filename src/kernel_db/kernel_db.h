@@ -118,6 +118,18 @@ public:
     return true;
   }
 
+  bool findAllFusedKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
+    DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+    auto it = compiledKernels.find(key);
+    if (it == compiledKernels.end()) return false;
+    std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
+    [distP2PStore, problem](auto& kernel){return kernel->FusedFacs <= problem.n() && 
+                                          kernel->OptLevel == KernelOptimizations::MaxOptLevel() &&
+                                          kernel->canCompute(problem, distP2PStore, false);});
+    return true;
+  }
+
+
   std::pair<KernelInfo*, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
   virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem) = 0;
 

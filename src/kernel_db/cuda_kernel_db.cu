@@ -260,11 +260,8 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
   return fastKronSuccess;
 }
 
-KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
+KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) {
   using Opts = KernelOptimizations::Optimization;
-  std::vector<KernelInfo*> kernels;
-  
-  findAllKernels(subProblem, false, kernels);
 
   for (int optlevel = KernelOptimizations::MaxOptLevel();
        optlevel >= 0; optlevel--) {
@@ -278,7 +275,6 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
                                                       ((CUDAKernel*)k2)->numBlocks(subProblem);});
       for (auto k : kernelsForOptLevel) {
         uint blocksm = blocksPerSM(gpusDetail[0], (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
-        // std::cout << k->str() << " " << gpusDetail[0].numSMs << " * " << blocksm << " <= " << ((CUDAKernel*)k)->numBlocks(subProblem) << std::endl;
         if (((CUDAKernel*)k)->numBlocks(subProblem) <= gpusDetail[0].numSMs * blocksm) {
           return k;
         }
@@ -294,15 +290,109 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
 
 TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
   TunedKernelsSeries kernelSeries;
-  fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
-  [](const KMMProblem) {return 1;},
-  [&kernelSeries, this]
-    (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
-      auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem), rstart, rstart, subProblem.k(), 0.0f);
-      std::cout << tk.kernel->str() << std::endl;
-      kernelSeries.push_back(tk);
-      return fastKronSuccess;
-  });
+  uint32_t MaxFuseP = 32;
+
+  bool factorsSameShape = true, factorsSquare = true, 
+       factorsPowerOfTwoShape = true, factorsLessThanMaxP = true;
+  for (int f = 0; f < problem.n(); f++) {
+    const Factor& fac = problem.f(f);
+    factorsLessThanMaxP = factorsLessThanMaxP && (fac.p() <= MaxFuseP);
+    factorsSquare = factorsSquare && (fac.p() == fac.q());
+    factorsPowerOfTwoShape = factorsPowerOfTwoShape && isPowerOf2(fac.p()) && isPowerOf2(fac.q());
+    if (f > 0) {
+      factorsSameShape = factorsSameShape && fac.p() == problem.f(f-1).p() && fac.q() == problem.f(f-1).q();
+    }
+  }
+
+  bool canFuse = factorsSameShape && factorsSquare && factorsPowerOfTwoShape && factorsLessThanMaxP;
+
+  if (canFuse) {
+    std::vector<KernelInfo*> kernels;
+    findAllFusedKernels(problem, false, kernels);
+    //Use a kernel that processes full problem
+    for (auto kernel : kernels) {
+      if (problem.n() == kernel->FusedFacs) {
+        kernelSeries.push_back(TunedKernelFromStart(kernel, 0, kernel->FusedFacs-1, problem.k(), 0.0f));
+        goto end;
+      }
+    }
+    
+    uint32_t MinConsecutiveStoreElems = 8;
+    //A fused kernel stores logP (TK) consecutive elements.
+    //Remove all kernels that stores (< MinConsecutiveStoreElems).
+    std::vector<KernelInfo*> validFusedKernels;
+    
+    {
+      auto filter = [problem, MinConsecutiveStoreElems](KernelInfo* kernel) {
+        const int PpowerN = (int)powf(problem.f(0).p(), kernel->FusedFacs);
+        const int consecutiveStoreElems = kernel->tileX.n()/PpowerN;
+        return consecutiveStoreElems >= MinConsecutiveStoreElems;
+      };
+
+      std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(validFusedKernels), filter);
+    }
+    
+    if (false) {
+      for (auto iter : validFusedKernels) {
+        std::cout << iter->str() << std::endl;
+      }
+    }
+
+    std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> numFusedToKernels;
+
+    for (auto kernel : validFusedKernels) {
+      if (kernel->FusedFacs <= problem.n()) {
+        if (numFusedToKernels.find(kernel->FusedFacs) == numFusedToKernels.end())
+          numFusedToKernels[kernel->FusedFacs] = std::vector<KernelInfo*>();
+        numFusedToKernels[kernel->FusedFacs].push_back(kernel);
+      }      
+    }
+
+    if (false) {
+      std::cout << "346: " << numFusedToKernels.size() << std::endl;
+      for (auto iter : numFusedToKernels) {
+        std::cout << iter.first << ": ";
+        for (auto k : iter.second) {
+          std::cout << k->str() << " ";
+        }
+        std::cout << std::endl;
+      }
+    }
+    auto fusedIter = numFusedToKernels.begin();
+
+    fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
+      [&fusedIter](const KMMProblem) {return fusedIter->first;},
+      [&fusedIter, &kernelSeries, &numFusedToKernels, this]
+        (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+          auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, fusedIter->second), 
+                                         rstart - (subProblem.n() - 1), rstart, subProblem.k(), 0.0f);
+          kernelSeries.push_back(tk);
+          // std::cout << "370 " << fusedIter->first << " " << rstart << "  " << (rstart - subProblem.n() + 1) << std::endl; 
+          while (fusedIter->first > rstart - subProblem.n() + 1&& fusedIter != numFusedToKernels.end()) {
+                      // std::cout << "372 " << fusedIter->first << " " << rstart << "  " << (rstart - (subProblem.n() - 1)) << std::endl;
+            fusedIter++;
+          }
+          return fastKronSuccess;
+      });
+  } else {
+    fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
+      [](const KMMProblem) {return 1;},
+      [&kernelSeries, this]
+        (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+          std::vector<KernelInfo*> kernels;
+          findAllKernels(subProblem, false, kernels);
+          auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, kernels), 
+                                         rstart, rstart, subProblem.k(), 0.0f);
+          kernelSeries.push_back(tk);
+          return fastKronSuccess;
+      });
+  }
+
+end:
+  std::cout <<"Minimum Time " << std::endl;
+  for (auto iter = kernelSeries.rbegin(); iter != kernelSeries.rend(); iter++) {
+    std::cout << "  " << (*iter) << std::endl;
+  }
 
   return kernelSeries;
 }
