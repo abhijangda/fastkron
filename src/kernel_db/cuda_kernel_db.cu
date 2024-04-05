@@ -276,7 +276,6 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
       std::sort(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), 
                 [subProblem](auto k1, auto k2){return ((CUDAKernel*)k1)->numBlocks(subProblem) >
                                                       ((CUDAKernel*)k2)->numBlocks(subProblem);});
-      float smUsageThreshold = 0.8;
       for (auto k : kernelsForOptLevel) {
         uint blocksm = blocksPerSM(gpusDetail[0], (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
         // std::cout << k->str() << " " << gpusDetail[0].numSMs << " * " << blocksm << " <= " << ((CUDAKernel*)k)->numBlocks(subProblem) << std::endl;
@@ -285,7 +284,7 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
         }
       }
 
-      //If no kernel is found then return the kernel with max grid size
+      //If no kernel is found then return the kernel with max reuse
       return kernelsForOptLevel[kernelsForOptLevel.size() - 1];
     }
   }
