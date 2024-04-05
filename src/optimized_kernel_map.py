@@ -9,7 +9,7 @@ def run_command(command):
     print (f"Running {command}\n", o)
   return o
 
-def tune(m, n, p, q, opX, opF, backend, fuse):
+def tune(m, n, p, q, opX, opF, backend, fuse, check):
   o = run_command(f'TUNE=0 ../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} {"--fuse" if fuse else ""}')
   o = o[o.find('Minimum Time'):]
   
@@ -40,15 +40,15 @@ if __name__ == "__main__":
 
   shapeToKernel = {}
 
-  for p in [8,16,32,64,128]:
-    for q in [8,16,32,64,128]:
-      for n in range(2,20):
+  for p in [2,4,8,16,32,64,128]:
+    for q in [2,4,8,16,32,64,128]:
+      for n in range(1,20):
         for m in [1,4,16,64,256,1024]:
           if m*(p**n) > 2*1024*1024*1024 or m*(q**n) > 2*1024*1024*1024:
             continue
           if (p!=q):
             continue
-          for canfuse in [False, True]:
+          for canfuse in [True]:
             if canfuse and (p != q or p > 32):
               continue
             allKernelsExec = tune(m, n, p, q, args.opX, args.opF, args.backend, canfuse)

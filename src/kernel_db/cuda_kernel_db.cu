@@ -262,7 +262,7 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
 
 KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) {
   using Opts = KernelOptimizations::Optimization;
-
+  for (auto k : kernels) std::cout << k->str() << std::endl;
   for (int optlevel = KernelOptimizations::MaxOptLevel();
        optlevel >= 0; optlevel--) {
     std::vector<KernelInfo*> kernelsForOptLevel;
@@ -291,7 +291,7 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const
 TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
   TunedKernelsSeries kernelSeries;
   uint32_t MaxFuseP = 32;
-
+  //TODO: fusion should considered for subproblems 
   bool factorsSameShape = true, factorsSquare = true, 
        factorsPowerOfTwoShape = true, factorsLessThanMaxP = true;
   for (int f = 0; f < problem.n(); f++) {
@@ -304,7 +304,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
     }
   }
 
-  bool canFuse = factorsSameShape && factorsSquare && factorsPowerOfTwoShape && factorsLessThanMaxP;
+  bool canFuse = problem.n() > 1 && factorsSameShape && factorsSquare && factorsPowerOfTwoShape && factorsLessThanMaxP;
 
   if (canFuse) {
     std::vector<KernelInfo*> kernels;
@@ -317,7 +317,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       }
     }
     
-    uint32_t MinConsecutiveStoreElems = 8;
+    uint32_t MinConsecutiveStoreElems = 16;
     //A fused kernel stores logP (TK) consecutive elements.
     //Remove all kernels that stores (< MinConsecutiveStoreElems).
     std::vector<KernelInfo*> validFusedKernels;
@@ -348,7 +348,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       }      
     }
 
-    if (false) {
+    if (true) {
       std::cout << "346: " << numFusedToKernels.size() << std::endl;
       for (auto iter : numFusedToKernels) {
         std::cout << iter.first << ": ";
@@ -358,23 +358,30 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
         std::cout << std::endl;
       }
     }
-    auto fusedIter = numFusedToKernels.begin();
+    if (!numFusedToKernels.empty()) {
+      auto fusedIter = numFusedToKernels.begin();
 
-    fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
-      [&fusedIter](const KMMProblem) {return fusedIter->first;},
-      [&fusedIter, &kernelSeries, &numFusedToKernels, this]
-        (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
-          auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, fusedIter->second), 
-                                         rstart - (subProblem.n() - 1), rstart, subProblem.k(), 0.0f);
-          kernelSeries.push_back(tk);
-          // std::cout << "370 " << fusedIter->first << " " << rstart << "  " << (rstart - subProblem.n() + 1) << std::endl; 
-          while (fusedIter->first > rstart - subProblem.n() + 1&& fusedIter != numFusedToKernels.end()) {
-                      // std::cout << "372 " << fusedIter->first << " " << rstart << "  " << (rstart - (subProblem.n() - 1)) << std::endl;
-            fusedIter++;
-          }
-          return fastKronSuccess;
-      });
-  } else {
+      fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
+        [&fusedIter](const KMMProblem) {return fusedIter->first;},
+        [&fusedIter, &kernelSeries, &numFusedToKernels, this]
+          (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+            auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, fusedIter->second), 
+                                          rstart - (subProblem.n() - 1), rstart, subProblem.k(), 0.0f);
+            kernelSeries.push_back(tk);
+            // std::cout << "370 " << fusedIter->first << " " << rstart << "  " << (rstart - subProblem.n() + 1) << std::endl; 
+            while (fusedIter->first > rstart - subProblem.n() + 1&& fusedIter != numFusedToKernels.end()) {
+                        // std::cout << "372 " << fusedIter->first << " " << rstart << "  " << (rstart - (subProblem.n() - 1)) << std::endl;
+              fusedIter++;
+            }
+            return fastKronSuccess;
+        });
+    }
+
+    if (!kernelSeries.empty()) goto end;
+  }
+
+  //No Fused kernel case found
+  {
     fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
       [](const KMMProblem) {return 1;},
       [&kernelSeries, this]
