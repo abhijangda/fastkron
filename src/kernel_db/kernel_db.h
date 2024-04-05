@@ -49,7 +49,6 @@ public:
         compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
       }
       compiledKernels.at(key).push_back(&info);
-      allKernels.push_back(&info);
     }
   
     //TODO: Check that if distP2PStore is needed then there is a kernel that can 
@@ -101,10 +100,21 @@ public:
   fastKronError procMalloc(uint32_t proc, Matrix& m);
   fastKronError procFree(uint32_t proc, Matrix m);
   
-  bool findAllKernels(const Factor& f, fastKronOp opX, fastKronOp opF, std::vector<KernelInfo*>& kernels) {
-    auto it = compiledKernels.find(DbKey{f, opX, opF});
+  bool findAllKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
+    DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+    auto it = compiledKernels.find(key);
     if (it == compiledKernels.end()) return false;
-    kernels = it->second;
+    kernels.insert(kernels.end(), it->second.begin(), it->second.end());
+
+    for (auto it : compiledKernels) {
+      if (it.first == key) continue;
+      for (auto kernel : it.second) {
+        if (kernel->canCompute(problem, distP2PStore)) {
+          kernels.push_back(kernel);
+        }
+      }
+    }
+
     return true;
   }
 

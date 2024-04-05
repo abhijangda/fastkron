@@ -22,20 +22,6 @@ std::size_t std::hash<std::pair<Factor, uint>>::operator()(const std::pair<Facto
   return hash<uint>()(m.second) ^ hash<Factor>()(m.first);
 }
 
-static std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr {
-  {
-    {Factor(64,64),1}, {
-      {Matrix(1024,4096),   "128_64x64_32x64_1_1x4096_4x8_3_NN_0"},
-      {Matrix(1024,262144), "128_64x64_32x64_1_1x4096_4x8_3_NN_0"},
-    }
-  },
-  {
-    {Factor(128,128),1}, {
-      {Matrix(1024,16384), "128_128x128_32x128_1_1x8192_4x16_3_NN_0"},
-    }
-  },
-};
-
 CUDAKernelDatabase::CUDAKernelDatabase() {
   streams.push_back(NULL);
   loadKernels<CUDAKernel>(AllCUDAKernels, sizeof(AllCUDAKernels)/sizeof(CUDAKernel));
