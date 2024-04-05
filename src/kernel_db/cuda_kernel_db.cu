@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <limits>
+#include <algorithm>
 
 #include <nccl.h>
 
@@ -213,11 +214,11 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
   return status;
 }
 
-// float occupancy(const CUDAArchDetail gpu, CUDAKernel* kernel, dim3 grid) {
-//   uint32_t regOcc = gpu.regsPerSM / (32 * kernelInfo->numRegs()); //32 is warp size
-//   uint32_t shmemOcc = gpu.sharedMemPerMultiprocessor / kernel->sharedMemSize();
-//   shmemOcc = kernel->block().x / 32;//TODO: Only considering x dim
-// }
+static float blocksPerSM(const CUDAArchDetail gpu, CUDAKernel* kernel, dim3 grid) {
+  uint32_t regOcc = gpu.regsPerSM / (kernel->block().x * kernel->numRegs());
+  uint32_t shmemOcc = gpu.sharedMemPerSM / kernel->sharedMemSize();
+  return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
+}
 
 std::string CUDAKernelDatabase::occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) {
   CUDAKernel* cudaKernel = dynamic_cast<CUDAKernel*>(kernelInfo);
@@ -226,11 +227,11 @@ std::string CUDAKernelDatabase::occupancyDetails(KernelInfo* kernelInfo, KMMProb
   dim3 block = cudaKernel->block();
   std::string indent = "  ";
 
-  ss << indent << "Grid: {" << grid.x << ", " << grid.y << ", " << grid.z << "}" << std::endl
-     << indent << "Block: {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
-     << indent << "Shared Mem: " << cudaKernel->sharedMemSize() << std::endl 
-     << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl;
-    //  << indent << "Occupancy: " << 1.0f << std::endl;
+  ss << indent << "Grid          : {" << grid.x << ", " << grid.y << ", " << grid.z << "}" << std::endl
+     << indent << "Block         : {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
+     << indent << "Shared Mem    : " << cudaKernel->sharedMemSize() << std::endl 
+     << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl
+     << indent << "Blocks Per SM : " << blocksPerSM(gpusDetail[0], cudaKernel, cudaKernel->grid(problem)) << std::endl;
 
   return ss.str();
 }
@@ -239,7 +240,7 @@ fastKronError CUDAKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& 
   CUDA_CHECK(cudaSetDevice(proc));
   CUDA_CHECK(cudaMalloc(&ptr, size));
   CUDA_CHECK(cudaMemset(ptr, 1, size));
-  
+
   return fastKronSuccess;
 }
 
@@ -261,21 +262,31 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
 
 KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem) {
   using Opts = KernelOptimizations::Optimization;
+  std::vector<KernelInfo*> kernels;
+  
+  findAllKernels(subProblem, false, kernels);
 
-  for (auto iter : compiledKernels) {
-    for (int optlevel = KernelOptimizations::MaxOptLevel();
-         optlevel >= 0; optlevel--) {
-      for (auto kernelInfo : iter.second) {
-        if (kernelInfo->OptLevel != optlevel) continue;
-        bool followsAllOpts = true;
-        uint lg = 0;
-        for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
-          if ((KernelOptimizations::getOptimizations(optlevel) & opt) == opt) {
-            followsAllOpts = followsAllOpts && kernelInfo->validOptFor(subProblem, opt);
-          }
+  for (int optlevel = KernelOptimizations::MaxOptLevel();
+       optlevel >= 0; optlevel--) {
+    std::vector<KernelInfo*> kernelsForOptLevel;
+    std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(kernelsForOptLevel),
+                 [optlevel](auto& kernel){return kernel->OptLevel == optlevel;});
+    if (kernelsForOptLevel.size() > 0) {
+      //sort kernels in descending order based on the number of thread blocks a kernel invoke
+      std::sort(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), 
+                [subProblem](auto k1, auto k2){return ((CUDAKernel*)k1)->numBlocks(subProblem) >
+                                                      ((CUDAKernel*)k2)->numBlocks(subProblem);});
+      float smUsageThreshold = 0.8;
+      for (auto k : kernelsForOptLevel) {
+        uint blocksm = blocksPerSM(gpusDetail[0], (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
+        // std::cout << k->str() << " " << gpusDetail[0].numSMs << " * " << blocksm << " <= " << ((CUDAKernel*)k)->numBlocks(subProblem) << std::endl;
+        if (((CUDAKernel*)k)->numBlocks(subProblem) <= gpusDetail[0].numSMs * blocksm) {
+          return k;
         }
-        if (followsAllOpts) return kernelInfo;
       }
+
+      //If no kernel is found then return the kernel with max grid size
+      return kernelsForOptLevel[kernelsForOptLevel.size() - 1];
     }
   }
 
@@ -289,6 +300,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
   [&kernelSeries, this]
     (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
       auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem), rstart, rstart, subProblem.k(), 0.0f);
+      std::cout << tk.kernel->str() << std::endl;
       kernelSeries.push_back(tk);
       return fastKronSuccess;
   });
@@ -317,6 +329,7 @@ CUDAArchDetail::CUDAArchDetail(int dev) {
   name               = std::string(prop.name);
   computeMajor       = prop.major;
   computeMinor       = prop.minor;
+  warpSize           = prop.warpSize;
 }
 
 fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {

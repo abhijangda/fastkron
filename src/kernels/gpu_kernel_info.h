@@ -43,6 +43,11 @@ struct GPUKernel : public KernelInfo {
                 1);
   }
 
+  uint32_t numBlocks(KMMProblem problem) {
+    dim3 g = grid(problem);
+    return g.x*g.y*g.z;
+  }
+
   dim3 block() {
     return dim3{NumThreads, 1, 1};
   }

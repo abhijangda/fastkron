@@ -52,6 +52,7 @@ public:
   std::string name;
   uint32_t computeMajor;
   uint32_t computeMinor;
+  uint32_t warpSize;
 
 
   // CUDAArchDetail(uint32_t numSMs, uint32_t maxBlocksPerSM, uint32_t maxThreadsPerBlock,
@@ -71,8 +72,9 @@ public:
           indent << "Max Threads per SM      : " << detail.maxThreadsPerSM << std::endl <<
           indent << "Registers Per SM        : " << detail.regsPerSM << std::endl <<
           indent << "Shared Memory per SM    : " << detail.sharedMemPerSM << std::endl<<
-          indent << "Shared Memory Per Block : " << detail.sharedMemPerBlock << std::endl;
-
+          indent << "Shared Memory Per Block : " << detail.sharedMemPerBlock << std::endl <<
+          indent << "Warp Size               : " << detail.warpSize << std::endl
+          ;
     return out;
   }
 };
