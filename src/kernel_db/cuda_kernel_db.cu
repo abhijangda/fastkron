@@ -45,7 +45,7 @@ CUDAKernelDatabase::CUDAKernelDatabase() {
     CUDA_CHECK(info.setSharedMemAttr());
   }
   //TODO: initialize in constructor
-  fastestKernelForShape.init(this, shapeToKernelStr);
+  // fastestKernelForShape.init(this, shapeToKernelStr);
   //TODO: Check that if distP2PStore is needed then there is a kernel that can 
   //do it
   //TODO: Add if debug
@@ -189,11 +189,11 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
                                            bool distP2PStore,
                                            int warmups, int runs,
                                            float& runtime) {
-  if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0) {
-    //skip probably slow kernels
-    runtime = std::numeric_limits<float>::max();
-    return fastKronSuccess;
-  }
+  // if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0) {
+  //   //skip probably slow kernels
+  //   runtime = std::numeric_limits<float>::max();
+  //   return fastKronSuccess;
+  // }
 
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -325,7 +325,7 @@ CUDAArchDetail::CUDAArchDetail(int dev) {
   maxThreadsPerBlock = prop.maxThreadsPerBlock;
   maxThreadsPerSM    = prop.maxThreadsPerMultiProcessor;
   regsPerSM          = prop.regsPerMultiprocessor;
-  maxRegsPerThread      = 256; 
+  maxRegsPerThread   = 256; 
   sharedMemPerSM     = prop.sharedMemPerMultiprocessor;
   sharedMemPerBlock  = prop.sharedMemPerBlock;
   name               = std::string(prop.name);

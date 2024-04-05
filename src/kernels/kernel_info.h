@@ -36,16 +36,26 @@ struct KernelInfo {
              fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
              FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
-             RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType), opX(opX), opF(opF) {}
+             RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
+             opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
   bool canCompute(KMMProblem problem, bool p2p) {
-    return f == problem.f(0) && 
-           problem.f(0).q() % tileF.q() == 0 &&
-           problem.opFs() == opF &&
-           problem.opX()  == opX &&
-           problem.k() % tileX.n() == 0 &&
-           problem.n() == FusedFacs &&
-           DistributeToGPUs == p2p;
+    using Opts = KernelOptimizations::Optimization;
+
+    bool ret = problem.opFs() == opF && problem.opX() == opX && 
+               DistributeToGPUs == p2p && problem.n() == FusedFacs &&
+               tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
+
+    if (!ret) return false;
+
+    bool followsAllOpts = true;
+    uint lg = 0;
+    for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
+      if ((KernelOptimizations::getOptimizations(OptLevel) & opt) == opt) {
+        followsAllOpts = followsAllOpts && validOptFor(problem, opt);
+    }}
+
+    return followsAllOpts;
   }
 
   size_t totalTileSize() {
@@ -64,7 +74,8 @@ struct KernelInfo {
 
     uint32_t kernelTileSlices = tileX.n()/f.p();
     uint32_t problemTileSlices = problem.x().n()/f_.p();
-    uint32_t slices;
+
+    uint32_t slices = 0;
     if (problemTileSlices >= kernelTileSlices) {
       slices = kernelTileSlices;
     } else {
@@ -91,7 +102,7 @@ struct KernelInfo {
   virtual std::string str() const {
     std::stringstream info;
     info << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
-            RegK << "x" << RegQ << "_" << OptLevel << "_" << opX << opF << "_" << DistributeToGPUs;
+            RegK << "x" << RegQ << "_" << opX << opF << "_" << DistributeToGPUs << "_" << OptLevel;
     return info.str();
   }
 };

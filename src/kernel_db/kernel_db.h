@@ -29,6 +29,7 @@ public:
   
 public:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
+  std::vector<KernelInfo*> allKernels;
 
 public:
   KernelDatabase() {}
@@ -48,6 +49,7 @@ public:
         compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
       }
       compiledKernels.at(key).push_back(&info);
+      allKernels.push_back(&info);
     }
   
     //TODO: Check that if distP2PStore is needed then there is a kernel that can 
