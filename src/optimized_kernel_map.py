@@ -9,8 +9,8 @@ def run_command(command):
     print (f"Running {command}\n", o)
   return o
 
-def tune(m, n, p, q, opX, opF, backend):
-  o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} --fuse')
+def tune(m, n, p, q, opX, opF, backend, fuse):
+  o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} {"--fuse" if fuse else ""}')
   o = o[o.find('Minimum Time'):]
   
   kernelSeries = re.findall(r'\s*\[(\d+), (\d+)\] = (\d+) (.+) runs', o)
@@ -40,19 +40,23 @@ if __name__ == "__main__":
 
   shapeToKernel = {}
 
-  for p,q in zip([2,4,8,16,32,64,128],[2,4,8,16,32,64,128]):
-    for n in range(2,11):
-      for m in [1,4,16,64,256,1024]:
-        if m*(p**n) > 2*1024*1024*1024 or m*(q**n) > 2*1024*1024*1024 or q**n < 64 or p**n < 64:
-          continue
-        allKernelsExec = tune(m, n, p, q, args.opX, args.opF, args.backend)
-        for kernelExec in allKernelsExec:
-          key = f"Factor({p},{q}),{kernelExec[0]}"
-          if key not in shapeToKernel:
-            shapeToKernel[key] = []
-          if len(shapeToKernel[key]) > 0 and (shapeToKernel[key][-1][2] == kernelExec[2] and shapeToKernel[key][-1][1] <= kernelExec[1] and shapeToKernel[key][-1][0] <= m):
+  for p in [2,4,8,16,32,64,128]:
+    for q in [2,4,8,16,32,64,128]:
+      for n in range(1,11):
+        for m in [1,4,16,64,256,1024]:
+          if m*(p**n) > 2*1024*1024*1024 or m*(q**n) > 2*1024*1024*1024:
             continue
-          shapeToKernel[key] += [(m, kernelExec[1], kernelExec[2])]
+          for canfuse in [False, True]:
+            if canfuse and (p != q or p > 32):
+              continue
+            allKernelsExec = tune(m, n, p, q, args.opX, args.opF, args.backend, canfuse)
+            for kernelExec in allKernelsExec:
+              key = f"Factor({p},{q}),{kernelExec[0]}"
+              if key not in shapeToKernel:
+                shapeToKernel[key] = []
+              if len(shapeToKernel[key]) > 0 and (shapeToKernel[key][-1][2] == kernelExec[2] and shapeToKernel[key][-1][1] <= kernelExec[1] and shapeToKernel[key][-1][0] <= m):
+                continue
+              shapeToKernel[key] += [(m, kernelExec[1], kernelExec[2])]
   
   maplines = ""
   indent = 1
@@ -63,7 +67,7 @@ if __name__ == "__main__":
     maplines += "  " * indent + "{"+k+"}," + " {\n"
     indent += 1
     for v in vs:
-      maplines += "  " * indent + "{" + f"Matrix({v[0]}, {v[1]}), {v[2]}" + "}" + ",\n"
+      maplines += "  " * indent + "{" + f'Matrix({v[0]}, {v[1]}), "{v[2]}"' + "}" + ",\n"
     indent -= 1
     maplines += "  " * indent + "}\n"
     indent -= 1
