@@ -11,4 +11,4 @@ set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_subdirectory(benchmarks)
 add_subdirectory(cuda)
-add_subdirectory(x86)
+#add_subdirectory(x86)
