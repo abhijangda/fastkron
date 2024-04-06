@@ -19,7 +19,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
   //Load shared memory Xsh to registers Xr 
   #pragma unroll
   for (uint rm = 0; rm < Yr.m(); rm++) {
-  if (rm < m) {
+  // if (rm < m) {
     #pragma unroll
     for (uint rk = 0; rk < Xr.k(); rk++) {
       uint shXk = yElem.k() + rk;
@@ -30,7 +30,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
         //TODO: bring shift calculation in Xsh.at
         float temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
         Xr.set(rm, rk, p, temp);
-      }
+      // }
   }}}
   
   #pragma unroll
