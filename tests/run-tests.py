@@ -17,17 +17,13 @@ backend = sys.argv[1].lower()
 assert backend in ['cuda', 'x86', 'amd', 'arm']
 
 if backend == 'cuda':
-  gen_test_kernels = { #not needed 'gen-tuner-kernels'                    : ['single-cuda-tuner-tests'], 
-                      'gen-single-cuda-kernels'               : ['single-cuda-no-fusion-tests', 'single-cuda-fusion-tests'],
-                      'gen-single-cuda-non-square-TT-kernels' : ['single-cuda-non-square-TT-tests'],
-                      'gen-non-square-kernels'    : ['single-cuda-non-square-tests'],
-                      'gen-single-cuda-distinct-shapes'       : ['single-cuda-distinct-shapes'],
-                      'gen-single-cuda-odd-shapes'            : ['single-cuda-odd-shapes'],
+  gen_test_kernels = { 
+                      'gen-single-gpu-kernels'               : ['single-gpu-cuda', 'single-gpu-cuda-TT'],
 
-                      'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests', 'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
-                      'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
-                      'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
-                      'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes', 'DIST_COMM=NCCL multi-cuda-distinct-shapes']
+                      # 'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests', 'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
+                      # 'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
+                      # 'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
+                      # 'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes', 'DIST_COMM=NCCL multi-cuda-distinct-shapes']
                       }
 elif backend == 'x86':
   gen_test_kernels = {#'gen-x86-tuner-kernels'         : ['x86-tuner-tests'], # No need
@@ -52,7 +48,7 @@ if not os.path.exists("build/"):
   os.mkdir("build/")
 
 os.chdir("build/")
-execute(f"cmake .. -DENABLE_{backend.upper()}=ON")
+execute(f'cmake .. -DENABLE_{backend.upper()}=ON -DCMAKE_CUDA_FLAGS="-Xptxas -v -O3"')
 
 for gen in sorted_keys:
   print(f"========= Running {gen} =========")
