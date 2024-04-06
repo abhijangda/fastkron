@@ -246,7 +246,7 @@ class GPUKernel(Kernel):
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
-           self.tileM * self.rk * self.rq <= 64 #and self.opt_level == 3
+           self.tileM * self.rk * self.rq <= 64 and self.opt_level == 3
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
@@ -287,11 +287,11 @@ def generate_kernel_decls(cases, opX, opF, useFusion, useDistKernels, numKernels
     allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
     for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
       MinTile = 32 if backend == 'x86' else 32
-      TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+      TilePs = [32] #[min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
       TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
       k_factors = factors(currK)
       TileKs = [f for f in k_factors if f % p == 0]
-      TileMs = [1, 2] #[2 ** i for i in range(0, int(math.log2(m)))]
+      TileMs = [1, 2, 4, 8, 16] #[2 ** i for i in range(0, int(math.log2(m)))]
 
       for tM in TileMs:
         for tQ in TileQs:

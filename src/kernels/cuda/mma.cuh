@@ -28,7 +28,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
         //TODO: bring shift calculation in Xsh.at
-        float temp = Xsh.at(rm, shXk * Xr.p() + (p + shift)%Xr.p());
+        float temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
         Xr.set(rm, rk, p, temp);
       // }
   }}}

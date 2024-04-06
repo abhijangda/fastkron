@@ -29,3 +29,22 @@ public:
   CUDA_DEVICE_HOST
   uint32_t j() const {return val[1];}
 };
+
+class Coord3D {
+  uint32_t val[3];
+
+public:
+  CUDA_DEVICE_HOST
+  Coord3D(uint32_t i, uint32_t j, uint32_t k) {
+    val[0] = i;
+    val[1] = j;
+    val[2] = k;
+  }
+
+  CUDA_DEVICE_HOST
+  uint32_t i() const {return val[0];}
+  CUDA_DEVICE_HOST
+  uint32_t j() const {return val[1];}
+  CUDA_DEVICE_HOST
+  uint32_t k() const {return val[2];}
+};

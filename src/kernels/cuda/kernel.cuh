@@ -129,21 +129,26 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint XshSlices = getXshSlices<kFactorShapeSame, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
+  
+  const uint RegM      = TileM;
+
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
+  const uint MThreads  = (TileQ/RegQ * QThreads);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
-
+  
   const uint ShTileK   = XshSlices*TileP;
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(QByTileQ);
   const uint tileK = getTileK(QByTileQ);
+  
+  const uint tid  = threadIdx.x;
+  const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
+  const uint yK   = ((tid % MThreads) % QThreads) * RegK;
+  const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
 
-  const uint tid      = threadIdx.x;
-  const uint yQ       = (tid   / QThreads) * RegQ;
-  const uint yK       = (tid   % QThreads) * RegK;
-
-  const YElem yElem(yQ, yK);
+  const YElem yElem(yM, yQ, yK);
 
   const uint tileM = blockIdx.y * TileM;
 
@@ -161,7 +166,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   XShared Xsh(&sharedStorage[0], ShTileK);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
-  register YRegisters<ElemT, TileM, RegK, RegQ> yReg;
+  register YRegisters<ElemT, RegM, RegK, RegQ> yReg;
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
@@ -210,7 +215,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
           (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
 
-      const uint glM = rm + tileM;
+      const uint glM = rm + yElem.m() + tileM;
       uint glK;
       ElemT* outputArray;
       uint32_t cIdx;

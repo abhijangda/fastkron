@@ -286,13 +286,15 @@ class FRegisters : public FixedShapeTensor2D<fastKronOp_N, T, TileP, CRegCols>{
     FRegisters() {}
 };
 
-class YElem : public Coord2D {
+class YElem : public Coord3D {
 public:
   CUDA_DEVICE_HOST
-  YElem(uint32_t yQ, uint32_t yK) : Coord2D(yQ, yK) {}
+  YElem(uint32_t yM, uint32_t yQ, uint32_t yK) : Coord3D(yM, yQ, yK) {}
 
   CUDA_DEVICE_HOST
-  uint32_t q() const {return i();}
+  uint32_t m() const {return Coord3D::i();}
   CUDA_DEVICE_HOST
-  uint32_t k() const {return j();}
+  uint32_t q() const {return Coord3D::j();}
+  CUDA_DEVICE_HOST
+  uint32_t k() const {return Coord3D::k();}
 };
