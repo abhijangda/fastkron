@@ -103,9 +103,11 @@ public:
   bool findAllKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
     DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
     auto it = compiledKernels.find(key);
-    for (auto k : it->second) {
-      if (k->canCompute(problem, distP2PStore)) {
-        kernels.push_back(k);
+    if (it != compiledKernels.end()) {
+      for (auto k : it->second) {
+        if (k->canCompute(problem, distP2PStore)) {
+          kernels.push_back(k);
+        }
       }
     }
     if (it != compiledKernels.end() and kernels.size() > 0) return true;

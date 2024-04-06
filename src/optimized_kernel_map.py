@@ -9,8 +9,8 @@ def run_command(command):
     print (f"Running {command}\n", o)
   return o
 
-def tune(m, n, p, q, opX, opF, backend, fuse, check):
-  o = run_command(f'TUNE=0 ../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} {"--fuse" if fuse else ""}')
+def run(m, n, p, q, opX, opF, backend, fuse, tune):
+  o = run_command(f'TUNE={tune} ../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} {"--fuse" if fuse else ""}')
   o = o[o.find('Minimum Time'):]
   
   kernelSeries = re.findall(r'\s*\[(\d+), (\d+)\] = (\d+) (.+) runs', o)
@@ -21,9 +21,9 @@ def tune(m, n, p, q, opX, opF, backend, fuse, check):
 
   allKernelsExec = list(set(allKernelsExec))
   gflops = re.findall(r'GFLOPS: (\d+\.\d+)', o)
-  print(f"{m}x{p**n}*({p}x{q}^{n})",allKernelsExec, gflops)
+  #print(f"{m}x{p**n}*({p}x{q}^{n})",allKernelsExec, gflops)
 
-  return allKernelsExec #["{"+f'Matrix({m},{p**n}), \"{kernels[0]}\"'+"},"]
+  return f"{m}x{p**n}*({p}x{q}^{n})", allKernelsExec, gflops #["{"+f'Matrix({m},{p**n}), \"{kernels[0]}\"'+"},"]
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
@@ -40,40 +40,51 @@ if __name__ == "__main__":
 
   shapeToKernel = {}
 
-  for p in [2,4,8,16,32,64,128]:
-    for q in [2,4,8,16,32,64,128]:
+  for p in [2,4,8,16,32,64,128,256]:
+    for q in [2,4,8,16,32,64,128,256]:
       for n in range(1,20):
         for m in [1,4,16,64,256,1024]:
           if m*(p**n) > 2*1024*1024*1024 or m*(q**n) > 2*1024*1024*1024:
             continue
-          if (p!=q):
+          if p <= 32 and q <= 32:
             continue
-          for canfuse in [True]:
-            if canfuse and (p != q or p > 32):
-              continue
-            allKernelsExec = tune(m, n, p, q, args.opX, args.opF, args.backend, canfuse)
-            for kernelExec in allKernelsExec:
-              key = f"Factor({p},{q}),{kernelExec[0]}"
-              if key not in shapeToKernel:
-                shapeToKernel[key] = []
-              if len(shapeToKernel[key]) > 0 and (shapeToKernel[key][-1][2] == kernelExec[2] and shapeToKernel[key][-1][1] <= kernelExec[1] and shapeToKernel[key][-1][0] <= m):
-                continue
-              shapeToKernel[key] += [(m, kernelExec[1], kernelExec[2])]
+          tuned = run(m, n, p, q, args.opX, args.opF, args.backend, True, 1)
+          selected = run(m, n, p, q, args.opX, args.opF, args.backend, True, 0)
+          print("Tuned", tuned)
+          print("Selected", selected)
   
-  maplines = ""
-  indent = 1
   
-  for k,vs in shapeToKernel.items():
-    maplines += "  " * indent + "{\n"
-    indent += 1
-    maplines += "  " * indent + "{"+k+"}," + " {\n"
-    indent += 1
-    for v in vs:
-      maplines += "  " * indent + "{" + f'Matrix({v[0]}, {v[1]}), "{v[2]}"' + "}" + ",\n"
-    indent -= 1
-    maplines += "  " * indent + "}\n"
-    indent -= 1
-    maplines += "  " * indent + "},\n"
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  #           for kernelExec in allKernelsExec:
+  #             key = f"Factor({p},{q}),{kernelExec[0]}"
+  #             if key not in shapeToKernel:
+  #               shapeToKernel[key] = []
+  #             if len(shapeToKernel[key]) > 0 and (shapeToKernel[key][-1][2] == kernelExec[2] and shapeToKernel[key][-1][1] <= kernelExec[1] and shapeToKernel[key][-1][0] <= m):
+  #               continue
+  #             shapeToKernel[key] += [(m, kernelExec[1], kernelExec[2])]
+
+  # maplines = ""
+  # indent = 1
+  
+  # for k,vs in shapeToKernel.items():
+  #   maplines += "  " * indent + "{\n"
+  #   indent += 1
+  #   maplines += "  " * indent + "{"+k+"}," + " {\n"
+  #   indent += 1
+  #   for v in vs:
+  #     maplines += "  " * indent + "{" + f'Matrix({v[0]}, {v[1]}), "{v[2]}"' + "}" + ",\n"
+  #   indent -= 1
+  #   maplines += "  " * indent + "}\n"
+  #   indent -= 1
+  #   maplines += "  " * indent + "},\n"
 
 
-  print(maplines)
+  # print(maplines)

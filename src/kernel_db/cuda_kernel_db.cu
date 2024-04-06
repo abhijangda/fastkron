@@ -262,7 +262,7 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
 
 KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) {
   using Opts = KernelOptimizations::Optimization;
-  for (auto k : kernels) std::cout << k->str() << std::endl;
+
   for (int optlevel = KernelOptimizations::MaxOptLevel();
        optlevel >= 0; optlevel--) {
     std::vector<KernelInfo*> kernelsForOptLevel;
@@ -289,8 +289,12 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const
 }
 
 TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
+  if (problemToKernelCache.find(problem) != problemToKernelCache.end())
+    return problemToKernelCache[problem];
+
   TunedKernelsSeries kernelSeries;
   uint32_t MaxFuseP = 32;
+
   //TODO: fusion should considered for subproblems 
   bool factorsSameShape = true, factorsSquare = true, 
        factorsPowerOfTwoShape = true, factorsLessThanMaxP = true;
@@ -348,7 +352,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       }      
     }
 
-    if (true) {
+    if (false) {
       std::cout << "346: " << numFusedToKernels.size() << std::endl;
       for (auto iter : numFusedToKernels) {
         std::cout << iter.first << ": ";
@@ -396,6 +400,8 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
   }
 
 end:
+  problemToKernelCache[problem] = kernelSeries;
+
   std::cout <<"Minimum Time " << std::endl;
   for (auto iter = kernelSeries.rbegin(); iter != kernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;

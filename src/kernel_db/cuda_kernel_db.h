@@ -94,6 +94,7 @@ public:
   thread_pool<ThreadArgs*>* threads_;
   std::vector<CUDAArchDetail> gpusDetail;
   OptimizedKernelForShape fastestKernelForShape;
+  std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
 
 public:
   CUDAKernelDatabase();
