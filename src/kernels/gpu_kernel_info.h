@@ -10,12 +10,12 @@ struct GPUKernel : public KernelInfo {
   GPUKernel() {}
   GPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
+             uint RegM, uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
              KernelInfo(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
-             RegK, RegQ, elemType, OptLevel, opX, opF),
+             RegM, RegK, RegQ, elemType, OptLevel, opX, opF),
              NumThreads(NumThreads), kernelFunc(getKernelFunc()),
              AAlignment(AAlignment), KronAlignment(KronAlignment) {}
 
@@ -38,9 +38,15 @@ struct GPUKernel : public KernelInfo {
   dim3 grid(KMMProblem problem) {
     Matrix tileX_ = getTileX(problem);
     Factor tileF_ = getTileF(problem);
-    return dim3(DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
-                DIVUP(problem.m(), tileX_.m()),
-                1);
+    if ( true||opX == fastKronOp_N) {
+      return dim3(DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
+                  DIVUP(problem.m(), tileX_.m()),
+                  1);
+    } else {
+      return dim3(DIVUP(problem.m(), tileX_.m()),
+                  DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
+                  1);
+    }
   }
 
   uint32_t numBlocks(KMMProblem problem) {

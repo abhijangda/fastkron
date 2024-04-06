@@ -69,7 +69,7 @@ template<typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
-         uint RegK, uint RegQ,
+         uint RegM, uint RegK, uint RegQ,
          uint OptLevel,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
@@ -129,8 +129,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   const uint XshSlices = getXshSlices<kFactorShapeSame, kTileK, MaxP>(params);
   const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
-  
-  const uint RegM      = TileM;
 
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
   const uint MThreads  = (TileQ/RegQ * QThreads);
@@ -206,7 +204,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
-  if (rm < XTile.m()) {
+  if (rm + yElem.m() < XTile.m()) {
     constexpr uint32_t StLen = storeVectorLen<FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {

@@ -7,11 +7,11 @@ struct CUDAKernel : public GPUKernel {
   CUDAKernel() {}
   CUDAKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
+             uint RegM, uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
-             GPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegK, RegQ, 
+             GPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
                        elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment) {
   }
   uint32_t localSize() const {

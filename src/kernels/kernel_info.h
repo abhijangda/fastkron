@@ -22,6 +22,7 @@ struct KernelInfo {
   Matrix tileX;
   fastKronOp opX;
   fastKronOp opF;
+  uint RegM;
   uint RegK;
   uint RegQ;
   uint FusedFacs;
@@ -32,11 +33,11 @@ struct KernelInfo {
   KernelInfo() {}
   KernelInfo(void* invokerFunc, Factor f, Factor tileF, Matrix tileX,
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
+             uint RegM, uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
              fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
              FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
-             RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
+             RegM(RegM), RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
              opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
   bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
@@ -102,7 +103,7 @@ struct KernelInfo {
   virtual std::string str() const {
     std::stringstream info;
     info << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
-            RegK << "x" << RegQ << "_" << opX << opF << "_" << DistributeToGPUs << "_" << OptLevel;
+            RegM << "x" << RegK << "x" << RegQ << "_" << opX << opF << "_" << DistributeToGPUs << "_" << OptLevel;
     return info.str();
   }
 };
@@ -111,10 +112,10 @@ struct CPUKernel : public KernelInfo {
   CPUKernel() {}
   CPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
             uint FusedFacs, bool DistributeToGPUs, 
-            uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
+            uint RegM, uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
             fastKronOp opX, fastKronOp opF) : 
             KernelInfo (invokerFunc, f, tileF, tileX, 
-                        FusedFacs, DistributeToGPUs, RegK, RegQ, elemType, OptLevel, opX, opF) {} 
+                        FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {} 
 };
 
 #include <vector>
