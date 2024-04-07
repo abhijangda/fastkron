@@ -37,6 +37,26 @@ def empty_dir(dir):
 def element_size(elem_type : str) -> int:
   if elem_type.lower() == "float":
     return 4
+  if elem_type.lower() == "int":
+    return 4
+
+def vec_type(elem_type : str, len : int) -> str:
+  elem_type = elem_type.lower()
+  assert len in [1, 2, 4]
+  if len == 1:
+    return elem_type
+  return f"{elem_type}{len}"
+
+def elem_type_to_fastkron_type(elem_type: str) -> str:
+  if elem_type.lower() == "float":
+    return "FastKronType:FastKronFloat"
+  if elem_type.lower() == "int":
+    return "FastKronType:FastKronInt"
+  if elem_type.lower() == "double":
+    return "FastKronType:FastKronDouble"
+  if elem_type.lower() == "float":
+    return "FastKronType:FastKronFloat"
+  assert false, f"{elem_type} not in FastKron"
 
 def factors(n):
   return list(set(functools.reduce(list.__add__, 
@@ -85,7 +105,7 @@ class Kernel:
     self.opF = opF
     self.fused_kernels = FusedKernel
     assert self.fused_kernels > 0
-    self.elemType = "float"
+    self.elemType = elemType
     self.dist = dist
     self.rk = rk
     self.rq = rq
@@ -111,7 +131,7 @@ class Kernel:
     return hash(repr(self))
 
   def constructorArgs(self):
-    return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {'ElementType::Float'}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {elem_type_to_fastkron_type(self.elemType)}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
 class CPUKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
@@ -128,7 +148,7 @@ class CPUKernel(Kernel):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"float, {self.shape.p}, {self.shape.q}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"{self.elemType}, {self.shape.p}, {self.shape.q}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
@@ -217,7 +237,7 @@ class GPUKernel(Kernel):
 
   def templateDecl(self):
     #TODO: repr and this should be same
-    return f"float, float2, float4, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"{self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
@@ -269,7 +289,7 @@ def xalignment(m, cols, op):
 def falignment(cols):
   return max([a for a in [1, 2, 4, 8] if cols % a == 0])
 
-def generate_kernel_decls(cases, opXs, opFs, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend):
+def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend):
   if not os.path.exists(all_kernels_dir):
     os.mkdir(all_kernels_dir)
 
@@ -282,60 +302,61 @@ def generate_kernel_decls(cases, opXs, opFs, useFusion, useDistKernels, numKerne
   configs = {}
   for opX in opXs:
     for opF in opFs:
-      for (m, k, n, ps, qs) in cases:
-        allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
-        for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
-          MinTile = 32 if backend == 'x86' else 32
-          TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
-          TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
-          k_factors = factors(currK)
-          TileKs = [f for f in k_factors if f % p == 0]
-          TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+      for elem_type in types:
+        for (m, k, n, ps, qs) in cases:
+          allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
+          for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
+            MinTile = 32 if backend == 'x86' else 32
+            TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+            TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
+            k_factors = factors(currK)
+            TileKs = [f for f in k_factors if f % p == 0]
+            TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
 
-          for tM in TileMs:
-            for tQ in TileQs:
-              for tK in TileKs:
-                if tK < p:
-                  continue
-                CRows = factors(tK//p)
-                CCols = factors(tQ)
-                RegMs = factors(tM)
-                for regRows in CRows:
-                  for regCols in CCols:
-                    for regM in RegMs:
-                      for tP in TilePs:
-                        fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
-                        for numFusedKerns in fusedCases:
-                          aalign = xalignment(tM, tK, opx)
-                          kronalign = falignment(tQ)
-                          shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
-                          if shape not in configs:
-                            configs[shape] = []
-                          __configs = []
-                          for opt_level in range(0, 4):
-                            if opt_level <= 1 or aalign == 1:
-                              new_aalign = aalign
-                            elif opt_level == 2:
-                              new_aalign = min(aalign, kronalign)
-                            else:
-                              new_aalign = aalign
- 
-                            if backend in ['cuda', 'hip']:
-                                  distKernels = [0, 1] if useDistKernels else [0]
-                                  for dist in distKernels: 
-                                    __configs += [GPUKernel(backend, KronMatMulShape(m, tK, n, p, q), 
-                                                            KronMatMulShape(m, k, n, ps, qs),
-                                                            p, q, tQ, tP, tM, regM, regRows, regCols,
-                                                            numFusedKerns, dist, "Float", opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
-                                                            opx, opF)]
-                            elif backend == 'x86':
-                              dist = 0
-                              __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q),
-                                                      KronMatMulShape(m, k, n, ps, qs),
-                                                      p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
-                                                      dist, "Float", opt_level, aalign, kronalign, allSameShapes, opx, opF)]
+            for tM in TileMs:
+              for tQ in TileQs:
+                for tK in TileKs:
+                  if tK < p:
+                    continue
+                  CRows = factors(tK//p)
+                  CCols = factors(tQ)
+                  RegMs = factors(tM)
+                  for regRows in CRows:
+                    for regCols in CCols:
+                      for regM in RegMs:
+                        for tP in TilePs:
+                          fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
+                          for numFusedKerns in fusedCases:
+                            aalign = xalignment(tM, tK, opx)
+                            kronalign = falignment(tQ)
+                            shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
+                            if shape not in configs:
+                              configs[shape] = []
+                            __configs = []
+                            for opt_level in range(0, 4):
+                              if opt_level <= 1 or aalign == 1:
+                                new_aalign = aalign
+                              elif opt_level == 2:
+                                new_aalign = min(aalign, kronalign)
+                              else:
+                                new_aalign = aalign
+  
+                              if backend in ['cuda', 'hip']:
+                                    distKernels = [0, 1] if useDistKernels else [0]
+                                    for dist in distKernels: 
+                                      __configs += [GPUKernel(backend, KronMatMulShape(m, tK, n, p, q), 
+                                                              KronMatMulShape(m, k, n, ps, qs),
+                                                              p, q, tQ, tP, tM, regM, regRows, regCols,
+                                                              numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
+                                                              opx, opF)]
+                              elif backend == 'x86':
+                                dist = 0
+                                __configs += [CPUKernel(KronMatMulShape(m, tK, n, p, q),
+                                                        KronMatMulShape(m, k, n, ps, qs),
+                                                        p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
+                                                        dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF)]
 
-                          configs[shape] += __configs
+                            configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
   
@@ -448,7 +469,8 @@ if __name__ == "__main__":
   parser.add_argument('-dist-kernels'      , required=False, action='store_true', default=False)
   parser.add_argument('-match-configs'     , required=False, type=str,  action='append',     nargs="+")
   parser.add_argument('-match-configs-file', required=False, type=str)
-  parser.add_argument('-backend'           , type=str)
+  parser.add_argument('-backend'           , required=True,  type=str)
+  parser.add_argument('-types'              , required=True,  type=str, nargs="+")
   args = parser.parse_args()
   parsed_cases = []
   
@@ -479,6 +501,9 @@ if __name__ == "__main__":
     assert opX in ["N", "T"]
   for opF in args.opF:
     assert opF in ["N", "T"]
+  for t in args.types:
+    assert t in ["float", "int", "double", "half"]
+
   if args.match_configs != None:
     assert type(args.match_configs) == list and len(args.match_configs) == 1
   assert (args.match_configs == None and args.match_configs_file == None) or \
@@ -494,5 +519,5 @@ if __name__ == "__main__":
       if line.strip() != "":
         match_configs += [line]
   
-  generate_kernel_decls(parsed_cases, args.opX, args.opF, not args.no_fuse, args.dist_kernels,
+  generate_kernel_decls(parsed_cases, args.opX, args.opF, args.types, not args.no_fuse, args.dist_kernels,
                         args.num_kernels, match_configs, args.backend)
