@@ -99,6 +99,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   static_assert((kTileK/MaxP)%RegK == 0,
                 "RegK not a multiple of MaxCols/MaxP");
 
+  static_assert(OptLevel == 3 || RegM == TileM,
+                "RegM can be different from TileM only for max optimization");
+
   //Vector Load types based on alignments 
   using XVecT = typename std::conditional<XAlignment == 1, ElemT, 
                 typename std::conditional<XAlignment == 2, Vec2T, 
@@ -131,7 +134,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
 
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
-  const uint MThreads  = (TileQ/RegQ * QThreads);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
   
@@ -142,16 +144,19 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint tileK = getTileK(QByTileQ);
   
   const uint tid  = threadIdx.x;
+  //TODO: RegM != TileM is only supported for max optimization level 
+  const uint MThreads  = (OptLevel < 3)? NumThreads : (TileQ/RegQ * QThreads);
   const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
   const uint yK   = ((tid % MThreads) % QThreads) * RegK;
-  const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
+  const uint yM   = (OptLevel < 3 || MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
 
   const YElem yElem(yM, yQ, yK);
 
   const uint tileM = blockIdx.y * TileM;
 
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
-                          (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
+                          (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
+                          (kKMultipleOfTileK)? TileK : MIN(X.n()-tileK * TileK, TileK),
                           P, TileP,
                           X);
 

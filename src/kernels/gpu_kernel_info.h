@@ -38,7 +38,7 @@ struct GPUKernel : public KernelInfo {
   dim3 grid(KMMProblem problem) {
     Matrix tileX_ = getTileX(problem);
     Factor tileF_ = getTileF(problem);
-    if ( true||opX == fastKronOp_N) {
+    if (true || opX == fastKronOp_N) {
       return dim3(DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
                   DIVUP(problem.m(), tileX_.m()),
                   1);

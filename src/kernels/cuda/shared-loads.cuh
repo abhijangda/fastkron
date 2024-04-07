@@ -23,7 +23,7 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
         uint32_t elem = k%Xsh.p();
 
         uint32_t xidx = XTile.data(row, slice, elem, tileP);
-        if (kPMultipleOfTileP || tileP + elem < XTile.P) {
+        if (kPMultipleOfTileP || (tileP + elem < XTile.P && slice < XTile.cols/XTile.P)) {
           ldGlobalVec(XTile.data(xidx), regs, VecTLen);  
         } else {
           //TODO: Remaining less than VecTLen elems
