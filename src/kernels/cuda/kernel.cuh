@@ -17,12 +17,12 @@
 #include <type_traits>
 #include <typeinfo>
 
-CUDA_DEVICE uint32_t getTileK(uint QByTileQ) {
-  return blockIdx.x/QByTileQ;
+CUDA_DEVICE uint32_t getTileK(uint bid_x, uint QByTileQ) {
+  return bid_x/QByTileQ;
 }
 
-CUDA_DEVICE uint32_t getTileQ(uint QByTileQ) {
-  return blockIdx.x%QByTileQ;
+CUDA_DEVICE uint32_t getTileQ(uint bid_x, uint QByTileQ) {
+  return bid_x%QByTileQ;
 }
 
 template<uint kFactorShapeSame, uint kTileK, uint kP, typename KernelParams> 
@@ -139,20 +139,23 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   
   const uint ShTileK   = XshSlices*TileP;
 
-  //TODO: Make this Coord2D
-  const uint tileQ = getTileQ(QByTileQ);
-  const uint tileK = getTileK(QByTileQ);
-  
+  const uint bid_x = blockIdx.x;
+  const uint bid_y = blockIdx.y;
   const uint tid  = threadIdx.x;
+
+  //TODO: Make this Coord2D
+  const uint tileQ = getTileQ(bid_x, QByTileQ);
+  const uint tileK = getTileK(bid_x, QByTileQ);
+  
   //TODO: RegM != TileM is only supported for max optimization level 
-  const uint MThreads  = (OptLevel < 3)? NumThreads : (TileQ/RegQ * QThreads);
+  const uint MThreads  = (OptLevel < 3) ? NumThreads : (TileQ/RegQ * QThreads);
   const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
   const uint yK   = ((tid % MThreads) % QThreads) * RegK;
   const uint yM   = (OptLevel < 3 || MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
 
   const YElem yElem(yM, yQ, yK);
 
-  const uint tileM = blockIdx.y * TileM;
+  const uint tileM = bid_y * TileM;
 
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
