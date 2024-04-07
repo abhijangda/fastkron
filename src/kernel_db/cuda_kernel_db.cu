@@ -76,7 +76,6 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                                   kernelInfo.getTileF(problem), 
                                   kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
-
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);

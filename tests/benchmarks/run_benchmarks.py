@@ -193,9 +193,9 @@ def run_tt(device, mode):
   device = device.lower()
   M = 1024 if device == "cuda" else 256
   M2 = 320 if device == "cuda" else 128
-  cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
-           Shape(M, 3, 64, 64), Shape(M2, 3, 128, 128)]
-
+  # cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
+  #          Shape(M, 3, 64, 64), Shape(M2, 3, 128, 128)]
+  cases = []
   M = 16
   cases += [Shape(M, 8, 8, 8),
            Shape(M, 6, 16, 16),

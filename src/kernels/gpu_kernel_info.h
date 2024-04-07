@@ -38,7 +38,7 @@ struct GPUKernel : public KernelInfo {
   dim3 grid(KMMProblem problem) {
     Matrix tileX_ = getTileX(problem);
     Factor tileF_ = getTileF(problem);
-    if (true || opX == fastKronOp_N) {
+    if (opX == fastKronOp_N) {
       return dim3(DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
                   DIVUP(problem.m(), tileX_.m()),
                   1);
@@ -47,6 +47,17 @@ struct GPUKernel : public KernelInfo {
                   DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
                   1);
     }
+  }
+
+  virtual bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
+    if (KernelInfo::canCompute(problem, p2p, exactFuse)) {
+      dim3 g = grid(problem);
+      if (g.y >= 65536 || g.z >= 65536) {
+        return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   uint32_t numBlocks(KMMProblem problem) {

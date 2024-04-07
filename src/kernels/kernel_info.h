@@ -40,7 +40,7 @@ struct KernelInfo {
              RegM(RegM), RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
              opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
-  bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
+  virtual bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
     using Opts = KernelOptimizations::Optimization;
 
     bool ret = problem.opFs() == opF && problem.opX() == opX && 

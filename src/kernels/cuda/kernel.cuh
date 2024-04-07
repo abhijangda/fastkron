@@ -139,8 +139,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   
   const uint ShTileK   = XshSlices*TileP;
 
-  const uint bid_x = blockIdx.x;
-  const uint bid_y = blockIdx.y;
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : blockIdx.y;
+  const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
   const uint tid  = threadIdx.x;
 
   //TODO: Make this Coord2D
