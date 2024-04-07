@@ -81,7 +81,8 @@ class FastKronEval:
   def __init__(self, backend, mode):
     self.backend = backend
     self.tuningmode = mode
-
+    self.built = False
+  
   def setup_cmake(self):
     d = os.getcwd()
     if os.path.exists('build/'):
@@ -109,7 +110,7 @@ class FastKronEval:
     run_command(f"cd build && make benchmark_{self.backend} -j")
 
   def run_fastkron(self, shape, GM, GK, LocalKrons, opX, opF):
-    kron = f"cd build && {'TUNE=0' if self.tuningmode=='NoTuning' else ''}./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w 20 -t float --tune --opx {opX} --opf {opF}"
+    kron = f"cd build && {'TUNE=0' if self.tuningmode=='NoTune' else ''} ./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w 20 -t float --tune --opx {opX} --opf {opF}"
     if GM * GK != 1:
       kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
     kron += " --backend " + self.backend
@@ -131,9 +132,12 @@ class FastKronEval:
       return (shape, GM, GK, wofuse, fused)
 
   def run_single_gpu(self, shape, opX, opF):
-    self.gen_kernels(shape, opX, opF, False)
-    self.setup_cmake()
-    self.build_kron()
+    if self.built == False:
+      self.gen_kernels(shape, opX, opF, False)
+      self.setup_cmake()
+      self.build_kron()
+      if self.tuningmode == 'FastTune' or self.tuningmode == 'NoTune':
+        self.built = True
     return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
 def run_nn(device, mode):
@@ -163,7 +167,7 @@ def run_nn(device, mode):
     gp = GPyTorchEval(device).run_single_gpu(shape)
     print(" & ".join((str(p) for p in (fk + gp))))
 
-def run_nt(device):
+def run_nt(device, mode):
   device = device.lower()
   M = 1024 if device == "cuda" else 256
   M2 = 320 if device == "cuda" else 128
@@ -178,11 +182,14 @@ def run_nt(device):
           #  Shape(M, 3, 128, 128)
            ]
 
+  fkeval = FastKronEval(device, mode)
+  fkeval.setup_cmake()
+
   for shape in cases:
-    fk = FastKronEval(device).run_single_gpu(shape,"N", "T")
+    fk = fkeval.run_single_gpu(shape,"N", "T")
     print(" & ".join((str(p) for p in (fk))))
   
-def run_tt(device):
+def run_tt(device, mode):
   device = device.lower()
   M = 1024 if device == "cuda" else 256
   M2 = 320 if device == "cuda" else 128
@@ -197,8 +204,11 @@ def run_tt(device):
           #  Shape(M, 3, 128, 128)
            ]
 
+  fkeval = FastKronEval(device, mode)
+  fkeval.setup_cmake()
+
   for shape in cases:
-    fk = FastKronEval(device).run_single_gpu(shape,"T", "T")
+    fk = fkeval.run_single_gpu(shape,"T", "T")
     print(" & ".join((str(p) for p in (fk))))
 
 def multi_gpu(scaling):
@@ -227,17 +237,17 @@ def multi_gpu(scaling):
 
 print("------- Single GPU NN-------")
 print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-run_nn("cuda", tuningmode)
+#run_nn("cuda", tuningmode)
+
+print("------- Single GPU NT-------")
+print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
+# run_nt("cuda", tuningmode)
+
+print("------- Single GPU TT-------")
+print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
+run_tt("cuda", tuningmode)
 
 if False:
-  print("------- Single GPU NT-------")
-  print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-  run_nt()
-
-  print("------- Single GPU TT-------")
-  print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-  run_tt()
-
   print("------- Multi GPU Weak Scaling --------")
   print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
   multi_gpu("weak")
