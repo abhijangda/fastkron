@@ -6,6 +6,7 @@ import math
 from functools import reduce
 import time
 import torch
+import sys
 
 def run_command(command):
   (s, o) = subprocess.getstatusoutput(command)
@@ -13,6 +14,10 @@ def run_command(command):
     print (f"Running {command}\n", o)
     assert False
   return o
+
+TuningModes = ['FullTune', 'FastTune', 'NoTune']
+tuningmode = sys.argv[1]
+assert tuningmode in TuningModes
 
 class Shape:
   def __init__(self, m, n, p, q):
@@ -73,8 +78,9 @@ class GPyTorchEval:
     return (flops/1e9,)
   
 class FastKronEval:
-  def __init__(self, backend):
+  def __init__(self, backend, mode):
     self.backend = backend
+    self.tuningmode = mode
 
   def setup_cmake(self):
     d = os.getcwd()
@@ -83,24 +89,27 @@ class FastKronEval:
     os.mkdir('build/')
     os.chdir('build/')
     if self.backend == "cuda":
-      backend_flags = '-DNVCC_GENCODE_FLAGS="-gencode arch=compute_80,code=sm_80" -DENABLE_CUDA=ON'
+      backend_flags = '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3" -DCMAKE_CUDA_ARCHITECTURES="80" -DENABLE_CUDA=ON'
     elif self.backend == "x86":
       backend_flags = "-DENABLE_X86=ON"
     run_command('cmake .. ' + backend_flags)
     os.chdir(d)
 
   def gen_kernels(self, shape, opX, opF, distKernels):
-    run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
-                str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
-                " -opX " + opX + " -opF " + opF + \
-                (" -dist-kernels " if distKernels else "") + \
-                " -backend " + self.backend)
+    if self.tuningmode == 'FullTune':
+      run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
+                  str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
+                  " -opX " + opX + " -opF " + opF + \
+                  (" -dist-kernels " if distKernels else "") + \
+                  " -backend " + self.backend)
+    elif self.tuningmode == 'FastTune' or self.tuningmode == 'NoTune':
+      run_command("cd build/ && make gen-single-gpu-kernels")
 
   def build_kron(self):
-    run_command("cd build && make benchmark -j")
+    run_command(f"cd build && make benchmark_{self.backend} -j")
 
   def run_fastkron(self, shape, GM, GK, LocalKrons, opX, opF):
-    kron = f"cd build && ./tests/benchmarks/benchmark -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w 20 -t float --tune --opx {opX} --opf {opF}"
+    kron = f"cd build && {'TUNE=0' if self.tuningmode=='NoTuning' else ''}./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w 20 -t float --tune --opx {opX} --opf {opF}"
     if GM * GK != 1:
       kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
     kron += " --backend " + self.backend
@@ -127,7 +136,7 @@ class FastKronEval:
     self.build_kron()
     return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
-def run_nn(device):
+def run_nn(device, mode):
   device = device.lower()
   M = 1024 if device == "cuda" else 256
   M2 = 320 if device == "cuda" else 128
@@ -146,10 +155,11 @@ def run_nn(device):
           Shape(M, 4, 64, 64),
           #  Shape(M, 3, 128, 128)
           ]
-    
 
+  fkeval = FastKronEval(device, mode)
+  fkeval.setup_cmake()
   for shape in cases:
-    fk = FastKronEval(device).run_single_gpu(shape, "N", "N")
+    fk = fkeval.run_single_gpu(shape, "N", "N")
     gp = GPyTorchEval(device).run_single_gpu(shape)
     print(" & ".join((str(p) for p in (fk + gp))))
 
@@ -215,11 +225,11 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
       print(" & ".join((str(p) for p in r)))
 
-if False:
-  print("------- Single GPU NN-------")
-  print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-  run_nn("cuda")
+print("------- Single GPU NN-------")
+print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
+run_nn("cuda", tuningmode)
 
+if False:
   print("------- Single GPU NT-------")
   print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
   run_nt()

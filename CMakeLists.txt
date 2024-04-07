@@ -78,9 +78,17 @@ set(KERNEL_HEADER_FILES
     ${KERNELS}/params.h)
 
 if(ENABLE_CUDA)
-  include(${CUDA}/kron-kernels/kernels.cmake)
+  if (EXISTS ${CUDA}/kron-kernels/kernels.cmake) 
+    include(${CUDA}/kron-kernels/kernels.cmake)
+  endif()
+  if (EXISTS ${CUDA}/kron-kernels/kernel_decl.inc)
+    set(CUDA_HEADER_FILES ${CUDA}/kron-kernels/kernel_decl.inc)
+  else()
+    set(CUDA_HEADER_FILES)
+  endif()
+
   set(CUDA_HEADER_FILES 
-      ${CUDA}/kron-kernels/kernel_decl.inc
+      ${CUDA_HEADER_FILES}
       ${CUDA}/utils.cuh 
       ${CUDA}/shared-loads.cuh
       ${CUDA}/register-loads.cuh
