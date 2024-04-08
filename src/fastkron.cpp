@@ -118,17 +118,17 @@ fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint 
   return Autotuner(*handle).tune(KMMProblem(FastKronInt, M, N, Ps, Qs, opX, opFs));
 }
 
-fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, float* x[], float* kronMats[], float* result[],
-                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
+fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
+                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
                                  void* streams) {
-  return handle->distributedsgekmm(NumKronMats, x, kronMats, result, M, N, K, 
-                                   KronMatCols, KronMatRows, temp1, temp2, streams);
+  return handle->distributedsgekmm(NumKronMats, (float**)x, (float**)kronMats, (float**)result, M, N, K, 
+                                   KronMatCols, KronMatRows, (float**)temp1, (float**)temp2, streams);
 }
 
-fastKronError allocDistributedX(fastKronHandle handle, float* dX[], float* hX, uint M, uint K) {
+fastKronError allocDistributedX(fastKronHandle handle, void* dX[], void* hX, uint M, uint K) {
   return handle->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
-fastKronError gatherDistributedY(fastKronHandle handle, float* dY[], float* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+fastKronError gatherDistributedY(fastKronHandle handle, void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   return handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 

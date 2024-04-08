@@ -298,9 +298,9 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
             T* temp1[], T* temp2[], cudaStream_t stream[]) {
   if (std::is_same<T, float>::value) {
     FastKronCHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
-                                  (float**)x, (float**)kpMats, (float**)result,
+                                  (void**)x, (void**)kpMats, (void**)result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, 
-                                  (float**)temp1, (float**)temp2, 
+                                  (void**)temp1, (void**)temp2, 
                                   (void*)stream));
   } else if (std::is_same<T, int>::value) {
     // CUDACHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
@@ -485,7 +485,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = nullptr;}
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
-    FastKronCHECK(allocDistributedX(handle, dX, hX, M, K));
+    FastKronCHECK(allocDistributedX(handle, (void**)dX, (void**)hX, M, K));
   } else {
     FastKronCHECK(backendMalloc(backend, (void**)&dX[0], sizeX));
   }
@@ -564,7 +564,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
     if (useDistributed) {
-      FastKronCHECK(gatherDistributedY(handle, dResult, dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+      FastKronCHECK(gatherDistributedY(handle, (void**)dResult, (void**)dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
     } else {
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
