@@ -8,13 +8,6 @@
 
 #pragma once
 
-enum ElementType {
-  Float,
-  Double,
-  Int,
-  Long
-};
-
 struct KernelInfo {
   void* invokerFunc;
   Factor f;
@@ -26,14 +19,14 @@ struct KernelInfo {
   uint RegK;
   uint RegQ;
   uint FusedFacs;
-  ElementType elemType;
+  FastKronType elemType;
   uint OptLevel;
   bool DistributeToGPUs;
   
   KernelInfo() {}
   KernelInfo(void* invokerFunc, Factor f, Factor tileF, Matrix tileX,
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegM, uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
+             uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
              fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
              FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
@@ -60,13 +53,14 @@ struct KernelInfo {
   }
 
   size_t totalTileSize() {
-    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
-    return (tileF.numel() + Xsh.numel())*sizeof(float);
+    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p(), elemType);
+    //TODO: make this tileF.size() + Xsh.size()
+    return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 
   Factor getTileF(KMMProblem problem) {
     Factor f_ = problem.f(0);
-    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
+    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()), elemType);
   }
 
   Matrix getTileX(KMMProblem problem) {
@@ -83,7 +77,7 @@ struct KernelInfo {
       slices = MIN(tileX.n()/f_.p(), kernelTileSlices);
       slices = MIN(problemTileSlices, slices);
     }
-    return Matrix(tileX.m(), slices * f_.p());
+    return Matrix(tileX.m(), slices * f_.p(), elemType);
   }
 
   size_t totalTileSize(KMMProblem problem) {
@@ -94,8 +88,10 @@ struct KernelInfo {
     //Pad Xsh to TileP
     //Pad Fsh to TileP x TileQ
     Matrix Xsh = Matrix(tileX_.m(), 
-                        (tileX_.n()/f_.p()) * tileF.p());
-    return (tileF.numel() + Xsh.numel())*sizeof(float);
+                        (tileX_.n()/f_.p()) * tileF.p(),
+                        elemType);
+    //TODO: make this tileF.size() + Xsh.size()
+    return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 
   bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt);
@@ -112,7 +108,7 @@ struct CPUKernel : public KernelInfo {
   CPUKernel() {}
   CPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
             uint FusedFacs, bool DistributeToGPUs, 
-            uint RegM, uint RegK, uint RegQ, ElementType elemType, uint OptLevel,
+            uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
             fastKronOp opX, fastKronOp opF) : 
             KernelInfo (invokerFunc, f, tileF, tileX, 
                         FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {} 

@@ -199,8 +199,8 @@ struct FusedParams {
   uint XglFusedSlices;
   
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
-    const Factor factorPower = std::reduce(problem.fs(), problem.fs() + Fused, Factor(1,1), [](Factor prev, Factor curr) {
-      return Factor(prev.p() * curr.p(), prev.q() * curr.q());
+    const Factor factorPower = std::reduce(problem.fs(), problem.fs() + Fused, Factor(1,1, FastKronTypeNone), [](Factor prev, Factor curr) {
+      return Factor(prev.p() * curr.p(), prev.q() * curr.q(), FastKronTypeNone);
     });
 
     XShFusedSlices = TileSizeColsA/factorPower.p();
@@ -246,8 +246,8 @@ struct DistributedParams {
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
     
-    const Factor factorPower = std::reduce(Factors, Factors + LocalKrons_, Factor(1,1), [](Factor prev, Factor curr) {
-      return Factor(prev.p() * curr.p(), prev.q() * curr.q());
+    const Factor factorPower = std::reduce(Factors, Factors + LocalKrons_, Factor(1,1, Factors[0].type()), [](Factor prev, Factor curr) {
+      return Factor(prev.p() * curr.p(), prev.q() * curr.q(), curr.type());
     });
     const uint KronColsPower = factorPower.q();
     const uint KronRowsPower = factorPower.p();

@@ -187,7 +187,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       int currFullN = currTempN * handle.cudaKernels.gpusInK_;
       Factor localFactors[KronMulBatchSize];
       for (int ii = 0; ii < KronMulBatchSize; ii++) {
-        localFactors[ii] = Factor(LocalKronRows[ii], LocalKronCols[ii]);
+        localFactors[ii] = Factor(LocalKronRows[ii], LocalKronCols[ii], FastKronFloat);
       }
       DistributedParams distParams(gr, gc, handle.cudaKernels.gpusInK_, 
                                    prevFullK, currFullN,
@@ -240,7 +240,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         fastKronError status;
-        KMMProblem subProblem(gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
+        KMMProblem subProblem(FastKronFloat, gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
                               fastKronOp_N, (void**)krons, fastKronOp_N, (void*)innerCurrResult, prevTempN, currTempN);
         status = handle.cudaKernels.invokeP2PStoreKernel(kernel.kernel, kernel.end, subProblem, distParams, 
                                                          EpilogueParams::create<float>(), KernelModeNormal);

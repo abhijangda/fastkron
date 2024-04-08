@@ -308,7 +308,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
   }
 
   bool canFuse = problem.n() > 1 && factorsSameShape && factorsSquare && factorsPowerOfTwoShape && factorsLessThanMaxP;
-
+  //TODO: Fix TT
   if (canFuse) {
     std::vector<KernelInfo*> kernels;
     findAllFusedKernels(problem, false, kernels);

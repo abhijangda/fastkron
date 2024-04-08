@@ -475,6 +475,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   size_t tempSize = 0;
   FastKronCHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
                            &resultSize, &tempSize));
+  resultSize = resultSize * sizeof(T);
+  tempSize = tempSize * sizeof(T);
   T* dX[gpus];
   T* dResult[gpus];
   T* dKpMats[gpus*NUM_KP_MATS];

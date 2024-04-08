@@ -9,27 +9,56 @@
 
 #pragma once
 
+enum FastKronType {
+  FastKronTypeNone,
+  FastKronFloat,
+  FastKronDouble,
+  FastKronInt,
+  FastKronHalf
+};
+
+static size_t sizeOfFastKronType(FastKronType t) {
+  switch (t) {
+    case FastKronTypeNone:
+      return 0;
+    case FastKronFloat:
+      return 4;
+    case FastKronDouble:
+      return 8;
+    case FastKronInt:
+      return 4;
+    case FastKronHalf:
+      return 2;
+  }
+  return 0;
+}
+
+
 class Matrix {
   uint32_t rows;
   uint32_t cols;
+  FastKronType eltype;
+
 public:
   void* ptr;
 
 public:
-  Matrix() : rows(0), cols(0), ptr(nullptr) {}
+  Matrix() : rows(0), cols(0), eltype(FastKronTypeNone), ptr(nullptr) {}
   
   CUDA_DEVICE_HOST
-  Matrix(uint32_t rows, uint32_t cols) : 
-    rows(rows), cols(cols), ptr(nullptr) {}
+  Matrix(uint32_t rows, uint32_t cols, FastKronType type) : 
+    rows(rows), cols(cols), eltype(type), ptr(nullptr) {}
 
   CUDA_DEVICE_HOST
-  Matrix(uint32_t rows, uint32_t cols, void* data) : 
-    rows(rows), cols(cols), ptr(data) {}
+  Matrix(uint32_t rows, uint32_t cols, FastKronType type, void* data) : 
+    rows(rows), cols(cols), eltype(type), ptr(data) {}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return rows;}
   CUDA_DEVICE_HOST
   uint32_t n() const {return cols;}
+  CUDA_DEVICE_HOST
+  FastKronType type() const {return eltype;}
   CUDA_DEVICE_HOST
   uint32_t numel() const {return rows * cols;}
 
@@ -173,11 +202,11 @@ class Factor : public Matrix {
 public:
   Factor() : Matrix() {}
   CUDA_DEVICE_HOST
-  Factor(uint32_t rows, uint32_t cols) :
-    Matrix(rows, cols) {}
+  Factor(uint32_t rows, uint32_t cols, FastKronType type) :
+    Matrix(rows, cols, type) {}
   CUDA_DEVICE_HOST
-  Factor(uint32_t rows, uint32_t cols, void* data) : 
-    Matrix(rows, cols, data) {}
+  Factor(uint32_t rows, uint32_t cols, FastKronType type, void* data) : 
+    Matrix(rows, cols, type, data) {}
 
   CUDA_DEVICE_HOST
   uint32_t p() const {return Matrix::m();}
@@ -197,11 +226,11 @@ class FactorArray : public StackArray<Factor, MaxSize> {
   FactorArray(StackArray<Factor, MaxSize> arr) : Base(arr) {}
 
 public:
-  FactorArray(uint32_t n, const uint32_t* ps, const uint32_t* qs, void* const* ptrs) : 
+  FactorArray(uint32_t n, const uint32_t* ps, const uint32_t* qs, FastKronType type, void* const* ptrs) : 
     Base(nullptr, n) {
     // assert (n < MaxSize);
     for (uint32_t i = 0; i < n; i++) {
-      Base::array[i] = Factor(ps[i], qs[i], ptrs ? ptrs[i] : nullptr);
+      Base::array[i] = Factor(ps[i], qs[i], type, ptrs ? ptrs[i] : nullptr);
     }
   }
 

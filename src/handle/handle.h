@@ -91,7 +91,7 @@ struct FastKronHandle {
   //uint maxFusedKernels(SlicedMulShape shape);
 
   fastKronError xgekmm(const KMMProblem problem, void* temp1, void* temp2, 
-                     EpilogueParams epilogueParams);
+                       EpilogueParams epilogueParams);
 
   fastKronError distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,

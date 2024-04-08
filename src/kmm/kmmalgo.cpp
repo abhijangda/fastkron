@@ -75,7 +75,7 @@ fastKronError executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
 
   Matrix result = problem.y();
   problem = KMMProblem(problem.x(), problem.opX(), problem.n(), problem.fs(),
-                       problem.opFs(), Matrix(problem.m(), problem.l(), firstIterOut));
+                       problem.opFs(), Matrix(problem.m(), problem.l(), problem.y().type(), firstIterOut));
   fastKronError err;
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     fastKronOp opX;

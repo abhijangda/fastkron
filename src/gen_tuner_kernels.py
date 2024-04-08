@@ -49,13 +49,13 @@ def vec_type(elem_type : str, len : int) -> str:
 
 def elem_type_to_fastkron_type(elem_type: str) -> str:
   if elem_type.lower() == "float":
-    return "FastKronType:FastKronFloat"
+    return "FastKronType::FastKronFloat"
   if elem_type.lower() == "int":
-    return "FastKronType:FastKronInt"
+    return "FastKronType::FastKronInt"
   if elem_type.lower() == "double":
-    return "FastKronType:FastKronDouble"
+    return "FastKronType::FastKronDouble"
   if elem_type.lower() == "float":
-    return "FastKronType:FastKronFloat"
+    return "FastKronType::FastKronFloat"
   assert false, f"{elem_type} not in FastKron"
 
 def factors(n):
@@ -131,7 +131,7 @@ class Kernel:
     return hash(repr(self))
 
   def constructorArgs(self):
-    return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {elem_type_to_fastkron_type(self.elemType)}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}, {elem_type_to_fastkron_type(self.elemType)}), Factor({self.tileP}, {self.tileQ}, {elem_type_to_fastkron_type(self.elemType)}), Matrix({self.tileM}, {self.shape.k}, {elem_type_to_fastkron_type(self.elemType)}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {elem_type_to_fastkron_type(self.elemType)}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
 class CPUKernel(Kernel):
   def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
