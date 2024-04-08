@@ -232,7 +232,7 @@ class GPUKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.threads()}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}_{self.elemType}_{self.aalign}_{self.kalign}"
+    return f"{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}_{self.elemType}_{self.aalign}_{self.kalign}"
 
   def kernelname(self):
     return f"{self.gpu_type}_{super().kernelname()}"
@@ -275,7 +275,7 @@ class GPUKernel(Kernel):
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
-           self.tileM * self.rk * self.rq <= 64 and self.opt_level == 3
+           self.tileM * self.rk * self.rq <= 64# and self.opt_level == 3
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
