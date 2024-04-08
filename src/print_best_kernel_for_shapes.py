@@ -9,11 +9,11 @@ def run_command(command):
     print (f"Running {command}\n", o)
   return o
 
-def tune(ms, n, p, q, opX, opF, backend):
+def tune(ms, n, p, q, opX, opF, fuse, backend, elemtype):
   # run_command(f'python gen_tuner_kernels.py -backend {backend} -same-factors {n} {p},{q} -opX {opX} -opF {opF}')
   # run_command(f'cd ../build/ && make benchmark_{backend} -j')
-  for m in ms:
-    o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t float --tune --backend {backend} --fuse')
+  # for m in ms:
+    o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t {elemtype} --tune --backend {backend} {"--fuse" if fuse else ""}')
     o = o[o.find('Minimum Time'):]
     kernels = re.findall(r'\d+\s(.+)\sruns\sfor', o)
     kernels = set(kernels)
@@ -50,12 +50,6 @@ if __name__ == "__main__":
         print(f"Invalid case: {case}")
         print(e)
         sys.exit(0)
-  else:
-    for n in range(2, 4):
-      for p,q in zip([32,64,128], [32,64,128]):
-          parsed_cases += [(n, p, q)]
-    print(len(parsed_cases), parsed_cases)
-
   if args.backend is None or args.backend.lower() not in ['cuda', 'x86', 'hip', 'arm']:
     print(f"Invalid backend: {args.backend}")
     sys.exit(0)
@@ -64,9 +58,18 @@ if __name__ == "__main__":
   assert args.opX in ["N", "T"]
   assert args.opF in ["N", "T"]
 
-  for case in parsed_cases:
-    ms = list(args.m[0])
-    if case[0] == 1024:
-      ms = [1,2,4,8,16, 32, 64, 128, 256,512,1024,2048,4096]
-    # print (m, case)
-    tune(ms, case[0], case[1], case[2], args.opX, args.opF, args.backend)
+  # run_command(f'python ./gen_tuner_kernels.py -backend {args.backend} -same-factors 3 128,128 -same-factors 3 64,64 -same-factors 4 32,32 -same-factors 5 16,16 -same-factors 6 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N -opF N -types {"double"}')
+  # run_command(f'cd ../build/ && make benchmark_{args.backend} -j')
+
+  for p in [2,4,8,16,32,64,128]:
+    for q in [2,4,8,16,32,64,128]:
+      if p != q:
+        continue
+      for n in range(2,20):
+        for m in [1,4,16,64,256,1024]:
+          if m*(p**n) > 2*1024*1024*1024 or m*(q**n) > 2*1024*1024*1024 or p**n < 64 or q**n < 64:
+            continue
+          # if p <= 32 and q <= 32:
+          #   continue
+          tune(m, n, p, q, args.opX, args.opF, False, args.backend, "double")
+          tune(m, n, p, q, args.opX, args.opF, True, args.backend, "double")
