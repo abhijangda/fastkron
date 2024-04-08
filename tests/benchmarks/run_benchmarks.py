@@ -96,7 +96,7 @@ class FastKronEval:
     os.mkdir('build/')
     os.chdir('build/')
     if self.backend == "cuda":
-      backend_flags = '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3" -DCMAKE_CUDA_ARCHITECTURES="80" -DENABLE_CUDA=ON'
+      backend_flags = '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3" -DCMAKE_CUDA_ARCHITECTURES="70;80" -DENABLE_CUDA=ON'
     elif self.backend == "x86":
       backend_flags = "-DENABLE_X86=ON"
     run_command('cmake .. ' + backend_flags)
