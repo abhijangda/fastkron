@@ -48,6 +48,7 @@ ElemT epilogue(const EpilogueParams& params, uint32_t idx, ElemT yVal) {
 
 //Store PTX instructions for each vector type
 template<typename YReg>
+CUDA_DEVICE
 void stVecYReg(float* addr, YReg& Yr, int numValues, int row, int i, int j) {
   switch (numValues) {
     case 1:
