@@ -74,15 +74,15 @@ fastKronError executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
   }
 
   Matrix result = problem.y();
-  problem = KMMProblem(problem.x(), problem.opX(), problem.n(), problem.fs(),
-                       problem.opFs(), Matrix(problem.m(), problem.l(), problem.y().type(), firstIterOut));
+  problem = KMMProblem(problem.type(), problem.x(), problem.opX(), problem.n(), problem.fs(),
+                       problem.opFs(), Matrix(problem.m(), problem.l(), firstIterOut));
   fastKronError err;
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     fastKronOp opX;
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
     //First iteration write output with no op
-    if (i < nextF) problem = KMMProblem(problem.x(), problem.opX(), problem.n(), 
+    if (i < nextF) problem = KMMProblem(problem.type(), problem.x(), problem.opX(), problem.n(), 
                                         problem.fs(), problem.opFs(), result);
     err = func(problem.rsub(i, nextF), i, tmps, result);
     if (err != fastKronSuccess) break;
@@ -102,7 +102,7 @@ fastKronError reverseExecuteGeKMM(KMMProblem problem, void* tmps[2], Matrix resu
   for (int i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
     if (i - (problem.n() - 1) < nextF) 
-      problem = KMMProblem(problem.x(), problem.opX(), problem.n(), 
+      problem = KMMProblem(problem.type(), problem.x(), problem.opX(), problem.n(), 
                            problem.fs(), problem.opFs(), result);
     err = func(problem.rsub(i, nextF), i, tmps, result);
     if (err != fastKronSuccess) break;

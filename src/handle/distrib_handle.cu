@@ -187,7 +187,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       int currFullN = currTempN * handle.cudaKernels.gpusInK_;
       Factor localFactors[KronMulBatchSize];
       for (int ii = 0; ii < KronMulBatchSize; ii++) {
-        localFactors[ii] = Factor(LocalKronRows[ii], LocalKronCols[ii], FastKronFloat);
+        localFactors[ii] = Factor(LocalKronRows[ii], LocalKronCols[ii]);
       }
       DistributedParams distParams(gr, gc, handle.cudaKernels.gpusInK_, 
                                    prevFullK, currFullN,

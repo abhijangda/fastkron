@@ -132,9 +132,9 @@ fastKronError Autotuner::tune(KMMProblem problem) {
   if (devicesPerProc <= 1) {
     //Use temporary as input/output matrix
     //TODO: fix this
-    auto tmpProblem = KMMProblem(Matrix(problem.x().m(), problem.x().n(), problem.x().type(), temp1[0].data()), 
+    auto tmpProblem = KMMProblem(problem.type(), Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
-                                 Matrix(problem.y().m(), problem.y().n(), problem.y().type(), temp2[0].data()));
+                                 Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
     tune(tmpProblem, false, DistributedParams());
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
@@ -180,9 +180,9 @@ fastKronError Autotuner::tune(KMMProblem problem) {
     float seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
 
-    auto tmpProblem = KMMProblem(Matrix(gpuM, gpuK, problem.x().type(), temp1[0].data()), 
+    auto tmpProblem = KMMProblem(problem.type(), Matrix(gpuM, gpuK,  temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
-                                 Matrix(gpuM, problem.y().n()/fastKron.cudaKernels.gpusInK_, problem.y().type(), temp2[0].data()));
+                                 Matrix(gpuM, problem.y().n()/fastKron.cudaKernels.gpusInK_, temp2[0].data()));
 
     for (int i = problem.n() - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);

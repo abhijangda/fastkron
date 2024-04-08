@@ -22,20 +22,21 @@ private:
   Matrix out; 
   fastKronOp opIn;
   fastKronOp opFactors; 
+  FastKronType eltype;
 
 public:
-  KMMProblemT(Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
-    in(x), opIn(opX), factors(fs), opFactors(opFs), out(y) {}
+  KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
+    eltype(eltype), in(x), opIn(opX), factors(fs), opFactors(opFs), out(y) {}
 
-  KMMProblemT(Matrix x, fastKronOp opX, int n, const Factor* fs, fastKronOp opFs, Matrix y) :
-    in(x), opIn(opX), factors(fs, n), opFactors(opFs), out(y) {}
+  KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, int n, const Factor* fs, fastKronOp opFs, Matrix y) :
+    eltype(eltype), in(x), opIn(opX), factors(fs, n), opFactors(opFs), out(y) {}
 
-  KMMProblemT(Matrix x, fastKronOp opX, std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
-    KMMProblemT(x, opX, Factors(fs), opFs, y) {}
+  KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
+    KMMProblemT(eltype, x, opX, Factors(fs), opFs, y) {}
 
   KMMProblemT(FastKronType eltype, const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
               void* xptr, fastKronOp opX, void* const* fsptr, fastKronOp opFs, void* yptr, const int k, const int l) : 
-             in(m, k, eltype, xptr), out(m, l, eltype, yptr), opIn(opX), opFactors(opFs), factors(n, ps, qs, eltype, fsptr) {}
+             eltype(eltype), in(m, k, xptr), out(m, l, yptr), opIn(opX), opFactors(opFs), factors(n, ps, qs, fsptr) {}
   
   KMMProblemT(FastKronType eltype, const uint m, const int n, const uint *ps, const uint *qs,
              void* x, fastKronOp opX, void* const* fs, fastKronOp opFs, void* y) :
@@ -61,9 +62,9 @@ public:
     assert (subn <= n());
     assert (rstart - (subn - 1) >= 0);
 
-    return KMMProblemT(Matrix(x().m(), subk, x().type(), x().data()), opX(),
-                      factors.sub(rstart - (subn - 1), subn), opFs(),
-                      Matrix(y().m(), subl, y().type(), y().data()));
+    return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
+                       factors.sub(rstart - (subn - 1), subn), opFs(),
+                       Matrix(y().m(), subl, y().data()));
   }
 
   KMMProblemT sub(int start, int subn) const {
@@ -80,9 +81,9 @@ public:
     assert (subn <= n());
     assert (start + (subn - 1) <= n());
 
-    return KMMProblemT(Matrix(x().m(), subk, x().type(), x().data()), opX(),
+    return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
                        factors.sub(start, subn), opFs(),
-                       Matrix(y().m(), subl, y().type(), y().data()));
+                       Matrix(y().m(), subl, y().data()));
   }
 
   template<uint32_t OtherMaxFactors>
@@ -114,8 +115,8 @@ public:
       y1 = temp1;
     }
 
-    in = Matrix(x().m(), x().n(), x().type(), x1);
-    out = Matrix(y().m(), y().n(), y().type(), y1);
+    in = Matrix(x().m(), x().n(), x1);
+    out = Matrix(y().m(), y().n(), y1);
   }
 
   CUDA_DEVICE_HOST
@@ -140,7 +141,7 @@ public:
   CUDA_DEVICE_HOST
   uint32_t n() const {return factors.len();}
   CUDA_DEVICE_HOST
-  uint32_t type() const {return x().type();}
+  FastKronType type() const {return eltype;}
   
   bool operator==(const KMMProblemT& other) const {
     bool eq = x() == other.x() && opX() == other.opX()   &&

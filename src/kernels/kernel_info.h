@@ -53,14 +53,14 @@ struct KernelInfo {
   }
 
   size_t totalTileSize() {
-    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p(), elemType);
+    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
     //TODO: make this tileF.size() + Xsh.size()
     return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 
   Factor getTileF(KMMProblem problem) {
     Factor f_ = problem.f(0);
-    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()), elemType);
+    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
   }
 
   Matrix getTileX(KMMProblem problem) {
@@ -77,7 +77,7 @@ struct KernelInfo {
       slices = MIN(tileX.n()/f_.p(), kernelTileSlices);
       slices = MIN(problemTileSlices, slices);
     }
-    return Matrix(tileX.m(), slices * f_.p(), elemType);
+    return Matrix(tileX.m(), slices * f_.p());
   }
 
   size_t totalTileSize(KMMProblem problem) {
@@ -88,9 +88,7 @@ struct KernelInfo {
     //Pad Xsh to TileP
     //Pad Fsh to TileP x TileQ
     Matrix Xsh = Matrix(tileX_.m(), 
-                        (tileX_.n()/f_.p()) * tileF.p(),
-                        elemType);
-    //TODO: make this tileF.size() + Xsh.size()
+                        (tileX_.n()/f_.p()) * tileF.p());
     return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 

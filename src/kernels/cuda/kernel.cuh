@@ -181,7 +181,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                 (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-      const Factor F(P, Q, FastKronTypeNone, params.problem.f(fac).data());
+      const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
       directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, decltype(Fsh)>

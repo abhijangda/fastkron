@@ -191,8 +191,8 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result
     gpuM = problem.m();
   }
 
-  result = Matrix(gpuM, resultCols, FastKronTypeNone);
-  temp = Matrix(gpuM, tempCols, FastKronTypeNone);
+  result = Matrix(gpuM, resultCols);
+  temp = Matrix(gpuM, tempCols);
   return e;
 }
 
