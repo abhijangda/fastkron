@@ -175,11 +175,11 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
                                            bool distP2PStore,
                                            int warmups, int runs,
                                            float& runtime) {
-  // if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0) {
-  //   //skip probably slow kernels
-  //   runtime = std::numeric_limits<float>::max();
-  //   return fastKronSuccess;
-  // }
+  if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0) {
+    //skip probably slow kernels
+    runtime = std::numeric_limits<float>::max();
+    return fastKronSuccess;
+  }
 
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
