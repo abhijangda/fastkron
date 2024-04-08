@@ -510,8 +510,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   if (tune) {
     if (std::is_same<T, float>::value)
       FastKronCHECK(sgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
-    if (std::is_same<T, int>::value)
+    else if (std::is_same<T, int>::value)
       FastKronCHECK(igekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
+    else if (std::is_same<T, double>::value)
+      FastKronCHECK(dgekmmTune(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N, opx, opfs));
+    else
+      abort();
   }
   printf("resultSize %lu tempSize %lu\n", resultSize, tempSize);
   for (int g = 0; g < gpus; g++) {

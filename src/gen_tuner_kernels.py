@@ -39,6 +39,8 @@ def element_size(elem_type : str) -> int:
     return 4
   if elem_type.lower() == "int":
     return 4
+  if elem_type.lower() == "double":
+    return 8
 
 def vec_type(elem_type : str, len : int) -> str:
   elem_type = elem_type.lower()
@@ -46,6 +48,12 @@ def vec_type(elem_type : str, len : int) -> str:
   if len == 1:
     return elem_type
   return f"{elem_type}{len}"
+
+def vector_lens(elem_type: str) -> list:
+  if element_size(elem_type) == 4:
+    return [1, 2, 4]
+  elif element_size(elem_type) == 8:
+    return [1, 2]
 
 def elem_type_to_fastkron_type(elem_type: str) -> str:
   if elem_type.lower() == "float":
@@ -267,7 +275,7 @@ class GPUKernel(Kernel):
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
-           self.tileM * self.rk * self.rq <= 64
+           self.tileM * self.rk * self.rq <= 64 and self.opt_level == 3
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
@@ -280,14 +288,14 @@ def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
-def xalignment(m, cols, op):
+def xalignment(m, cols, op, elem_type):
   if op == "T":
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return max([a for a in [1, 2, 4] if cols % a == 0])
+    return max([a for a in vector_lens(elem_type) if cols % a == 0])
 
-def falignment(cols):
-  return max([a for a in [1, 2, 4, 8] if cols % a == 0])
+def falignment(cols, elem_type):
+  return max([a for a in vector_lens(elem_type) if cols % a == 0])
 
 def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend):
   if not os.path.exists(all_kernels_dir):
@@ -327,8 +335,8 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
                         for tP in TilePs:
                           fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
                           for numFusedKerns in fusedCases:
-                            aalign = xalignment(tM, tK, opx)
-                            kronalign = falignment(tQ)
+                            aalign = xalignment(tM, tK, opx, elem_type)
+                            kronalign = falignment(tQ, elem_type)
                             shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
                             if shape not in configs:
                               configs[shape] = []

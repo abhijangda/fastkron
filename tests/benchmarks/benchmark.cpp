@@ -245,8 +245,8 @@ int main(int argc, char* argv[]) {
     status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else if (strcmp(type, "int") == 0)
     status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
-  // else if (strcmp(type, "double") == 0)
-  //   status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, false);
+  else if (strcmp(type, "double") == 0)
+    status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else
     printf("type not supported %s\n", type);
 

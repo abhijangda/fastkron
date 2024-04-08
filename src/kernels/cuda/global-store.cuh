@@ -124,6 +124,45 @@ void stVecYReg(int* addr, YReg& Yr, int numValues, int row, int i, int j) {
   }
 }
 
+template<typename YReg>
+CUDA_DEVICE
+void stVecYReg(double* addr, YReg& Yr, int numValues, int row, int i, int j) {
+  switch (numValues) {
+    case 1:
+    #if defined(__NVCC__) || defined(__CUDACC__)
+      asm volatile ("st.global.f64 [%0], {%1};" ::
+                    "l"(addr), 
+                    "d"(Yr.at(row, i, j)));
+    #elif defined(__HIPCC__)
+      *addr = Yr.at(row, i, j);
+    #endif
+      break;
+    case 2:
+    #if defined(__NVCC__) || defined(__CUDACC__)
+      asm volatile ("st.global.v2.f64 [%0], {%1, %2};" ::
+                    "l"(addr),
+                    "d"(Yr.at(row, i+0, j)), "d"(Yr.at(row, i+1, j)));
+    #elif defined(__HIPCC__)
+      *addr = Yr.at(row, i+0, j);
+      *(addr + 1) = Yr.at(row, i+1, j);
+    #endif
+      break;
+    case 4:
+    // #if defined(__NVCC__) || defined(__CUDACC__)
+    //   asm volatile ("st.global.v4.f64 [%0], {%1, %2, %3, %4};" ::
+    //                 "l"(addr), 
+    //                 "d"(Yr.at(row, i  , j)), "d"(Yr.at(row, i+1, j)), 
+    //                 "d"(Yr.at(row, i+2, j)), "d"(Yr.at(row, i+3, j)));
+    // #elif defined(__HIPCC__)
+    //   *addr = Yr.at(row, i+0, j);
+    //   *(addr + 1) = Yr.at(row, i+1, j);
+    //   *(addr + 2) = Yr.at(row, i+2, j);
+    //   *(addr + 3) = Yr.at(row, i+3, j);
+    // #endif
+      break;
+  }
+}
+
 template<uint32_t FusedMuls, uint32_t XAlign, uint32_t RegK>
 CUDA_DEVICE
 constexpr uint32_t storeVectorLen() {
