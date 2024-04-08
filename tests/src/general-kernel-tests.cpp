@@ -54,3 +54,5 @@ FUSION_TEST(M_, 2, 4, 63, 31, float);
 FUSION_TEST(M_, 2, 3, 297, 127, float);
 FUSION_TEST(M_, 2, 3, 127, 297, float);
 FUSION_TEST(M_, 2, 2, 936, 505, float);
+
+FUSION_TEST(M_, 2, 3, 128, 128, int);
