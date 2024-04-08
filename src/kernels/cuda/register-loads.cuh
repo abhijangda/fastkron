@@ -71,6 +71,42 @@ void ldGlobalVec(const float* ptr, float* regs, uint len) {
   }
 }
 
+CUDA_DEVICE
+void ldGlobalVec(const int* ptr, int* regs, uint len) {
+  switch(len) {
+    case 1:
+    #if defined(__NVCC__) || defined(__CUDACC__)
+      asm volatile ("ld.ca.global.s32 {%0}, [%1];" :
+                    "=r"(regs[0]) : "l"(ptr));
+    #elif defined(__HIPCC__)
+      regs[0] = *ptr;
+    #endif
+      break;
+    case 2:
+    #if defined(__NVCC__) || defined(__CUDACC__)
+      asm volatile ("ld.ca.global.v2.s32 {%0, %1}, [%2];" :
+                    "=r"(regs[0]), "=r"(regs[1]) : "l"(ptr));
+    #elif defined(__HIPCC__)
+    {
+      int2 f2 = *(int2*)ptr; 
+      regs[0] = f2.x; regs[1] = f2.y;
+    }
+    #endif
+      break;
+    case 4:
+    #if defined(__NVCC__) || defined(__CUDACC__)
+      asm volatile ("ld.ca.global.v4.s32 {%0, %1, %2, %3}, [%4];" :
+                    "=r"(regs[0]), "=r"(regs[1]), "=r"(regs[2]), "=r"(regs[3]) : "l"(ptr));
+    #elif defined(__HIPCC__)
+    {
+      int4 f4 = *(int4*)ptr; 
+      regs[0] = f4.x; regs[1] = f4.y; regs[2] = f4.z; regs[3] = f4.w;
+    }
+    #endif
+      break;
+  }
+}
+
 //int loads
 CUDA_DEVICE
 void ldGlobalVec(const int* ptr, int4& vec) {

@@ -92,6 +92,7 @@ fastKronError Autotuner::tune(KMMProblem problem) {
   float minTime = 0;
   Matrix result, temp;
   fastKron.gekmmResultTemp(problem, result, temp);
+
   uint devicesPerProc = 1;
 
   switch (fastKron.backend) {
@@ -115,14 +116,14 @@ fastKronError Autotuner::tune(KMMProblem problem) {
     //TODO: Init temp to 1
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
-    kernelDb->procMalloc(p, temp1[p]);
-    kernelDb->procMalloc(p, temp2[p]);
+    kernelDb->procMalloc(p, problem.type(), temp1[p]);
+    kernelDb->procMalloc(p, problem.type(), temp2[p]);
     kernelDb->procMemset(p, temp1[p], 1.0f);
     kernelDb->procMemset(p, temp2[p], 1.0f);
 
     for (int f = 0; f < problem.n(); f++) {
       Fs[p][f] = problem.f(f);
-      kernelDb->procMalloc(p, Fs[p][f]);
+      kernelDb->procMalloc(p, problem.type(), Fs[p][f]);
       kernelDb->procMemset(p, Fs[p][f], 1.0f);
     }
   }

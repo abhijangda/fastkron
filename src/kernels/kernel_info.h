@@ -36,7 +36,8 @@ struct KernelInfo {
   virtual bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
     using Opts = KernelOptimizations::Optimization;
 
-    bool ret = problem.opFs() == opF && problem.opX() == opX && 
+    bool ret = problem.type() == elemType &&
+               problem.opFs() == opF && problem.opX() == opX && 
                DistributeToGPUs == p2p && ((exactFuse && problem.n() == FusedFacs) || (!exactFuse && problem.n() >= FusedFacs)) &&
                tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
 
@@ -96,7 +97,7 @@ struct KernelInfo {
 
   virtual std::string str() const {
     std::stringstream info;
-    info << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
+    info << strOfFastKronType(elemType) << "_" << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
             RegM << "x" << RegK << "x" << RegQ << "_" << opX << opF << "_" << DistributeToGPUs << "_" << OptLevel;
     return info.str();
   }

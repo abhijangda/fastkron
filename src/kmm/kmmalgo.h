@@ -175,7 +175,7 @@ public:
         if (i < problem.n() - 1) out << "(x)";
       }
     out << ")";
-    out << "_" << problem.opX() << problem.opFs();
+    out << "_" << problem.opX() << problem.opFs() << "_" << strOfFastKronType(problem.type());
     return out;
   }
 };

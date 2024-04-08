@@ -42,9 +42,9 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   return std::make_pair(bestKernel, minTime);
 }
 
-fastKronError KernelDatabase::procMalloc(uint32_t proc, Matrix& m) {
+fastKronError KernelDatabase::procMalloc(uint32_t proc, FastKronType type, Matrix& m) {
   void* ptr = nullptr;
-  fastKronError e = procMalloc(proc, m.numel() * sizeof(float), ptr);
+  fastKronError e = procMalloc(proc, m.numel() * sizeOfFastKronType(type), ptr);
 
   if (e == fastKronSuccess) {
     m.ptr = ptr;

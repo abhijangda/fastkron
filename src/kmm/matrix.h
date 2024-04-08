@@ -33,6 +33,21 @@ static size_t sizeOfFastKronType(FastKronType t) {
   return 0;
 }
 
+static std::string strOfFastKronType(FastKronType t) {
+  switch(t) {
+    case FastKronTypeNone:
+      return "NONE";
+    case FastKronFloat:
+      return "f";
+    case FastKronDouble:
+      return "d";
+    case FastKronInt:
+      return "i";
+    case FastKronHalf:
+      return "h";
+  }
+  return "INVALID";
+}
 
 class Matrix {
   uint32_t rows;

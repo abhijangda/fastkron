@@ -97,7 +97,7 @@ public:
     return nullptr;
   }
 
-  fastKronError procMalloc(uint32_t proc, Matrix& m);
+  fastKronError procMalloc(uint32_t proc, FastKronType type, Matrix& m);
   fastKronError procFree(uint32_t proc, Matrix m);
   
   bool findAllKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
