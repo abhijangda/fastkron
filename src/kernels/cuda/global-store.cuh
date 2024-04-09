@@ -164,10 +164,10 @@ void stVecYReg(double* addr, YReg& Yr, int numValues, int row, int i, int j) {
   }
 }
 
-template<uint32_t FusedMuls, uint32_t XAlign, uint32_t RegK>
+template<uint32_t kKMultipleOfTileK, uint32_t FusedMuls, uint32_t XAlign, uint32_t RegK>
 CUDA_DEVICE
 constexpr uint32_t storeVectorLen() {
-  constexpr uint len = (FusedMuls == 1) ? 
+  constexpr uint len = (kKMultipleOfTileK and FusedMuls == 1) ? 
                       MIN(XAlign, MIN(RegK, 4) & (8 - 1)) :
                       1;
   static_assert (len == 4 || len == 2 || len == 1);

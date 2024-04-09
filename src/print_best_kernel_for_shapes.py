@@ -65,11 +65,11 @@ if __name__ == "__main__":
     for q in [2,4,8,16,32,64,128]:
       if p != q:
         continue
-      for n in range(2,20):
+      for n in range(1,20):
         for m in [1,4,16,64,256,1024]:
-          if m*(p**n) > 1024*1024*1024 or m*(q**n) > 1024*1024*1024 or p**n < 64 or q**n < 64:
+          if m*(p**n) > 1024*1024*1024 or m*(q**n) > 1024*1024*1024: # or p**n < 64 or q**n < 64:
             continue
-          if p <= 32 and q <= 32:
-            continue
+          # if p <= 32 and q <= 32:
+          #   continue
           tune(m, n, p, q, args.opX, args.opF, False, args.backend, "double")
           tune(m, n, p, q, args.opX, args.opF, True, args.backend, "double")

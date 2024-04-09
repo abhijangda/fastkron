@@ -102,20 +102,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   static_assert(OptLevel == 3 || RegM == TileM,
                 "RegM can be different from TileM only for max optimization");
 
-  //Vector Load types based on alignments 
-  using XVecT = typename std::conditional<XAlignment == 1, ElemT, 
-                typename std::conditional<XAlignment == 2, Vec2T, 
-                                          Vec4T>::type>::type;
-
-  const bool LoadFullFactor = OptLevel == 3 && TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
-  using FVecT = typename std::conditional<LoadFullFactor , Vec4T,
-                typename std::conditional<FAlignment == 1, ElemT,
-                typename std::conditional<FAlignment == 2, Vec2T,
-                                          Vec4T>::type>::type>::type;
-
-  const Matrix X = params.problem.x();
-  const Matrix Y = params.problem.y();
-
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
@@ -123,6 +109,21 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kQLeTileQ         = KernelOptimizations::IsQLeTileQ        (OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
+
+  //Vector Load types based on alignments 
+  using XVecT = typename std::conditional<!kKMultipleOfTileK || XAlignment == 1, ElemT, 
+                typename std::conditional<XAlignment == 2, Vec2T, 
+                                          Vec4T>::type>::type;
+
+  const bool LoadFullFactor = kPMultipleOfTileP && kKMultipleOfTileK &&
+                              TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
+  using FVecT = typename std::conditional<LoadFullFactor , Vec4T,
+                typename std::conditional<FAlignment == 1, ElemT,
+                typename std::conditional<FAlignment == 2, Vec2T,
+                                          Vec4T>::type>::type>::type;
+
+  const Matrix X = params.problem.x();
+  const Matrix Y = params.problem.y();
 
   static_assert(!(kQLeTileQ && kQMultipleOfTileQ),
                 "Both QLeTileQ and QMultipleOfTileQ cannot be true at same time");
@@ -136,7 +137,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
-  
   const uint ShTileK   = XshSlices*TileP;
 
   const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : blockIdx.y;
@@ -146,7 +146,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(bid_x, QByTileQ);
   const uint tileK = getTileK(bid_x, QByTileQ);
-  
+
   //TODO: RegM != TileM is only supported for max optimization level 
   const uint MThreads  = (OptLevel < 3) ? NumThreads : (TileQ/RegQ * QThreads);
   const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
@@ -213,7 +213,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   #pragma unroll
   for (uint rm = 0; rm < yReg.m(); rm++) {
   if (rm + yElem.m() < XTile.m()) {
-    constexpr uint32_t StLen = storeVectorLen<FusedFacs, XAlignment, RegK>();
+    constexpr uint32_t StLen = storeVectorLen<kKMultipleOfTileK, FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
