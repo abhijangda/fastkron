@@ -290,6 +290,59 @@ def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = set(sliced_mults)
   return list(sliced_mults)
 
+def parseMatrix(rep):
+  s = rep.split('x')
+  return int(s[0]), int(s[1])
+
+def parseRegTile(rep):
+  s = rep.split('x')
+  return int(s[0]), int(s[1]), int(s[2])
+
+class KernelTemplate:
+  def __init__(self, template):
+    self.parse(template)
+  
+  def parse(self, template):
+    parts = template.split('_')
+    self.num_threads = parts[0]
+    if self.num_threads != "*":
+      self.num_threads = int(self.num_threads)
+    else:
+      assert self.num_threads == "*"
+    self.elem_type = parts[1]
+    if self.elem_type != "*":
+      assert self.elem_type in ['d', 'f', 'i']
+      if self.elem_type == "d":
+        self.elem_type = "double"
+      elif self.elem_type == "f":
+        self.elem_type = "float"
+      elif self.elem_type == "i":
+        self.elem_type = "int"
+    else:
+      assert self.elem_type == "*"
+    self.f = parseMatrix(parts[2])
+    self.tileF = parseMatrix(parts[3])
+    self.fused = int(parts[4])
+    self.tileX = parseMatrix(parts[5])
+    self.regtile = parseRegTile(parts[6])
+
+  def is_template_of(self, kernel):
+    if not (self.num_threads == "*" or kernel.num_threads == self.num_threads):
+      return False
+    if not (self.elem_type == "*" or self.elem_type == kernel.elemType):
+      return False
+    if not (self.f[0] == kernel.shape.p and self.f[1] == kernel.shape.q):
+      return False
+    if not (self.tileF[0] == kernel.tileP and self.tileF[1] == kernel.tileQ):
+      return False
+    if not (self.fused == kernel.fused_kernels):
+      return False
+    if not (self.tileX[0] == kernel.tileM and self.tileX[1] == kernel.shape.k):
+      return False
+    if not (self.regtile == (kernel.rm, kernel.rk, kernel.rq)):
+      return False
+    return True
+
 def xalignment(m, cols, op, elem_type):
   if op == "T":
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
@@ -307,7 +360,11 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
     kernel_dir = os.path.join(all_kernels_dir, f'{backend}/kron-kernels')
   elif backend == 'x86':
     kernel_dir = os.path.join(all_kernels_dir, 'cpu/x86/kron-kernels')
-
+  
+  kernelTemplates = []
+  for config in onlySpecificConfigs:
+    kernelTemplates += [KernelTemplate(config)]
+    
   empty_dir(kernel_dir)
   configs = {}
   for opX in opXs:
@@ -391,8 +448,8 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
     if onlySpecificConfigs != []:
         __configs = []
         for config in configs:
-          for specificConfig in onlySpecificConfigs:
-            if specificConfig.replace(' ', '') in repr(config).replace(' ', ''):
+          for template in kernelTemplates:
+            if template.is_template_of(config):
               __configs += [config]
               break
 
