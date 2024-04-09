@@ -31,7 +31,7 @@ struct GPUKernel : public KernelInfo {
 
   virtual std::string str() const {
     std::stringstream info;
-    info << NumThreads << "_" << KernelInfo::str();
+    info << runtimeStr() << "_" << archStr() << "_" << NumThreads << "_" << KernelInfo::str();
     return info.str();
   }
 

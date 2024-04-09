@@ -3,16 +3,33 @@
 
 #include "kernels/gpu_kernel_info.h"
 
+enum SMArch {
+  volta,
+  ampere
+};
+
+static std::string smArchToStr(SMArch arch) {
+  switch (arch) {
+    case SMArch::volta:
+      return "volta";
+    case SMArch::ampere:
+      return "ampere";
+  }
+
+  return "";
+}
 struct CUDAKernel : public GPUKernel {
+  SMArch arch;
   CUDAKernel() {}
-  CUDAKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
+  CUDAKernel(SMArch arch, void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
              uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
              GPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
-                       elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment) {
+                       elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
+                       arch(arch) {
   }
   uint32_t localSize() const {
     cudaFuncAttributes attr;
@@ -34,5 +51,13 @@ struct CUDAKernel : public GPUKernel {
     }
 
     return err;
+  }
+
+  virtual std::string runtimeStr() const {
+    return "cuda";
+  }
+
+  virtual std::string archStr() const {
+    return smArchToStr(arch);
   }
 };

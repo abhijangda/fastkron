@@ -95,6 +95,16 @@ struct KernelInfo {
 
   bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt);
 
+  virtual std::string runtimeStr() const {
+    assert (false);
+    return "";
+  }
+
+  virtual std::string archStr() const {
+    assert(false);
+    return "";
+  }
+
   virtual std::string str() const {
     std::stringstream info;
     info << strOfFastKronType(elemType) << "_" << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
