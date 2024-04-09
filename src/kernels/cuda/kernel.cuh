@@ -78,6 +78,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                            FusedParams<FusedFacs> fusedParams,
                            DistributedParams distParams,
                            EpilogueParams epilogueParams) {
+#if __CUDA_ARCH__ == __OPTIMIZED_CUDA_ARCH__
   //Alignment of X and F are correct in terms of elements of 4-bytes
   static_assert(XAlignment == 1 ||
                 XAlignment == 2 ||
@@ -263,4 +264,5 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
     stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
+#endif
 }

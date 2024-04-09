@@ -252,9 +252,18 @@ class GPUKernel(Kernel):
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
+  
+  def setOptimizedCUDAArch(self):
+    smXX = ""
+    if self.arch == "ampere":
+      smXX = "800"
+    elif self.arch == "volta":
+      smXX = "700"
+    return f"#define __OPTIMIZED_CUDA_ARCH__ {smXX}"
 
   def hostInvokeFile(self):
-    return "\n".join(['#include "kernels/cuda/kernel.cuh"', "",
+    return "\n".join([self.setOptimizedCUDAArch(), "",
+                      '#include "kernels/cuda/kernel.cuh"', "",
                       self.getKernelFuncDecl()+"{",
                       f"  return (void*)&{self.kernelDecl()};",
                       "}",
@@ -508,9 +517,15 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
   kernels_cmake = f"set({backend.upper()}_KERNELS "
   for config in combinedConfigs:
     kernels_cmake += os.path.join(kernel_dir, config.filename()) + "\n"
+  kernels_cmake += ")\n"
+
+  # for config in combinedConfigs:
+  #   filepath = os.path.join(kernel_dir, config.filename())
+  #   smXX = 70 if config.arch == "volta" else (80 if config.arch == "ampere" else 90)
+  #   kernels_cmake += f"set_source_files_properties({filepath} PROPERTIES CUDA_ARCHITECTURES {smXX})\n"
 
   with open(os.path.join(kernel_dir, "kernels.cmake"), "w") as f:
-    f.write(kernels_cmake + ")")
+    f.write(kernels_cmake)
 
 def compute_k(ps, qs):
   k = 1
