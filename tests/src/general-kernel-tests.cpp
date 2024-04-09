@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #include "testBase.h"
 
-#define FUSION_TEST(M, MinFacs, MaxFacs, P, Q, Type) \
+#define GENERAL_TEST(M, MinFacs, MaxFacs, P, Q, Type) \
   TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##NN) { \
   bool result = true;\
   for (uint Facs = MinFacs; Facs <= MaxFacs; Facs++) {\
@@ -21,38 +21,42 @@
   EXPECT_TRUE(result);\
 }
 
-#define M_ 16
-FUSION_TEST(M_, 1, 10, 2, 2, float);
-FUSION_TEST(M_, 1, 8, 3, 3, float);
-FUSION_TEST(M_, 1, 8, 4, 4, float);
-FUSION_TEST(M_, 1, 7, 5, 5, float);
-FUSION_TEST(M_, 1, 7, 6, 6, float);
-FUSION_TEST(M_, 1, 6, 8, 8, float);
-FUSION_TEST(M_, 1, 5, 12, 12, float);
-FUSION_TEST(M_, 1, 5, 16, 16, float);
-FUSION_TEST(M_, 1, 5, 24, 24, float);
-FUSION_TEST(M_, 1, 4, 31, 31, float);
-FUSION_TEST(M_, 1, 4, 32, 32, float);
-FUSION_TEST(M_, 1, 3, 50, 50, float);
-FUSION_TEST(M_, 1, 3, 55, 55, float);
-FUSION_TEST(M_, 1, 3, 62, 62, float);
-FUSION_TEST(M_, 1, 3, 64, 64, float);
-FUSION_TEST(M_, 1, 3, 127, 127, float);
-FUSION_TEST(M_, 1, 3, 128, 128, float);
-FUSION_TEST(M_, 1, 3, 129, 129, float);
-FUSION_TEST(M_, 1, 3, 255, 255, float);
-FUSION_TEST(M_, 1, 2, 297, 297, float);
-FUSION_TEST(M_, 1, 2, 384, 384, float);
-FUSION_TEST(M_, 1, 2, 505, 505, float);
-FUSION_TEST(M_, 1, 2, 512, 512, float);
-FUSION_TEST(M_, 1, 2, 739, 739, float);
-FUSION_TEST(M_, 1, 2, 1024, 1024, float);
+#define FLOAT_DOUBLE_TEST(MinN, MaxN, P, Q) \
+  GENERAL_TEST(16, MinN, MaxN, P, Q, float); \
+  GENERAL_TEST(16, MinN, MaxN, P, Q, double);
 
 
-FUSION_TEST(M_, 1, 4, 31, 63, float);
-FUSION_TEST(M_, 1, 4, 63, 31, float);
-FUSION_TEST(M_, 1, 3, 297, 127, float);
-FUSION_TEST(M_, 1, 3, 127, 297, float);
-FUSION_TEST(M_, 1, 2, 936, 505, float);
+FLOAT_DOUBLE_TEST(1, 10, 2, 2);
+FLOAT_DOUBLE_TEST(1, 8, 3, 3);
+FLOAT_DOUBLE_TEST(1, 8, 4, 4);
+FLOAT_DOUBLE_TEST(1, 7, 5, 5);
+FLOAT_DOUBLE_TEST(1, 7, 6, 6);
+FLOAT_DOUBLE_TEST(1, 6, 8, 8);
+FLOAT_DOUBLE_TEST(1, 5, 12, 12);
+FLOAT_DOUBLE_TEST(1, 5, 16, 16);
+FLOAT_DOUBLE_TEST(1, 5, 24, 24);
+FLOAT_DOUBLE_TEST(1, 4, 31, 31);
+FLOAT_DOUBLE_TEST(1, 4, 32, 32);
+FLOAT_DOUBLE_TEST(1, 3, 50, 50);
+FLOAT_DOUBLE_TEST(1, 3, 55, 55);
+FLOAT_DOUBLE_TEST(1, 3, 62, 62);
+FLOAT_DOUBLE_TEST(1, 3, 64, 64);
+FLOAT_DOUBLE_TEST(1, 3, 127, 127);
+FLOAT_DOUBLE_TEST(1, 3, 128, 128);
+FLOAT_DOUBLE_TEST(1, 3, 129, 129);
+FLOAT_DOUBLE_TEST(1, 3, 255, 255);
+FLOAT_DOUBLE_TEST(1, 2, 297, 297);
+FLOAT_DOUBLE_TEST(1, 2, 384, 384);
+FLOAT_DOUBLE_TEST(1, 2, 505, 505);
+FLOAT_DOUBLE_TEST(1, 2, 512, 512);
+FLOAT_DOUBLE_TEST(1, 2, 739, 739);
+FLOAT_DOUBLE_TEST(1, 2, 1024, 1024);
 
-// FUSION_TEST(M_, 1, 3, 128, 128, int);
+
+FLOAT_DOUBLE_TEST(1, 4, 31, 63);
+FLOAT_DOUBLE_TEST(1, 4, 63, 31);
+FLOAT_DOUBLE_TEST(1, 3, 297, 127);
+FLOAT_DOUBLE_TEST(1, 3, 127, 297);
+FLOAT_DOUBLE_TEST(1, 2, 936, 505);
+
+// FLOAT_DOUBLE_TEST(1, 3, 128, 128, int);

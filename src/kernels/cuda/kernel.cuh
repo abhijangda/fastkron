@@ -111,12 +111,13 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
   //Vector Load types based on alignments 
-  using XVecT = typename std::conditional<!kKMultipleOfTileK || XAlignment == 1, ElemT, 
+  using XVecT = typename std::conditional<true || !kKMultipleOfTileK || XAlignment == 1, ElemT, 
                 typename std::conditional<XAlignment == 2, Vec2T, 
                                           Vec4T>::type>::type;
 
   const bool LoadFullFactor = kPMultipleOfTileP && kKMultipleOfTileK &&
-                              TileP >= MaxP && TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
+                              MaxP > 2 && MaxQ > 2 && TileP >= MaxP && 
+                              TileQ >= MaxQ && (MaxP*MaxQ) % 4 == 0;
   using FVecT = typename std::conditional<LoadFullFactor , Vec4T,
                 typename std::conditional<FAlignment == 1, ElemT,
                 typename std::conditional<FAlignment == 2, Vec2T,

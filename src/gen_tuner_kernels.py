@@ -47,6 +47,8 @@ def vec_type(elem_type : str, len : int) -> str:
   assert len in [1, 2, 4]
   if len == 1:
     return elem_type
+  if elem_type == "double" and len >= 4:
+    len = 2
   return f"{elem_type}{len}"
 
 def vector_lens(elem_type: str) -> list:
