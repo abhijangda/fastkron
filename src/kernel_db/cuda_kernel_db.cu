@@ -268,10 +268,18 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const
     std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(kernelsForOptLevel),
                  [optlevel](auto& kernel){return kernel->OptLevel == optlevel;});
     if (kernelsForOptLevel.size() > 0) {
+      //Find kernels that have either same P or same Q
+      std::vector<KernelInfo*> kernelsWithSamePOrQ;
+      std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), std::back_inserter(kernelsWithSamePOrQ),
+                   [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or kernel->f.q() == subProblem.f(0).q();});
+      if (kernelsWithSamePOrQ.size() > 0) {
+        kernelsForOptLevel = kernelsWithSamePOrQ;
+      }
       //sort kernels in descending order based on the number of thread blocks a kernel invoke
-      std::sort(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), 
-                [subProblem](auto k1, auto k2){return ((CUDAKernel*)k1)->numBlocks(subProblem) >
-                                                      ((CUDAKernel*)k2)->numBlocks(subProblem);});
+      auto order = [subProblem, this](auto k1, auto k2) {
+        return ((CUDAKernel*)k1)->numBlocks(subProblem) > ((CUDAKernel*)k2)->numBlocks(subProblem);
+      };
+      std::sort(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), order);
       for (auto k : kernelsForOptLevel) {
         uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
         if (((CUDAKernel*)k)->numBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
