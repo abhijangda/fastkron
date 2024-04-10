@@ -30,6 +30,7 @@ public:
 public:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
   std::vector<KernelInfo*> allKernels;
+  std::vector<HardwareDetails*> hardware;
 
 public:
   KernelDatabase() {}
@@ -105,7 +106,7 @@ public:
     auto it = compiledKernels.find(key);
     if (it != compiledKernels.end()) {
       for (auto k : it->second) {
-        if (k->canCompute(problem, distP2PStore)) {
+        if (k->canCompute(problem, hardware[0], distP2PStore)) {
           kernels.push_back(k);
         }
       }
@@ -115,7 +116,7 @@ public:
     for (auto it : compiledKernels) {
       if (it.first == key) continue;
       for (auto kernel : it.second) {
-        if (kernel->canCompute(problem, distP2PStore)) {
+        if (kernel->canCompute(problem, hardware[0], distP2PStore)) {
           kernels.push_back(kernel);
         }
       }
@@ -129,9 +130,9 @@ public:
     auto it = compiledKernels.find(key);
     if (it == compiledKernels.end()) return false;
     std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
-    [distP2PStore, problem](auto& kernel){return kernel->FusedFacs <= problem.n() && 
+    [distP2PStore, problem, this](auto& kernel){return kernel->FusedFacs <= problem.n() && 
                                           kernel->OptLevel == KernelOptimizations::MaxOptLevel() &&
-                                          kernel->canCompute(problem, distP2PStore, false);});
+                                          kernel->canCompute(problem, this->hardware[0], distP2PStore, false);});
     return true;
   }
 

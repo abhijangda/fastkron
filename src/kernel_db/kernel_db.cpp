@@ -17,7 +17,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   std::cout << "Tuning for shape "  << problem << std::endl;
   if (findAllKernels(problem, distP2PStore, allKernels)) {
   for (auto kernel : allKernels) {
-    if (!kernel->canCompute(problem, distP2PStore)) continue;
+    if (!kernel->canCompute(problem, hardware[0], distP2PStore)) continue;
     std::cout << kernel->str() << std::endl;
     float kernelTime = std::numeric_limits<float>::max();
     fastKronError status;

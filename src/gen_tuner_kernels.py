@@ -129,13 +129,13 @@ class Kernel:
     return repr(self) == repr(other)
 
   def getKernelFuncName(self):
-    return f"get{self.kernelname()}"
+    return f"get_{self.kernelname()}"
 
   def getKernelFuncDecl(self):
     return f"void* {self.getKernelFuncName()}()"
 
   def hostFuncName(self):
-    return f"invoke{self.kernelname()}"
+    return f"invoke_{self.kernelname()}"
 
   def __hash__(self):
     return hash(repr(self))

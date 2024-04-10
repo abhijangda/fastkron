@@ -5,6 +5,7 @@
 #include "utils/utils.h"
 #include "handle/op.h"
 #include "kernels/params.h"
+#include "kernels/hw_details.h"
 
 #pragma once
 
@@ -33,7 +34,7 @@ struct KernelInfo {
              RegM(RegM), RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
              opX(opX), opF(opF) {}
   bool isValid() {return invokerFunc != nullptr;}
-  virtual bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
     using Opts = KernelOptimizations::Optimization;
 
     bool ret = problem.type() == elemType &&

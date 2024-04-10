@@ -7,6 +7,7 @@
 #include "kernel_db/kernel_db.h"
 #include "env/env.h"
 #include "utils/thread_pool.h"
+#include "kernels/hw_details.h"
 
 #pragma once
 
@@ -39,46 +40,6 @@ public:
   }
 };
 
-class CUDAArchDetail {
-public:
-  uint32_t numSMs;
-  uint32_t maxBlocksPerSM;
-  uint32_t maxThreadsPerBlock;
-  uint32_t maxThreadsPerSM;
-  uint32_t regsPerSM;
-  uint32_t maxRegsPerThread;
-  uint32_t sharedMemPerSM;
-  uint32_t sharedMemPerBlock;
-  std::string name;
-  uint32_t computeMajor;
-  uint32_t computeMinor;
-  uint32_t warpSize;
-
-
-  // CUDAArchDetail(uint32_t numSMs, uint32_t maxBlocksPerSM, uint32_t maxThreadsPerBlock,
-  //                uint32_t maxThreadsPerSM, uint32_t regsPerSM, uint32_t sharedMemPerSM) :
-  //                numSMs(numSMs), maxBlocksPerSM(maxBlocksPerSM), 
-  //                maxThreadsPerBlock(maxThreadsPerBlock),
-  //                maxThreadsPerSM(maxThreadsPerSM), 
-  //                regsPerSM(regsPerSM), sharedMemPerSM(sharedMemPerSM) {}
-  CUDAArchDetail(int dev);
-  
-  friend std::ostream& operator<<(std::ostream &out, const CUDAArchDetail &detail) {
-    std::string indent = "    ";
-    out << detail.name << std::endl <<
-          indent << "Compute Capability      : " << (detail.computeMajor*10 + detail.computeMinor) << std::endl <<
-          indent << "SMs                     : " << detail.numSMs       << std::endl <<
-          indent << "Max Blocks per SM       : " << detail.maxBlocksPerSM << std::endl <<
-          indent << "Max Threads per SM      : " << detail.maxThreadsPerSM << std::endl <<
-          indent << "Registers Per SM        : " << detail.regsPerSM << std::endl <<
-          indent << "Shared Memory per SM    : " << detail.sharedMemPerSM << std::endl<<
-          indent << "Shared Memory Per Block : " << detail.sharedMemPerBlock << std::endl <<
-          indent << "Warp Size               : " << detail.warpSize << std::endl
-          ;
-    return out;
-  }
-};
-
 //TODO: Change name to Executor?
 class CUDAKernelDatabase : public KernelDatabase {
 public:
@@ -92,7 +53,6 @@ public:
   std::vector<void*> ncclComms;
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
-  std::vector<CUDAArchDetail> gpusDetail;
   OptimizedKernelForShape fastestKernelForShape;
   std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
 
@@ -102,8 +62,8 @@ public:
 
   fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   static int numDevices();
-  CUDAArchDetail parseDeviceProperties(int dev);
-
+  CUDAArchDetails parseDeviceProperties(int dev);
+  CUDAArchDetails getCUDADeviceProperties() {return *(dynamic_cast<CUDAArchDetails*>(hardware[0]));}
   void free();
   virtual fastKronError initTune();
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 

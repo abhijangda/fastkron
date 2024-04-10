@@ -3,21 +3,6 @@
 
 #include "kernels/gpu_kernel_info.h"
 
-enum SMArch {
-  volta,
-  ampere
-};
-
-static std::string smArchToStr(SMArch arch) {
-  switch (arch) {
-    case SMArch::volta:
-      return "volta";
-    case SMArch::ampere:
-      return "ampere";
-  }
-
-  return "";
-}
 struct CUDAKernel : public GPUKernel {
   SMArch arch;
   CUDAKernel() {}
@@ -31,6 +16,14 @@ struct CUDAKernel : public GPUKernel {
                        elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
                        arch(arch) {
   }
+  //TODO: Make "const HardwareDetails"
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
+    if (GPUKernel::canCompute(problem, hardware, p2p, exactFuse)) {
+      return ((CUDAArchDetails*)hardware)->smArch == arch;
+    }
+    return false;
+  }
+
   uint32_t localSize() const {
     cudaFuncAttributes attr;
     CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));

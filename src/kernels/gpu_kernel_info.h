@@ -49,8 +49,8 @@ struct GPUKernel : public KernelInfo {
     }
   }
 
-  virtual bool canCompute(KMMProblem problem, bool p2p, bool exactFuse = true) {
-    if (KernelInfo::canCompute(problem, p2p, exactFuse)) {
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
+    if (KernelInfo::canCompute(problem, hardware, p2p, exactFuse)) {
       dim3 g = grid(problem);
       if (g.y >= 65536 || g.z >= 65536) {
         return false;

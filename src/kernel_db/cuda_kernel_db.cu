@@ -213,7 +213,7 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
   return status;
 }
 
-static float blocksPerSM(const CUDAArchDetail gpu, CUDAKernel* kernel, dim3 grid) {
+static float blocksPerSM(const CUDAArchDetails gpu, CUDAKernel* kernel, dim3 grid) {
   uint32_t regOcc = gpu.regsPerSM / (kernel->block().x * kernel->numRegs());
   uint32_t shmemOcc = gpu.sharedMemPerSM / kernel->sharedMemSize();
   return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
@@ -230,7 +230,7 @@ std::string CUDAKernelDatabase::occupancyDetails(KernelInfo* kernelInfo, KMMProb
      << indent << "Block         : {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
      << indent << "Shared Mem    : " << cudaKernel->sharedMemSize() << std::endl 
      << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl
-     << indent << "Blocks Per SM : " << blocksPerSM(gpusDetail[0], cudaKernel, cudaKernel->grid(problem)) << std::endl;
+     << indent << "Blocks Per SM : " << blocksPerSM(getCUDADeviceProperties(), cudaKernel, cudaKernel->grid(problem)) << std::endl;
 
   return ss.str();
 }
@@ -273,8 +273,8 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const
                 [subProblem](auto k1, auto k2){return ((CUDAKernel*)k1)->numBlocks(subProblem) >
                                                       ((CUDAKernel*)k2)->numBlocks(subProblem);});
       for (auto k : kernelsForOptLevel) {
-        uint blocksm = blocksPerSM(gpusDetail[0], (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
-        if (((CUDAKernel*)k)->numBlocks(subProblem) <= gpusDetail[0].numSMs * blocksm) {
+        uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
+        if (((CUDAKernel*)k)->numBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
           return k;
         }
       }
@@ -415,7 +415,7 @@ int CUDAKernelDatabase::numDevices() {
   return devs;
 }
 
-CUDAArchDetail::CUDAArchDetail(int dev) {
+CUDAArchDetails::CUDAArchDetails(int dev) {
   cudaDeviceProp prop;
 
   CUDA_CHECK(cudaGetDeviceProperties(&prop, dev));
@@ -431,6 +431,7 @@ CUDAArchDetail::CUDAArchDetail(int dev) {
   computeMajor       = prop.major;
   computeMinor       = prop.minor;
   warpSize           = prop.warpSize;
+  smArch             = computeCapabilityToSMArch(computeMajor, computeMinor);
 }
 
 fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
@@ -449,11 +450,11 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
   isDistributed_ = gpus > 1;
 
   for (int i = 0; i < numGPUs_; i++) {
-    auto detail = CUDAArchDetail(i);
-    gpusDetail.push_back(detail);
+    auto detail = new CUDAArchDetails(i);
+    hardware.push_back(detail);
     //TODO: If verbose
     std::cout << "Found GPU " << i << std::endl;
-    std::cout << detail;
+    std::cout << (*detail);
   }
 
   if (isDistributed_) {
