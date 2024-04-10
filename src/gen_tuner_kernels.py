@@ -278,7 +278,7 @@ class GPUKernel(Kernel):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
     return f"{self.backend.upper()}Kernel{{"+\
             self.arch+","+self.constructorArgs() + ","+\
-            f"get{self.kernelname()}, {self.threads()}, " +\
+            f"get_{self.kernelname()}, {self.threads()}, " +\
             f"{self.aalign}, {self.kalign}" + "}"
 
   def isValid(self):

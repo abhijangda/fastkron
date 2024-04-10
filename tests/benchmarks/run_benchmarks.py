@@ -90,6 +90,8 @@ class FastKronEval:
     self.elemtype = elemtype
   
   def setup_cmake(self):
+    if self.built == True:
+      return
     d = os.getcwd()
     if os.path.exists('build/'):
       shutil.rmtree('build/')
@@ -124,7 +126,7 @@ class FastKronEval:
     o = run_command(kron + " --fuse")
     fused = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
     fusedtime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
-    if shape.ps[0] <= 32:
+    if shape.ps[0] <= 32 and shape.ps[0] == shape.qs[0]:
       o = run_command(kron)
       wofuse = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
       wofusetime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
@@ -133,7 +135,7 @@ class FastKronEval:
       wofusetime = fusedtime
 
     if GM*GK == 1:
-      return (shape, wofuse, fused)
+      return (shape, float(wofuse), float(fused))
     else:
       return (shape, GM, GK, wofuse, fused)
 
@@ -146,33 +148,45 @@ class FastKronEval:
         self.built = True
     return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
-def run_nn(device, mode, elemtype):
+def run_nn(device, mode, elemtype, dataset):
   print(f"------- Single {device.upper()} {elemtype.upper()} {mode} NN -------")
   device = device.lower()
-  M = 1024 if device == "cuda" else 256
-  M2 = 320 if device == "cuda" else 128
-  cases = [
-          Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
-          Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
-          Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
-          Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
-          Shape(M, 2, 128, 128), 
-          Shape(M2, 3, 128, 128)]
+  cases = []
+  if dataset == "large":
+    M = 1024 if device == "cuda" else 256
+    M2 = 320 if device == "cuda" else 128
+    cases = [
+            Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
+            Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
+            Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
+            Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
+            Shape(M, 2, 128, 128), 
+            Shape(M2, 3, 128, 128)]
 
-  M = 16
-  cases += [Shape(M, 8, 8, 8),
-          Shape(M, 6, 16, 16),
-          Shape(M, 5, 32, 32),
-          Shape(M, 4, 64, 64),
-          #  Shape(M, 3, 128, 128)
-          ]
+    M = 16
+    cases += [Shape(M, 8, 8, 8),
+            Shape(M, 6, 16, 16),
+            Shape(M, 5, 32, 32),
+            Shape(M, 4, 64, 64),
+            #  Shape(M, 3, 128, 128)
+            ]
+  elif dataset == "full":
+    factor = 2 if elemtype == "double" else 1
+    for p in [2,4,8,16,32,64,128]:
+      for q in [2,4,8,16,32,64,128]:
+        for n in range(1,20):
+          for m in [1,4,16,64,256,1024]:
+            if m*(p**n) > 1024*1024*1024//factor or m*(q**n) > 1024*1024*1024//factor: # or p**n < 64 or q**n < 64:
+              continue
+            cases += [Shape(m, n, p, q)]
 
   fkeval = FastKronEval(device, mode, elemtype)
+  fkeval.built = True
   fkeval.setup_cmake()
   for shape in cases:
     fk = fkeval.run_single_gpu(shape, "N", "N")
     gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
-    print(" & ".join((str(p) for p in (fk + gp))))
+    print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
 
 def run_nt(device, mode):
   device = device.lower()
@@ -276,9 +290,11 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('-backends'    , required=True, type=str, nargs="+")
   parser.add_argument('-types'       , required=True, type=str, nargs="+")
-  parser.add_argument("-tune-modes", required=True, type=str, nargs="+")
-  
+  parser.add_argument("-tune-modes"  , required=True, type=str, nargs="+")
+  parser.add_argument("-dataset"     , required=True, type=str)
   args = parser.parse_args()
+  
+  assert args.dataset in ["large", "full"]
 
   for backend in args.backends:
     for elemtype in args.types:
@@ -287,4 +303,4 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        run_nn(backend, mode, elemtype)
+        run_nn(backend, mode, elemtype, args.dataset)
