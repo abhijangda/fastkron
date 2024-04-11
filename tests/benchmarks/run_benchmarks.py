@@ -16,6 +16,12 @@ def run_command(command):
     assert False
   return o
 
+def total_gpu_memory():
+  o = run_command("nvidia-smi -d MEMORY -q -i 0")
+  mems = re.findall(r'Total\s*\:\s*(\d+)', o)
+  mems = [int(m) for m in mems]
+  return max(mems)
+
 TuningModes = ['FullTune', 'FastTune', 'NoTune']
 
 class Shape:
@@ -153,8 +159,17 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
   device = device.lower()
   cases = []
   if dataset == "large":
-    M = 1024 if device == "cuda" else 256
-    M2 = 320 if device == "cuda" else 128
+    if device == "cuda":
+      if total_gpu_memory() <= 16*1024:
+        M = 256
+        M2 = 128
+      else:
+        M = 1024
+        M2 = 320
+    else:
+      M = 256
+      M2 = 128
+
     cases = [
             Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
             Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
@@ -174,8 +189,6 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
     factor = 2 if elemtype == "double" else 1
     for p in [2,4,8,16,32,64,128]:
       for q in [2,4,8,16,32,64,128]:
-        if p == 2:
-          continue
         for n in range(1,20):
           for m in [1,4,16,64,256,1024]:
             if m*(p**n) > 1024*1024*1024//factor or m*(q**n) > 1024*1024*1024//factor: # or p**n < 64 or q**n < 64:
@@ -270,5 +283,5 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        # run_nn(backend, mode, elemtype, args.dataset)
-        run_tt(backend, mode, elemtype, args.dataset)
+        run_nn(backend, mode, elemtype, args.dataset)
+        # run_tt(backend, mode, elemtype, args.dataset)
