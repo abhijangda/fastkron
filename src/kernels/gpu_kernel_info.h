@@ -43,9 +43,19 @@ struct GPUKernel : public KernelInfo {
                   DIVUP(problem.m(), tileX_.m()),
                   1);
     } else {
+      //problem.k() can be very large, which can make grid.y more than the limit (65535).
+      //Distribute grid.y to y and z
+      uint32_t origGridy = DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q());
+      dim3 grid = {0,0,0};
+      if (origGridy <= 32768) {
+        grid.y = origGridy;
+        grid.z = 1;
+      } else {
+        grid.y = 32768;
+        grid.z = DIVUP(origGridy, 32768);
+      }
       return dim3(DIVUP(problem.m(), tileX_.m()),
-                  DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
-                  1);
+                  grid.y, grid.z);
     }
   }
 

@@ -328,7 +328,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       }
     }
     
-    uint32_t MinConsecutiveStoreElems = 16;
+    uint32_t MinConsecutiveStoreElems = 16; //TODO: 16 for Ampere and 8 for Volta
     //A fused kernel stores logP (TK) consecutive elements.
     //Remove all kernels that stores (< MinConsecutiveStoreElems).
     std::vector<KernelInfo*> validFusedKernels;

@@ -141,7 +141,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
   const uint ShTileK   = XshSlices*TileP;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : blockIdx.y;
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : (blockIdx.z * 32768 + blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
   const uint tid  = threadIdx.x;
 
@@ -158,7 +158,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const YElem yElem(yM, yQ, yK);
 
   const uint tileM = bid_y * TileM;
-
+  if (tileM >= X.m() || tileK * TileK >= X.n()) return;
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
                           (kKMultipleOfTileK)? TileK : MIN(X.n()-tileK * TileK, TileK),

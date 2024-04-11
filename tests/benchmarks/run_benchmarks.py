@@ -148,8 +148,8 @@ class FastKronEval:
         self.built = True
     return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
-def run_nn(device, mode, elemtype, dataset):
-  print(f"------- Single {device.upper()} {elemtype.upper()} {mode} NN -------")
+def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
+  print(f"------- Single {device.upper()} {elemtype.upper()} {mode} {opX}{opF} -------")
   device = device.lower()
   cases = []
   if dataset == "large":
@@ -174,6 +174,8 @@ def run_nn(device, mode, elemtype, dataset):
     factor = 2 if elemtype == "double" else 1
     for p in [2,4,8,16,32,64,128]:
       for q in [2,4,8,16,32,64,128]:
+        if p == 2:
+          continue
         for n in range(1,20):
           for m in [1,4,16,64,256,1024]:
             if m*(p**n) > 1024*1024*1024//factor or m*(q**n) > 1024*1024*1024//factor: # or p**n < 64 or q**n < 64:
@@ -184,53 +186,18 @@ def run_nn(device, mode, elemtype, dataset):
   fkeval.built = True
   fkeval.setup_cmake()
   for shape in cases:
-    fk = fkeval.run_single_gpu(shape, "N", "N")
+    fk = fkeval.run_single_gpu(shape, opX, opF)
     gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
 
+def run_nn(device, mode, elemtype, dataset):
+  benchmark_single_gpu(device, "N", "N", mode, elemtype, dataset)
+
 def run_nt(device, mode):
-  device = device.lower()
-  M = 1024 if device == "cuda" else 256
-  M2 = 320 if device == "cuda" else 128
-  cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
-           Shape(M, 3, 64, 64), Shape(M2, 3, 128, 128)]
+  benchmark_single_gpu(device, "N", "T", mode, elemtype, dataset)
 
-  M = 16
-  cases += [Shape(M, 8, 8, 8),
-           Shape(M, 6, 16, 16),
-           Shape(M, 5, 32, 32),
-           Shape(M, 4, 64, 64),
-          #  Shape(M, 3, 128, 128)
-           ]
-
-  fkeval = FastKronEval(device, mode)
-  fkeval.setup_cmake()
-
-  for shape in cases:
-    fk = fkeval.run_single_gpu(shape,"N", "T")
-    print(" & ".join((str(p) for p in (fk))))
-  
-def run_tt(device, mode):
-  device = device.lower()
-  M = 1024 if device == "cuda" else 256
-  M2 = 320 if device == "cuda" else 128
-  # cases = [Shape(M, 6, 8, 8), Shape(M, 4, 32, 32),
-  #          Shape(M, 3, 64, 64), Shape(M2, 3, 128, 128)]
-  cases = []
-  M = 16
-  cases += [Shape(M, 8, 8, 8),
-           Shape(M, 6, 16, 16),
-           Shape(M, 5, 32, 32),
-           Shape(M, 4, 64, 64),
-          #  Shape(M, 3, 128, 128)
-           ]
-
-  fkeval = FastKronEval(device, mode)
-  fkeval.setup_cmake()
-
-  for shape in cases:
-    fk = fkeval.run_single_gpu(shape,"T", "T")
-    print(" & ".join((str(p) for p in (fk))))
+def run_tt(device, mode, elemtype, dataset):
+  benchmark_single_gpu(device, "T", "T", mode, elemtype, dataset)
 
 def multi_gpu(scaling):
   cases = []
@@ -303,4 +270,5 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        run_nn(backend, mode, elemtype, args.dataset)
+        # run_nn(backend, mode, elemtype, args.dataset)
+        run_tt(backend, mode, elemtype, args.dataset)
