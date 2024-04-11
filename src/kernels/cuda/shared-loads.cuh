@@ -28,7 +28,6 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
         } else {
           //TODO: Remaining less than VecTLen elems
         }
-
         Xsh.store(row, slice, elem, RegK, VecTLen, regs);
       }
     }}

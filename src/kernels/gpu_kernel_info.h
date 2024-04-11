@@ -84,6 +84,6 @@ struct GPUKernel : public KernelInfo {
   }
 
   size_t sharedMemSize(KMMProblem problem) {
-    return totalTileSize(problem);
+    return MAX(totalTileSize(problem), totalTileSize());
   }
 };

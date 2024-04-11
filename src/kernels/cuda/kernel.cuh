@@ -100,9 +100,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   static_assert((kTileK/MaxP)%RegK == 0,
                 "RegK not a multiple of MaxCols/MaxP");
 
-  static_assert(OptLevel == 3 || RegM == TileM,
-                "RegM can be different from TileM only for max optimization");
-
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
@@ -149,16 +146,17 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint tileQ = getTileQ(bid_x, QByTileQ);
   const uint tileK = getTileK(bid_x, QByTileQ);
 
-  //TODO: RegM != TileM is only supported for max optimization level 
-  const uint MThreads  = (OptLevel < 3) ? NumThreads : (TileQ/RegQ * QThreads);
-  const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
+  const uint MThreads  = (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
+  const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;//TODO: optimize tid%MThreads when MThreads >= NumThreads
   const uint yK   = ((tid % MThreads) % QThreads) * RegK;
-  const uint yM   = (OptLevel < 3 || MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
+  const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
 
   const YElem yElem(yM, yQ, yK);
 
   const uint tileM = bid_y * TileM;
+  //TODO: is this condition optimized for OptLevel == 3?
   if (tileM >= X.m() || tileK * TileK >= X.n()) return;
+  
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
                           (kKMultipleOfTileK)? TileK : MIN(X.n()-tileK * TileK, TileK),
@@ -170,8 +168,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   using XShared = ShiftShared<fastKronOp_N, ElemT, kXshSlicesSame, 
                               TileM, kTileK/MaxP, TileP>;
   using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
-
-  XShared Xsh(&sharedStorage[0], ShTileK);
+  XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
   register YRegisters<ElemT, RegM, RegK, RegQ> yReg;
@@ -195,7 +192,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       if (FusedFacs > 1) yReg.zero();
       if (kFactorShapeSame ||
           ((kKMultipleOfTileK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
-           (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)))
+           (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) &&
+           (kKMultipleOfTileK || yElem.m() < TileM))
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
@@ -261,7 +259,6 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
        }
       }
     }
-
     stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 #endif

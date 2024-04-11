@@ -220,7 +220,6 @@ public:
     //Only works for numElems == 1
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
-      // uint32_t shCol = startCol + i;
       uint32_t shift = slice/RegK;
       uint32_t col = slice*p() + (shift + elem)%p();
       // CUDA_DEVICE_ASSERT(row * n() + col < numel());
