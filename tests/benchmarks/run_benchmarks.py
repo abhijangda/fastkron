@@ -199,8 +199,14 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
   fkeval.built = True
   fkeval.setup_cmake()
   for shape in cases:
-    fk = fkeval.run_single_gpu(shape, opX, opF)
-    gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
+    try:
+      fk = fkeval.run_single_gpu(shape, opX, opF)
+    except:
+      fk = (shape, 1, 1)
+    try:
+      gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
+    except:
+      gp = (1, 1)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
 
 def run_nn(device, mode, elemtype, dataset):

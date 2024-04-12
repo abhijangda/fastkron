@@ -70,7 +70,6 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                      KernelMode execMode,
                      cudaStream_t stream) {
   cudaError_t status;
-
   //Create the grid and thread block
   KernelParams<FusedFacs> params (problem, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), 
@@ -317,7 +316,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
 
   bool canFuse = problem.n() > 1 && factorsSameShape && factorsSquare && factorsPowerOfTwoShape && factorsLessThanMaxP;
   //TODO: Fix TT
-  if (canFuse) {
+  if (false && canFuse) {
     std::vector<KernelInfo*> kernels;
     findAllFusedKernels(problem, false, kernels);
     //Use a kernel that processes full problem
@@ -328,7 +327,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       }
     }
     
-    uint32_t MinConsecutiveStoreElems = 16; //TODO: 16 for Ampere and 8 for Volta
+    uint32_t MinConsecutiveStoreElems = (getCUDADeviceProperties().smArch == SMArch::ampere) ? 16 : 8; //TODO: 16 for Ampere and 8 for Volta
     //A fused kernel stores logP (TK) consecutive elements.
     //Remove all kernels that stores (< MinConsecutiveStoreElems).
     std::vector<KernelInfo*> validFusedKernels;

@@ -223,6 +223,7 @@ public:
       uint32_t shift = slice/RegK;
       uint32_t col = slice*p() + (shift + elem)%p();
       // CUDA_DEVICE_ASSERT(row * n() + col < numel());
+      // printf("row %d col %d\n", row, col);
       Base::set(data, row, col, elems[i]);
     }
   }

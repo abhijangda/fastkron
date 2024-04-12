@@ -24,6 +24,12 @@ struct CUDAKernel : public GPUKernel {
     return false;
   }
 
+  uint32_t ptxVersion() const {
+    cudaFuncAttributes attr;
+    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
+    return attr.ptxVersion;
+  }
+
   uint32_t localSize() const {
     cudaFuncAttributes attr;
     CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
