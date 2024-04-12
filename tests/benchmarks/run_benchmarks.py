@@ -289,5 +289,5 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        run_nn(backend, mode, elemtype, args.dataset)
-        # run_tt(backend, mode, elemtype, args.dataset)
+        #run_nn(backend, mode, elemtype, args.dataset)
+        run_tt(backend, mode, elemtype, args.dataset)
