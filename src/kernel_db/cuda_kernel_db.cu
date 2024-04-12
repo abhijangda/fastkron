@@ -294,6 +294,52 @@ KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const
   return nullptr;
 }
 
+std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> CUDAKernelDatabase::filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels) {
+  uint32_t MinConsecutiveStoreElems = (getCUDADeviceProperties().smArch == SMArch::ampere) ? 16 : 8; //TODO: 16 for Ampere and 8 for Volta
+  //A fused kernel stores logP (TK) consecutive elements.
+  //Remove all kernels that stores (< MinConsecutiveStoreElems).
+  std::vector<KernelInfo*> validFusedKernels;
+  
+  {
+    auto filter = [problem, MinConsecutiveStoreElems](KernelInfo* kernel) {
+      const int PpowerN = (int)powf(problem.f(0).p(), kernel->FusedFacs);
+      const int consecutiveStoreElems = kernel->tileX.n()/PpowerN;
+      return consecutiveStoreElems >= MinConsecutiveStoreElems;
+    };
+
+    std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(validFusedKernels), filter);
+  }
+  
+  if (false) {
+    for (auto iter : validFusedKernels) {
+      std::cout << iter->str() << std::endl;
+    }
+  }
+
+  std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> numFusedToKernels;
+
+  for (auto kernel : validFusedKernels) {
+    if (kernel->FusedFacs <= problem.n()) {
+      if (numFusedToKernels.find(kernel->FusedFacs) == numFusedToKernels.end())
+        numFusedToKernels[kernel->FusedFacs] = std::vector<KernelInfo*>();
+      numFusedToKernels[kernel->FusedFacs].push_back(kernel);
+    }      
+  }
+
+  if (false) {
+    std::cout << "346: " << numFusedToKernels.size() << std::endl;
+    for (auto iter : numFusedToKernels) {
+      std::cout << iter.first << ": ";
+      for (auto k : iter.second) {
+        std::cout << k->str() << " ";
+      }
+      std::cout << std::endl;
+    }
+  }
+
+  return numFusedToKernels;
+}
+
 TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
   if (problemToKernelCache.find(problem) != problemToKernelCache.end())
     return problemToKernelCache[problem];
@@ -315,8 +361,8 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
   }
 
   bool canFuse = problem.n() > 1 && factorsSameShape && factorsSquare && factorsPowerOfTwoShape && factorsLessThanMaxP;
-  //TODO: Fix TT
-  if (false && canFuse) {
+
+  if (canFuse) {
     std::vector<KernelInfo*> kernels;
     findAllFusedKernels(problem, false, kernels);
     //Use a kernel that processes full problem
@@ -326,49 +372,32 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
         goto end;
       }
     }
-    
-    uint32_t MinConsecutiveStoreElems = (getCUDADeviceProperties().smArch == SMArch::ampere) ? 16 : 8; //TODO: 16 for Ampere and 8 for Volta
-    //A fused kernel stores logP (TK) consecutive elements.
-    //Remove all kernels that stores (< MinConsecutiveStoreElems).
-    std::vector<KernelInfo*> validFusedKernels;
-    
-    {
-      auto filter = [problem, MinConsecutiveStoreElems](KernelInfo* kernel) {
-        const int PpowerN = (int)powf(problem.f(0).p(), kernel->FusedFacs);
-        const int consecutiveStoreElems = kernel->tileX.n()/PpowerN;
-        return consecutiveStoreElems >= MinConsecutiveStoreElems;
-      };
+    bool firstOpTKernelFound = false;
+    if (problem.opX() == fastKronOp_T) {
+      //First kernel for OpX = T
+      auto numFusedToKernels_T = filterFastestFusedKernels(problem, kernels);
+      if (!numFusedToKernels_T.empty()) {
+        auto maxFused = numFusedToKernels_T.begin();
+        auto tk = TunedKernelFromStart(this->kernelForSubProblem(problem, maxFused->second), 
+                                      problem.n() - maxFused->first, problem.n() - 1, problem.k(), 0.0f);
+        kernelSeries.push_back(tk);
+        firstOpTKernelFound = true;
 
-      std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(validFusedKernels), filter);
-    }
-    
-    if (false) {
-      for (auto iter : validFusedKernels) {
-        std::cout << iter->str() << std::endl;
+        //Find kernels for OpX = N
+        KMMProblem subProblem = problem.rsub(problem.n() - 1 - maxFused->first, problem.n() - maxFused->first);
+        subProblem.setOpX(fastKronOp_N);
+        std::vector<KernelInfo*> kernels_OpN;
+        findAllFusedKernels(subProblem, false, kernels_OpN);
+        kernels = kernels_OpN;
+        problem = subProblem;
       }
+    } else {
+      firstOpTKernelFound = true;
     }
+    
+    auto numFusedToKernels = filterFastestFusedKernels(problem, kernels);
 
-    std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> numFusedToKernels;
-
-    for (auto kernel : validFusedKernels) {
-      if (kernel->FusedFacs <= problem.n()) {
-        if (numFusedToKernels.find(kernel->FusedFacs) == numFusedToKernels.end())
-          numFusedToKernels[kernel->FusedFacs] = std::vector<KernelInfo*>();
-        numFusedToKernels[kernel->FusedFacs].push_back(kernel);
-      }      
-    }
-
-    if (false) {
-      std::cout << "346: " << numFusedToKernels.size() << std::endl;
-      for (auto iter : numFusedToKernels) {
-        std::cout << iter.first << ": ";
-        for (auto k : iter.second) {
-          std::cout << k->str() << " ";
-        }
-        std::cout << std::endl;
-      }
-    }
-    if (!numFusedToKernels.empty()) {
+    if (firstOpTKernelFound && !numFusedToKernels.empty()) {
       auto fusedIter = numFusedToKernels.begin();
 
       fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
