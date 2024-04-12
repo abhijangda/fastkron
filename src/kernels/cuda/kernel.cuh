@@ -65,7 +65,7 @@ CUDA_DEVICE uint32_t getXTileK(KernelParams& params) {
   return params.tileX.n();
 }
 
-template<typename ElemT, typename Vec2T, typename Vec4T,
+template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
@@ -78,7 +78,9 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                            FusedParams<FusedFacs> fusedParams,
                            DistributedParams distParams,
                            EpilogueParams epilogueParams) {
-#if __CUDA_ARCH__ == __OPTIMIZED_CUDA_ARCH__
+#ifdef __CUDA_ARCH__
+  if (__CUDA_ARCH__ != SMArch) return;
+#endif
   //Alignment of X and F are correct in terms of elements of 4-bytes
   static_assert(XAlignment == 1 ||
                 XAlignment == 2 ||
@@ -136,7 +138,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
-  const uint ShTileK   = XshSlices*TileP;
+  // const uint ShTileK   = XshSlices*TileP;
 
   const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : (blockIdx.z * 32768 + blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
@@ -146,8 +148,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint tileQ = getTileQ(bid_x, QByTileQ);
   const uint tileK = getTileK(bid_x, QByTileQ);
 
-  const uint MThreads  = (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
-  const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;//TODO: optimize tid%MThreads when MThreads >= NumThreads
+  const uint MThreads  = (TileM == 1) ? NumThreads : (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
+  const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
   const uint yK   = ((tid % MThreads) % QThreads) * RegK;
   const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
 
@@ -261,5 +263,4 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
     }
     stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
-#endif
 }

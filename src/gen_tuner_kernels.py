@@ -248,22 +248,20 @@ class GPUKernel(Kernel):
 
   def templateDecl(self):
     #TODO: repr and this should be same
-    return f"{self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"{self.optimizedCUDAArch()}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
   
-  def setOptimizedCUDAArch(self):
+  def optimizedCUDAArch(self):
     smXX = ""
     if self.arch == "ampere":
-      smXX = "800"
+      return "800"
     elif self.arch == "volta":
-      smXX = "700"
-    return f"#define __OPTIMIZED_CUDA_ARCH__ {smXX}"
+      return "700"
 
   def hostInvokeFile(self):
-    return "\n".join([self.setOptimizedCUDAArch(), "",
-                      '#include "kernels/cuda/kernel.cuh"', "",
+    return "\n".join(['#include "kernels/cuda/kernel.cuh"', "",
                       self.getKernelFuncDecl()+"{",
                       f"  return (void*)&{self.kernelDecl()};",
                       "}",
