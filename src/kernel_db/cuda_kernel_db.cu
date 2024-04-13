@@ -229,7 +229,8 @@ std::string CUDAKernelDatabase::occupancyDetails(KernelInfo* kernelInfo, KMMProb
      << indent << "Block         : {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
      << indent << "Shared Mem    : " << cudaKernel->sharedMemSize() << std::endl 
      << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl
-     << indent << "Blocks Per SM : " << blocksPerSM(getCUDADeviceProperties(), cudaKernel, cudaKernel->grid(problem)) << std::endl;
+     << indent << "Blocks Per SM : " << blocksPerSM(getCUDADeviceProperties(), cudaKernel, cudaKernel->grid(problem)) << std::endl
+     << indent << "Local Memory  : " << cudaKernel->localSize() << std::endl;
 
   return ss.str();
 }

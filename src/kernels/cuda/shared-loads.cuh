@@ -62,9 +62,9 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
 }
 
 template<bool kPMultipleOfTileP, bool kQMultipleOfTileQ,
-         typename ElemT, typename VecT, typename FShared>
+         typename ElemT, typename VecT, fastKronOp opF, typename FShared>
 CUDA_DEVICE
-void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF, 
+void directFgToFsh(const uint NumThreads, const uint tid, 
                    const uint tileP, const uint tileQ,
                    const Factor& F, FShared& Fsh) {
   const uint VecTLen = sizeof(VecT)/sizeof(ElemT);
@@ -79,11 +79,11 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
     __syncthreads();
   }
 
-  if (!(F.p() == Fsh.p() && F.q() == Fsh.q())) {
+  if (opF == fastKronOp_T || !(F.p() == Fsh.p() && F.q() == Fsh.q())) {
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
-    const uint Vecs     = Fsh.shape(1)/VecTLen;
+    const uint Vecs     = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
-    for (uint swid = tid/Vecs; swid < Fsh.shape(0); swid += ThGroups) {
+    for (uint swid = tid/Vecs; swid < ((opF == fastKronOp_N) ? Fsh.p() : Fsh.q()); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
         ElemT regs[VecTLen] = {0};
         if (opF == fastKronOp_N) {
@@ -93,6 +93,8 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           if ((kQMultipleOfTileQ || col < F.q()) &&
               (kPMultipleOfTileP || tileP + row < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
+          
+          Fsh.store(row, elem * VecTLen, VecTLen, regs);
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;
@@ -100,9 +102,11 @@ void directFgToFsh(const uint NumThreads, const uint tid, fastKronOp opF,
           if ((kPMultipleOfTileP || tileP + col < F.p()) &&
               (kQMultipleOfTileQ || row < F.q()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
+          
+          for (int ii = 0; ii < VecTLen; ii++) {
+            Fsh.store(elem * VecTLen + ii, swid, 1, &regs[ii]);
+          }
         }
-
-        Fsh.store(swid, elem * VecTLen, VecTLen, regs);
 
         //This condition avoids generating this loop giving better performance
         if (Vecs == NumThreads/ThGroups) break;

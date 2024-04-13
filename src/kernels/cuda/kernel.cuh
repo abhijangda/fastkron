@@ -166,10 +166,11 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                           X);
 
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
-
+  
+  //If X or F are Op_T then transpose then in shared memory
   using XShared = ShiftShared<fastKronOp_N, ElemT, kXshSlicesSame, 
                               TileM, kTileK/MaxP, TileP>;
-  using FShared = DirectShared<OpF, ElemT, TileP, TileQ>;
+  using FShared = DirectShared<fastKronOp_N, ElemT, TileP, TileQ>;
   XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
@@ -185,8 +186,8 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       const Factor F(P, Q, params.problem.f(fac).data());
 
       //Load F to shared memory
-      directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, decltype(Fsh)>
-                    (NumThreads, tid, OpF, tileP, tileQ, F, Fsh);
+      directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, OpF, decltype(Fsh)>
+                    (NumThreads, tid, tileP, tileQ, F, Fsh);
 
       __syncthreads();
 
