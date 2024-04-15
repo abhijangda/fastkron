@@ -320,15 +320,16 @@ class KernelTemplate:
     self.parse(template)
   
   def parse(self, template):
-    parts = template.split('_')
-    self.backend = parts[0]
-    self.arch = parts[1]
-    self.num_threads = parts[2]
-    if self.num_threads != "*":
-      self.num_threads = int(self.num_threads)
-    else:
-      assert self.num_threads == "*"
-    self.elem_type = parts[3]
+    parts = iter(template.split('_'))
+    self.backend = next(parts)
+    self.arch = next(parts)
+    if self.backend.lower() == "cuda" or self.backend.lower() == "hip":
+      self.num_threads = next(parts)
+      if self.num_threads != "*":
+        self.num_threads = int(self.num_threads)
+      else:
+        assert self.num_threads == "*"
+    self.elem_type = next(parts)
     if self.elem_type != "*":
       assert self.elem_type in ['d', 'f', 'i']
       if self.elem_type == "d":
@@ -339,19 +340,20 @@ class KernelTemplate:
         self.elem_type = "int"
     else:
       assert self.elem_type == "*"
-    self.f = parseMatrix(parts[4])
-    self.tileF = parseMatrix(parts[5])
-    self.fused = int(parts[6])
-    self.tileX = parseMatrix(parts[7])
-    self.regtile = parseRegTile(parts[8])
+    self.f = parseMatrix(next(parts))
+    self.tileF = parseMatrix(next(parts))
+    self.fused = int(next(parts))
+    self.tileX = parseMatrix(next(parts))
+    self.regtile = parseRegTile(next(parts))
 
   def is_template_of(self, kernel):
     if not (self.backend == "*" or self.backend == kernel.backend):
       return False
     if not (self.arch == "*" or self.arch == kernel.arch):
       return False
-    if not (self.num_threads == "*" or kernel.num_threads == self.num_threads):
-      return False
+    if self.backend.lower() == "cuda" or self.backend.lower() == "hip":
+      if not (self.num_threads == "*" or kernel.num_threads == self.num_threads):
+        return False
     if not (self.elem_type == "*" or self.elem_type == kernel.elemType):
       return False
     if not (self.f[0] == kernel.shape.p and self.f[1] == kernel.shape.q):
