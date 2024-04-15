@@ -89,7 +89,7 @@ enum X86SIMD {
 static std::string x86simdToStr(X86SIMD simd) {
   switch(simd) {
     case NoSIMD:
-      return "-";
+      return "NoSIMD";
     case AVX:
       return "AVX";
     case AVX512:
@@ -113,12 +113,14 @@ public:
 
   friend std::ostream& operator<<(std::ostream& out, const X86ArchDetails& detail) {
     std::string indent = "    ";
-    out << indent << "Vendor        :" << detail.vendor  << std::endl
-        << indent << "L2 Cache Size :" << detail.l2Size  << std::endl
-        << indent << "L3 Cache Size :" << detail.l3Size  << std::endl
-        << indent << "Cores         :" << detail.cores   << std::endl
-        << indent << "Sockets       :" << detail.sockets << std::endl
-        << indent << "SIMD Type     :" << x86simdToStr(detail.simd) << std::endl;
+    out << indent << "Vendor        : " << detail.vendor  << std::endl
+        << indent << "L2 Cache Size : " << detail.l2Size  << std::endl
+        << indent << "L3 Cache Size : " << detail.l3Size  << std::endl
+        << indent << "Cores         : " << detail.cores   << std::endl
+        << indent << "Sockets       : " << detail.sockets << std::endl
+        << indent << "SIMD Type     : " << x86simdToStr(detail.simd) << std::endl;
     return out;
   }
+
+  uint32_t totalL3Size() {return l3Size * sockets;}
 };

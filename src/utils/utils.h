@@ -105,10 +105,9 @@ static void memset(T* ptr, size_t nelem, T val) {
     ptr[i] = val;
 }
 
-static uint l3CacheSize() {
-  return 384*1024*1024;
-}
-
-static void trashL3Cache(char* trash1, char* trash2) {
-  memcpy(trash1, trash2, l3CacheSize());
+static void parallelCopy(char* trash1, char* trash2, uint32_t sz) {
+  #pragma omp parallel for
+  for (int i = 0; i < sz; i++) {
+    trash1[i] = trash2[i];
+  }
 }

@@ -179,7 +179,7 @@ class CPUKernel(Kernel):
                       "}"])
 
   def kernelInfo(self):
-    return "CPUKernel{" + self.constructorArgs() + "}"
+    return f"{self.backend.upper()}Kernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"
 
   def isValid(self):
     AVXLen = 8 if self.elemType == "float" else 4

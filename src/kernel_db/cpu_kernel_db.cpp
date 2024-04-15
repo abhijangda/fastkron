@@ -11,20 +11,13 @@
   #include "kernels/cpu/x86/kron-kernels/kernel_decl.inc"
 #endif
 
-CPUKernel AllX86Kernels[] = {
+X86Kernel AllX86Kernels[] = {
 #ifdef ENABLE_X86
   ALL_X86_KERNELS
 #endif
 };
 
-CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {
-  loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(CPUKernel));
-  trash1 = new char[l3CacheSize()];
-  trash2 = new char[l3CacheSize()];
-  for (int i = 0; i < l3CacheSize(); i++) {
-    trash1[i] = i % std::numeric_limits<char>::max();
-  }
-}
+CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {}
 
 template<uint FusedFacs>
 fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex, 
@@ -91,6 +84,9 @@ fastKronError CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
   return fastKronSuccess;
 }
 
+//f_128x128_32x128_1_1x8192_1x16x4_NN_0_0
+//f_128x128_128x128_1_1x8192_1x16x4_NN_0_0
+//f_128x128_32x128_1_1x16384_1x16x4_NN_0_0
 fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
@@ -103,8 +99,10 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
   for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
     for (int r = 0; r < runs; r++) {
-      if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3CacheSize())
-        trashL3Cache(trash1, trash2);
+      //Trash L3 Cache
+      uint32_t l3size = ((X86ArchDetails*)hardware[0])->totalL3Size();
+      if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3size)
+        parallelCopy(trash1, trash2, l3size);
       double startTime = getCurrTime();
       if (distP2PStore) {
         status = invokeP2PStoreKernel(kernel, factorIdx, problem,
@@ -230,4 +228,13 @@ X86KernelDatabase::X86KernelDatabase() {
 
   auto detail = new X86ArchDetails{cpuVendor, l2Size, l3Size, sockets, cores, simd};
   hardware.push_back(detail);
+
+  std::cout << "Detected CPU " << std::endl << (*detail) << std::endl;
+
+  loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));
+  trash1 = new char[detail->totalL3Size()];
+  trash2 = new char[detail->totalL3Size()];
+  for (int i = 0; i < detail->totalL3Size(); i++) {
+    trash1[i] = i % std::numeric_limits<char>::max();
+  }
 }

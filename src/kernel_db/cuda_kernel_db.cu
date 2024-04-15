@@ -490,7 +490,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
     auto detail = new CUDAArchDetails(i);
     hardware.push_back(detail);
     //TODO: If verbose
-    std::cout << "Found GPU " << i << std::endl;
+    std::cout << "Running on GPU " << i << std::endl;
     std::cout << (*detail);
   }
 

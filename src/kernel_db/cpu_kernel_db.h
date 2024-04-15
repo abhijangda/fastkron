@@ -4,13 +4,14 @@
 #include "kernel_db/kernel_db.h"
 
 class CPUKernelDatabase : public KernelDatabase {
+protected:
   char* trash1, *trash2;
 
 public:
   CPUKernelDatabase();
 
   void init() {}
-  virtual fastKronError initTune() {}
+  virtual fastKronError initTune() {return fastKronSuccess;}
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
@@ -18,7 +19,7 @@ public:
   virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
-                                           KernelMode execMode) {}
+                                           KernelMode execMode) {return fastKronSuccess;}
   virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
@@ -27,7 +28,9 @@ public:
                                  int warmups, int runs,
                                  float& runtime);
   virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) {return "";}
-  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem) {}
+  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem) {
+    return TunedKernelsSeries();
+  }
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
   virtual fastKronError procFree(uint32_t proc, void* ptr);

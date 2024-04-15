@@ -121,7 +121,31 @@ struct CPUKernel : public KernelInfo {
             uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
             fastKronOp opX, fastKronOp opF) : 
             KernelInfo (invokerFunc, f, tileF, tileX, 
-                        FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {} 
+                        FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {}
+};
+
+struct X86Kernel : public CPUKernel {
+  X86SIMD simd;
+  X86Kernel() {}
+  X86Kernel(X86SIMD simd, void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
+            uint FusedFacs, bool DistributeToGPUs, 
+            uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
+            fastKronOp opX, fastKronOp opF) :
+            simd(simd), CPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {}
+  
+  virtual std::string runtimeStr() const {
+    return "X86";
+  }
+
+  virtual std::string archStr() const {
+    return x86simdToStr(simd);
+  }
+
+  virtual std::string str() const {
+    std::stringstream info;
+    info << runtimeStr() << "_" << archStr() << "_" << KernelInfo::str();
+    return info.str();
+  }
 };
 
 #include <vector>
