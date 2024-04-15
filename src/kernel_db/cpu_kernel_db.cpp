@@ -1,3 +1,9 @@
+#include <filesystem>
+#include <fstream>
+#include <regex>
+#include <set>
+#include <immintrin.h>
+
 #include "kernels/params.h"
 #include "kernel_db/cpu_kernel_db.h"
 
@@ -27,7 +33,7 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
                    EpilogueParams epilogueParams,
                    KernelMode execMode) {
   //Create the grid and thread block
-  KernelParams<FusedFacs> params (problem, kronIndex, execMode);
+  KernelParams<FusedFacs> params (problem, kernelInfo.tileX, kernelInfo.tileF, kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
@@ -120,4 +126,108 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
   }
   
   return status;
+}
+
+void cpuid(uint32_t in, uint32_t regs[4]) {
+#ifdef _WIN32
+#else
+  __asm__ (
+    "cpuid" : "=a" (regs[0]), "=b" (regs[1]), "=c" (regs[2]), "=d" (regs[3]) :
+    "a"(in), "c"(0)
+  );
+#endif
+}
+
+X86KernelDatabase::X86KernelDatabase() {  
+  unsigned cpuidregs[4];
+
+  // Get vendor
+  std::string cpuVendor = "";
+  {
+    char vendor[12];
+    cpuid(0, cpuidregs);
+    ((unsigned *)vendor)[0] = cpuidregs[1]; // EBX
+    ((unsigned *)vendor)[1] = cpuidregs[3]; // EDX
+    ((unsigned *)vendor)[2] = cpuidregs[2]; // ECX
+    cpuVendor = std::string(vendor, 12);
+  }
+
+  //Get Physical Cores
+  uint32_t cores = 0;
+  if (cpuVendor == "GenuineIntel") {
+    // Get DCP cache info
+    cpuid(4, cpuidregs);
+    cores = ((cpuidregs[0] >> 26) & 0x3f) + 1; // EAX[31:26] + 1
+  } else if (cpuVendor == "AuthenticAMD") {
+    // Get NC: Number of CPU cores - 1
+    cpuid(0x80000008, cpuidregs);
+    cores = ((unsigned)(cpuidregs[2] & 0xff)) + 1; // ECX[7:0] + 1
+  }
+
+  //Get L2 and L3 cache size
+  uint32_t l2Size = 0, l3Size = 0;
+  {
+    cpuid(0x80000006, cpuidregs);
+    l2Size = (cpuidregs[2] >> 18) & 0xFFFF; //ECX[31:18]
+    l3Size = (cpuidregs[3] >> 18) & 0x3FFF;
+  }
+
+  //Get number of cpu sockets
+  uint32_t sockets = 0; 
+  {
+    //TODO: Only for linux
+    std::set<std::string> socketset;
+    std::filesystem::path syscpu = "/sys/devices/system/cpu/";
+    
+    if (!std::filesystem::exists(syscpu) or 
+        !std::filesystem::is_directory(syscpu)) {
+      //TODO: What to do?
+      std::cout << "Error " << syscpu << " not a directory" << std::endl;
+    }
+
+    for (const auto& cpudir : std::filesystem::directory_iterator(syscpu)) {
+      std::regex cpuRegex((syscpu/"cpu").string() + "\\d+");
+
+      if (std::filesystem::is_directory(cpudir) &&
+          std::regex_search(cpudir.path().string(), cpuRegex)) {
+
+        auto socket = cpudir.path() / "topology/physical_package_id";
+        std::ifstream socketfile;
+        socketfile.open(socket);
+        if (socketfile.is_open()) {
+          std::string socketstring;
+          socketfile >> socketstring;
+          socketset.insert(socketstring);
+        } else {
+          std::cout << "Error " << socket << " not present " << std::endl;
+        }
+      }
+    }
+
+    sockets = socketset.size();
+  }
+
+  X86SIMD simd = NoSIMD;
+  {
+    //Has AVX?
+    cpuid(1, cpuidregs);
+    if ((cpuidregs[2] >> 28) & 0x1) {
+      simd = X86SIMD::AVX;
+    }
+
+    //Has AVX2?
+    cpuid(0x7, cpuidregs);
+    if ((cpuidregs[2] >> 5) & 0x1) {
+      // simd = X86SIMD::AVX2;
+    }
+
+    //Has AVX512?
+    cpuid(0x7, cpuidregs);
+    if ((cpuidregs[2] >> 16) & 0x1) {
+      simd = X86SIMD::AVX512;
+    }
+  }
+
+  auto detail = new X86ArchDetails{cpuVendor, l2Size, l3Size, sockets, cores, simd};
+  hardware.push_back(detail);
 }

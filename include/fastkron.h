@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #pragma once
 
 #define FastKronCHECK(cmd) do {                        \
@@ -52,42 +54,42 @@ fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream);
 fastKronError fastKronInitX86(fastKronHandle handlePtr);
 
 //TODO: A different function for setting stream of handle 
-fastKronError gekmmSizes(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[],
+fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                        size_t* resultSize, size_t* tempSize);
 
-fastKronError sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, 
+fastKronError sgekmm(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], float* X, 
                    fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
                    float alpha, float beta, float *Z, float* temp1, float* temp2);
-fastKronError igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, 
+fastKronError igekmm(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], int* X, 
                    fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, int *Z, int* temp1, int* temp2);
-fastKronError dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, 
+fastKronError dgekmm(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], double* X, 
                    fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2);
 
-fastKronError sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError sgekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
                        fastKronOp opX, fastKronOp opFs);
-fastKronError dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError dgekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
                        fastKronOp opX, fastKronOp opFs);
-fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+fastKronError igekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
                        fastKronOp opX, fastKronOp opFs);
 
-// fastKronError kronSGEMMOutofCore(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
-//                                uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream);
-// fastKronError kronSGEMMOutofCoreX(fastKronHandle handle, const uint NumKronMats, float* x, float* kronMats[], float** result,
-//   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
-// fastKronError kronIGEMMOutofCoreX(fastKronHandle handle, const uint NumKronMats, int* x, int* kronMats[], int** result,
-//   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], cudaStream_t stream[]);
+// fastKronError kronSGEMMOutofCore(fastKronHandle handle, const uint32_t NumKronMats, float* x, float* kronMats[], float** result,
+//                                uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], cudaStream_t stream);
+// fastKronError kronSGEMMOutofCoreX(fastKronHandle handle, const uint32_t NumKronMats, float* x, float* kronMats[], float** result,
+//   uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], cudaStream_t stream[]);
+// fastKronError kronIGEMMOutofCoreX(fastKronHandle handle, const uint32_t NumKronMats, int* x, int* kronMats[], int** result,
+//   uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], cudaStream_t stream[]);
 
 //TODO: modify such that the results are always written to the supplied result pointer 
-fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
-                                 uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], 
+fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint32_t NumKronMats, void* x[], void* kronMats[], void* result[],
+                                 uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], 
                                  void* temp1[], void* temp2[], void* stream);
 
-fastKronError allocDistributedX(fastKronHandle handle, void* dX[], void* hX, uint M, uint K);
-fastKronError gatherDistributedY(fastKronHandle handle, void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
-// fastKronError allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K);
-// fastKronError gatherDistributedY(fastKronHandle handle, int* dY[], int* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
-// fastKronError allocDistributedX(fastKronHandle handle, double* dX[], double* hX, uint M, uint K);
-// fastKronError gatherDistributedY(fastKronHandle handle, double* dY[], double* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
+fastKronError allocDistributedX(fastKronHandle handle, void* dX[], void* hX, uint32_t M, uint32_t K);
+fastKronError gatherDistributedY(fastKronHandle handle, void* dY[], void* hY, uint32_t M, uint32_t K, uint32_t NumKronMats, uint32_t KronMatCols[], uint32_t KronMatRows[]);
+// fastKronError allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint32_t M, uint32_t K);
+// fastKronError gatherDistributedY(fastKronHandle handle, int* dY[], int* hY, uint32_t M, uint32_t K, uint32_t NumKronMats, uint32_t KronMatCols[], uint32_t KronMatRows[]);
+// fastKronError allocDistributedX(fastKronHandle handle, double* dX[], double* hX, uint32_t M, uint32_t K);
+// fastKronError gatherDistributedY(fastKronHandle handle, double* dY[], double* hY, uint32_t M, uint32_t K, uint32_t NumKronMats, uint32_t KronMatCols[], uint32_t KronMatRows[]);
 }

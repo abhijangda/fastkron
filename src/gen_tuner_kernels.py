@@ -20,8 +20,8 @@ def slurp(file):
     return f.read()
 
 def empty_dir(dir):
-  if not os.path.exists(kernel_dir):
-    os.makedirs(kernel_dir, exist_ok=True)
+  if not os.path.exists(dir):
+    os.makedirs(dir, exist_ok=True)
     return
 
   for filename in os.listdir(dir):
@@ -42,6 +42,7 @@ def element_size(elem_type : str) -> int:
   if elem_type.lower() == "double":
     return 8
 
+#TODO: change to cuda vec type
 def vec_type(elem_type : str, len : int) -> str:
   elem_type = elem_type.lower()
   assert len in [1, 2, 4]
@@ -51,7 +52,7 @@ def vec_type(elem_type : str, len : int) -> str:
     len = 2
   return f"{elem_type}{len}"
 
-def vector_lens(elem_type: str) -> list:
+def memory_vector_lengths(elem_type: str) -> list:
   if element_size(elem_type) == 4:
     return [1, 2, 4]
   elif element_size(elem_type) == 8:
@@ -144,12 +145,14 @@ class Kernel:
     return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {elem_type_to_fastkron_type(self.elemType)}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
 class CPUKernel(Kernel):
-  def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
-               tileQ : int, tileP : int, tileM: int, rk: int, rq: int,
+  def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
+               tileQ : int, tileP : int, tileM: int, rm : int, rk: int, rq: int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str):
-    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, rk, rq, allPowersOf2, opX, opF)
+    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, rm, rk, rq, allPowersOf2, opX, opF)
     self.aalign = aalign
     self.kalign = kalign
+    self.backend = backend
+    self.arch = arch
 
   def __repr__(self):
     return f"{self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.dist}, {self.elemType}, {self.opX}, {self.opF}"
@@ -179,11 +182,14 @@ class CPUKernel(Kernel):
     return "CPUKernel{" + self.constructorArgs() + "}"
 
   def isValid(self):
-    AVXLen = 8
+    AVXLen = 8 if self.elemType == "float" else 4
+    assert self.arch == "avx"
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
-    cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
+    cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
+              and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
             (self.aalign == 8 and self.rk % AVXLen == 0))
+
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
       cond = cond and self.rk == min(16, self.shape.k//self.shape.p) and self.rq == min(4, self.tileQ)
@@ -360,14 +366,33 @@ class KernelTemplate:
       return False
     return True
 
-def xalignment(m, cols, op, elem_type):
+def x_mem_vector_len(m, cols, op, elem_type):
   if op == "T":
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return max([a for a in vector_lens(elem_type) if cols % a == 0])
+    return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
-def falignment(cols, elem_type):
-  return max([a for a in vector_lens(elem_type) if cols % a == 0])
+def f_mem_vector_len(cols, elem_type):
+  return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+
+def simd_lengths(backend: str, arch : str, elem_type: str):
+  assert backend == "x86"
+  lengths = [1]
+  if arch == "avx" or arch == "avx512":
+    lengths += [256 // (element_size(elem_type) * 8)]
+  if arch == "avx512":
+    lengths += [512 // (element_size(elem_type) * 8)]
+  
+  # assert False, f"Invalid {arch}"
+  return lengths
+
+def x_simd_len(backend : str, arch : str, m, cols, op, elem_type):
+  lengths = simd_lengths(backend, arch, elem_type)
+  return max([a for a in lengths if cols % a == 0])
+
+def f_simd_len(backend : str, arch : str, cols, elem_type):
+  lengths = simd_lengths(backend, arch, elem_type)
+  return max([a for a in lengths if cols % a == 0])
 
 def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs):
   if not os.path.exists(all_kernels_dir):
@@ -418,33 +443,34 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
                           for tP in TilePs:
                             fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
                             for numFusedKerns in fusedCases:
-                              aalign = xalignment(tM, tK, opx, elem_type)
-                              kronalign = falignment(tQ, elem_type)
                               shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
                               if shape not in configs:
                                 configs[shape] = []
                               __configs = []
                               for opt_level in range(0, 4):
-                                if opt_level <= 1 or aalign == 1:
-                                  new_aalign = aalign
-                                elif opt_level == 2:
-                                  new_aalign = min(aalign, kronalign)
-                                else:
-                                  new_aalign = aalign
-    
                                 if backend in ['cuda', 'hip']:
-                                      distKernels = [0, 1] if useDistKernels else [0]
-                                      for dist in distKernels:
-                                        config = GPUKernel(backend, arch, KronMatMulShape(m, tK, n, p, q), 
-                                                                KronMatMulShape(m, k, n, ps, qs),
-                                                                p, q, tQ, tP, tM, regM, regRows, regCols,
-                                                                numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
-                                                                opx, opF) 
-                                        if config.isValid():
-                                          __configs += [config]
+                                  aalign = x_mem_vector_len(tM, tK, opx, elem_type)
+                                  kronalign = f_mem_vector_len(tQ, elem_type)
+                                  if opt_level <= 1 or aalign == 1:
+                                    new_aalign = aalign
+                                  elif opt_level == 2:
+                                    new_aalign = min(aalign, kronalign)
+                                  else:
+                                    new_aalign = aalign
+                                  distKernels = [0, 1] if useDistKernels else [0]
+                                  for dist in distKernels:
+                                    config = GPUKernel(backend, arch, KronMatMulShape(m, tK, n, p, q), 
+                                                          KronMatMulShape(m, k, n, ps, qs),
+                                                          p, q, tQ, tP, tM, regM, regRows, regCols,
+                                                          numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
+                                                          opx, opF) 
+                                    if config.isValid():
+                                      __configs += [config]
                                 elif backend == 'x86':
                                   dist = 0
-                                  config = CPUKernel(KronMatMulShape(m, tK, n, p, q),
+                                  aalign = x_simd_len(backend, arch, tM, tK, opx, elem_type)
+                                  kronalign = f_simd_len(backend, arch, tQ, elem_type)
+                                  config = CPUKernel(backend, arch, KronMatMulShape(m, tK, n, p, q),
                                                           KronMatMulShape(m, k, n, ps, qs),
                                                           p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
                                                           dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF)
@@ -601,6 +627,9 @@ if __name__ == "__main__":
   if args.backend == "cuda":
     for sm in args.archs:
       assert sm in ["volta", "ampere", "hopper"]
+  elif args.backend == "x86":
+    for cpu_flag in args.archs:
+      assert cpu_flag in ["sisd", "avx", "avx512"]
 
   print("Generating kernels for ", parsed_cases)
   for opX in args.opX:
@@ -625,5 +654,5 @@ if __name__ == "__main__":
       if line.strip() != "":
         match_configs += [line]
   
-  generate_kernel_decls(parsed_cases, args.opX, args.opF, args.types, not args.no_fuse, args.dist_kernels,
-                        args.num_kernels, match_configs, args.backend, args.archs)
+  generate_kernel_decls(parsed_cases, args.opX, args.opF, args.types, not args.no_fuse, 
+                        args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs)

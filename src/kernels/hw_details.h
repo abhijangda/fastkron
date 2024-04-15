@@ -62,7 +62,7 @@ public:
   //                regsPerSM(regsPerSM), sharedMemPerSM(sharedMemPerSM) {}
   CUDAArchDetails(int dev);
   
-  friend std::ostream& operator<<(std::ostream &out, const CUDAArchDetails &detail) {
+  friend std::ostream& operator<<(std::ostream &out, const CUDAArchDetails& detail) {
     std::string indent = "    ";
     out << detail.name << std::endl <<
           indent << "Compute Capability      : " << (detail.computeMajor*10 + detail.computeMinor) << std::endl <<
@@ -78,4 +78,47 @@ public:
   }
 
   virtual ~CUDAArchDetails() {}
+};
+
+enum X86SIMD {
+  NoSIMD,
+  AVX,
+  AVX512
+};
+
+static std::string x86simdToStr(X86SIMD simd) {
+  switch(simd) {
+    case NoSIMD:
+      return "-";
+    case AVX:
+      return "AVX";
+    case AVX512:
+      return "AVX512";
+  }
+  return "";
+}
+
+class X86ArchDetails : public HardwareDetails {
+public:
+  std::string vendor;
+  uint32_t l2Size;
+  uint32_t l3Size;
+  uint32_t sockets;
+  uint32_t cores;
+  X86SIMD simd;
+
+  X86ArchDetails(std::string vendor, uint32_t l2Size, uint32_t l3Size, uint32_t sockets, uint32_t cores, X86SIMD simd) :
+    vendor(vendor), l2Size(l2Size), l3Size(l3Size), sockets(sockets), cores(cores), simd(simd)
+  {}
+
+  friend std::ostream& operator<<(std::ostream& out, const X86ArchDetails& detail) {
+    std::string indent = "    ";
+    out << indent << "Vendor        :" << detail.vendor  << std::endl
+        << indent << "L2 Cache Size :" << detail.l2Size  << std::endl
+        << indent << "L3 Cache Size :" << detail.l3Size  << std::endl
+        << indent << "Cores         :" << detail.cores   << std::endl
+        << indent << "Sockets       :" << detail.sockets << std::endl
+        << indent << "SIMD Type     :" << x86simdToStr(detail.simd) << std::endl;
+    return out;
+  }
 };
