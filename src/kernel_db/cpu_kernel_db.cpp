@@ -162,12 +162,19 @@ X86KernelDatabase::X86KernelDatabase() {
     cores = ((unsigned)(cpuidregs[2] & 0xff)) + 1; // ECX[7:0] + 1
   }
 
-  //Get L2 and L3 cache size
+  //Get L1 cache size in KB
+  uint32_t l1Size = 0;
+  {
+    cpuid(0x80000005, cpuidregs);
+    l1Size = (cpuidregs[2] >> 24) & 0xFF; //ECX[31:24]
+  }
+
+  //Get L2 and L3 cache size in KB
   uint32_t l2Size = 0, l3Size = 0;
   {
     cpuid(0x80000006, cpuidregs);
-    l2Size = (cpuidregs[2] >> 18) & 0xFFFF; //ECX[31:18]
-    l3Size = (cpuidregs[3] >> 18) & 0x3FFF;
+    l2Size = (cpuidregs[2] >> 16) & 0xFFFF; //ECX[31:16]
+    l3Size = ((cpuidregs[3] >> 18) & 0x3FFF) * 512; //EDX[31:18]
   }
 
   //Get number of cpu sockets
@@ -226,7 +233,8 @@ X86KernelDatabase::X86KernelDatabase() {
     }
   }
 
-  auto detail = new X86ArchDetails{cpuVendor, l2Size, l3Size, sockets, cores, simd};
+  auto detail = new X86ArchDetails(cpuVendor, l1Size, l2Size, l3Size, 
+                                   sockets, cores, simd);
   hardware.push_back(detail);
 
   std::cout << "Detected CPU " << std::endl << (*detail) << std::endl;
