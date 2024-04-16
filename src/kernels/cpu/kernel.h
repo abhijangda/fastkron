@@ -32,15 +32,26 @@ class FloatVectorType<8>
 {
 private:
   __m256 data;
+  uint32_t VectorLen = 8;
 public:
   void load(const float* ptr) {
     data = _mm256_loadu_ps(ptr);
   }
 
   void store(float* ptr) {
-    _mm256_storeu_ps(ptr, data);  
+    _mm256_storeu_ps(ptr, data);
   }
   
+  void store(float* ptr, uint32_t sz) {
+    if (sz == VectorLen)
+      _mm256_storeu_ps(ptr, data);
+    else {
+      float elems[VectorLen];
+      _mm256_storeu_ps(elems, data);
+      memcpy(ptr, elems, sz * sizeof(float));
+    }
+  }
+
   void zero() {
     data = _mm256_setzero_ps();
   }
@@ -141,7 +152,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t ym = 0; ym < VecRegM; ym++) {
     for (uint32_t yk = 0; yk < VecRegK; yk++) {
     for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-      yReg[ym][yq][yk].load(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
+      yReg[ym][yq][yk].load(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen]);
     }}}
   }
 
@@ -228,11 +239,15 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
       for (uint32_t em = 0; em < VecRegM; em++) {
         #pragma unroll
         for (uint32_t ek = 0; ek < VecRegK; ek++) {
-          XReg[em][ek].load(&TileX[(m + em)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + ek*VectorLen]);
+          XReg[em][ek].load(&TileX[(m + em)*TileP*(kTileK/MaxP) + p * (kTileK/MaxP) + k/TileP + ek*VectorLen]);
       }}
-
+      if (k == 3584) {
+        // for (int i = 0; i < RegK; i++)
+        // printf("tileP %d p %d %.1f \n", tileP, p, TileX[p * (kTileK/MaxP) + k/TileP + 14]);
+      }
       #pragma unroll
       for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+        // if (q == 0 && rq == 0) printf("p %d %f\n", p, TileF[p*TileQ + q + rq]);
         if (OpF == fastKronOp_N)
           FReg[rq].broadcast(&TileF[p*TileQ + q + rq]);
         else
@@ -254,7 +269,9 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t ym = 0; ym < VecRegM; ym++) {
     for (uint32_t yq = 0; yq < VecRegQ; yq++) {
     for (uint32_t yk = 0; yk < VecRegK; yk++) {
-      yReg[ym][yq][yk].store(&tileBuff[(m+ym)*TileQ*(TileK/P) + (q+yq)*(TileK/P) + k/TileP+yk*VectorLen]);
+      uint32_t idx = (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen;
+      // if (q == 0 && rq == 0 && k ==) printf("idx %d q %d yq %d k %d yk %d\n", idx, q, yq, k, yk);
+      yReg[ym][yq][yk].store(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + idx]);
     }}}
   } else {
     const uint32_t XTileSlices = TileK/P;
@@ -273,6 +290,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
       } else {
         //TODO: Need to fix
         uint32_t memK;
+        uint32_t slice = k/TileP + rk*VectorLen;
         if (FusedFacs > 1) {
           uint32_t xshCol = cacheK;
           //Scale shared mem slice idx to global mem idx
@@ -283,16 +301,22 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
           uint32_t elem = (tileK/TileK) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
           memK = glSlice + sliceElem + elem; 
         } else {
-          memK = (cacheK/XTileSlices) * XSlices +
-                  (tileK/TileK) * XTileSlices +
-                  cacheK % XTileSlices;
+          memK = (q + rq) * XSlices +
+                  tileK * XTileSlices +
+                  slice;
 
           if (TileQ < Q) {
             memK += tileQ * XSlices * TileQ;
           }
         }
-        if (m + rm < XTile.m())
-          reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N));
+
+        if (memK >= K) {continue;}
+        if (m + rm < XTile.m()) {
+          uint32_t sliceRemaining = XTileSlices - slice;
+          reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), MIN(sliceRemaining, VectorLen));
+          //if (memK==0) printf("memk %d\n", memK);
+          // if (memK == 120) printf("memK %d tileK %d q %d rq %d k %d rk %d\n", memK, tileK, q, rq, k, rk);
+        }
       }
     }}}
   }
@@ -385,21 +409,23 @@ void cpuKernel(KernelParams<FusedFacs> params,
                 transpose<VectorLen>(slices);
 
                 for (uint32_t pp = 0; pp < VectorLen; pp++) {
-                  slices[pp].store(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P]);
+                  slices[pp].store(&TileX[m*TileP*(kTileK/MaxP) + (p + pp)*(kTileK/MaxP) + k/P]);
                 }
               } else {
                 // printf("P %d tileP %d p %d %d\n", P, tileP, p, P-tileP-p);
                 uint32_t NumSlices1 = (TileK - k)/P;
-                uint32_t pp = 0;
-                for (; pp < P - tileP - p; pp++) {
+                uint32_t remainingP = P - tileP - p;
+                // printf("remainingP %d NumSlices1 %d TileK %d k %d p %d\n", remainingP, NumSlices1, TileK, k, p);
+                for (; p < P - tileP; p++) {
                   for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
-                    const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p + pp, 0) :
-                                                                &tileBuff[m * TileK + k + sliceIdx*P + tileP + p + pp];
-                    TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P + sliceIdx] = *ptr;
+                    const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
+                                                                &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
+                    // if (p>=31 || k/P + sliceIdx >= 127) printf("%d %d\n",p,k/P + sliceIdx);
+                    TileX[m*TileP*(kTileK/MaxP) + p*(kTileK/MaxP) + k/P + sliceIdx] = *ptr;
                   }
                 }
 
-                for (; p + pp < TileP; pp++) {
+                for (; p < TileP; p++) {
                   for (uint32_t sliceIdx = NumSlices1; sliceIdx < NumSlices; sliceIdx++)
                   //TODO: set to zero?
                     ;// TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P + sliceIdx] = 0.0f;
@@ -411,10 +437,10 @@ void cpuKernel(KernelParams<FusedFacs> params,
           if (false && tileP == 96 && tid == 0) {
             printf("tileP %d\n", tileP);
             for (int ii = 0; ii < TileP; ii++) {
-              // if (ii < 31) continue;
+              if (ii < 31) continue;
               printf("ii %d \n", ii);
-              for (int jj = 0; jj < TileK/P; jj++) {
-                printf("%.1f ", TileX[ii * (TileK/P) + jj]);
+              for (int jj = 0; jj < TileK/MaxP; jj++) {
+                printf("%d %.1f \n", jj, TileX[ii * (TileK/MaxP) + jj]);
               }
               printf("\n");
             }
@@ -438,9 +464,9 @@ void cpuKernel(KernelParams<FusedFacs> params,
         
         for (uint32_t m = 0; m < XTile.m(); m += RegM) {
         for (uint32_t q = 0; q < TileQ; q += RegQ) {
-        for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
-          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>(TileK, tileM, tileK, tileP, tileQ,
-          m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
+        for (uint32_t k = 0; k < kTileK/MaxP * TileP; k += RegK * TileP) {
+          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>
+          (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
         }}}
       }
     }
