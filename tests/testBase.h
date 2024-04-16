@@ -70,6 +70,7 @@
                 Matrix Functions
 ***************************************************/
 int one(int i, int j) {return 1;}
+int zero(int i, int j) {return 0;}
 int zeroOne(int i, int j) {return i % 2;}
 int zeroOneJ(int i, int j) {return j % 2;}
 int setToI(int i, int j) {return i;}
@@ -447,7 +448,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   }
   if (verbose) printf("setting values on host\n");
   if (checkResults)
-    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, randMod, randMod);
+    setValues(NUM_KP_MATS, hKpMats, hX, M, N, K, KP_MAT_N, KP_MAT_K, one, one);
   if (verbose) printf("values set\n");
   //Allocate GPU data
   fastKronHandle handle;

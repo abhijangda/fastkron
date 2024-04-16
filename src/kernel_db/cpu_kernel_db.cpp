@@ -26,13 +26,26 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
                    EpilogueParams epilogueParams,
                    KernelMode execMode) {
   //Create the grid and thread block
-  KernelParams<FusedFacs> params (problem, kernelInfo.tileX, kernelInfo.tileF, kronIndex, execMode);
+  KernelParams<FusedFacs> params (problem, kernelInfo.getTileX(problem), 
+                                  kernelInfo.getTileF(problem), kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
+  if (kronIndex == 1) {
+    printf("80\n");
+    for (int i = 0; i < problem.y().numel(); i++) {
+      float* m = (float*)problem.y().ptr;
+      uint row = i/(problem.y().n());
+      if (m[i] != 127) {
+        printf("%f %d %d\n", m[i], i/(problem.y().n()), i%(problem.y().n()));
+        break;
+      }
+    }
+    exit(EXIT_SUCCESS);
+  }
   return fastKronSuccess;
 }
 
@@ -84,8 +97,6 @@ fastKronError CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
   return fastKronSuccess;
 }
 
-//f_128x128_32x128_1_1x8192_1x16x4_NN_0_0
-//f_128x128_128x128_1_1x8192_1x16x4_NN_0_0
 //f_128x128_32x128_1_1x16384_1x16x4_NN_0_0
 fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
                                  KMMProblem problem, DistributedParams distParams, 

@@ -117,11 +117,11 @@ inline void transpose(FloatVectorType<8> rows[8]) {
 }
 
 template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
-         uint TileP, uint TileQ, uint TileK,
+         uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
          fastKronOp OpF, typename SliceX>
 __attribute__((always_inline)) static inline
-void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
+void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
   //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
   const uint32_t RegM = TileM;
   const uint32_t VecRegK = RegK/VectorLen;
@@ -287,9 +287,8 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
                   (tileK/TileK) * XTileSlices +
                   cacheK % XTileSlices;
 
-          if (TileQ != Q) {
-            const uint32_t QTiles = Q/TileQ;
-            memK += (tileQ/TileQ) * (Y.n()/QTiles);
+          if (TileQ < Q) {
+            memK += tileQ * XSlices * TileQ;
           }
         }
         if (m + rm < XTile.m())
@@ -300,7 +299,7 @@ void vectorMMAAndStore(uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t 
 }
 
 template<typename ElemT, uint MaxQ, uint MaxP, uint TileP, 
-         uint TileQ, uint TileK, uint TileM, uint FusedFacs, 
+         uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
          uint RegK, uint RegQ, int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,
@@ -314,7 +313,8 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t K = X.n();
   const uint32_t P = F.p();
   const uint32_t Q = F.q();
-
+  const uint32_t XSlices = params.XSlices;
+  const uint32_t XshSlices = params.XshSlices;
   const uint32_t RegM = TileM;
 
   const uint32_t YRegs = RegM * RegK * RegQ;
@@ -324,15 +324,17 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t VectorLen = (XAlignment == 8 && RegK % 8 == 0) ? 8 : 1; //AVX256 length
   
   // static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
-  static_assert(TileK % RegK == 0);
-  static_assert(TileQ % RegQ == 0);
+  // static_assert(TileK % RegK == 0);
+  // static_assert(TileQ % RegQ == 0);
   assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q));
   //For Transpose load loop to TileX
-  assert ((TileK/P) % VectorLen == 0);
+  // assert ((TileK/P) % VectorLen == 0);
 
   uint threads = omp_get_max_threads();
   
-  const size_t SzTileX = TileM*TileP*(TileK/P);
+  const size_t SzTileX = TileM*kTileK;
+  printf("SzTileX %d\n", SzTileX);
+  const size_t TileK = XshSlices*P;
   //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
   static ElemT* TileYs[96] = {nullptr};
@@ -341,13 +343,14 @@ void cpuKernel(KernelParams<FusedFacs> params,
   if (TileXs[0] == nullptr) {
     for (int i = 0; i < 96; i++)  {
       TileXs[i] = (ElemT*)aligned_alloc(4096, SzTileX * sizeof(ElemT));
-      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * TileK/P * sizeof(ElemT));
+      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * XshSlices * sizeof(ElemT));
       TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
     }
   }
 
   #pragma omp parallel for collapse(3)
   for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
+//TODO: Would swapping Q and K improve the performance
   for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
   for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     Slice<ElemT, OpX> XTile(tileM, tileK, 
@@ -362,30 +365,58 @@ void cpuKernel(KernelParams<FusedFacs> params,
       ElemT* TileX = TileXs[tid];
       //Transpose X data and store to TileX to reduce TLB misses
       for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
+        memset(TileX, 0, SzTileX); //TODO: remove this
         for (uint32_t m = 0; m < XTile.m(); m++) {
           uint32_t NumSlices = VectorLen;
           for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
-            for (uint32_t p = 0; p < ROUNDDOWN(TileP, VectorLen); p += VectorLen) {
-              FloatVectorType<VectorLen> slices[VectorLen];
-              for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
-                const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
-                                                            &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
-                slices[sliceIdx].load(ptr);
-              }
+            uint32_t p = 0;
+            for (p = 0; p < TileP; p += VectorLen) {
+              if (P - tileP - p >= VectorLen && TileK - k >= NumSlices * P) {
+                FloatVectorType<VectorLen> slices[VectorLen];
+                for (int i = 0; i < VectorLen; i++) {
+                  slices[i].zero();
+                }
+                for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+                  const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
+                                                              &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
+                  slices[sliceIdx].load(ptr);
+                }
 
-              transpose<VectorLen>(slices);
+                transpose<VectorLen>(slices);
 
-              for (uint32_t pp = 0; pp < VectorLen; pp++) {
-                slices[pp].store(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P]);
+                for (uint32_t pp = 0; pp < VectorLen; pp++) {
+                  slices[pp].store(&TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P]);
+                }
+              } else {
+                // printf("P %d tileP %d p %d %d\n", P, tileP, p, P-tileP-p);
+                uint32_t NumSlices1 = (TileK - k)/P;
+                uint32_t pp = 0;
+                for (; pp < P - tileP - p; pp++) {
+                  for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
+                    const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p + pp, 0) :
+                                                                &tileBuff[m * TileK + k + sliceIdx*P + tileP + p + pp];
+                    TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P + sliceIdx] = *ptr;
+                  }
+                }
+
+                for (; p + pp < TileP; pp++) {
+                  for (uint32_t sliceIdx = NumSlices1; sliceIdx < NumSlices; sliceIdx++)
+                  //TODO: set to zero?
+                    ;// TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P + sliceIdx] = 0.0f;
+                }
               }
             }
+          }
 
-            for (uint32_t p = ROUNDDOWN(TileP, VectorLen); p < TileP; p++) {
-              for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
-                const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
-                                                            &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
-                TileX[m*TileP*(TileK/P) + p*(TileK/P) + k/P + sliceIdx] = *ptr;
+          if (false && tileP == 96 && tid == 0) {
+            printf("tileP %d\n", tileP);
+            for (int ii = 0; ii < TileP; ii++) {
+              // if (ii < 31) continue;
+              printf("ii %d \n", ii);
+              for (int jj = 0; jj < TileK/P; jj++) {
+                printf("%.1f ", TileX[ii * (TileK/P) + jj]);
               }
+              printf("\n");
             }
           }
         }
@@ -393,8 +424,10 @@ void cpuKernel(KernelParams<FusedFacs> params,
         ElemT* TileF = TileFs[tid]; //[TileP][TileQ];
         Factor F = params.problem.f(fac);
         if (OpF == fastKronOp_N) {
+          memset(TileF, 0, TileP*TileQ * sizeof(ElemT));
           for (int p = 0; p < TileP; p++) {
-            memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+            if (tileP + p < P)
+              memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
           }
         } else if (OpF == fastKronOp_T) {
           //Access TileF in mma as transpose
@@ -406,7 +439,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
         for (uint32_t m = 0; m < XTile.m(); m += RegM) {
         for (uint32_t q = 0; q < TileQ; q += RegQ) {
         for (uint32_t k = 0; k < TileK/P * TileP; k += RegK * TileP) {
-          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, TileK, TileM, FusedFacs, RegK, RegQ, OpF>(tileM, tileK, tileP, tileQ,
+          vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>(TileK, tileM, tileK, tileP, tileQ,
           m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
         }}}
       }
