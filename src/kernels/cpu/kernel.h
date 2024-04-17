@@ -309,10 +309,6 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
           memK += tileQ * XSlices;
         }
 
-        // if (tileK/TileK == 1) printf("memK %d\n", memK);
-        // if (memK == 0)
-        //   printf("memK %d tileK %d q %d rq %d k %d rk %d K %d slice %d\n",
-        //          memK, tileK, q, rq, k, rk, K, slice);
         if (memK >= Y.n()) {
           printf("memK %d tileK %d q %d rq %d k %d rk %d K %d slice %d tileQ %d XSlices %d TileQ %d\n",
                   memK, tileK, q, rq, k, rk, K, slice, tileQ, XSlices, TileQ);
@@ -321,7 +317,6 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         if (m + rm < XTile.m()) {
           uint32_t sliceRemaining = XTile.cols/P - slice;
           reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), MIN(sliceRemaining, VectorLen));
-          //if (memK==0) printf("memk %d\n", memK);
         }
       }
     }}}
@@ -396,7 +391,6 @@ void cpuKernel(KernelParams<FusedFacs> params,
       ElemT* TileX = TileXs[tid];
       //Transpose X data and store to TileX to reduce TLB misses
       for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
-        memset(TileX, 0, SzTileX); //TODO: remove this
         for (uint32_t m = 0; m < XTile.m(); m++) {
           uint32_t NumSlices = VectorLen;
           for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
@@ -434,8 +428,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
 
                 for (; p < TileP; p++) {
                   for (uint32_t sliceIdx = NumSlices1; sliceIdx < NumSlices; sliceIdx++)
-                  //TODO: set to zero?
-                    ;// TileX[m*TileP*(TileK/P) + (p + pp)*(TileK/P) + k/P + sliceIdx] = 0.0f;
+                    TileX[m*TileP*(kTileK/MaxP) + p*(kTileK/MaxP) + k/P + sliceIdx] = 0.0f;
                 }
               }
             }
@@ -457,10 +450,16 @@ void cpuKernel(KernelParams<FusedFacs> params,
         ElemT* TileF = TileFs[tid]; //[TileP][TileQ];
         Factor F = params.problem.f(fac);
         if (OpF == fastKronOp_N) {
-          memset(TileF, 0, TileP*TileQ * sizeof(ElemT)); //TODO: fix this
           for (int p = 0; p < TileP; p++) {
-            if (tileP + p < P)
-              memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), MIN(TileQ, Q) * sizeof(ElemT));
+            if (tileP + p < P) {
+              memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), MIN(TileQ, Q - tileQ) * sizeof(ElemT));
+              if (Q - tileQ < TileQ) {
+                memset(&TileF[p*TileQ + Q - tileQ], 0, (TileQ - (Q - tileQ)) * sizeof(ElemT));
+              }
+            }
+            else {
+              memset(&TileF[p*TileQ + 0], 0, TileQ * sizeof(ElemT));
+            }
           }
         } else if (OpF == fastKronOp_T) {
           //Access TileF in mma as transpose
