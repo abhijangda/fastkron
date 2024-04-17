@@ -34,7 +34,7 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
-  if (false && kronIndex == 1) {
+  if (false && kronIndex == 2) {
     printf("80\n");
     for (int i = 0; i < problem.y().numel(); i++) {
       float* m = (float*)problem.y().ptr;

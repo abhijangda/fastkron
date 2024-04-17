@@ -291,6 +291,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         //TODO: Need to fix
         uint32_t memK;
         uint32_t slice = k/TileP + rk*VectorLen;
+        if (slice >= XTile.cols/P) continue;
         if (FusedFacs > 1) {
           uint32_t xshCol = cacheK;
           //Scale shared mem slice idx to global mem idx
@@ -302,20 +303,22 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
           memK = glSlice + sliceElem + elem; 
         } else {
           memK = (q + rq) * XSlices +
-                  tileK * XTileSlices +
+                  (tileK/TileK) * XTileSlices +
                   slice;
-
-          if (TileQ < Q) {
-            memK += tileQ * XSlices * TileQ;
-          }
+        }
+        if (TileQ < Q) {
+          memK += tileQ * XSlices * TileQ;
         }
 
+        // if (tileK/TileK == 1) printf("memK %d\n", memK);
+        // if (memK == 16136)
+        //   printf("memK %d tileK %d q %d rq %d k %d rk %d K %d slice %d\n",
+        //          memK, tileK, q, rq, k, rk, K, slice);
         if (memK >= K) {continue;}
         if (m + rm < XTile.m()) {
-          uint32_t sliceRemaining = XTileSlices - slice;
+          uint32_t sliceRemaining = XTile.cols/P - slice;
           reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), MIN(sliceRemaining, VectorLen));
           //if (memK==0) printf("memk %d\n", memK);
-          // if (memK == 120) printf("memK %d tileK %d q %d rq %d k %d rk %d\n", memK, tileK, q, rq, k, rk);
         }
       }
     }}}
@@ -357,8 +360,9 @@ void cpuKernel(KernelParams<FusedFacs> params,
   uint threads = omp_get_max_threads();
   
   const size_t SzTileX = TileM*kTileK;
-  printf("SzTileX %d\n", SzTileX);
   const size_t TileK = XshSlices*P;
+  printf("SzTileX %d XshSlices %d TileK %d\n", SzTileX, XshSlices, TileK);
+  
   //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
   static ElemT* TileYs[96] = {nullptr};
@@ -378,10 +382,10 @@ void cpuKernel(KernelParams<FusedFacs> params,
   for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
   for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     Slice<ElemT, OpX> XTile(tileM, tileK, 
-                            (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), TileK,
+                            (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
+                            MIN(TileK, K - tileK),
                             P, P, //TODO: setting this to P because XTile.data is not right for GPU backend
                             X);
-
     const uint tid = omp_get_thread_num();
     ElemT* tileBuff = TileYs[tid];
 
