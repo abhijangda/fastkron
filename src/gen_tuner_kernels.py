@@ -155,13 +155,13 @@ class CPUKernel(Kernel):
     self.arch = arch
 
   def __repr__(self):
-    return f"{self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.dist}, {self.elemType}, {self.opX}, {self.opF}"
+    return f"{self.backend}_{self.arch}_{self.elemType[0]}_{self.shape.p}_{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}"
   
   def filename(self):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"{self.elemType}, {self.shape.p}, {self.shape.q}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rk}, {self.rq}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"{self.elemType}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
@@ -199,13 +199,13 @@ class CPUKernel(Kernel):
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
-              (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and \
+              (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.opt_level == 3 and \
               #Next fused intermediate must have atleast AVXLen slices to make sure
               #Transpose X->TileX loads contiguous AVXLen first elements of slices of same P
                self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen 
+           self.rq <= AVXLen and self.rm == self.tileM
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
@@ -241,7 +241,7 @@ class GPUKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}_{self.elemType}_{self.aalign}_{self.kalign}"
+    return f"{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
 
   # def kernelname(self):
   #   return f"{super().kernelname()}"

@@ -325,7 +325,8 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
 
 template<typename ElemT, uint MaxQ, uint MaxP, uint TileP, 
          uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
-         uint RegK, uint RegQ, int XAlignment, int FAlignment,
+         uint RegM, uint RegK, uint RegQ, uint OptLevel, 
+         int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs> params,
                FusedParams<FusedFacs> fusedParams,
@@ -340,7 +341,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   const uint32_t Q = F.q();
   const uint32_t XSlices = params.XSlices;
   const uint32_t XshSlices = params.XshSlices;
-  const uint32_t RegM = TileM;
+  static_assert(RegM == TileM, "x86 requires RegM == TileM");
 
   const uint32_t YRegs = RegM * RegK * RegQ;
   const uint32_t XRegs = RegM * RegK;
@@ -351,7 +352,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   // static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
   // static_assert(TileK % RegK == 0);
   // static_assert(TileQ % RegQ == 0);
-  assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q));
+  assert(FusedFacs == 1 || (FusedFacs > 1 && P <= TileP && Q <= TileQ && P == Q && OptLevel == KernelOptimizations::MaxOptLevel()));
   //For Transpose load loop to TileX
   // assert ((TileK/P) % VectorLen == 0);
 
@@ -359,8 +360,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   
   const size_t SzTileX = TileM*kTileK;
   const size_t TileK = XshSlices*P;
-  printf("SzTileX %d XshSlices %d XSlices %d TileK %d\n", SzTileX, XshSlices, XSlices, TileK);
-  
+  // printf("SzTileX %d TileK %d XshSlices %d\n", SzTileX, TileK, XshSlices);
   //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
   static ElemT* TileYs[96] = {nullptr};
@@ -396,7 +396,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
           for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
             uint32_t p = 0;
             for (p = 0; p < TileP; p += VectorLen) {
-              if (P - tileP - p >= VectorLen && TileK - k >= NumSlices * P) {
+              if (TileP >= VectorLen && P - tileP - p >= VectorLen && TileK - k >= NumSlices * P) {
                 FloatVectorType<VectorLen> slices[VectorLen];
                 for (int i = 0; i < VectorLen; i++) {
                   slices[i].zero();
@@ -427,8 +427,9 @@ void cpuKernel(KernelParams<FusedFacs> params,
                 }
 
                 for (; p < TileP; p++) {
-                  for (uint32_t sliceIdx = NumSlices1; sliceIdx < NumSlices; sliceIdx++)
+                  for (uint32_t sliceIdx = NumSlices1; sliceIdx < NumSlices; sliceIdx++) {
                     TileX[m*TileP*(kTileK/MaxP) + p*(kTileK/MaxP) + k/P + sliceIdx] = 0.0f;
+                  }
                 }
               }
             }
