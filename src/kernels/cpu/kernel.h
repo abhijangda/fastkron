@@ -292,6 +292,8 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         uint32_t memK;
         uint32_t slice = k/TileP + rk*VectorLen;
         if (slice >= XTile.cols/P) continue;
+        if (tileQ + q + rq >= MIN(TileQ, Q)) continue;
+
         if (FusedFacs > 1) {
           uint32_t xshCol = cacheK;
           //Scale shared mem slice idx to global mem idx
@@ -314,7 +316,11 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         // if (memK == 16136)
         //   printf("memK %d tileK %d q %d rq %d k %d rk %d K %d slice %d\n",
         //          memK, tileK, q, rq, k, rk, K, slice);
-        if (memK >= K) {continue;}
+        if (memK >= Y.n()) {
+          printf("memK %d tileK %d q %d rq %d k %d rk %d K %d slice %d\n",
+                  memK, tileK, q, rq, k, rk, K, slice);
+          continue;
+        }
         if (m + rm < XTile.m()) {
           uint32_t sliceRemaining = XTile.cols/P - slice;
           reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), MIN(sliceRemaining, VectorLen));
@@ -361,7 +367,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   
   const size_t SzTileX = TileM*kTileK;
   const size_t TileK = XshSlices*P;
-  printf("SzTileX %d XshSlices %d TileK %d\n", SzTileX, XshSlices, TileK);
+  printf("SzTileX %d XshSlices %d XSlices %d TileK %d\n", SzTileX, XshSlices, XSlices, TileK);
   
   //TODO: Allocate this in fastKron_initBackend
   static ElemT* TileXs[96] = {nullptr};
@@ -371,7 +377,7 @@ void cpuKernel(KernelParams<FusedFacs> params,
   if (TileXs[0] == nullptr) {
     for (int i = 0; i < 96; i++)  {
       TileXs[i] = (ElemT*)aligned_alloc(4096, SzTileX * sizeof(ElemT));
-      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * XshSlices * sizeof(ElemT));
+      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/MaxP) * sizeof(ElemT));
       TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
     }
   }
@@ -454,10 +460,10 @@ void cpuKernel(KernelParams<FusedFacs> params,
         ElemT* TileF = TileFs[tid]; //[TileP][TileQ];
         Factor F = params.problem.f(fac);
         if (OpF == fastKronOp_N) {
-          memset(TileF, 0, TileP*TileQ * sizeof(ElemT));
+          memset(TileF, 0, TileP*TileQ * sizeof(ElemT)); //TODO: fix this
           for (int p = 0; p < TileP; p++) {
             if (tileP + p < P)
-              memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), TileQ * sizeof(ElemT));
+              memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), MIN(TileQ, Q) * sizeof(ElemT));
           }
         } else if (OpF == fastKronOp_T) {
           //Access TileF in mma as transpose
