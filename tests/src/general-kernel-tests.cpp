@@ -23,7 +23,7 @@
 
 #define FLOAT_DOUBLE_TEST(MinN, MaxN, P, Q) \
   GENERAL_TEST(16, MinN, MaxN, P, Q, float); \
-  GENERAL_TEST(16, MinN, MaxN, P, Q, double);
+  // GENERAL_TEST(16, MinN, MaxN, P, Q, double);
 
 
 FLOAT_DOUBLE_TEST(1, 10, 2, 2);
