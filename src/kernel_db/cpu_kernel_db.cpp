@@ -31,8 +31,8 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
-  typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
-                                     DistributedParams, EpilogueParams);
+  typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>&, FusedParams<FusedFacs>&,
+                                     DistributedParams&, EpilogueParams&);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
   if (false && kronIndex == 2) {
     printf("80\n");
@@ -107,9 +107,9 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
                                  float& runtime) {
   runtime = std::numeric_limits<float>::max();
   fastKronError status;
-  for (int sample = 0; sample < 1; sample++) {
+  for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
-    for (int r = 0; r < 1; r++) {
+    for (int r = 0; r < runs; r++) {
       //Trash L3 Cache
       uint32_t l3size = ((X86ArchDetails*)hardware[0])->totalL3Size();
       if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3size)

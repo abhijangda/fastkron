@@ -4,6 +4,7 @@
 
 #include "kmm/kmmalgo.h"
 #include "config.h"
+#include "utils/utils.h"
 
 enum KernelMode {
   KernelModeTuning,
@@ -109,6 +110,46 @@ struct KernelOptimizations {
     return isEnabled(optLevel, Optimization::FactorShapeSame);
   }
 };
+
+template<uint kFactorShapeSame, uint kTileK, uint kP, typename KernelParams> 
+CUDA_DEVICE_HOST uint32_t getXshSlices(const KernelParams& params) {
+  if (kFactorShapeSame) {
+    return kTileK/kP;
+  } else {
+    return params.XshSlices;
+  }
+}
+
+template<uint kFactorShapeSame, uint kQ, typename KernelParams> 
+CUDA_DEVICE_HOST uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
+  //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
+  //number of loads as store also requires reading Y.n()
+  if (kFactorShapeSame) {
+    return Y.n()/kQ;
+  } else {
+    return params.XSlices;
+  }
+}
+
+template<uint kXshSlicesSame, uint RegK> 
+CUDA_DEVICE_HOST uint32_t getQThreads(uint XshSlices) {
+  if (kXshSlicesSame) return XshSlices/RegK;
+  return DIVUP(XshSlices, RegK);
+}
+
+template<uint kQLeTileQ, uint TileQ> 
+CUDA_DEVICE_HOST uint32_t getQByTileQ(uint Q) {
+  if (kQLeTileQ) {
+    return 1;
+  }
+  return DIVUP(Q, TileQ);
+}
+
+template<uint kTileKSame, uint kTileK, typename KernelParams> 
+CUDA_DEVICE_HOST uint32_t getXTileK(KernelParams& params) {
+  if (kTileKSame) return kTileK;
+  return params.tileX.n();
+}
 
 #pragma once
 

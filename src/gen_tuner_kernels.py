@@ -167,7 +167,7 @@ class CPUKernel(Kernel):
     return f"cpuKernel<{self.templateDecl()}>"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams)"
+    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}>& params, FusedParams<{self.fused_kernels}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
 
   def hostInvokeFile(self):
     return "\n".join(['#include "../../kernel.h"', "",
@@ -205,7 +205,7 @@ class CPUKernel(Kernel):
                self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen and self.rm == self.tileM
+           self.rq <= AVXLen and self.rm == self.tileM# and self.opt_level == 3
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
