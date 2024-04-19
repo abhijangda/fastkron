@@ -375,7 +375,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
   if (TileXs[0] == nullptr) {
     for (int i = 0; i < 128; i++)  {
       TileXs[i] = (ElemT*)aligned_alloc(4096, TileM * kTileK * sizeof(ElemT));
-      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/P) * sizeof(ElemT));
+      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/MaxP) * sizeof(ElemT));
       TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
     }
   }
