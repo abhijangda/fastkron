@@ -56,6 +56,8 @@ class GPyTorchEval:
       self.elemtype = torch.double
     elif elemtype == "half":
       self.elemtype = torch.half
+    if self.backend == "x86" and "OMP_NUM_THREADS" in os.environ:
+      torch.set_num_threads(int(os.environ["OMP_NUM_THREADS"]))
 
   def run_single_gpu(self, shape):
     r = self._run_kron(shape)
@@ -186,12 +188,15 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
             #  Shape(M, 3, 128, 128)
             ]
   elif dataset == "full":
+    MAX_SIZE = 256 * 1024 * 1024 if device == "x86" else 1024*1024*1024
     factor = 2 if elemtype == "double" else 1
     for p in [2,4,8,16,32,64,128]:
       for q in [2,4,8,16,32,64,128]:
-        for n in range(1,20):
-          for m in [1,4,16,64,256,1024]:
-            if m*(p**n) > 1024*1024*1024//factor or m*(q**n) > 1024*1024*1024//factor: # or p**n < 64 or q**n < 64:
+        if (p == 2 and q == 2) or (p == 2 and q == 4):
+          continue
+        for n in range(1,13 if device == "x86" else 20):
+          for m in [1,4,16,64,256] + ([] if device == "x86" else [1024]):
+            if m*(p**n) > MAX_SIZE//factor or m*(q**n) > MAX_SIZE//factor: # or p**n < 64 or q**n < 64:
               continue
             cases += [Shape(m, n, p, q)]
 
@@ -289,5 +294,5 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        #run_nn(backend, mode, elemtype, args.dataset)
-        run_tt(backend, mode, elemtype, args.dataset)
+        run_nn(backend, mode, elemtype, args.dataset)
+        #run_tt(backend, mode, elemtype, args.dataset)
