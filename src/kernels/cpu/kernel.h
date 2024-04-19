@@ -368,12 +368,12 @@ void cpuKernel(KernelParams<FusedFacs>& params,
 
   // uint threads = omp_get_max_threads();  
   //TODO: Allocate this in fastKron_initBackend
-  static ElemT* TileXs[96] = {nullptr};
-  static ElemT* TileYs[96] = {nullptr};
-  static ElemT* TileFs[96] = {nullptr};
+  static ElemT* TileXs[128] = {nullptr};
+  static ElemT* TileYs[128] = {nullptr};
+  static ElemT* TileFs[128] = {nullptr};
 
   if (TileXs[0] == nullptr) {
-    for (int i = 0; i < 96; i++)  {
+    for (int i = 0; i < 128; i++)  {
       TileXs[i] = (ElemT*)aligned_alloc(4096, TileM * kTileK * sizeof(ElemT));
       TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/P) * sizeof(ElemT));
       TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
@@ -409,9 +409,6 @@ void cpuKernel(KernelParams<FusedFacs>& params,
                   (TileP >= VectorLen);
               if (ValidAVXTranspose) {
                 FloatVectorType<VectorLen> slices[VectorLen];
-                // for (int i = 0; i < VectorLen; i++) {
-                //   slices[i].zero();
-                // }
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                               &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
