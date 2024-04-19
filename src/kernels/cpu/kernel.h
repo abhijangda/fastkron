@@ -404,9 +404,11 @@ void cpuKernel(KernelParams<FusedFacs>& params,
             uint32_t p = 0;
             for (p = 0; p < TileP; p += VectorLen) {
               const bool ValidAVXTranspose = 
-                  ((kKMultipleOfTileK && kTileKMultipleOfSlices) || TileK - k >= NumSlices * P) && 
-                  ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
-                  (TileP >= VectorLen);
+                  ((OpX == fastKronOp_N) && (
+                    ((kKMultipleOfTileK && kTileKMultipleOfSlices) || TileK - k >= NumSlices * P) && 
+                    ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
+                    (TileP >= VectorLen)
+                  ));
               if (ValidAVXTranspose) {
                 FloatVectorType<VectorLen> slices[VectorLen];
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
