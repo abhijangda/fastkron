@@ -13,7 +13,7 @@ def tune(ms, n, p, q, opX, opF, fuse, backend, elemtype):
   # run_command(f'python gen_tuner_kernels.py -backend {backend} -same-factors {n} {p},{q} -opX {opX} -opF {opF}')
   # run_command(f'cd ../build/ && make benchmark_{backend} -j')
   # for m in ms:
-    o = run_command(f'../build/tests/benchmarks/benchmark_cuda -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t {elemtype} --tune --backend {backend} {"--fuse" if fuse else ""}')
+    o = run_command(f'OMP_NUM_THREADS=64 taskset -c 0-64 ../build/tests/benchmarks/benchmark_{backend} -m {m} -n {n} -p {p} -q {q} -r {10} -w {10} -t {elemtype} --tune --backend {backend} {"--fuse" if fuse else ""}')
     o = o[o.find('Minimum Time'):]
     kernels = re.findall(r'\d+\s(.+)\sruns\sfor', o)
     kernels = set(kernels)
@@ -65,11 +65,12 @@ if __name__ == "__main__":
     for q in [2,4,8,16,32,64,128]:
       if p != q:
         continue
-      for n in range(1,20):
-        for m in [1,4,16,64,256,1024]:
-          if m*(p**n) > 1024*1024*1024 or m*(q**n) > 1024*1024*1024: # or p**n < 64 or q**n < 64:
+      for n in range(1,13):
+        for m in [1,4,16,64,256]:
+          if m*(p**n) > 1024*1024*1024 or m*(q**n) > 1024*1024*1024 or p**n < 64 or q**n < 64:
             continue
           # if p <= 32 and q <= 32:
           #   continue
-          tune(m, n, p, q, args.opX, args.opF, False, args.backend, "double")
-          tune(m, n, p, q, args.opX, args.opF, True, args.backend, "double")
+          if p <= 32:
+            tune(m, n, p, q, args.opX, args.opF, False, args.backend, "float")
+          tune(m, n, p, q, args.opX, args.opF, True, args.backend, "float")

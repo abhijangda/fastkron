@@ -106,6 +106,7 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
                                  int warmups, int runs,
                                  float& runtime) {
   runtime = std::numeric_limits<float>::max();
+  // if (kernel->tileX.n() < 16384 || kernel->tileF.q() < 64) return fastKronSuccess;
   fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
