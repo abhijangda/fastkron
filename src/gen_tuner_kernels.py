@@ -205,7 +205,7 @@ class CPUKernel(Kernel):
                self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen and self.rm == self.tileM and self.opt_level == 3
+           self.rq <= AVXLen and self.rm == self.tileM and self.opt_level == 0
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 

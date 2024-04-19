@@ -477,7 +477,14 @@ void cpuKernel(KernelParams<FusedFacs>& params,
         } else if (OpF == fastKronOp_T) {
           //Access TileF in mma as transpose
           for (int q = 0; q < TileQ; q++) {
-            memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), TileP * sizeof(ElemT));
+            if (tileQ + q < Q) {
+              memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), MIN(TileP, P - tileP) * sizeof(ElemT));
+              if (P - tileP < TileP) {
+                memset(&TileF[q*TileP + P - tileP], 0, (TileP - (P - tileP))*sizeof(ElemT));
+              }
+            } else {
+              memset(&TileF[q*TileP], 0, TileP * sizeof(ElemT));
+            }
           }
         }
         
