@@ -32,7 +32,7 @@ class FloatVectorType<8>
 {
 private:
   __m256 data;
-  uint32_t VectorLen = 8;
+  static const uint32_t VectorLen = 8;
 public:
   void load(const float* ptr) {
     data = _mm256_loadu_ps(ptr);
@@ -62,6 +62,11 @@ public:
 
   void fmadd(FloatVectorType<8>& a, FloatVectorType<8>& b) {
     data = _mm256_fmadd_ps(a.data, b.data, data);
+  }
+
+  void gather(const float* base, uint32_t gatherIdxs[VectorLen]) {
+    __m256i vidx = _mm256_loadu_si256((__m256i*)&gatherIdxs[0]);
+    data = _mm256_i32gather_ps(base, vidx, sizeof(float)); 
   }
 
   friend void transpose<8>(FloatVectorType<8>[8]);
@@ -380,10 +385,10 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     }
   }
 
+  //TODO: Change loops based on Op_T or Op_N
   #pragma omp parallel for collapse(3)
-  for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
-//TODO: Would swapping Q and K improve the performance
   for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
+  for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
   for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     Slice<ElemT, OpX> XTile(tileM, tileK, 
                             (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
@@ -404,17 +409,27 @@ void cpuKernel(KernelParams<FusedFacs>& params,
             uint32_t p = 0;
             for (p = 0; p < TileP; p += VectorLen) {
               const bool ValidAVXTranspose = 
-                  ((OpX == fastKronOp_N) && (
                     ((kKMultipleOfTileK && kTileKMultipleOfSlices) || TileK - k >= NumSlices * P) && 
                     ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
-                    (TileP >= VectorLen)
-                  ));
+                    (TileP >= VectorLen);
               if (ValidAVXTranspose) {
                 FloatVectorType<VectorLen> slices[VectorLen];
-                for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
-                  const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
+                if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac > 0)) {
+                  for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+                    const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                               &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
-                  slices[sliceIdx].load(ptr);
+                    slices[sliceIdx].load(ptr);
+                  }
+                } else if (OpX == fastKronOp_T and fac == 0) {
+                  //TODO: Gather works with AVX2
+                  uint32_t gatherIdxs[VectorLen] = {0};
+                  for (uint pp = 0; pp < VectorLen; pp++) {
+                    gatherIdxs[pp] = pp * X.m();
+                  }
+                  for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+                    const ElemT* ptr = XTile.data(m, k + sliceIdx*P + tileP + p, 0);
+                    slices[sliceIdx].gather(ptr, gatherIdxs);
+                  }
                 }
 
                 transpose<VectorLen>(slices);
