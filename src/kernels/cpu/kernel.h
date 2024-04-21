@@ -367,14 +367,14 @@ void threadWork(KernelParams<FusedFacs>& params,
                   (TileP >= VectorLen);
             if (ValidAVXTranspose) {
               FloatVectorType<VectorLen> slices[VectorLen];
-              if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac > 0)) {
+              if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                             &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
                   slices[sliceIdx].load(ptr);
                 }
                 transpose<VectorLen>(slices);
-              } else if (OpX == fastKronOp_T and fac == 0) {
+              } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
                 //TODO: Gather works with AVX2
                 uint32_t gatherIdxs[VectorLen] = {0};
                 for (uint pp = 0; pp < VectorLen; pp++) {
