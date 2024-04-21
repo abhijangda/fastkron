@@ -420,19 +420,19 @@ void cpuKernel(KernelParams<FusedFacs>& params,
                                                               &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
                     slices[sliceIdx].load(ptr);
                   }
+                  transpose<VectorLen>(slices);
                 } else if (OpX == fastKronOp_T and fac == 0) {
                   //TODO: Gather works with AVX2
                   uint32_t gatherIdxs[VectorLen] = {0};
                   for (uint pp = 0; pp < VectorLen; pp++) {
-                    gatherIdxs[pp] = pp * X.m();
-                  }
-                  for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
-                    const ElemT* ptr = XTile.data(m, k + sliceIdx*P + tileP + p, 0);
-                    slices[sliceIdx].gather(ptr, gatherIdxs);
+                    const ElemT* ptr = XTile.data(m, k + 0*P + tileP + p + pp, 0);
+                    for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
+                      gatherIdxs[sliceIdx] = sliceIdx * X.m() * P; //TODO: Assumes TileM == 1
+                    }
+
+                    slices[pp].gather(ptr, gatherIdxs);
                   }
                 }
-
-                transpose<VectorLen>(slices);
 
                 for (uint32_t pp = 0; pp < VectorLen; pp++) {
                   slices[pp].store(&TileX[m*TileP*(kTileK/MaxP) + (p + pp)*(kTileK/MaxP) + k/P]);
