@@ -525,7 +525,6 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     }
   }
 
-  //TODO: Change loops based on Op_T or Op_N
   if (OpX == fastKronOp_N) {
     #pragma omp parallel for collapse(3)
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {

@@ -192,8 +192,6 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
     factor = 2 if elemtype == "double" else 1
     for p in [2,4,8,16,32,64,128]:
       for q in [2,4,8,16,32,64,128]:
-        if p == 2 or (p == 4 and q <= 8):
-          continue
         for n in range(1,13 if device == "x86" else 20):
           for m in [1,4,16,64,256] + ([] if device == "x86" else [1024]):
             if m*(p**n) > MAX_SIZE//factor or m*(q**n) > MAX_SIZE//factor: # or p**n < 64 or q**n < 64:
