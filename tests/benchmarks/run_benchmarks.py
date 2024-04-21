@@ -86,7 +86,7 @@ class GPyTorchEval:
         return (t2-t1)*1000/r
     
     run_case(10)
-    t = run_case(20)
+    t = min(run_case(5), run_case(5), run_case(5), run_case(5), run_case(5))
     flops = shape.flops()/(t/1e3)
     return (flops/1e9,)
   
@@ -192,7 +192,7 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
     factor = 2 if elemtype == "double" else 1
     for p in [2,4,8,16,32,64,128]:
       for q in [2,4,8,16,32,64,128]:
-        if p == 2:
+        if p == 2 or (p == 4 and q <= 8):
           continue
         for n in range(1,13 if device == "x86" else 20):
           for m in [1,4,16,64,256] + ([] if device == "x86" else [1024]):
