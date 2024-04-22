@@ -8,112 +8,163 @@
 
 #pragma once
 
-template<uint32_t VectorLen> class FloatVectorType;
-
-template<uint32_t VectorLen>
-inline void transpose(FloatVectorType<VectorLen> rows[VectorLen]) {}
-template<> 
-inline void transpose(FloatVectorType<8> rows[8]);
-
-template<uint32_t VectorLen>
-class FloatVectorType 
-{
-public:
-  void load(const float* ptr);
-  void store(float* ptr);
-  void zero();
-  void broadcast(const float* ptr);
-  void fmadd(FloatVectorType<VectorLen>& a, FloatVectorType<VectorLen>& b);
-  friend void transpose<VectorLen>(FloatVectorType<VectorLen>[VectorLen]);
-};
+template<typename ElemT, typename VecT>
+static inline void vectorLoad(const ElemT* ptr, VecT& data){assert(false);}
 
 template<>
-class FloatVectorType<8>
-{
-private:
+inline void vectorLoad(const float* ptr, __m256& data) {
+  data = _mm256_loadu_ps(ptr);
+}
+
+template<>
+inline void vectorLoad(const double* ptr, __m256d& data) {
+  data = _mm256_loadu_pd(ptr);
+}
+
+template<typename ElemT, typename VecT>
+static inline void vectorStore(ElemT* ptr, const VecT& vec) {}
+
+template<>
+inline void vectorStore(float* ptr, const __m256& vec) {
+  _mm256_storeu_ps(ptr, vec);
+}
+
+template<>
+inline void vectorStore(double* ptr, const __m256d& vec) {
+  _mm256_storeu_pd(ptr, vec);
+}
+
+
+template<typename VecT>
+static inline void vectorZero(VecT& data) {assert(false);}
+
+template<>
+inline void vectorZero(__m256& data) {
+  data = _mm256_setzero_ps();
+}
+
+template<>
+inline void vectorZero(__m256d& data) {
+  data = _mm256_setzero_pd();
+}
+
+template<typename VecT>
+inline void vectorFMA(const VecT& a, const VecT& b, VecT& c) {assert(false);}
+
+template<>
+inline void vectorFMA(const __m256& a, const __m256& b, __m256& c) {
+  c = _mm256_fmadd_ps(a, b, c);
+}
+
+template<>
+inline void vectorFMA(const __m256d& a, const __m256d& b, __m256d& c) {
+  c = _mm256_fmadd_pd(a, b, c);
+}
+
+template<typename ElemT, typename VecT>
+static inline void vectorBroadcast(const ElemT* ptr, VecT& data) {}
+
+template<>
+inline void vectorBroadcast(const float* ptr, __m256& data) {
+  data = _mm256_broadcast_ss(ptr);
+}
+
+template<>
+inline void vectorBroadcast(const double* ptr, __m256d& data) {
+  data = _mm256_broadcast_sd(ptr);
+}
+
+template<typename ElemT, typename VecT>
+static inline void vectorGather(const ElemT* base, const uint32_t* gatherIdxs, VecT& data);
+
+template<>
+inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m256& data) {
+  __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
+  data = _mm256_i32gather_ps(base, vidx, sizeof(float)); 
+}
+
+template<>
+inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m256d& data) {
+  // __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
+  // data = _mm256_i32gather_pd(base, vidx, sizeof(double));
+  assert(false); 
+}
+
+template<typename ElemT, typename VecT> class X86Vector;
+template<typename ElemT, typename VecT>
+static void transpose(X86Vector<ElemT, VecT> rows[]);
+
+struct AVXFloat {
+  using VecT = __m256;
   __m256 data;
-  static const uint32_t VectorLen = 8;
+};
+
+template<typename ElemT, typename VecT>
+class X86Vector {
+private:
+  VecT vec;
+  static const uint32_t VectorLen = sizeof(VecT)/sizeof(ElemT);
+
 public:
-  void load(const float* ptr) {
-    data = _mm256_loadu_ps(ptr);
+  X86Vector(typename VecT::VecT v): vec{v} {}
+  X86Vector() {}
+
+  void load(const ElemT* ptr) {
+    vectorLoad<ElemT, AVXFloat::VecT>(ptr, vec.data);
   }
 
-  void store(float* ptr) {
-    _mm256_storeu_ps(ptr, data);
+  void store(ElemT* ptr) {
+    vectorStore<ElemT, AVXFloat::VecT>(ptr, vec.data);
   }
   
-  void store(float* ptr, uint32_t sz) {
+  void store(ElemT* ptr, uint32_t sz) {
     if (sz == VectorLen)
       store(ptr);
     else {
-      float elems[VectorLen];
-      _mm256_storeu_ps(elems, data);
-      memcpy(ptr, elems, sz * sizeof(float));
+      ElemT elems[VectorLen];
+      vectorStore<ElemT, AVXFloat::VecT>(elems, vec.data);
+      memcpy(ptr, elems, sz * sizeof(ElemT));
     }
   }
 
   void zero() {
-    data = _mm256_setzero_ps();
+    vectorZero<AVXFloat::VecT>(vec.data);
   }
 
-  void broadcast(const float* ptr) {
-    data = _mm256_broadcast_ss(ptr);
+  void broadcast(const ElemT* ptr) {
+    vectorBroadcast<ElemT, AVXFloat::VecT>(ptr, vec.data);
   }
 
-  void fmadd(FloatVectorType<8>& a, FloatVectorType<8>& b) {
-    data = _mm256_fmadd_ps(a.data, b.data, data);
-  }
-
-  void gather(const float* base, uint32_t gatherIdxs[VectorLen]) {
-    __m256i vidx = _mm256_loadu_si256((__m256i*)&gatherIdxs[0]);
-    data = _mm256_i32gather_ps(base, vidx, sizeof(float)); 
-  }
-
-  friend void transpose<8>(FloatVectorType<8>[8]);
-};
-
-template<>
-class FloatVectorType<1>
-{
-private:
-  float data;
-public:
-  void load(const float* ptr) {
-    data = *ptr;
+  void fmadd(const X86Vector<ElemT, VecT>& a, const X86Vector<ElemT, VecT>& b) {
+    vectorFMA<AVXFloat::VecT>(a.vec.data, b.vec.data, vec.data);
   }
   
-  void store(float* ptr) {
-    *ptr = data;
+  void gather(const float* base, const uint32_t* gatherIdxs) {
+    vectorGather(base, gatherIdxs, vec.data);
   }
 
-  void zero() {
-    data = 0;
+  const typename VecT::VecT& data() {return vec.data;}
+  void print() {
+    ElemT elems[VectorLen];
+    vectorStore<ElemT, AVXFloat::VecT>(elems, vec.data);
+    printf("%f\n", elems[0]);
   }
-
-  void broadcast(const float* ptr) {
-    load(ptr);
-  }
-
-  void fmadd(FloatVectorType<1>& a, FloatVectorType<1>& b) {
-    data = a.data*b.data + data;
-  }
-  
-  friend void transpose<1>(FloatVectorType<1>[8]);
+  friend void transpose<>(X86Vector<ElemT, VecT> rows[]);
 };
 
 // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
 template<>
-inline void transpose(FloatVectorType<8> rows[8]) {
+inline void transpose(X86Vector<float, AVXFloat> rows[]) {
   __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
   __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
-  __t0 = _mm256_unpacklo_ps(rows[0].data, rows[1].data);
-  __t1 = _mm256_unpackhi_ps(rows[0].data, rows[1].data);
-  __t2 = _mm256_unpacklo_ps(rows[2].data, rows[3].data);
-  __t3 = _mm256_unpackhi_ps(rows[2].data, rows[3].data);
-  __t4 = _mm256_unpacklo_ps(rows[4].data, rows[5].data);
-  __t5 = _mm256_unpackhi_ps(rows[4].data, rows[5].data);
-  __t6 = _mm256_unpacklo_ps(rows[6].data, rows[7].data);
-  __t7 = _mm256_unpackhi_ps(rows[6].data, rows[7].data);
+  __t0 = _mm256_unpacklo_ps(rows[0].data(), rows[1].data());
+  __t1 = _mm256_unpackhi_ps(rows[0].data(), rows[1].data());
+  __t2 = _mm256_unpacklo_ps(rows[2].data(), rows[3].data());
+  __t3 = _mm256_unpackhi_ps(rows[2].data(), rows[3].data());
+  __t4 = _mm256_unpacklo_ps(rows[4].data(), rows[5].data());
+  __t5 = _mm256_unpackhi_ps(rows[4].data(), rows[5].data());
+  __t6 = _mm256_unpacklo_ps(rows[6].data(), rows[7].data());
+  __t7 = _mm256_unpackhi_ps(rows[6].data(), rows[7].data());
   __tt0 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(1,0,1,0));
   __tt1 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(3,2,3,2));
   __tt2 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(1,0,1,0));
@@ -122,14 +173,14 @@ inline void transpose(FloatVectorType<8> rows[8]) {
   __tt5 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(3,2,3,2));
   __tt6 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(1,0,1,0));
   __tt7 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(3,2,3,2));
-  rows[0].data = _mm256_permute2f128_ps(__tt0, __tt4, 0x20);
-  rows[1].data = _mm256_permute2f128_ps(__tt1, __tt5, 0x20);
-  rows[2].data = _mm256_permute2f128_ps(__tt2, __tt6, 0x20);
-  rows[3].data = _mm256_permute2f128_ps(__tt3, __tt7, 0x20);
-  rows[4].data = _mm256_permute2f128_ps(__tt0, __tt4, 0x31);
-  rows[5].data = _mm256_permute2f128_ps(__tt1, __tt5, 0x31);
-  rows[6].data = _mm256_permute2f128_ps(__tt2, __tt6, 0x31);
-  rows[7].data = _mm256_permute2f128_ps(__tt3, __tt7, 0x31);
+  rows[0] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt0, __tt4, 0x20));
+  rows[1] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt1, __tt5, 0x20));
+  rows[2] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt2, __tt6, 0x20));
+  rows[3] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt3, __tt7, 0x20));
+  rows[4] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt0, __tt4, 0x31));
+  rows[5] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt1, __tt5, 0x31));
+  rows[6] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt2, __tt6, 0x31));
+  rows[7] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt3, __tt7, 0x31));
 }
 
 template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
@@ -145,7 +196,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
   const uint32_t VecRegQ = RegQ;
 
-  using VectorType = FloatVectorType<VectorLen>;
+  using VectorType = X86Vector<ElemT, AVXFloat>;
   VectorType yReg[VecRegM][VecRegQ][VecRegK];
 
   if (tileP == 0) {
@@ -263,7 +314,10 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
       for (uint32_t rk = 0; rk < VecRegK; rk++) {
       #pragma unroll
       for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+        // XReg[rm][rk].print();
+        // FReg[rq].print();
         yReg[rm][rq][rk].fmadd(XReg[rm][rk], FReg[rq]);
+        // yReg[rm][rq][rk].print();
       }}}
     }
   }
@@ -366,14 +420,14 @@ void threadWork(KernelParams<FusedFacs>& params,
                   ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
                   (TileP >= VectorLen);
             if (ValidAVXTranspose) {
-              FloatVectorType<VectorLen> slices[VectorLen];
+              X86Vector<ElemT, AVXFloat> slices[VectorLen];
               if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                             &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
                   slices[sliceIdx].load(ptr);
                 }
-                transpose<VectorLen>(slices);
+                transpose(slices);
               } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
                 //TODO: Gather works with AVX2
                 uint32_t gatherIdxs[VectorLen] = {0};

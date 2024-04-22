@@ -183,20 +183,23 @@ class CPUKernel(Kernel):
 
   def isValid(self):
     AVXLen = 8 if self.elemType == "float" else 4
+    elem_size = element_size(self.elemType)
     assert self.arch == "avx"
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
-              and (self.shape.k // self.shape.p) % 8 != 0 and self.shape.k % self.rk == 0) or \
-            (self.aalign == 8 and self.rk % AVXLen == 0))
+              and (self.shape.k // self.shape.p) % AVXLen != 0 and self.shape.k % self.rk == 0) or \
+            (self.aalign == AVXLen and self.rk % AVXLen == 0))
 
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
-      cond = cond and self.rk == min(16, self.shape.k//self.shape.p) and self.rq == min(4, self.tileQ)
+      MaxRk = 16 if elem_size == 4 else 8
+      MaxRq = 4 if elem_size == 4 else 4
+      cond = cond and self.rk == min(MaxRk, self.shape.k//self.shape.p) and self.rq == min(MaxRq, self.tileQ)
     # print(self, cond, self.shape.k, self.shape.p, self.rk, self.problem.k, isPowerOfTwo(self.problem.k), (self.shape.k // self.shape.p) % 8 != 0, self.shape.k % self.rk == 0)
     return cond and self.shape.k * self.tileM <= 16*1024 and \
            self.shape.k % self.shape.p == 0 and \
-           self.tileM * (self.shape.k//self.shape.p) * self.tileQ * 4 <= 1*1024*1024 and \
+           self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
            self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
               (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.opt_level == 3 and \
