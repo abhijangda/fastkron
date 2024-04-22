@@ -101,23 +101,32 @@ public:
   fastKronError procMalloc(uint32_t proc, FastKronType type, Matrix& m);
   fastKronError procFree(uint32_t proc, Matrix m);
   
-  bool findAllKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
+  bool findAllKernels(KMMProblem problem, bool distP2PStore, 
+                      std::vector<std::vector<KernelInfo*>>& kernels) {
+    for (int i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
+      kernels.push_back(std::vector<KernelInfo*>());
+    }
+
     DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
     auto it = compiledKernels.find(key);
     if (it != compiledKernels.end()) {
       for (auto k : it->second) {
-        if (k->canCompute(problem, hardware[0], distP2PStore)) {
-          kernels.push_back(k);
+        if (k->canCompute(problem, hardware[0], distP2PStore) &&
+            k->OptLevel == KernelOptimizations::MaxOptLevel()) {
+          kernels[k->OptLevel].push_back(k);
         }
       }
     }
-    if (it != compiledKernels.end() and kernels.size() > 0) return true;
+  
+    if (it != compiledKernels.end() and 
+        kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
+        return true;
 
     for (auto it : compiledKernels) {
       if (it.first == key) continue;
       for (auto kernel : it.second) {
         if (kernel->canCompute(problem, hardware[0], distP2PStore)) {
-          kernels.push_back(kernel);
+          kernels[kernel->OptLevel].push_back(kernel);
         }
       }
     }
