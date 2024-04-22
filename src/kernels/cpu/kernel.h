@@ -90,11 +90,7 @@ inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m256d
   assert(false); 
 }
 
-template<typename ElemT, typename VecT> class X86Vector;
-template<typename ElemT, typename VecT>
-static void transpose(X86Vector<ElemT, VecT> rows[]);
-
-struct AVXFloat {
+struct AVXFloatWrapper {
   using VecT = __m256;
   __m256 data;
 };
@@ -110,11 +106,11 @@ public:
   X86Vector() {}
 
   void load(const ElemT* ptr) {
-    vectorLoad<ElemT, AVXFloat::VecT>(ptr, vec.data);
+    vectorLoad<ElemT, AVXFloatWrapper::VecT>(ptr, vec.data);
   }
 
   void store(ElemT* ptr) {
-    vectorStore<ElemT, AVXFloat::VecT>(ptr, vec.data);
+    vectorStore<ElemT, AVXFloatWrapper::VecT>(ptr, vec.data);
   }
   
   void store(ElemT* ptr, uint32_t sz) {
@@ -122,21 +118,21 @@ public:
       store(ptr);
     else {
       ElemT elems[VectorLen];
-      vectorStore<ElemT, AVXFloat::VecT>(elems, vec.data);
+      vectorStore<ElemT, AVXFloatWrapper::VecT>(elems, vec.data);
       memcpy(ptr, elems, sz * sizeof(ElemT));
     }
   }
 
   void zero() {
-    vectorZero<AVXFloat::VecT>(vec.data);
+    vectorZero<AVXFloatWrapper::VecT>(vec.data);
   }
 
   void broadcast(const ElemT* ptr) {
-    vectorBroadcast<ElemT, AVXFloat::VecT>(ptr, vec.data);
+    vectorBroadcast<ElemT, AVXFloatWrapper::VecT>(ptr, vec.data);
   }
 
   void fmadd(const X86Vector<ElemT, VecT>& a, const X86Vector<ElemT, VecT>& b) {
-    vectorFMA<AVXFloat::VecT>(a.vec.data, b.vec.data, vec.data);
+    vectorFMA<AVXFloatWrapper::VecT>(a.vec.data, b.vec.data, vec.data);
   }
   
   void gather(const float* base, const uint32_t* gatherIdxs) {
@@ -146,42 +142,46 @@ public:
   const typename VecT::VecT& data() {return vec.data;}
   void print() {
     ElemT elems[VectorLen];
-    vectorStore<ElemT, AVXFloat::VecT>(elems, vec.data);
+    vectorStore<ElemT, AVXFloatWrapper::VecT>(elems, vec.data);
     printf("%f\n", elems[0]);
   }
-  friend void transpose<>(X86Vector<ElemT, VecT> rows[]);
 };
 
-// https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
-template<>
-inline void transpose(X86Vector<float, AVXFloat> rows[]) {
-  __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
-  __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
-  __t0 = _mm256_unpacklo_ps(rows[0].data(), rows[1].data());
-  __t1 = _mm256_unpackhi_ps(rows[0].data(), rows[1].data());
-  __t2 = _mm256_unpacklo_ps(rows[2].data(), rows[3].data());
-  __t3 = _mm256_unpackhi_ps(rows[2].data(), rows[3].data());
-  __t4 = _mm256_unpacklo_ps(rows[4].data(), rows[5].data());
-  __t5 = _mm256_unpackhi_ps(rows[4].data(), rows[5].data());
-  __t6 = _mm256_unpacklo_ps(rows[6].data(), rows[7].data());
-  __t7 = _mm256_unpackhi_ps(rows[6].data(), rows[7].data());
-  __tt0 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(1,0,1,0));
-  __tt1 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(3,2,3,2));
-  __tt2 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(1,0,1,0));
-  __tt3 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(3,2,3,2));
-  __tt4 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(1,0,1,0));
-  __tt5 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(3,2,3,2));
-  __tt6 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(1,0,1,0));
-  __tt7 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(3,2,3,2));
-  rows[0] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt0, __tt4, 0x20));
-  rows[1] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt1, __tt5, 0x20));
-  rows[2] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt2, __tt6, 0x20));
-  rows[3] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt3, __tt7, 0x20));
-  rows[4] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt0, __tt4, 0x31));
-  rows[5] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt1, __tt5, 0x31));
-  rows[6] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt2, __tt6, 0x31));
-  rows[7] = X86Vector<float, AVXFloat>(_mm256_permute2f128_ps(__tt3, __tt7, 0x31));
-}
+class AVXFloat : public X86Vector<float, AVXFloatWrapper> {
+public:
+  AVXFloat(AVXFloatWrapper::VecT v) : X86Vector<float, AVXFloatWrapper>(v) {}
+  AVXFloat() {}
+
+  // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
+  static void transpose(AVXFloat rows[]) {
+    __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
+    __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
+    __t0 = _mm256_unpacklo_ps(rows[0].data(), rows[1].data());
+    __t1 = _mm256_unpackhi_ps(rows[0].data(), rows[1].data());
+    __t2 = _mm256_unpacklo_ps(rows[2].data(), rows[3].data());
+    __t3 = _mm256_unpackhi_ps(rows[2].data(), rows[3].data());
+    __t4 = _mm256_unpacklo_ps(rows[4].data(), rows[5].data());
+    __t5 = _mm256_unpackhi_ps(rows[4].data(), rows[5].data());
+    __t6 = _mm256_unpacklo_ps(rows[6].data(), rows[7].data());
+    __t7 = _mm256_unpackhi_ps(rows[6].data(), rows[7].data());
+    __tt0 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(1,0,1,0));
+    __tt1 = _mm256_shuffle_ps(__t0,__t2,_MM_SHUFFLE(3,2,3,2));
+    __tt2 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(1,0,1,0));
+    __tt3 = _mm256_shuffle_ps(__t1,__t3,_MM_SHUFFLE(3,2,3,2));
+    __tt4 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(1,0,1,0));
+    __tt5 = _mm256_shuffle_ps(__t4,__t6,_MM_SHUFFLE(3,2,3,2));
+    __tt6 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(1,0,1,0));
+    __tt7 = _mm256_shuffle_ps(__t5,__t7,_MM_SHUFFLE(3,2,3,2));
+    rows[0] = AVXFloat(_mm256_permute2f128_ps(__tt0, __tt4, 0x20));
+    rows[1] = AVXFloat(_mm256_permute2f128_ps(__tt1, __tt5, 0x20));
+    rows[2] = AVXFloat(_mm256_permute2f128_ps(__tt2, __tt6, 0x20));
+    rows[3] = AVXFloat(_mm256_permute2f128_ps(__tt3, __tt7, 0x20));
+    rows[4] = AVXFloat(_mm256_permute2f128_ps(__tt0, __tt4, 0x31));
+    rows[5] = AVXFloat(_mm256_permute2f128_ps(__tt1, __tt5, 0x31));
+    rows[6] = AVXFloat(_mm256_permute2f128_ps(__tt2, __tt6, 0x31));
+    rows[7] = AVXFloat(_mm256_permute2f128_ps(__tt3, __tt7, 0x31));
+  }
+};
 
 template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
@@ -196,7 +196,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
   const uint32_t VecRegQ = RegQ;
 
-  using VectorType = X86Vector<ElemT, AVXFloat>;
+  using VectorType = AVXFloat;
   VectorType yReg[VecRegM][VecRegQ][VecRegK];
 
   if (tileP == 0) {
@@ -420,14 +420,14 @@ void threadWork(KernelParams<FusedFacs>& params,
                   ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
                   (TileP >= VectorLen);
             if (ValidAVXTranspose) {
-              X86Vector<ElemT, AVXFloat> slices[VectorLen];
+              AVXFloat slices[VectorLen];
               if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                             &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
                   slices[sliceIdx].load(ptr);
                 }
-                transpose(slices);
+                AVXFloat::transpose(slices);
               } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
                 //TODO: Gather works with AVX2
                 uint32_t gatherIdxs[VectorLen] = {0};
