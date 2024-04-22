@@ -2,7 +2,7 @@
 #include "testBase.h"
 
 #define FUSION_TEST(M, MinFacs, MaxFacs, P, Q, Type) \
-  TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##NN) { \
+  TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##TT) { \
   bool result = true;\
   for (uint Facs = MinFacs; Facs <= MaxFacs; Facs++) {\
     uint KP_MAT_N[Facs];\
