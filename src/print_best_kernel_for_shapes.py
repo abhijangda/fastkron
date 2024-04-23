@@ -65,20 +65,12 @@ if __name__ == "__main__":
     for q in [2,4,8,16,32,64,128]:
       if p != q:
         continue
-<<<<<<< HEAD
       for n in range(1,13):
-=======
-      for n in range(1,16):
->>>>>>> 709dc55 (OpF = T for cpu general kernel)
         for m in [1,4,16,64,256]:
           if m*(p**n) > 1024*1024*1024 or m*(q**n) > 1024*1024*1024 or p**n < 64 or q**n < 64:
             continue
           # if p <= 32 and q <= 32:
           #   continue
-<<<<<<< HEAD
           if p <= 32:
-            tune(m, n, p, q, args.opX, args.opF, False, args.backend, "float")
-=======
-          tune(m, n, p, q, args.opX, args.opF, False, args.backend, "float")
->>>>>>> 709dc55 (OpF = T for cpu general kernel)
-          tune(m, n, p, q, args.opX, args.opF, True, args.backend, "float")
+            tune(m, n, p, q, args.opX, args.opF, False, args.backend, "double")
+          tune(m, n, p, q, args.opX, args.opF, True, args.backend, "double")
