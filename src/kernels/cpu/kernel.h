@@ -95,22 +95,30 @@ struct AVXFloatWrapper {
   __m256 data;
 };
 
+struct AVXDoubleWrapper {
+  using VecT = __m256d;
+  __m256d data;
+};
+
 template<typename ElemT, typename VecT>
 class X86Vector {
 private:
+  using VecWrapper = VecT;
+  using UnderlyingVecT = typename VecT::VecT; 
   VecT vec;
-  static const uint32_t VectorLen = sizeof(VecT)/sizeof(ElemT);
 
 public:
+  static const uint32_t VectorLen = sizeof(VecT)/sizeof(ElemT);
+
   X86Vector(typename VecT::VecT v): vec{v} {}
   X86Vector() {}
 
   void load(const ElemT* ptr) {
-    vectorLoad<ElemT, AVXFloatWrapper::VecT>(ptr, vec.data);
+    vectorLoad<ElemT, UnderlyingVecT>(ptr, vec.data);
   }
 
   void store(ElemT* ptr) {
-    vectorStore<ElemT, AVXFloatWrapper::VecT>(ptr, vec.data);
+    vectorStore<ElemT, UnderlyingVecT>(ptr, vec.data);
   }
   
   void store(ElemT* ptr, uint32_t sz) {
@@ -118,31 +126,31 @@ public:
       store(ptr);
     else {
       ElemT elems[VectorLen];
-      vectorStore<ElemT, AVXFloatWrapper::VecT>(elems, vec.data);
+      vectorStore<ElemT, UnderlyingVecT>(elems, vec.data);
       memcpy(ptr, elems, sz * sizeof(ElemT));
     }
   }
 
   void zero() {
-    vectorZero<AVXFloatWrapper::VecT>(vec.data);
+    vectorZero<UnderlyingVecT>(vec.data);
   }
 
   void broadcast(const ElemT* ptr) {
-    vectorBroadcast<ElemT, AVXFloatWrapper::VecT>(ptr, vec.data);
+    vectorBroadcast<ElemT, UnderlyingVecT>(ptr, vec.data);
   }
 
   void fmadd(const X86Vector<ElemT, VecT>& a, const X86Vector<ElemT, VecT>& b) {
-    vectorFMA<AVXFloatWrapper::VecT>(a.vec.data, b.vec.data, vec.data);
+    vectorFMA<UnderlyingVecT>(a.vec.data, b.vec.data, vec.data);
   }
   
-  void gather(const float* base, const uint32_t* gatherIdxs) {
+  void gather(const ElemT* base, const uint32_t* gatherIdxs) {
     vectorGather(base, gatherIdxs, vec.data);
   }
 
   const typename VecT::VecT& data() {return vec.data;}
   void print() {
     ElemT elems[VectorLen];
-    vectorStore<ElemT, AVXFloatWrapper::VecT>(elems, vec.data);
+    vectorStore<ElemT, UnderlyingVecT>(elems, vec.data);
     printf("%f\n", elems[0]);
   }
 };
@@ -152,8 +160,8 @@ public:
   AVXFloat(AVXFloatWrapper::VecT v) : X86Vector<float, AVXFloatWrapper>(v) {}
   AVXFloat() {}
 
-  // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
   static void transpose(AVXFloat rows[]) {
+    // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
     __m256 __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
     __m256 __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
     __t0 = _mm256_unpacklo_ps(rows[0].data(), rows[1].data());
@@ -183,7 +191,27 @@ public:
   }
 };
 
-template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP, 
+class AVXDouble : public X86Vector<double, AVXDoubleWrapper> {
+public:
+  AVXDouble(AVXDoubleWrapper::VecT v) : X86Vector<double, AVXDoubleWrapper>(v) {}
+  AVXDouble() {}
+
+  static void transpose(AVXDouble rows[]) {
+    // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
+    __m256d tmp3, tmp2, tmp1, tmp0;
+    tmp0 = _mm256_shuffle_pd(rows[0].data(), rows[1].data(), 0x0);
+    tmp2 = _mm256_shuffle_pd(rows[0].data(), rows[1].data(), 0xF);
+    tmp1 = _mm256_shuffle_pd(rows[2].data(), rows[3].data(), 0x0);
+    tmp3 = _mm256_shuffle_pd(rows[2].data(), rows[3].data(), 0xF);
+
+    rows[0] = AVXDouble(_mm256_permute2f128_pd(tmp0, tmp1, 0x20));
+    rows[1] = AVXDouble(_mm256_permute2f128_pd(tmp2, tmp3, 0x20));
+    rows[2] = AVXDouble(_mm256_permute2f128_pd(tmp0, tmp1, 0x31));
+    rows[3] = AVXDouble(_mm256_permute2f128_pd(tmp2, tmp3, 0x31));
+  }
+};
+
+template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
          fastKronOp OpF,
@@ -191,13 +219,13 @@ template<typename ElemT, uint VectorLen, uint MaxQ, uint MaxP,
 __attribute__((always_inline)) static inline
 void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
   //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
+  const uint VectorLen = X86VecT::VectorLen;
   const uint32_t RegM = TileM;
   const uint32_t VecRegK = RegK/VectorLen;
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
   const uint32_t VecRegQ = RegQ;
 
-  using VectorType = AVXFloat;
-  VectorType yReg[VecRegM][VecRegQ][VecRegK];
+  X86VecT yReg[VecRegM][VecRegQ][VecRegK];
 
   if (tileP == 0) {
     for (uint32_t ym = 0; ym < VecRegM; ym++) {
@@ -214,6 +242,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   }
 
   if (false && VectorLen == 8 && VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
+    #if 0
     for (uint32_t p = 0; p < TileP; p += 2) {
       {
         ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
@@ -288,10 +317,11 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
 
       }
     }
+    #endif
   } else {
     for (uint32_t p = 0; p < TileP; p++) {
-      VectorType XReg[VecRegM][VecRegK];
-      VectorType FReg[VecRegQ];
+      X86VecT XReg[VecRegM][VecRegK];
+      X86VecT FReg[VecRegQ];
       #pragma unroll
       for (uint32_t em = 0; em < VecRegM; em++) {
         #pragma unroll
@@ -314,10 +344,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
       for (uint32_t rk = 0; rk < VecRegK; rk++) {
       #pragma unroll
       for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-        // XReg[rm][rk].print();
-        // FReg[rq].print();
         yReg[rm][rq][rk].fmadd(XReg[rm][rk], FReg[rq]);
-        // yReg[rm][rq][rk].print();
       }}}
     }
   }
@@ -327,7 +354,6 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t yq = 0; yq < VecRegQ; yq++) {
     for (uint32_t yk = 0; yk < VecRegK; yk++) {
       uint32_t idx = (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen;
-      // if (q == 0 && rq == 0 && k ==) printf("idx %d q %d yq %d k %d yk %d\n", idx, q, yq, k, yk);
       yReg[ym][yq][yk].store(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + idx]);
     }}}
   } else {
@@ -379,7 +405,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   }
 }
 
-template<typename ElemT, uint MaxQ, uint MaxP, uint TileP, 
+template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP, 
          uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
          uint RegM, uint RegK, uint RegQ, uint OptLevel, 
          int XAlignment, int FAlignment,
@@ -395,7 +421,7 @@ void threadWork(KernelParams<FusedFacs>& params,
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
   const uint32_t K = X.n();
-  const uint32_t VectorLen = (XAlignment == 8 && RegK % 8 == 0) ? 8 : 1; //AVX256 length
+  const uint32_t VectorLen = X86VecT::VectorLen;
 
   Slice<ElemT, OpX> XTile(tileM, tileK, 
                             (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
@@ -420,14 +446,14 @@ void threadWork(KernelParams<FusedFacs>& params,
                   ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
                   (TileP >= VectorLen);
             if (ValidAVXTranspose) {
-              AVXFloat slices[VectorLen];
+              X86VecT slices[VectorLen];
               if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                             &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
                   slices[sliceIdx].load(ptr);
                 }
-                AVXFloat::transpose(slices);
+                X86VecT::transpose(slices);
               } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
                 //TODO: Gather works with AVX2
                 uint32_t gatherIdxs[VectorLen] = {0};
@@ -512,14 +538,14 @@ void threadWork(KernelParams<FusedFacs>& params,
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < kTileK/MaxP * TileP; k += RegK * TileP) {
-        vectorMMAAndStore<ElemT, VectorLen, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF, kKMultipleOfTileK, kQMultipleOfTileQ>
+        vectorMMAAndStore<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF, kKMultipleOfTileK, kQMultipleOfTileQ>
         (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
       }}}
     }
   }
 }
 
-template<typename ElemT, uint MaxQ, uint MaxP, uint TileP, 
+template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP, 
          uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
          uint RegM, uint RegK, uint RegQ, uint OptLevel, 
          int XAlignment, int FAlignment,
@@ -584,7 +610,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
-      threadWork<ElemT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
+      threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
         params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, TileXs, TileFs, TileYs, X, Y
       );
     }}}
@@ -593,7 +619,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
-      threadWork<ElemT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
+      threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
         params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, TileXs, TileFs, TileYs, X, Y
       );
     }}}

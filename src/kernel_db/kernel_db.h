@@ -123,7 +123,6 @@ public:
         return true;
 
     for (auto it : compiledKernels) {
-      if (it.first == key) continue;
       for (auto kernel : it.second) {
         if (kernel->canCompute(problem, hardware[0], distP2PStore)) {
           kernels[kernel->OptLevel].push_back(kernel);
