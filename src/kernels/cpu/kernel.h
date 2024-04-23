@@ -11,6 +11,32 @@
 template<typename ElemT, typename VecT>
 static inline void vectorLoad(const ElemT* ptr, VecT& data){assert(false);}
 
+template<typename ElemT, typename VecT>
+static inline void vectorStore(ElemT* ptr, const VecT& vec) {}
+
+template<typename VecT>
+static inline void vectorZero(VecT& data) {assert(false);}
+
+template<typename VecT>
+inline void vectorFMA(const VecT& a, const VecT& b, VecT& c) {assert(false);}
+
+template<typename ElemT, typename VecT>
+static inline void vectorGather(const ElemT* base, const uint32_t* gatherIdxs, VecT& data);
+
+template<typename ElemT, typename VecT>
+static inline void vectorBroadcast(const ElemT* ptr, VecT& data) {}
+
+////////////////////////AVX-256/////////////////////////////
+struct AVXFloatWrapper {
+  using VecT = __m256;
+  __m256 data;
+};
+
+struct AVXDoubleWrapper {
+  using VecT = __m256d;
+  __m256d data;
+};
+
 template<>
 inline void vectorLoad(const float* ptr, __m256& data) {
   data = _mm256_loadu_ps(ptr);
@@ -20,9 +46,6 @@ template<>
 inline void vectorLoad(const double* ptr, __m256d& data) {
   data = _mm256_loadu_pd(ptr);
 }
-
-template<typename ElemT, typename VecT>
-static inline void vectorStore(ElemT* ptr, const VecT& vec) {}
 
 template<>
 inline void vectorStore(float* ptr, const __m256& vec) {
@@ -34,10 +57,6 @@ inline void vectorStore(double* ptr, const __m256d& vec) {
   _mm256_storeu_pd(ptr, vec);
 }
 
-
-template<typename VecT>
-static inline void vectorZero(VecT& data) {assert(false);}
-
 template<>
 inline void vectorZero(__m256& data) {
   data = _mm256_setzero_ps();
@@ -47,9 +66,6 @@ template<>
 inline void vectorZero(__m256d& data) {
   data = _mm256_setzero_pd();
 }
-
-template<typename VecT>
-inline void vectorFMA(const VecT& a, const VecT& b, VecT& c) {assert(false);}
 
 template<>
 inline void vectorFMA(const __m256& a, const __m256& b, __m256& c) {
@@ -61,9 +77,6 @@ inline void vectorFMA(const __m256d& a, const __m256d& b, __m256d& c) {
   c = _mm256_fmadd_pd(a, b, c);
 }
 
-template<typename ElemT, typename VecT>
-static inline void vectorBroadcast(const ElemT* ptr, VecT& data) {}
-
 template<>
 inline void vectorBroadcast(const float* ptr, __m256& data) {
   data = _mm256_broadcast_ss(ptr);
@@ -73,9 +86,6 @@ template<>
 inline void vectorBroadcast(const double* ptr, __m256d& data) {
   data = _mm256_broadcast_sd(ptr);
 }
-
-template<typename ElemT, typename VecT>
-static inline void vectorGather(const ElemT* base, const uint32_t* gatherIdxs, VecT& data);
 
 template<>
 inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m256& data) {
@@ -90,15 +100,83 @@ inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m256d
   assert(false); 
 }
 
-struct AVXFloatWrapper {
-  using VecT = __m256;
-  __m256 data;
+//////////////////////////////////////////////////////////
+
+////////////////////////AVX-512///////////////////////////
+struct AVX512FloatWrapper {
+  using VecT = __m512;
+  __m512 data;
 };
 
-struct AVXDoubleWrapper {
-  using VecT = __m256d;
-  __m256d data;
+struct AVX512DoubleWrapper {
+  using VecT = __m512d;
+  __m512d data;
 };
+
+template<>
+inline void vectorLoad(const float* ptr, __m512& data) {
+  data = _mm512_loadu_ps(ptr);
+}
+
+template<>
+inline void vectorLoad(const double* ptr, __m512d& data) {
+  data = _mm512_loadu_pd(ptr);
+}
+
+template<>
+inline void vectorStore(float* ptr, const __m512& vec) {
+  _mm512_storeu_ps(ptr, vec);
+}
+
+template<>
+inline void vectorStore(double* ptr, const __m512d& vec) {
+  _mm512_storeu_pd(ptr, vec);
+}
+
+template<>
+inline void vectorZero(__m512& data) {
+  data = _mm512_setzero_ps();
+}
+
+template<>
+inline void vectorZero(__m512d& data) {
+  data = _mm512_setzero_pd();
+}
+
+template<>
+inline void vectorFMA(const __m512& a, const __m512& b, __m512& c) {
+  c = _mm512_fmadd_ps(a, b, c);
+}
+
+template<>
+inline void vectorFMA(const __m512d& a, const __m512d& b, __m512d& c) {
+  c = _mm512_fmadd_pd(a, b, c);
+}
+
+template<>
+inline void vectorBroadcast(const float* ptr, __m512& data) {
+  data = _mm512_set1_ps(*ptr);
+}
+
+template<>
+inline void vectorBroadcast(const double* ptr, __m512d& data) {
+  data = _mm512_set1_pd(*ptr);
+}
+
+template<>
+inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m512& data) {
+  __m512i vidx = _mm512_loadu_si512((__m512i*)gatherIdxs);
+  data = _mm512_i32gather_ps(vidx, base, sizeof(float)); 
+}
+
+template<>
+inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m512d& data) {
+  // __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
+  // data = _mm256_i32gather_pd(base, vidx, sizeof(double));
+  assert(false); 
+}
+
+//////////////////////////////////////////////////////////
 
 template<typename ElemT, typename VecT>
 class X86Vector {
@@ -208,6 +286,83 @@ public:
     rows[1] = AVXDouble(_mm256_permute2f128_pd(tmp2, tmp3, 0x20));
     rows[2] = AVXDouble(_mm256_permute2f128_pd(tmp0, tmp1, 0x31));
     rows[3] = AVXDouble(_mm256_permute2f128_pd(tmp2, tmp3, 0x31));
+  }
+};
+
+class AVX512Float : public X86Vector<float, AVX512FloatWrapper> {
+public:
+  AVX512Float(AVX512FloatWrapper::VecT v) : X86Vector<float, AVX512FloatWrapper>(v) {}
+  AVX512Float() {}
+
+  static void transpose(AVX512Float rows[]) {
+    // https://gist.github.com/nihui/37d98b705a6a28911d77c502282b4748
+    __m512 _tmp0 = _mm512_unpacklo_ps(rows[0].data(), rows[1].data());
+    __m512 _tmp1 = _mm512_unpackhi_ps(rows[0].data(), rows[1].data());
+    __m512 _tmp2 = _mm512_unpacklo_ps(rows[2].data(), rows[3].data());
+    __m512 _tmp3 = _mm512_unpackhi_ps(rows[2].data(), rows[3].data());
+    __m512 _tmp4 = _mm512_unpacklo_ps(rows[4].data(), rows[5].data());
+    __m512 _tmp5 = _mm512_unpackhi_ps(rows[4].data(), rows[5].data());
+    __m512 _tmp6 = _mm512_unpacklo_ps(rows[6].data(), rows[7].data());
+    __m512 _tmp7 = _mm512_unpackhi_ps(rows[6].data(), rows[7].data());
+    __m512 _tmp8 = _mm512_unpacklo_ps(rows[8].data(), rows[9].data());
+    __m512 _tmp9 = _mm512_unpackhi_ps(rows[8].data(), rows[9].data());
+    __m512 _tmpa = _mm512_unpacklo_ps(rows[10].data(), rows[11].data());
+    __m512 _tmpb = _mm512_unpackhi_ps(rows[10].data(), rows[11].data());
+    __m512 _tmpc = _mm512_unpacklo_ps(rows[12].data(), rows[13].data());
+    __m512 _tmpd = _mm512_unpackhi_ps(rows[12].data(), rows[13].data());
+    __m512 _tmpe = _mm512_unpacklo_ps(rows[14].data(), rows[15].data());
+    __m512 _tmpf = _mm512_unpackhi_ps(rows[14].data(), rows[15].data());
+
+    __m512 _tmpg = _mm512_shuffle_ps(_tmp0, _tmp2, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmph = _mm512_shuffle_ps(_tmp0, _tmp2, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmpi = _mm512_shuffle_ps(_tmp1, _tmp3, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpj = _mm512_shuffle_ps(_tmp1, _tmp3, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmpk = _mm512_shuffle_ps(_tmp4, _tmp6, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpl = _mm512_shuffle_ps(_tmp4, _tmp6, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmpm = _mm512_shuffle_ps(_tmp5, _tmp7, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpn = _mm512_shuffle_ps(_tmp5, _tmp7, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmpo = _mm512_shuffle_ps(_tmp8, _tmpa, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpp = _mm512_shuffle_ps(_tmp8, _tmpa, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmpq = _mm512_shuffle_ps(_tmp9, _tmpb, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpr = _mm512_shuffle_ps(_tmp9, _tmpb, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmps = _mm512_shuffle_ps(_tmpc, _tmpe, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpt = _mm512_shuffle_ps(_tmpc, _tmpe, _MM_SHUFFLE(3, 2, 3, 2));
+    __m512 _tmpu = _mm512_shuffle_ps(_tmpd, _tmpf, _MM_SHUFFLE(1, 0, 1, 0));
+    __m512 _tmpv = _mm512_shuffle_ps(_tmpd, _tmpf, _MM_SHUFFLE(3, 2, 3, 2));
+
+    _tmp0 = _mm512_shuffle_f32x4(_tmpg, _tmpk, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp1 = _mm512_shuffle_f32x4(_tmpo, _tmps, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp2 = _mm512_shuffle_f32x4(_tmph, _tmpl, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp3 = _mm512_shuffle_f32x4(_tmpp, _tmpt, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp4 = _mm512_shuffle_f32x4(_tmpi, _tmpm, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp5 = _mm512_shuffle_f32x4(_tmpq, _tmpu, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp6 = _mm512_shuffle_f32x4(_tmpj, _tmpn, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp7 = _mm512_shuffle_f32x4(_tmpr, _tmpv, _MM_SHUFFLE(2, 0, 2, 0));
+    _tmp8 = _mm512_shuffle_f32x4(_tmpg, _tmpk, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmp9 = _mm512_shuffle_f32x4(_tmpo, _tmps, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmpa = _mm512_shuffle_f32x4(_tmph, _tmpl, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmpb = _mm512_shuffle_f32x4(_tmpp, _tmpt, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmpc = _mm512_shuffle_f32x4(_tmpi, _tmpm, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmpd = _mm512_shuffle_f32x4(_tmpq, _tmpu, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmpe = _mm512_shuffle_f32x4(_tmpj, _tmpn, _MM_SHUFFLE(3, 1, 3, 1));
+    _tmpf = _mm512_shuffle_f32x4(_tmpr, _tmpv, _MM_SHUFFLE(3, 1, 3, 1));
+
+    rows[0] = AVX512Float(_mm512_shuffle_f32x4(_tmp0, _tmp1, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[1] = AVX512Float(_mm512_shuffle_f32x4(_tmp2, _tmp3, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[2] = AVX512Float(_mm512_shuffle_f32x4(_tmp4, _tmp5, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[3] = AVX512Float(_mm512_shuffle_f32x4(_tmp6, _tmp7, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[4] = AVX512Float(_mm512_shuffle_f32x4(_tmp8, _tmp9, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[5] = AVX512Float(_mm512_shuffle_f32x4(_tmpa, _tmpb, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[6] = AVX512Float(_mm512_shuffle_f32x4(_tmpc, _tmpd, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[7] = AVX512Float(_mm512_shuffle_f32x4(_tmpe, _tmpf, _MM_SHUFFLE(2, 0, 2, 0)));
+    rows[8] = AVX512Float(_mm512_shuffle_f32x4(_tmp0, _tmp1, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[9] = AVX512Float(_mm512_shuffle_f32x4(_tmp2, _tmp3, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[10] = AVX512Float(_mm512_shuffle_f32x4(_tmp4, _tmp5, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[11] = AVX512Float(_mm512_shuffle_f32x4(_tmp6, _tmp7, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[12] = AVX512Float(_mm512_shuffle_f32x4(_tmp8, _tmp9, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[13] = AVX512Float(_mm512_shuffle_f32x4(_tmpa, _tmpb, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[14] = AVX512Float(_mm512_shuffle_f32x4(_tmpc, _tmpd, _MM_SHUFFLE(3, 1, 3, 1)));
+    rows[15] = AVX512Float(_mm512_shuffle_f32x4(_tmpe, _tmpf, _MM_SHUFFLE(3, 1, 3, 1)));
   }
 };
 

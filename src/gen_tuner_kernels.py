@@ -182,9 +182,14 @@ class CPUKernel(Kernel):
     return f"{self.backend.upper()}Kernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"
 
   def isValid(self):
-    AVXLen = 8 if self.elemType == "float" else 4
+    vectorWidth = 0
+    if self.arch.lower() == "avx" or self.arch.lower() == "avx2":
+      vectorWidth = 256 // 8
+    elif self.arch.lower() == "avx512":
+      vectorWidth = 512 // 8
     elem_size = element_size(self.elemType)
-    assert self.arch == "avx"
+    AVXLen = vectorWidth // elem_size
+
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
@@ -193,14 +198,13 @@ class CPUKernel(Kernel):
 
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
-      MaxRk = 16 if elem_size == 4 else 8
-      MaxRq = 4 if elem_size == 4 else 4
-      cond = cond and self.rk == min(MaxRk, self.shape.k//self.shape.p) and self.rq == min(MaxRq, self.tileQ)
+      MaxRkVecRegs = 4 if self.arch == "avx512" else 2
+      MaxRqVecRegs = 4
+      cond = cond and self.rk == min(MaxRkVecRegs * AVXLen, self.shape.k//self.shape.p) and self.rq == min(MaxRqVecRegs, self.tileQ)
     # print(self, cond, self.shape.k, self.shape.p, self.rk, self.problem.k, isPowerOfTwo(self.problem.k), (self.shape.k // self.shape.p) % 8 != 0, self.shape.k % self.rk == 0)
-    return cond and self.shape.k * self.tileM <= 16*1024 and \
+    return cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
-           self.rk/AVXLen < 8 and \
             (self.fused_kernels == 1 or \
               (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.opt_level == 3 and \
               #Next fused intermediate must have atleast AVXLen slices to make sure
