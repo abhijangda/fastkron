@@ -143,6 +143,18 @@ public:
   CUDA_DEVICE_HOST
   FastKronType type() const {return eltype;}
   
+  CUDA_DEVICE_HOST
+  size_t flop() const {
+    size_t ops = 0;
+    long kk = k();
+    for (int i = n() - 1; i >= 0; i--) {
+      kk = (kk/f(i).p()) * f(i).q();
+      ops += kk * f(i).p();
+    }
+
+    return 2 * ((long)x().m()) * ops;
+  }
+
   bool operator==(const KMMProblemT& other) const {
     bool eq = x() == other.x() && opX() == other.opX()   &&
               n() == other.n() && opFs() == other.opFs() &&
