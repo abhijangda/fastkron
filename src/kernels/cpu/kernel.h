@@ -169,9 +169,8 @@ inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m512& 
 
 template<>
 inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m512d& data) {
-  // __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
-  // data = _mm256_i32gather_pd(base, vidx, sizeof(double));
-  assert(false); 
+  __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
+  data = _mm512_i32gather_pd(vidx, base, sizeof(double));
 }
 //////////////////////////////////////////////////////////
 
