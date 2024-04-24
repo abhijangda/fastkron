@@ -363,6 +363,57 @@ public:
   }
 };
 
+class AVX512Double : public X86Vector<double, AVX512DoubleWrapper> {
+public:
+  AVX512Double(AVX512DoubleWrapper::VecT v) : X86Vector<double, AVX512DoubleWrapper>(v) {}
+  AVX512Double() {}
+
+  static void transpose(AVX512Double rows[]) {
+    //https://github.com/romeric/Fastor/blob/master/Fastor/backend/transpose/transpose_kernels.h:_MM_TRANSPOSE8_PD
+    __m512d __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
+    __m512d __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
+
+    constexpr int64_t idx1[8] = {0, 8 , 1 , 9 , 4 , 12, 5 , 13};
+    constexpr int64_t idx2[8] = {2, 10, 3 , 11, 6 , 14, 7 , 15};
+    constexpr int64_t idx3[8] = {0, 1 , 8 , 9 , 4 , 5 , 12, 13};
+    constexpr int64_t idx4[8] = {2, 3 , 10, 11, 6 , 7 , 14, 15};
+    constexpr int64_t idx5[8] = {4, 5 , 6 , 7 , 12, 13, 14, 15};
+
+    __m512i vidx1 = _mm512_load_epi64(idx1);
+    __m512i vidx2 = _mm512_load_epi64(idx2);
+    __m512i vidx3 = _mm512_load_epi64(idx3);
+    __m512i vidx4 = _mm512_load_epi64(idx4);
+    __m512i vidx5 = _mm512_load_epi64(idx5);
+
+    __t0 = _mm512_permutex2var_pd(rows[0].data(), vidx1, rows[1].data());
+    __t1 = _mm512_permutex2var_pd(rows[0].data(), vidx2, rows[1].data());
+    __t2 = _mm512_permutex2var_pd(rows[2].data(), vidx1, rows[3].data());
+    __t3 = _mm512_permutex2var_pd(rows[2].data(), vidx2, rows[3].data());
+    __t4 = _mm512_permutex2var_pd(rows[4].data(), vidx1, rows[5].data());
+    __t5 = _mm512_permutex2var_pd(rows[4].data(), vidx2, rows[5].data());
+    __t6 = _mm512_permutex2var_pd(rows[6].data(), vidx1, rows[7].data());
+    __t7 = _mm512_permutex2var_pd(rows[6].data(), vidx2, rows[7].data());
+
+    __tt0 = _mm512_permutex2var_pd(__t0, vidx3, __t2);
+    __tt1 = _mm512_permutex2var_pd(__t0, vidx4, __t2);
+    __tt2 = _mm512_permutex2var_pd(__t1, vidx3, __t3);
+    __tt3 = _mm512_permutex2var_pd(__t1, vidx4, __t3);
+    __tt4 = _mm512_permutex2var_pd(__t4, vidx3, __t6);
+    __tt5 = _mm512_permutex2var_pd(__t4, vidx4, __t6);
+    __tt6 = _mm512_permutex2var_pd(__t5, vidx3, __t7);
+    __tt7 = _mm512_permutex2var_pd(__t5, vidx4, __t7);
+
+    rows[0] = AVX512Double(_mm512_insertf64x4(__tt0,_mm512_castpd512_pd256(__tt4),0x1));
+    rows[1] = AVX512Double(_mm512_insertf64x4(__tt1,_mm512_castpd512_pd256(__tt5),0x1));
+    rows[2] = AVX512Double(_mm512_insertf64x4(__tt2,_mm512_castpd512_pd256(__tt6),0x1));
+    rows[3] = AVX512Double(_mm512_insertf64x4(__tt3,_mm512_castpd512_pd256(__tt7),0x1));
+    rows[4] = AVX512Double(_mm512_permutex2var_pd(__tt0, vidx5, __tt4));
+    rows[5] = AVX512Double(_mm512_permutex2var_pd(__tt1, vidx5, __tt5));
+    rows[6] = AVX512Double(_mm512_permutex2var_pd(__tt2, vidx5, __tt6));
+    rows[7] = AVX512Double(_mm512_permutex2var_pd(__tt3, vidx5, __tt7));
+  }
+};
+
 template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
