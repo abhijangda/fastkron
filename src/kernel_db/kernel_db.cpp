@@ -32,7 +32,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
                distP2PStore, warmups, runs, kernelTime);
     if (status == fastKronSuccess) {
       std::cout << "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
-                   "  GFLOPs: " << std::fixed << std::setprecision(4) << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
+                   "  GFLOPs: " << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
                    occupancyDetails(kernel, problem) << std::endl;
       if (kernelTime < minTime) {
         bestKernel = kernel;
