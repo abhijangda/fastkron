@@ -169,14 +169,29 @@ class CPUKernel(Kernel):
   def hostFuncDecl(self):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}>& params, FusedParams<{self.fused_kernels}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
 
+  def pragmaTargetArch(self):
+    targetArch = ""
+    if self.arch.lower() == "avx" or self.arch.lower() == "avx2":
+      targetArch = 'x86-64-v3'
+    elif self.arch.lower() == "avx512":
+      targetArch = 'x86-64-v4'
+    else:
+      targetArch = 'x86-64-v2'
+
+    return f'''#pragma GCC push_options
+#pragma GCC optimization("O3")
+#pragma GCC target("arch={targetArch}")'''
+
   def hostInvokeFile(self):
-    return "\n".join(['#include "../../kernel.h"', "",
+    return "\n".join([self.pragmaTargetArch(), "",
+                      '#include "../../kernel.h"', "",
                       self.getKernelFuncDecl()+"{",
                       f"  return (void*)&{self.kernelDecl()};",
                       "}",
                       self.hostFuncDecl()+"{",
                       f"  {self.kernelDecl()}(params, fusedParams, distParams, epilogueParams);",
-                      "}"])
+                      "}",
+                      "#pragma GCC pop_options"])
 
   def kernelInfo(self):
     return f"{self.backend.upper()}Kernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"

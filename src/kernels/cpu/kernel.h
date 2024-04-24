@@ -98,7 +98,6 @@ inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m256d
   __m128i vidx = _mm_loadu_si128((__m128i*)gatherIdxs);
   data = _mm256_i32gather_pd(base, vidx, sizeof(double));
 }
-
 //////////////////////////////////////////////////////////
 
 ////////////////////////AVX-512///////////////////////////
@@ -174,7 +173,6 @@ inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m512d
   // data = _mm256_i32gather_pd(base, vidx, sizeof(double));
   assert(false); 
 }
-
 //////////////////////////////////////////////////////////
 
 template<typename ElemT, typename VecT>
