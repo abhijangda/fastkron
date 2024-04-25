@@ -210,12 +210,14 @@ class CPUKernel(Kernel):
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
               and (self.shape.k // self.shape.p) % AVXLen != 0 and self.shape.k % self.rk == 0) or \
             (self.aalign == AVXLen and self.rk % AVXLen == 0))
-
+    # cond1 = cond
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
       MaxRkVecRegs = 4 if self.arch == "avx512" else 2
       MaxRqVecRegs = 4
       cond = cond and self.rk == min(MaxRkVecRegs * AVXLen, self.shape.k//self.shape.p) and self.rq == min(MaxRqVecRegs, self.tileQ)
+    # if self.shape.k == 8192 and self.shape.p == 32 and self.shape.q == 32 and self.tileQ == 32 and self.tileP == 32 and self.fused_kernels == 2 and self.tileM == 1 and self.rk == 16 and self.rq == 4:
+    #   print(repr(self), cond, cond1)
     # print(self, cond, self.shape.k, self.shape.p, self.rk, self.problem.k, isPowerOfTwo(self.problem.k), (self.shape.k // self.shape.p) % 8 != 0, self.shape.k % self.rk == 0)
     return cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
@@ -227,7 +229,7 @@ class CPUKernel(Kernel):
                self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen and self.rm == self.tileM# and self.opt_level == 3
+           self.rq <= AVXLen and self.rm == self.tileM and self.opt_level == 3
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
