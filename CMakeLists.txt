@@ -102,9 +102,16 @@ else()
 endif()
 
 if(ENABLE_X86)
-  include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
+  if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernels.cmake) 
+    include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
+  endif()
+  if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc) 
+    set(X86_HEADER_FILES ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc)
+  else()
+    set(X86_HEADER_FILES)
+  endif()
+
   set(X86_HEADER_FILES
-      ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
       ${SRC}/kernel_db/cpu_kernel_db.cpp
       ${SRC}/kernel_db/cpu_kernel_db.h
       ${X86_KERNELS})
