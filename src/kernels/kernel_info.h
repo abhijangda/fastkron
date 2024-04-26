@@ -146,6 +146,13 @@ struct X86Kernel : public CPUKernel {
     info << runtimeStr() << "_" << archStr() << "_" << KernelInfo::str();
     return info.str();
   }
+
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
+    if (CPUKernel::canCompute(problem, hardware, p2p, exactFuse)) {
+      return simd <= ((X86ArchDetails*)hardware)->simd;
+    }
+    return false;
+  }
 };
 
 #include <vector>
