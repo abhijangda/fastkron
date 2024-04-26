@@ -1,6 +1,3 @@
-#include "kernels/params.h"
-#include "utils/utils.h"
-
 #include <immintrin.h>
 #include <cstring>
 #include <cstdlib>

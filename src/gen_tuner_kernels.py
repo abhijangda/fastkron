@@ -183,7 +183,9 @@ class CPUKernel(Kernel):
 #pragma GCC target("arch={targetArch}")'''
 
   def hostInvokeFile(self):
-    return "\n".join([self.pragmaTargetArch(), "",
+    return "\n".join(['#include "kernels/params.h"',
+                      '#include "utils/utils.h"',
+                      self.pragmaTargetArch(), "",
                       '#include "../../kernel.h"', "",
                       self.getKernelFuncDecl()+"{",
                       f"  return (void*)&{self.kernelDecl()};",
