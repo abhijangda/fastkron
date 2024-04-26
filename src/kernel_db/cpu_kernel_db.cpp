@@ -174,6 +174,20 @@ X86KernelDatabase::X86KernelDatabase() {
     cores = ((unsigned)(cpuidregs[2] & 0xff)) + 1; // ECX[7:0] + 1
   }
 
+  // Get processor brand string
+  // This seems to be working for both Intel & AMD vendors
+  std::string model = "";
+  for(int i=0x80000002; i<0x80000005; ++i) {
+      cpuid(i, cpuidregs);
+      char name[16];
+      ((unsigned*)name)[0] = cpuidregs[0];
+      ((unsigned*)name)[1] = cpuidregs[1];
+      ((unsigned*)name)[2] = cpuidregs[2];
+      ((unsigned*)name)[3] = cpuidregs[3];
+
+      model += std::string(name, 16);
+  }
+  
   //Get L1 cache size in KB
   uint32_t l1Size = 0;
   {
@@ -245,7 +259,7 @@ X86KernelDatabase::X86KernelDatabase() {
     }
   }
 
-  auto detail = new X86ArchDetails(cpuVendor, l1Size, l2Size, l3Size, 
+  auto detail = new X86ArchDetails(cpuVendor, model, l1Size, l2Size, l3Size, 
                                    sockets, cores, simd);
   hardware.push_back(detail);
 

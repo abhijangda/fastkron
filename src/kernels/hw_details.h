@@ -101,6 +101,7 @@ static std::string x86simdToStr(X86SIMD simd) {
 class X86ArchDetails : public HardwareDetails {
 public:
   std::string vendor;
+  std::string model;
   //Cache sizes in KB
   uint32_t l1Size;
   uint32_t l2Size;
@@ -109,13 +110,14 @@ public:
   uint32_t cores;
   X86SIMD simd;
 
-  X86ArchDetails(std::string vendor, uint32_t l1Size, uint32_t l2Size, uint32_t l3Size, uint32_t sockets, uint32_t cores, X86SIMD simd) :
-    vendor(vendor), l1Size(l1Size), l2Size(l2Size), l3Size(l3Size), sockets(sockets), cores(cores), simd(simd)
+  X86ArchDetails(std::string vendor, std::string model, uint32_t l1Size, uint32_t l2Size, uint32_t l3Size, uint32_t sockets, uint32_t cores, X86SIMD simd) :
+    vendor(vendor), model(model), l1Size(l1Size), l2Size(l2Size), l3Size(l3Size), sockets(sockets), cores(cores), simd(simd)
   {}
 
   friend std::ostream& operator<<(std::ostream& out, const X86ArchDetails& detail) {
     std::string indent = "    ";
     out << indent << "Vendor        : " << detail.vendor  << std::endl
+        << indent << "Model         : " << detail.model   << std::endl
         << indent << "L1 Cache Size : " << detail.l1Size  << " KB" << std::endl
         << indent << "L2 Cache Size : " << detail.l2Size  << " KB" << std::endl
         << indent << "L3 Cache Size : " << detail.l3Size  << " KB" << std::endl
