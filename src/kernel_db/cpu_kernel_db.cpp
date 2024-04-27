@@ -138,12 +138,12 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
   return status;
 }
 
-void cpuid(uint32_t in, uint32_t regs[4]) {
+void cpuid(uint32_t in, uint32_t regs[4], uint32_t ecx = 0) {
 #ifdef _WIN32
 #else
   __asm__ (
     "cpuid" : "=a" (regs[0]), "=b" (regs[1]), "=c" (regs[2]), "=d" (regs[3]) :
-    "a"(in), "c"(0)
+    "a"(in), "c"(ecx)
   );
 #endif
 }
@@ -190,9 +190,21 @@ X86KernelDatabase::X86KernelDatabase() {
   
   //Get L1 cache size in KB
   uint32_t l1Size = 0;
-  {
+  if (cpuVendor == "AuthenticAMD") {
     cpuid(0x80000005, cpuidregs);
     l1Size = (cpuidregs[2] >> 24) & 0xFF; //ECX[31:24]
+  } else if (cpuVendor == "GenuineIntel") {
+    cpuid(0x4, cpuidregs);
+    uint32_t ways = (cpuidregs[1] >> 22); //EBX[31:22];
+    uint32_t partitions = (cpuidregs[1] >> 12) & ((1 << 10) - 1); //EBX[21:12]
+    uint32_t sets = cpuidregs[2]; //ECX[31:0]
+    uint32_t linesize = cpuidregs[1] & ((1<<12)-1); //EBX[11:0]
+    //This size in bytes 
+    l1Size = (ways + 1) * (partitions + 1) * (linesize + 1) * (sets + 1);
+    l1Size = l1Size / 1024;
+  } else {
+    //TODO: error
+    assert(false);
   }
 
   //Get L2 and L3 cache size in KB
@@ -200,7 +212,20 @@ X86KernelDatabase::X86KernelDatabase() {
   {
     cpuid(0x80000006, cpuidregs);
     l2Size = (cpuidregs[2] >> 16) & 0xFFFF; //ECX[31:16]
+  }
+  if (cpuVendor == "AuthenticAMD") {
+    cpuid(0x80000006, cpuidregs);
     l3Size = ((cpuidregs[3] >> 18) & 0x3FFF) * 512; //EDX[31:18]
+  } else if (cpuVendor == "GenuineIntel") {
+    memset(cpuidregs, 0, 4 * sizeof(uint32_t));
+    cpuid(0x4, cpuidregs, 3);
+    uint32_t ways = (cpuidregs[1] >> 22); //EBX[31:22];
+    uint32_t partitions = (cpuidregs[1] >> 12) & ((1 << 10) - 1); //EBX[21:12]
+    uint32_t sets = cpuidregs[2]; //ECX[31:0]
+    uint32_t linesize = cpuidregs[1] & ((1<<12)-1); //EBX[11:0]
+    //This size in bytes 
+    l3Size = (ways + 1) * (partitions + 1) * (linesize + 1) * (sets + 1);
+    l3Size = l3Size / 1024;
   }
 
   //Get number of cpu sockets
