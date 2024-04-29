@@ -98,7 +98,7 @@ static std::string x86simdToStr(X86SIMD simd) {
   return "";
 }
 
-class X86ArchDetails : public HardwareDetails {
+class CPUArchDetails : public HardwareDetails {
 public:
   std::string vendor;
   std::string model;
@@ -108,10 +108,19 @@ public:
   uint32_t l3Size;
   uint32_t sockets;
   uint32_t cores;
+
+  CPUArchDetails(std::string vendor, std::string model, uint32_t l1Size, uint32_t l2Size, uint32_t l3Size, uint32_t sockets, uint32_t cores) :
+    vendor(vendor), model(model), l1Size(l1Size), l2Size(l2Size), l3Size(l3Size), sockets(sockets), cores(cores)
+  {}
+  uint32_t totalL3Size() {return l3Size * sockets;}
+};
+
+class X86ArchDetails : public CPUArchDetails {
+public:
   X86SIMD simd;
 
   X86ArchDetails(std::string vendor, std::string model, uint32_t l1Size, uint32_t l2Size, uint32_t l3Size, uint32_t sockets, uint32_t cores, X86SIMD simd) :
-    vendor(vendor), model(model), l1Size(l1Size), l2Size(l2Size), l3Size(l3Size), sockets(sockets), cores(cores), simd(simd)
+    CPUArchDetails(vendor, model, l1Size, l2Size, l3Size, sockets, cores), simd(simd)
   {}
 
   friend std::ostream& operator<<(std::ostream& out, const X86ArchDetails& detail) {
@@ -126,6 +135,4 @@ public:
         << indent << "SIMD Type     : " << x86simdToStr(detail.simd) << std::endl;
     return out;
   }
-
-  uint32_t totalL3Size() {return l3Size * sockets;}
 };

@@ -84,21 +84,6 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
   status = cudaGetLastError();
   CUDA_CHECK(status);
 
-  if (false && kronIndex == 1) {
-    printf("80\n");
-    CUDA_CHECK(cudaDeviceSynchronize());
-    float* m = new float[problem.x().numel()];
-    cudaMemcpy(m, params.problem.y().data(), params.problem.y().numel() * sizeof(float), cudaMemcpyDeviceToHost);
-    for (int i = 0; i < problem.y().numel(); i++) {
-      uint row = i/(problem.y().n());
-      if ((row % 2 == 0 && m[i] != 0) || (row%2 == 1 and m[i] != 128)) {
-        printf("%f %d %d\n", m[i], i/(problem.y().n()), i%(problem.y().n()));
-        break;
-      }
-    }
-    exit(EXIT_SUCCESS);
-  }
-
   return fastKronSuccess;
 }
 

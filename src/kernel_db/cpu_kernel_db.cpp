@@ -34,18 +34,6 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>&, FusedParams<FusedFacs>&,
                                      DistributedParams&, EpilogueParams&);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
-  if (false && kronIndex == 2) {
-    printf("80\n");
-    for (int i = 0; i < problem.y().numel(); i++) {
-      float* m = (float*)problem.y().ptr;
-      uint row = i/(problem.y().n());
-      if (m[i] != 127) {
-        printf("%f %d %d\n", m[i], i/(problem.y().n()), i%(problem.y().n()));
-        break;
-      }
-    }
-    exit(EXIT_SUCCESS);
-  }
   return fastKronSuccess;
 }
 
@@ -112,7 +100,7 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
     float avgtime = 0;
     for (int r = 0; r < runs; r++) {
       //Trash L3 Cache
-      uint32_t l3size = ((X86ArchDetails*)hardware[0])->totalL3Size();
+      uint32_t l3size = ((CPUArchDetails*)hardware[0])->totalL3Size();
       if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3size)
         parallelCopy(trash1, trash2, l3size);
       double startTime = getCurrTime();
