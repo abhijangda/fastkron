@@ -85,6 +85,7 @@ public:
   virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem);
   virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
   virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
+  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
   virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);

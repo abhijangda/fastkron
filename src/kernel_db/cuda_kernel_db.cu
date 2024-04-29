@@ -259,37 +259,45 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
   return fastKronSuccess;
 }
 
-KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) {
+KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {
   using Opts = KernelOptimizations::Optimization;
 
   for (int optlevel = KernelOptimizations::MaxOptLevel();
        optlevel >= 0; optlevel--) {
-    std::vector<KernelInfo*> kernelsForOptLevel;
-    std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(kernelsForOptLevel),
-                 [optlevel](auto& kernel){return kernel->OptLevel == optlevel;});
+    std::vector<KernelInfo*> kernelsForOptLevel = kernels[optlevel];
     if (kernelsForOptLevel.size() > 0) {
-      //Find kernels that have either same P or same Q
-      std::vector<KernelInfo*> kernelsWithSamePOrQ;
-      std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), std::back_inserter(kernelsWithSamePOrQ),
-                   [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or kernel->f.q() == subProblem.f(0).q();});
-      if (kernelsWithSamePOrQ.size() > 0) {
-        kernelsForOptLevel = kernelsWithSamePOrQ;
-      }
-      //sort kernels in descending order based on the number of thread blocks a kernel invoke
-      auto order = [subProblem, this](auto k1, auto k2) {
-        return ((CUDAKernel*)k1)->numBlocks(subProblem) > ((CUDAKernel*)k2)->numBlocks(subProblem);
-      };
-      std::sort(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), order);
-      for (auto k : kernelsForOptLevel) {
-        uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
-        if (((CUDAKernel*)k)->numBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
-          return k;
-        }
-      }
-
-      //If no kernel is found then return the kernel with max reuse
-      return kernelsForOptLevel[kernelsForOptLevel.size() - 1];
+      KernelInfo* info = kernelForSubProblem(subProblem, kernelsForOptLevel);
+      if (info) return info;
     }
+  }
+}
+
+KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
+  if (kernelsForOptLevel.size() > 0) {
+    //Find kernels that have either same P or same Q
+    std::vector<KernelInfo*> kernelsWithSamePOrQ;
+    std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), std::back_inserter(kernelsWithSamePOrQ),
+                  [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or kernel->f.q() == subProblem.f(0).q();});
+    std::vector<KernelInfo*> filteredKernels;
+    if (kernelsWithSamePOrQ.size() > 0) {
+      filteredKernels = kernelsWithSamePOrQ;
+    } else {
+      filteredKernels = kernelsForOptLevel;
+    }
+    //sort kernels in descending order based on the number of thread blocks a kernel invoke
+    auto order = [subProblem, this](auto k1, auto k2) {
+      return ((CUDAKernel*)k1)->numBlocks(subProblem) > ((CUDAKernel*)k2)->numBlocks(subProblem);
+    };
+    std::sort(filteredKernels.begin(), filteredKernels.end(), order);
+    for (auto k : filteredKernels) {
+      uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
+      if (((CUDAKernel*)k)->numBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
+        return k;
+      }
+    }
+
+    //If no kernel is found then return the kernel with max reuse
+    return filteredKernels[filteredKernels.size() - 1];
   }
 
   return nullptr;
@@ -379,7 +387,14 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       auto numFusedToKernels_T = filterFastestFusedKernels(problem, kernels);
       if (!numFusedToKernels_T.empty()) {
         auto maxFused = numFusedToKernels_T.begin();
-        auto tk = TunedKernelFromStart(this->kernelForSubProblem(problem, maxFused->second), 
+        std::vector<std::vector<KernelInfo*>> k;
+        for (int i = 0; i <= KernelOptimizations::MaxOptLevel(); i++)
+          if (i == KernelOptimizations::MaxOptLevel())  
+            k.push_back(maxFused->second);
+          else
+            k.push_back(std::vector<KernelInfo*>());
+
+        auto tk = TunedKernelFromStart(this->kernelForSubProblem(problem, k), 
                                       problem.n() - maxFused->first, problem.n() - 1, problem.k(), 0.0f);
         kernelSeries.push_back(tk);
         firstOpTKernelFound = true;
@@ -426,7 +441,7 @@ TunedKernelsSeries CUDAKernelDatabase::kernelSeriesForProblem(KMMProblem problem
       [](const KMMProblem) {return 1;},
       [&kernelSeries, this]
         (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
-          std::vector<KernelInfo*> kernels;
+          std::vector<std::vector<KernelInfo*>> kernels;
           findAllKernels(subProblem, false, kernels);
           auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, kernels), 
                                          rstart, rstart, subProblem.k(), 0.0f);
