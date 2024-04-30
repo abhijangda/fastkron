@@ -251,7 +251,7 @@ X86KernelDatabase::X86KernelDatabase() {
     sockets = socketset.size();
   }
 
-  X86SIMD simd = NoSIMD;
+  X86SIMD simd = SISD;
   {
     //Has AVX?
     cpuid(1, cpuidregs);
@@ -262,6 +262,7 @@ X86KernelDatabase::X86KernelDatabase() {
     //Has AVX2?
     cpuid(0x7, cpuidregs);
     if ((cpuidregs[2] >> 5) & 0x1) {
+      //TODO: Requires AVX2 not just AVX
       // simd = X86SIMD::AVX2;
     }
 

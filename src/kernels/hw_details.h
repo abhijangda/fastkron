@@ -81,15 +81,15 @@ public:
 };
 
 enum X86SIMD {
-  NoSIMD,
+  SISD,
   AVX,
   AVX512
 };
 
 static std::string x86simdToStr(X86SIMD simd) {
   switch(simd) {
-    case NoSIMD:
-      return "NoSIMD";
+    case SISD:
+      return "SISD";
     case AVX:
       return "AVX";
     case AVX512:

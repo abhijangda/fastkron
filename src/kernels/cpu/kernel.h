@@ -24,12 +24,12 @@ template<typename ElemT, typename VecT>
 static inline void vectorBroadcast(const ElemT* ptr, VecT& data) {}
 
 ////////////////////////Single///////////////////////////////
-struct SingleFloatWrapper {
+struct SISDFloatWrapper {
   using VecT = float;
   float data;
 };
 
-struct SingleDoubleWrapper {
+struct SISDDoubleWrapper {
   using VecT = double;
   double data;
 };
@@ -50,50 +50,48 @@ inline void vectorStore(float* ptr, const float& vec) {
 }
 
 template<>
-inline void vectorStore(double* ptr, const __m256d& vec) {
-  _mm256_storeu_pd(ptr, vec);
+inline void vectorStore(double* ptr, const double& vec) {
+  *ptr = vec;
 }
 
 template<>
-inline void vectorZero(__m256& data) {
-  data = _mm256_setzero_ps();
+inline void vectorZero(float& data) {
+  data = 0;
 }
 
 template<>
-inline void vectorZero(__m256d& data) {
-  data = _mm256_setzero_pd();
+inline void vectorZero(double& data) {
+  data = 0;
 }
 
 template<>
-inline void vectorFMA(const __m256& a, const __m256& b, __m256& c) {
-  c = _mm256_fmadd_ps(a, b, c);
+inline void vectorFMA(const float& a, const float& b, float& c) {
+  c = a*b + c;
 }
 
 template<>
-inline void vectorFMA(const __m256d& a, const __m256d& b, __m256d& c) {
-  c = _mm256_fmadd_pd(a, b, c);
+inline void vectorFMA(const double& a, const double& b, double& c) {
+  c = a*b + c;
 }
 
 template<>
-inline void vectorBroadcast(const float* ptr, __m256& data) {
-  data = _mm256_broadcast_ss(ptr);
+inline void vectorBroadcast(const float* ptr, float& data) {
+  data = *ptr;
 }
 
 template<>
-inline void vectorBroadcast(const double* ptr, __m256d& data) {
-  data = _mm256_broadcast_sd(ptr);
+inline void vectorBroadcast(const double* ptr, double& data) {
+  data = *ptr;
 }
 
 template<>
-inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m256& data) {
-  __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
-  data = _mm256_i32gather_ps(base, vidx, sizeof(float)); 
+inline void vectorGather(const float* base, const uint32_t* gatherIdxs, float& data) {
+  data = base[gatherIdxs[0]]; 
 }
 
 template<>
-inline void vectorGather(const double* base, const uint32_t* gatherIdxs, __m256d& data) {
-  __m128i vidx = _mm_loadu_si128((__m128i*)gatherIdxs);
-  data = _mm256_i32gather_pd(base, vidx, sizeof(double));
+inline void vectorGather(const double* base, const uint32_t* gatherIdxs, double& data) {
+  data = base[gatherIdxs[0]];
 }
 ////////////////////////////////////////////////////////////
 
@@ -269,7 +267,7 @@ public:
   void store(ElemT* ptr, uint32_t sz) {
     if (sz == VectorLen)
       store(ptr);
-    else {
+    else if (VectorLen > 1) {
       ElemT elems[VectorLen];
       vectorStore<ElemT, UnderlyingVecT>(elems, vec.data);
       memcpy(ptr, elems, sz * sizeof(ElemT));
@@ -297,6 +295,24 @@ public:
     ElemT elems[VectorLen];
     vectorStore<ElemT, UnderlyingVecT>(elems, vec.data);
     printf("%f\n", elems[0]);
+  }
+};
+
+class SISDFloat : public X86Vector<float, SISDFloatWrapper> {
+public:
+  SISDFloat(SISDFloatWrapper::VecT v) : X86Vector<float, SISDFloatWrapper>(v) {}
+  SISDFloat() {}
+  static void transpose(SISDFloat rows[]) {
+    rows[0] = rows[0];
+  }
+};
+
+class SISDDouble : public X86Vector<double, SISDDoubleWrapper> {
+public:
+  SISDDouble(SISDDoubleWrapper::VecT v) : X86Vector<double, SISDDoubleWrapper>(v) {}
+  SISDDouble() {}
+  static void transpose(SISDDouble rows[]) {
+    rows[0] = rows[0];
   }
 };
 
@@ -671,6 +687,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         if (m + rm < XTile.m()) {
           uint32_t slices = (kKMultipleOfTileK && kTileK % VectorLen == 0) ? 
                              VectorLen : (XTile.cols/P - slice);
+          slices = MIN(VectorLen, slices);
           reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
         }
       }
@@ -714,16 +731,16 @@ void threadWork(KernelParams<FusedFacs>& params,
         for (uint32_t k = 0; k < TileK; k += NumSlices * P) {
           uint32_t p = 0;
           for (p = 0; p < TileP; p += VectorLen) {
-            const bool ValidAVXTranspose = 
+            const bool ValidAVXTranspose =
                   ((kKMultipleOfTileK && kTileKMultipleOfSlices) || TileK - k >= NumSlices * P) && 
                   ((kPMultipleOfTileP && TileP % VectorLen == 0) || P - tileP - p >= VectorLen) &&
                   (TileP >= VectorLen);
-            if (ValidAVXTranspose) {
+            if (VectorLen > 1 && ValidAVXTranspose) {
               X86VecT slices[VectorLen];
               if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
-                                                            &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
+                                                              &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
                   slices[sliceIdx].load(ptr);
                 }
                 X86VecT::transpose(slices);
@@ -744,15 +761,12 @@ void threadWork(KernelParams<FusedFacs>& params,
                 slices[pp].store(&TileX[m*TileP*(kTileK/MaxP) + (p + pp)*(kTileK/MaxP) + k/P]);
               }
             } else {
-              // printf("P %d tileP %d p %d %d\n", P, tileP, p, P-tileP-p);
               uint32_t NumSlices1 = (TileK - k)/P;
               uint32_t remainingP = P - tileP - p;
-              // if (tileP == 0 && tileK == 0) /printf("remainingP %d NumSlices1 %d TileK %d k %d p %d\n", remainingP, NumSlices1, TileK, k, p);
               for (; p < MIN(TileP, P - tileP); p++) {
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                               &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
-                  // if (p>=31 || k/P + sliceIdx >= 127) printf("%d %d\n",p,k/P + sliceIdx);
                   TileX[m*TileP*(kTileK/MaxP) + p*(kTileK/MaxP) + k/P + sliceIdx] = *ptr;
                 }
               }

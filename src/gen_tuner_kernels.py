@@ -155,7 +155,7 @@ class CPUKernel(Kernel):
     self.arch = arch
 
   def __repr__(self):
-    return f"{self.backend}_{self.arch}_{self.elemType[0]}_{self.shape.p}_{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}"
+    return f"{self.backend}_{self.arch}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}"
   
   def filename(self):
     return f"{self.kernelname()}.cpp"
@@ -199,7 +199,9 @@ class CPUKernel(Kernel):
     return f"{self.backend.upper()}Kernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"
 
   def isValid(self):
-    vectorWidth = 0
+    if self.arch.lower() == "sisd":
+      return True
+    vectorWidth = element_size(self.elemType)
     if self.arch.lower() == "avx" or self.arch.lower() == "avx2":
       vectorWidth = 256 // 8
     elif self.arch.lower() == "avx512":
