@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sstream>
+#include <omp.h>
 
 #include "kmm/matrix.h"
 #include "utils/utils.h"
@@ -92,6 +93,15 @@ struct KernelInfo {
     Matrix Xsh = Matrix(tileX_.m(), 
                         (tileX_.n()/f_.p()) * tileF.p());
     return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
+  }
+
+  size_t numThreads(KMMProblem problem) {
+    Matrix tileX_ = getTileX(problem);
+    Factor tileF_ = getTileF(problem);
+
+    return DIVUP(problem.k(), tileX_.n()) * 
+           DIVUP(problem.f(0).q(), tileF_.q()) * 
+           DIVUP(problem.m(), tileX_.m());
   }
 
   bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt);

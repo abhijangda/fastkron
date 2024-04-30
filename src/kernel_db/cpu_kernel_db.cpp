@@ -126,6 +126,36 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
   return status;
 }
 
+KernelInfo* CPUKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
+  if (kernelsForOptLevel.size() > 0) {
+    //Find kernels that have either same P or same Q
+    std::vector<KernelInfo*> kernelsWithSamePOrQ;
+    std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), std::back_inserter(kernelsWithSamePOrQ),
+                 [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or kernel->f.q() == subProblem.f(0).q();});
+    std::vector<KernelInfo*> filteredKernels;
+    if (kernelsWithSamePOrQ.size() > 0) {
+      filteredKernels = kernelsWithSamePOrQ;
+    } else {
+      filteredKernels = kernelsForOptLevel;
+    }
+    //sort kernels in descending order based on the number of threads a kernel invoke
+    auto order = [subProblem, this](auto k1, auto k2) {
+      return ((CPUKernel*)k1)->numThreads(subProblem) > ((CPUKernel*)k2)->numThreads(subProblem);
+    };
+    std::sort(filteredKernels.begin(), filteredKernels.end(), order);
+    for (auto k : filteredKernels) {
+      if (((CPUKernel*)k)->numThreads(subProblem) <= getMaxThreads()) {
+        return k;
+      }
+    }
+
+    //If no kernel is found then return the kernel with max reuse
+    return filteredKernels[filteredKernels.size() - 1];
+  }
+
+  return nullptr;
+}
+
 void cpuid(uint32_t in, uint32_t regs[4], uint32_t ecx = 0) {
 #ifdef _WIN32
 #else
@@ -251,24 +281,17 @@ X86KernelDatabase::X86KernelDatabase() {
     sockets = socketset.size();
   }
 
+  __builtin_cpu_init ();
+
   X86SIMD simd = SISD;
-  {
-    //Has AVX?
-    cpuid(1, cpuidregs);
-    if ((cpuidregs[2] >> 28) & 0x1) {
+  if (__builtin_cpu_supports("fma")) {
+    //Has AVX and AVX2
+    if (__builtin_cpu_supports("avx2")) {
       simd = X86SIMD::AVX;
     }
 
-    //Has AVX2?
-    cpuid(0x7, cpuidregs);
-    if ((cpuidregs[2] >> 5) & 0x1) {
-      //TODO: Requires AVX2 not just AVX
-      // simd = X86SIMD::AVX2;
-    }
-
     //Has AVX512?
-    cpuid(0x7, cpuidregs);
-    if ((cpuidregs[2] >> 16) & 0x1) {
+    if (__builtin_cpu_supports("avx512f")) {
       simd = X86SIMD::AVX512;
     }
   }

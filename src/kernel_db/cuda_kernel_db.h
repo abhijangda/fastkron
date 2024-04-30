@@ -13,33 +13,6 @@
 
 struct ThreadArgs;
 
-
-template<>
-struct std::hash<std::pair<Factor, uint32_t>> {
-  std::size_t operator()(const std::pair<Factor, uint32_t>& m) const;
-};
-
-class OptimizedKernelForShape {
-  std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, KernelInfo*, MatrixComparator>> shapeToKernel;
-public:
-  void init(KernelDatabase* db, std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr) {
-    for (auto factorIter : shapeToKernelStr) {
-      shapeToKernel[factorIter.first] = {};
-      for (auto iter : factorIter.second) {
-        shapeToKernel[factorIter.first][iter.first] = db->getKernel(iter.second);
-      }
-    }
-
-    if (true) {
-      for (auto factorIter : shapeToKernel) {
-        for (auto iter : factorIter.second) {
-          std::cout << iter.second->str() << std::endl;
-        }
-      }
-    }
-  }
-};
-
 //TODO: Change name to Executor?
 class CUDAKernelDatabase : public KernelDatabase {
 public:
@@ -53,8 +26,6 @@ public:
   std::vector<void*> ncclComms;
   pthread_barrier_t* barriers_;
   thread_pool<ThreadArgs*>* threads_;
-  OptimizedKernelForShape fastestKernelForShape;
-  std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
 
 public:
   CUDAKernelDatabase();
@@ -83,9 +54,7 @@ public:
                                  float& runtime);
 
   virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem);
-  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
   virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
-  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
   virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);

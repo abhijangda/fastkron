@@ -1,10 +1,18 @@
 #include <functional>
+#include <map>
 
 #include "kmm/kmmalgo.h"
 #include "kernels/kernel_info.h"
 #include "kernels/params.h"
 
 #pragma once
+
+template<>
+struct std::hash<std::pair<Factor, uint32_t>> {
+  std::size_t operator()(const std::pair<Factor, uint32_t>& m) const;
+};
+
+class OptimizedKernelForShape;
 
 class KernelDatabase {
 public:
@@ -31,9 +39,11 @@ public:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
   std::vector<KernelInfo*> allKernels;
   std::vector<HardwareDetails*> hardware;
+  std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
+  OptimizedKernelForShape* fastestKernelForShape;
 
 public:
-  KernelDatabase() {}
+  KernelDatabase();
   ~KernelDatabase() {}
 
   template<typename SubClassKernel>
@@ -146,9 +156,45 @@ public:
 
 
   std::pair<KernelInfo*, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
-  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem) = 0;
+  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
+  virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
+  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) = 0;
+  KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {
+    using Opts = KernelOptimizations::Optimization;
+
+    for (int optlevel = KernelOptimizations::MaxOptLevel();
+        optlevel >= 0; optlevel--) {
+      std::vector<KernelInfo*> kernelsForOptLevel = kernels[optlevel];
+      if (kernelsForOptLevel.size() > 0) {
+        KernelInfo* info = kernelForSubProblem(subProblem, kernelsForOptLevel);
+        if (info) return info;
+      }
+    }
+  }
 
   void free() {
     compiledKernels.clear();
+  }
+};
+
+//TODO: Needs to be removed
+class OptimizedKernelForShape {
+  std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, KernelInfo*, MatrixComparator>> shapeToKernel;
+public:
+  void init(KernelDatabase* db, std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr) {
+    for (auto factorIter : shapeToKernelStr) {
+      shapeToKernel[factorIter.first] = {};
+      for (auto iter : factorIter.second) {
+        shapeToKernel[factorIter.first][iter.first] = db->getKernel(iter.second);
+      }
+    }
+
+    if (true) {
+      for (auto factorIter : shapeToKernel) {
+        for (auto iter : factorIter.second) {
+          std::cout << iter.second->str() << std::endl;
+        }
+      }
+    }
   }
 };
