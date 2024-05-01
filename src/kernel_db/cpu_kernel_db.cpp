@@ -94,6 +94,10 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
                                  int warmups, int runs,
                                  float& runtime) {
   runtime = std::numeric_limits<float>::max();
+  //Avoid the SISD kernel when running on AVX/AVX512
+  if ((*(dynamic_cast<const X86ArchDetails*>(hardware[0]))).simd != X86SIMD::SISD) {
+    if (((X86Kernel*)kernel)->simd == X86SIMD::SISD) return fastKronSuccess;
+  }
   // if (kernel->tileX.n() < 8192 || kernel->tileF.q() < 64) return fastKronSuccess;
   fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
