@@ -111,8 +111,8 @@ public:
   fastKronError procMalloc(uint32_t proc, FastKronType type, Matrix& m);
   fastKronError procFree(uint32_t proc, Matrix m);
   
-  bool findAllKernels(KMMProblem problem, bool distP2PStore, 
-                      std::vector<std::vector<KernelInfo*>>& kernels) {
+  virtual bool findAllKernels(KMMProblem problem, bool distP2PStore, 
+                              std::vector<std::vector<KernelInfo*>>& kernels) {
     for (int i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
       kernels.push_back(std::vector<KernelInfo*>());
     }

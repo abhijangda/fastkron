@@ -126,7 +126,7 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
   return status;
 }
 
-KernelInfo* CPUKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
+KernelInfo* X86KernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
     std::vector<KernelInfo*> kernelsWithSamePOrQ;
@@ -138,19 +138,27 @@ KernelInfo* CPUKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const 
     } else {
       filteredKernels = kernelsForOptLevel;
     }
+    X86SIMD simd = getX86CPUProperties().simd;
+    std::vector<KernelInfo*> kernelsForArch;
+    std::copy_if(filteredKernels.begin(), filteredKernels.end(), std::back_inserter(kernelsForArch),
+                 [simd, subProblem](auto& kernel){
+                   return kernel->FusedFacs > 1 || 
+                    (((X86Kernel*)kernel)->simd == simd);
+                 });
+
     //sort kernels in descending order based on the number of threads a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
       return ((CPUKernel*)k1)->numThreads(subProblem) > ((CPUKernel*)k2)->numThreads(subProblem);
     };
-    std::sort(filteredKernels.begin(), filteredKernels.end(), order);
-    for (auto k : filteredKernels) {
+    std::sort(kernelsForArch.begin(), kernelsForArch.end(), order);
+    for (auto k : kernelsForArch) {
       if (((CPUKernel*)k)->numThreads(subProblem) <= getMaxThreads()) {
         return k;
       }
     }
 
     //If no kernel is found then return the kernel with max reuse
-    return filteredKernels[filteredKernels.size() - 1];
+    return kernelsForArch[kernelsForArch.size() - 1];
   }
 
   return nullptr;

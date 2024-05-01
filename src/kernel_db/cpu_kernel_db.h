@@ -31,7 +31,6 @@ public:
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
   virtual fastKronError procFree(uint32_t proc, void* ptr);
-  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
 
   uint32_t getMaxThreads() const {
     return MAX(omp_get_max_threads(), getCPUProperties().sockets * getCPUProperties().cores);
@@ -43,4 +42,6 @@ public:
 class X86KernelDatabase : public CPUKernelDatabase {
 public:
   X86KernelDatabase();
+  X86ArchDetails getX86CPUProperties() const {return *(dynamic_cast<const X86ArchDetails*>(hardware[0]));}
+  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
 };
