@@ -147,6 +147,7 @@ KernelInfo* X86KernelDatabase::kernelForSubProblem(KMMProblem subProblem, const 
     std::copy_if(filteredKernels.begin(), filteredKernels.end(), std::back_inserter(kernelsForArch),
                  [simd, subProblem](auto& kernel){
                    return kernel->FusedFacs > 1 || 
+                   //TODO: write conversion function kernel.asX86Kernel()
                     (((X86Kernel*)kernel)->simd == simd);
                  });
     if (kernelsForArch.size() == 0)
