@@ -149,6 +149,8 @@ KernelInfo* X86KernelDatabase::kernelForSubProblem(KMMProblem subProblem, const 
                    return kernel->FusedFacs > 1 || 
                     (((X86Kernel*)kernel)->simd == simd);
                  });
+    if (kernelsForArch.size() == 0)
+      kernelsForArch = filteredKernels;
 
     //sort kernels in descending order based on the number of threads a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
