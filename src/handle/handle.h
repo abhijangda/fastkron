@@ -68,6 +68,17 @@ struct FastKronHandle {
     }
   }
 
+  std::vector<KernelDatabase*> getAllKernelDbs() {
+    std::vector<KernelDatabase*> out;
+    if        (hasBackend(fastKronBackend_X86))  {
+      out.push_back(getKernelDb(fastKronBackend_X86));
+    } else if (hasBackend(fastKronBackend_CUDA)) {
+      out.push_back(getKernelDb(fastKronBackend_CUDA));
+    } else if (hasBackend(fastKronBackend_HIP))  {
+      out.push_back(getKernelDb(fastKronBackend_HIP));
+    }
+  }
+
   fastKronError initX86Backend();
   fastKronError initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   fastKronError initHIPBackend(void* ptrToStream);
@@ -84,8 +95,6 @@ struct FastKronHandle {
   bool useFusion_;
   void setUseFusion(bool v) {useFusion_ = v;}
   bool getUseFusion()       {return useFusion_;}
-
-  TunedKernelsSeries tunedKernelSeries;
   
   //SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
   //KernelInfo selectKernel(SlicedMulShape shape);

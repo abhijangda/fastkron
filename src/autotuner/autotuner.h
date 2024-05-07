@@ -1,6 +1,9 @@
 #include "handle/handle.h"
 #include "kmm/kmmalgo.h"
 
+#include <utility>
+#include <unordered_map>
+
 #pragma once
 
 class TunedKernelsMap {
@@ -46,9 +49,14 @@ class Autotuner {
 
   fastKronError tune(KMMProblem problem, KernelDatabase* kernelDb, bool isDistributed, DistributedParams distParams);
 
-public:
-  Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
-  {}
+  std::unordered_map<KernelDatabase*, std::unordered_map<KMMProblem, TunedKernelsSeries>> tunedKernelSeries;
 
-  fastKronError tune(KMMProblem problem, const fastKronBackend backend);
+public:
+  Autotuner(FastKronHandle& fastKron) : fastKron(fastKron) {
+    for (auto db : fastKron.getAllKernelDbs()) {
+      tunedKernelSeries[db] = std::unordered_map<KMMProblem, TunedKernelsSeries>();
+    }
+  }
+
+  fastKronError tune(KMMProblem problem, const fastKronBackend backend, TunedKernelsSeries& retKernelSeries);
 };

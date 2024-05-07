@@ -83,9 +83,15 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
   return err;
 }
 
-fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend) {
+fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend, TunedKernelsSeries& retKernelSeries) {
   //Only row major layout of all matrics is supported.
   if (!env::getTune()) return fastKronSuccess;
+  auto kernelDb = fastKron.getKernelDb(backend);
+
+  if (tunedKernelSeries[kernelDb].count(problem) > 0) {
+    retKernelSeries = tunedKernelSeries[kernelDb][problem];
+    return fastKronSuccess;
+  }
 
   float minTime = 0;
   Matrix result, temp;
@@ -100,8 +106,6 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend)
   } else if (fastKron.hasBackend(fastKronBackend_X86)) {
       devicesPerProc = 1;
   }
-
-  auto kernelDb = fastKron.getKernelDb(backend);
 
   Matrix temp1[devicesPerProc];
   Matrix temp2[devicesPerProc];
@@ -136,7 +140,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend)
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(problem, 0, false,
                                   tunedKernels, tunedKernelsMap);
-    fastKron.tunedKernelSeries = tunedKernels;
+    retKernelSeries = tunedKernels;
   } else {
 #ifdef ENABLE_CUDA
     assert(fastKron.backend == fastKronBackend_CUDA);
@@ -205,7 +209,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend)
     
     if (seriesTime < minTime) {
       minTime = seriesTime;
-      fastKron.tunedKernelSeries = tunedKernelSeries;
+      retKernelSeries = tunedKernelSeries;
       fastKron.cudaKernels.perGPUKronBatch_ = MaxLocalKrons;
     }
     }
@@ -221,7 +225,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend)
   }
   
   std::cout <<"Minimum Time " << minTime << " through kernels: " << std::endl;
-  for (auto iter = fastKron.tunedKernelSeries.rbegin(); iter != fastKron.tunedKernelSeries.rend(); iter++) {
+  for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
 #ifdef ENABLE_CUDA
     if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
@@ -234,5 +238,8 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend)
     }
 #endif
   }
+
+  tunedKernelSeries[kernelDb][problem] = retKernelSeries;
+
   return fastKronSuccess;
 }

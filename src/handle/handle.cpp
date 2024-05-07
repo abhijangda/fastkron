@@ -128,6 +128,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   if (problem.y().data() == nullptr) return fastKronInvalidArgument;
   if (temp1              == nullptr) return fastKronInvalidArgument;
   if (not hasBackend(backend))       return fastKronInvalidArgument;
+  fastKronError err;
 
   void* temps[2] = {temp1, temp2};
 
@@ -135,27 +136,25 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
 
   TunedKernelsSeries kernelSeries;
   if (env::getTune()) {
-    //TODO: tunedKernelSeries for each backend
-    if (tunedKernelSeries.size() == 0) {
-      uint32_t Ps[problem.n()];
-      uint32_t Qs[problem.n()];
-      problem.ps(Ps);
-      problem.qs(Qs);
+    uint32_t Ps[problem.n()];
+    uint32_t Qs[problem.n()];
+    problem.ps(Ps);
+    problem.qs(Qs);
 
-      Autotuner(*this).tune(KMMProblem(problem.type(), problem.m(), problem.n(),
-                                         Ps, Qs, problem.opX(), problem.opFs()),
-                            backend);
-    }
-
-    kernelSeries = tunedKernelSeries;
+    err =  Autotuner(*this).tune(KMMProblem(problem.type(), problem.m(), problem.n(),
+                                      Ps, Qs, problem.opX(), problem.opFs()),
+                              backend, kernelSeries);
   } 
   else {
     kernelSeries = kernelDb->kernelSeriesForProblem(problem);
   }
 
+  if (err != fastKronSuccess)
+    return err;
+
   auto kernelSeriesIter = kernelSeries.begin();
 
-  fastKronError err = executeGeKMM(problem, temps, kernelSeries.size(),
+  err = executeGeKMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel->FusedFacs;},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
       (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
@@ -278,8 +277,7 @@ fastKronError FastKronHandle::initX86Backend() {
 //   return err;
 // }
 
-FastKronHandle::FastKronHandle(uint32_t backends) :
-  tunedKernelSeries(), backends(backends)
+FastKronHandle::FastKronHandle(uint32_t backends) : backends(backends)
 #ifdef ENABLE_CUDA
   , cudaKernels()
 #endif
