@@ -89,7 +89,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   if (!env::getTune()) return fastKronSuccess;
   auto kernelDb = fastKron.getKernelDb(backend);
 
-  if (tunedKernelSeries[kernelDb].count(problem) > 0) {
+  if (tunedKernelSeries[kernelDb].count(problem) == 1) {
     retKernelSeries = tunedKernelSeries[kernelDb][problem];
     return fastKronSuccess;
   }
