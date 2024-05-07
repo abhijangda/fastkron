@@ -51,7 +51,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   return minTime;
 }
 
-fastKronError Autotuner::tune(KMMProblem problem,
+fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
                             bool isDistributed, DistributedParams distParams) {
   //Only row major layout of all matrics is supported.
   //For performance eval we do not need these to contain any value
@@ -60,8 +60,6 @@ fastKronError Autotuner::tune(KMMProblem problem,
   //of previous iteration as input to current
   //A KronMat is a series of SlicedMats
   //We need to get best kernel for all contiguous SlicedMats
-
-  auto kernelDb = fastKron.getBackendKernelDb();
 
   auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
                [](const KMMProblem p){return 1;},
@@ -85,7 +83,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
   return err;
 }
 
-fastKronError Autotuner::tune(KMMProblem problem) {
+fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend) {
   //Only row major layout of all matrics is supported.
   if (!env::getTune()) return fastKronSuccess;
 
@@ -95,18 +93,15 @@ fastKronError Autotuner::tune(KMMProblem problem) {
 
   uint devicesPerProc = 1;
 
-  switch (fastKron.backend) {
-    case fastKronBackend_CUDA:
-#ifdef ENABLE_CUDA
-    devicesPerProc = fastKron.cudaKernels.numGPUs_;
-#endif
-    break;
-    case fastKronBackend_X86:
+  if (fastKron.hasBackend(fastKronBackend_CUDA)) {
+    #ifdef ENABLE_CUDA
+      devicesPerProc = fastKron.cudaKernels.numGPUs_;
+    #endif
+  } else if (fastKron.hasBackend(fastKronBackend_X86)) {
       devicesPerProc = 1;
-      break;
   }
 
-  auto kernelDb = fastKron.getBackendKernelDb();
+  auto kernelDb = fastKron.getKernelDb(backend);
 
   Matrix temp1[devicesPerProc];
   Matrix temp2[devicesPerProc];
@@ -136,7 +131,7 @@ fastKronError Autotuner::tune(KMMProblem problem) {
     auto tmpProblem = KMMProblem(problem.type(), Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
-    tune(tmpProblem, false, DistributedParams());
+    tune(tmpProblem, kernelDb, false, DistributedParams());
     std::cout << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(problem, 0, false,
@@ -197,7 +192,7 @@ fastKronError Autotuner::tune(KMMProblem problem) {
                                    subproblem.n());
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.cudaKernels.gpusInK_ > 1 && fastKron.cudaKernels.isDistributed_ && fastKron.cudaKernels.distComm_ == DistComm::P2P;
-      tune(subproblem, distP2PStore, distParams);
+      tune(subproblem, kernelDb, distP2PStore, distParams);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
                                         tunedKernels, tunedKernelsMap);

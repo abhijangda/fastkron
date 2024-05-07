@@ -122,17 +122,31 @@ std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
   return os;
 }
 
-fastKronError FastKronHandle::xgekmm(const KMMProblem problem, void* temp1, void* temp2,
+fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBackend backend, 
+                                     void* temp1, void* temp2,
                                      EpilogueParams epilogueParams) {
   if (problem.y().data() == nullptr) return fastKronInvalidArgument;
   if (temp1              == nullptr) return fastKronInvalidArgument;
+  if (not hasBackend(backend))       return fastKronInvalidArgument;
 
   void* temps[2] = {temp1, temp2};
 
   auto kernelDb = getKernelDb(backend);
 
   TunedKernelsSeries kernelSeries;
-  if (env::getTune() && tunedKernelSeries.size() > 0) {
+  if (env::getTune()) {
+    //TODO: tunedKernelSeries for each backend
+    if (tunedKernelSeries.size() == 0) {
+      uint32_t Ps[problem.n()];
+      uint32_t Qs[problem.n()];
+      problem.ps(Ps);
+      problem.qs(Qs);
+
+      Autotuner(*this).tune(KMMProblem(problem.type(), problem.m(), problem.n(),
+                                         Ps, Qs, problem.opX(), problem.opFs()),
+                            backend);
+    }
+
     kernelSeries = tunedKernelSeries;
   } 
   else {
@@ -218,7 +232,7 @@ fastKronError FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize,
 }
 
 fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  if (backend != fastKronBackend_CUDA) return fastKronInvalidArgument;
+  if (!hasBackend(fastKronBackend_CUDA)) return fastKronInvalidArgument;
 #ifdef ENABLE_CUDA
   cudaKernels.init(ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
   return fastKronSuccess;
@@ -228,7 +242,7 @@ fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int g
 }
 
 fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
-  if (backend != fastKronBackend_HIP) return fastKronInvalidArgument;
+  if (!hasBackend(fastKronBackend_HIP)) return fastKronInvalidArgument;
 #ifdef ENABLE_HIP
   hipKernels.init(ptrToStream);
   return fastKronSuccess;
@@ -238,7 +252,7 @@ fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
 }
 
 fastKronError FastKronHandle::initX86Backend() {
-  if (backend != fastKronBackend_X86) return fastKronInvalidArgument;
+  if (!hasBackend(fastKronBackend_X86)) return fastKronInvalidArgument;
 #ifdef ENABLE_X86
   x86Kernels.init();
   return fastKronSuccess;
@@ -247,8 +261,25 @@ fastKronError FastKronHandle::initX86Backend() {
 #endif
 }
 
-FastKronHandle::FastKronHandle(fastKronBackend backend) :
-  tunedKernelSeries(), backend(backend)
+// fastKronError FastKronHandle::initBackends() {
+//   fastKronError err = fastKronSuccess;
+  
+//   if (hasBackend(fastKronBackend_X86)) 
+//     err = initX86Backend();
+  
+//   if (err != fastKronSuccess &&
+//       hasBackend(fastKronBackend_CUDA)) 
+//     err = initCUDABackend();
+  
+//   if (err != fastKronSuccess &&
+//       hasBackend(fastKronBackend_HIP)) 
+//     err = initHIPBackend();
+
+//   return err;
+// }
+
+FastKronHandle::FastKronHandle(uint32_t backends) :
+  tunedKernelSeries(), backends(backends)
 #ifdef ENABLE_CUDA
   , cudaKernels()
 #endif

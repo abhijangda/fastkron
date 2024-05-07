@@ -170,6 +170,8 @@ public:
         if (info) return info;
       }
     }
+
+    return nullptr;
   }
 
   void free() {

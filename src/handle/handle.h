@@ -30,9 +30,14 @@ enum ProcType {
 struct FastKronHandle {
   void* result_;
 
-  FastKronHandle(fastKronBackend backend);
+  FastKronHandle(uint32_t backends);
 
-  fastKronBackend backend;
+  uint32_t backends;
+  bool hasBackend(fastKronBackend backend) {
+    return (backends & backend);
+  }
+
+  // fastKronError initBackends();
 
 #ifdef ENABLE_CUDA
   CUDAKernelDatabase cudaKernels;
@@ -63,10 +68,6 @@ struct FastKronHandle {
     }
   }
 
-  KernelDatabase* getBackendKernelDb() {
-    return getKernelDb(backend);
-  }
-
   fastKronError initX86Backend();
   fastKronError initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   fastKronError initHIPBackend(void* ptrToStream);
@@ -90,7 +91,7 @@ struct FastKronHandle {
   //KernelInfo selectKernel(SlicedMulShape shape);
   //uint maxFusedKernels(SlicedMulShape shape);
 
-  fastKronError xgekmm(const KMMProblem problem, void* temp1, void* temp2, 
+  fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend, void* temp1, void* temp2, 
                        EpilogueParams epilogueParams);
 
   fastKronError distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],

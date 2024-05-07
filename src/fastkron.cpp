@@ -9,35 +9,13 @@
 /**************************************************
           Library Functions
 ***************************************************/
-fastKronError fastKronInit(fastKronHandle* handle, fastKronBackend backend) {
-  switch (backend) {
-    case fastKronBackend_CUDA:
-      #ifndef ENABLE_CUDA
-        return fastKronBackendNotAvailable;
-      #endif
-      break;
-    case fastKronBackend_HIP:
-      #ifndef ENABLE_HIP
-        return fastKronBackendNotAvailable;
-      #endif
-      break;
-    case fastKronBackend_X86:
-      #ifndef ENABLE_X86
-        return fastKronBackendNotAvailable;
-      #endif
-      break;
-    case fastKronBackend_ARM:
-      #ifndef ENABLE_ARM
-        return fastKronBackendNotAvailable;
-      #endif
-      break;
-    default:
-      return fastKronBackendNotAvailable;
-  }
-
-  FastKronHandle* h = new FastKronHandle(backend);
+fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
+  FastKronHandle* h = new FastKronHandle(backends);
   *handle = h;
-  return fastKronSuccess;
+  return (h->hasBackend(fastKronBackend_X86) || 
+          h->hasBackend(fastKronBackend_CUDA) ||
+          h->hasBackend(fastKronBackend_HIP)) ? 
+          fastKronSuccess : fastKronInvalidArgument;
 }
 
 void fastKronDestroy(fastKronHandle handle) {
@@ -83,40 +61,40 @@ fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], ui
   return handlePtr->gekmmSizes(problem, resultSize, tempSize);
 }
 
-fastKronError sgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], float* X, 
+fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], float* X, 
                    fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
                    float alpha, float beta, float *Z, float* temp1, float* temp2) {
   KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  return handle->xgekmm(problem, (void*)temp1, (void*)temp2,
+  return handle->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
-fastKronError igekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], int* X, 
+fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], int* X, 
                    fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, int *Z, int* temp1, int* temp2) {
   KMMProblem problem(FastKronInt, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
+  return handle->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
-fastKronError dgekmm(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], double* X, 
+fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], double* X, 
                    fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2) {
   KMMProblem problem(FastKronDouble, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  return handle->xgekmm(problem, (void*)temp1, (void*)temp2, 
+  return handle->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<double>(alpha, beta, Z));
 }
 
-fastKronError sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronOp opX, fastKronOp opFs) {
-  return Autotuner(*handle).tune(KMMProblem(FastKronFloat, M, N, Ps, Qs, opX, opFs));
-}
-fastKronError dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronOp opX, fastKronOp opFs) {
-  return Autotuner(*handle).tune(KMMProblem(FastKronDouble, M, N, Ps, Qs, opX, opFs));
-}
-fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
-                       fastKronOp opX, fastKronOp opFs) {
-  return Autotuner(*handle).tune(KMMProblem(FastKronInt, M, N, Ps, Qs, opX, opFs));
-}
+// fastKronError sgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+//                        fastKronOp opX, fastKronOp opFs) {
+//   return Autotuner(*handle).tune(KMMProblem(FastKronFloat, M, N, Ps, Qs, opX, opFs));
+// }
+// fastKronError dgekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+//                        fastKronOp opX, fastKronOp opFs) {
+//   return Autotuner(*handle).tune(KMMProblem(FastKronDouble, M, N, Ps, Qs, opX, opFs));
+// }
+// fastKronError igekmmTune(fastKronHandle handle, uint M, uint N, uint Ps[], uint Qs[], 
+//                        fastKronOp opX, fastKronOp opFs) {
+//   return Autotuner(*handle).tune(KMMProblem(FastKronInt, M, N, Ps, Qs, opX, opFs));
+// }
 
 fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,

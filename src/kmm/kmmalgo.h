@@ -92,14 +92,14 @@ public:
 
   }
 
-  uint32_t* ps(uint32_t *array) {
+  uint32_t* ps(uint32_t *array) const {
     for (uint32_t i = 0; i < n(); i++) {
       array[i] = factors[i].p();
     }
     return array;
   }
 
-  uint32_t* qs(uint32_t *array) {
+  uint32_t* qs(uint32_t *array) const {
     for (uint32_t i = 0; i < n(); i++) {
       array[i] = factors[i].q();
     }

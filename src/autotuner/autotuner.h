@@ -44,11 +44,11 @@ class Autotuner {
   FastKronHandle& fastKron;
   TunedKernelsMap tunedKernelsMap;
 
-  fastKronError tune(KMMProblem problem, bool isDistributed, DistributedParams distParams);
+  fastKronError tune(KMMProblem problem, KernelDatabase* kernelDb, bool isDistributed, DistributedParams distParams);
 
 public:
   Autotuner(FastKronHandle& fastKron) : fastKron(fastKron)
   {}
 
-  fastKronError tune(KMMProblem problem);
+  fastKronError tune(KMMProblem problem, const fastKronBackend backend);
 };
