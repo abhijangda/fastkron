@@ -116,8 +116,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         currTempN = (currTempN/LocalKronRows[i])*LocalKronCols[i];
       }
 
-      if (handle.tunedKernelSeries.size() > 0) {
-        for (auto tunedKernel : handle.tunedKernelSeries) {
+      if (handle.autotuner.distribTunedKernelSeries.size() > 0) {
+        for (auto tunedKernel : handle.autotuner.distribTunedKernelSeries) {
           if (tunedKernel.start >= endKron and tunedKernel.end < endKron + KronMulBatchSize) {
             kernelSeries.insert(kernelSeries.begin(), tunedKernel);
           }
@@ -166,8 +166,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         currTempN = (currTempN/LocalKronRows[i])*LocalKronCols[i];
       }
 
-      if (handle.tunedKernelSeries.size() > 0) {
-        for (auto tunedKernel : handle.tunedKernelSeries) {
+      if (handle.autotuner.distribTunedKernelSeries.size() > 0) {
+        for (auto tunedKernel : handle.autotuner.distribTunedKernelSeries) {
           if (tunedKernel.start >= endKron  and tunedKernel.end < endKron + KronMulBatchSize) {
             kernelSeries.insert(kernelSeries.begin(), tunedKernel);
           }
@@ -498,6 +498,10 @@ fastKronError FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, u
 fastKronError FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
   void* streams) {
+    if (autotuner.distribTunedKernelSeries.size() == 0) {
+      TunedKernelsSeries s;
+      autotuner.tune(KMMProblem(FastKronFloat, M, NumKronMats, KronMatRows, KronMatCols, fastKronOp_N, fastKronOp_N), fastKronBackend_CUDA, s);
+    }
     return distributedKronMatmul(*this, NumKronMats, (void**)x, (void**)kronMats, (void**)result, M, N, K, 
       KronMatCols, KronMatRows, (void**)temp1, (void**)temp2, (cudaStream_t*)streams);
 }

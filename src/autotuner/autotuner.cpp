@@ -3,6 +3,7 @@
 #include <iomanip>
 
 #include "autotuner/autotuner.h"
+#include "handle/handle.h"
 #include "kmm/kmmalgo.h"
 #include "utils/utils.h"
 
@@ -143,7 +144,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
     retKernelSeries = tunedKernels;
   } else {
 #ifdef ENABLE_CUDA
-    assert(fastKron.backend == fastKronBackend_CUDA);
+    assert(fastKron.hasBackend(fastKronBackend_CUDA));
     assert(fastKron.cudaKernels.isDistributed_ == true);
     if (!checkDistributedKronSizes(problem,
                                    fastKron.cudaKernels.perGPUKronBatch_, fastKron.cudaKernels.gpusInK_))
@@ -210,6 +211,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
     if (seriesTime < minTime) {
       minTime = seriesTime;
       retKernelSeries = tunedKernelSeries;
+      distribTunedKernelSeries = tunedKernelSeries;
       fastKron.cudaKernels.perGPUKronBatch_ = MaxLocalKrons;
     }
     }
@@ -242,4 +244,10 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   tunedKernelSeries[kernelDb][problem] = retKernelSeries;
 
   return fastKronSuccess;
+}
+
+Autotuner::Autotuner(FastKronHandle& fastKron) : fastKron(fastKron) {
+  for (auto db : fastKron.getAllKernelDbs()) {
+    tunedKernelSeries[db] = std::unordered_map<KMMProblem, TunedKernelsSeries>();
+  }
 }

@@ -298,7 +298,7 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], 
             T* temp1[], T* temp2[], cudaStream_t stream[]) {
   if (std::is_same<T, float>::value) {
-    FastKronCHECK(kronDistributedSGEMM(handle, fastKronBackend_CUDA, NUM_KP_MATS,
+    FastKronCHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
                                   (void**)x, (void**)kpMats, (void**)result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, 
                                   (void**)temp1, (void**)temp2, 

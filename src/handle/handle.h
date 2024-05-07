@@ -5,6 +5,7 @@
 #include "utils/thread_pool.h"
 #include "env/env.h"
 #include "kmm/kmmalgo.h"
+#include "autotuner/autotuner.h"
 
 #ifdef ENABLE_X86
 #include "kernel_db/cpu_kernel_db.h"
@@ -29,7 +30,7 @@ enum ProcType {
 
 struct FastKronHandle {
   void* result_;
-
+  Autotuner autotuner;
   FastKronHandle(uint32_t backends);
 
   uint32_t backends;
@@ -77,6 +78,7 @@ struct FastKronHandle {
     } else if (hasBackend(fastKronBackend_HIP))  {
       out.push_back(getKernelDb(fastKronBackend_HIP));
     }
+    return out;
   }
 
   fastKronError initX86Backend();

@@ -141,7 +141,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
     problem.ps(Ps);
     problem.qs(Qs);
 
-    err =  Autotuner(*this).tune(KMMProblem(problem.type(), problem.m(), problem.n(),
+    err =  autotuner.tune(KMMProblem(problem.type(), problem.m(), problem.n(),
                                       Ps, Qs, problem.opX(), problem.opFs()),
                               backend, kernelSeries);
   } 
@@ -277,7 +277,8 @@ fastKronError FastKronHandle::initX86Backend() {
 //   return err;
 // }
 
-FastKronHandle::FastKronHandle(uint32_t backends) : backends(backends)
+FastKronHandle::FastKronHandle(uint32_t backends) : backends(backends),
+autotuner(*this)
 #ifdef ENABLE_CUDA
   , cudaKernels()
 #endif
