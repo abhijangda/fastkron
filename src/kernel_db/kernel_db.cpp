@@ -37,7 +37,7 @@ TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) 
   TunedKernelsSeries kernelSeries;
   uint32_t MaxFuseP = 32;
 
-  //TODO: fusion should considered for subproblems 
+  //TODO: fusion should considered for subproblems
   bool factorsSameShape = true, factorsSquare = true, 
        factorsPowerOfTwoShape = true, factorsLessThanMaxP = true;
   for (int f = 0; f < problem.n(); f++) {

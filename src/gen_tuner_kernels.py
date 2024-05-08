@@ -675,7 +675,7 @@ if __name__ == "__main__":
     for cpu_flag in args.archs:
       assert cpu_flag in ["sisd", "avx", "avx512"]
 
-  print("Generating kernels for ", parsed_cases)
+  print("Generating kernels for ", args.backend, args.archs, parsed_cases)
   for opX in args.opX:
     assert opX in ["N", "T"]
   for opF in args.opF:
