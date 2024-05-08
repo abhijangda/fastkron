@@ -201,6 +201,7 @@ class CPUKernel(Kernel):
   def isValid(self):
     if self.arch.lower() == "sisd":
       return True
+
     vectorWidth = element_size(self.elemType)
     if self.arch.lower() == "avx" or self.arch.lower() == "avx2":
       vectorWidth = 256 // 8
@@ -375,7 +376,7 @@ class KernelTemplate:
     self.tileX = parseMatrix(next(parts))
     self.regtile = parseRegTile(next(parts))
 
-  def is_template_of(self, kernel):
+  def is_template_of_kernel(self, kernel):
     if not (self.backend == "*" or self.backend == kernel.backend):
       return False
     if not (self.arch == "*" or self.arch == kernel.arch):
@@ -434,14 +435,19 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
   elif backend == 'x86':
     kernel_dir = os.path.join(all_kernels_dir, 'cpu/x86/kron-kernels')
   
-  maxTileK = 1 << 31
-  kernelTemplates = []
-  for config in onlySpecificConfigs:
-    kernelTemplates += [KernelTemplate(config)]
-    if len(kernelTemplates) == 1:
-      maxTileK = kernelTemplates[-1].tileX[1]
-    maxTileK = max(maxTileK, kernelTemplates[-1].tileX[1])
+  validTileKs = {}
+  for (_,_,_, ps, qs) in cases:
+    validTileKs[str((ps[0], qs[0]))] = set()
 
+  kernelTemplates = {}
+  for config in onlySpecificConfigs:
+    template = KernelTemplate(config)
+    if str(template.f) not in kernelTemplates:
+      kernelTemplates[str(template.f)] = []
+    kernelTemplates[str(template.f)] += [template]
+    validTileKs[str(template.f)].add(template.tileX[1])
+  print(validTileKs)
+  
   empty_dir(kernel_dir)
   configs = {}
   for arch in archs:
@@ -449,13 +455,19 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
       for opF in opFs:
         for elem_type in types:
           for (m, k, n, ps, qs) in cases:
+            if arch == 'sisd' and (ps[0] != 128 or qs[0] != 128):
+              continue
+
             allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
             for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
               MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
               TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
               TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
               k_factors = factors(currK)
-              TileKs = [f for f in k_factors if f % p == 0]
+              if str((ps[0], qs[0])) in validTileKs and len(validTileKs[str((ps[0], qs[0]))]) > 0:
+                TileKs = list(validTileKs[str((ps[0], qs[0]))])
+              else:
+                TileKs = [f for f in k_factors if f % p == 0]
               TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
 
               for tM in TileMs:
@@ -463,7 +475,7 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
                   for tK in TileKs:
                     if tK < p:
                       continue
-                    if tK > maxTileK:
+                    if arch == 'sisd' and tK != 16384:
                       continue
                     CRows = factors(tK//p)
                     CCols = factors(tQ)
@@ -516,8 +528,7 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
   for k in configs:
     validConfigs[k] = []
     for config in configs[k]:
-      if config.isValid():
-        validConfigs[k] += [config]
+      validConfigs[k] += [config]
   
   print("Valid configs", sum([len(validConfigs[k]) for k in validConfigs]))
 
@@ -532,15 +543,17 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
     if onlySpecificConfigs != []:
         __configs = []
         for config in configs:
-          for template in kernelTemplates:
-            if template.is_template_of(config):
-              __configs += [config]
-              break
+          factorHash = str((config.shape.p, config.shape.q))
+          if factorHash in kernelTemplates:
+            for template in kernelTemplates[factorHash]:
+              if template.is_template_of_kernel(config):
+                __configs += [config]
+                break
 
         configs = __configs
     configs = configs[:min(len(configs), numKernels)]
     combinedConfigs += configs
-  
+
   combinedConfigs = list(set(combinedConfigs))
   print("Generating", len(combinedConfigs), "configs")
   if len(combinedConfigs) == 0:
