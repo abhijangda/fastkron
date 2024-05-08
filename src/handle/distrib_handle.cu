@@ -274,8 +274,8 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
           innerCurrResult = results[g];
         gekmmSizes(&handle, M, NumKronMats, KronMatRows, KronMatCols, 
                    &resultSize, &tempSize);
-        T* sendTemp = (T*)temp1[g] + (tempSize/sizeof(float))/2;
-        T* recvTemp = (T*)temp2[g] + (tempSize/sizeof(float))/2;
+        T* sendTemp = (T*)temp1[g] + tempSize/2;
+        T* recvTemp = (T*)temp2[g] + tempSize/2;
         //Call we want to use NCCL Send/Recv
         {
           const uint SliceRows = gpuM;
