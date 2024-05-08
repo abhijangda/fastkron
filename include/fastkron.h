@@ -5,8 +5,8 @@
 #define FastKronCHECK(cmd) do {                        \
   fastKronError e = cmd;                              \
   if(e != fastKronSuccess) {      \
-    printf("Failed: FastKron error %s:%d '%s'\n",       \
-        __FILE__,__LINE__,fastKronGetErrorString(e));   \
+    printf("Failed: FastKron error %s:%d at %s:%d \n",       \
+        fastKronGetErrorString(e),e,__FILE__,__LINE__);   \
     exit(EXIT_FAILURE);                             \
   }                                                 \
 } while(0)                                          \

@@ -144,13 +144,12 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
     err =  autotuner.tune(KMMProblem(problem.type(), problem.m(), problem.n(),
                                       Ps, Qs, problem.opX(), problem.opFs()),
                               backend, kernelSeries);
+    if (err != fastKronSuccess)
+      return err;
   } 
   else {
     kernelSeries = kernelDb->kernelSeriesForProblem(problem);
   }
-
-  if (err != fastKronSuccess)
-    return err;
 
   auto kernelSeriesIter = kernelSeries.begin();
 

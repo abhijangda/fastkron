@@ -33,10 +33,7 @@ std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> KernelDatabase::
   return numFusedToKernels;
 }
 
-TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
-  if (problemToKernelCache.find(problem) != problemToKernelCache.end())
-    return problemToKernelCache[problem];
-
+TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) {
   TunedKernelsSeries kernelSeries;
   uint32_t MaxFuseP = 32;
 
@@ -135,12 +132,21 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
   }
 
 end:
-  problemToKernelCache[problem] = kernelSeries;
-
   std::cout <<"Minimum Time " << std::endl;
   for (auto iter = kernelSeries.rbegin(); iter != kernelSeries.rend(); iter++) {
     std::cout << "  " << (*iter) << std::endl;
   }
+
+  return kernelSeries;
+}
+
+TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
+  if (problemToKernelCache.find(problem) != problemToKernelCache.end())
+    return problemToKernelCache[problem];
+
+  auto kernelSeries = __kernelSeriesForProblem(problem);
+
+  problemToKernelCache[problem] = kernelSeries;
 
   return kernelSeries;
 }

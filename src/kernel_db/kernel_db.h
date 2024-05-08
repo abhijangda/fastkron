@@ -156,7 +156,8 @@ public:
 
 
   std::pair<KernelInfo*, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
-  virtual TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
+  TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
+  TunedKernelsSeries __kernelSeriesForProblem(KMMProblem problem);
   virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
   virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) = 0;
   KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {

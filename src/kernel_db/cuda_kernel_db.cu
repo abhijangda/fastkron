@@ -23,7 +23,7 @@ std::size_t std::hash<std::pair<Factor, uint>>::operator()(const std::pair<Facto
   return hash<uint>()(m.second) ^ hash<Factor>()(m.first);
 }
 
-CUDAKernelDatabase::CUDAKernelDatabase() {
+CUDAKernelDatabase::CUDAKernelDatabase() : isDistributed_(false) {
   streams.push_back(NULL);
   loadKernels<CUDAKernel>(AllCUDAKernels, sizeof(AllCUDAKernels)/sizeof(CUDAKernel));
   for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKernel); i++) {
