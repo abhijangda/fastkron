@@ -35,10 +35,13 @@ test_cases = {k : {'single':{}, 'multi': {}} for k in all_backends}
 
 test_cases['cuda']['single'] = {'gen-single-gpu-kernels' : ['single-gpu-cuda-NN', 'single-gpu-cuda-TT']}
 test_cases['cuda']['multi'] = {
-  'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests', 'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
+  'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests',
+                                           'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
   'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
-  'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests', 'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
-  'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes', 'DIST_COMM=NCCL multi-cuda-distinct-shapes']
+  'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests',
+                                                        'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
+  'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes',
+                                           'DIST_COMM=NCCL multi-cuda-distinct-shapes']
 }
 
 test_cases['x86']['single'] = {'gen-x86-kernels' : ['x86-cpu-NN', 'x86-cpu-TT']}
@@ -80,6 +83,6 @@ for mode in single_or_multi:
       execute(f'make -j')
       for run in test_cases['cuda'][mode][case]:
         output = execute(f'make {run if " " not in run else run.split(" ")[1]} -j')
-        output = execute((f"TUNE=0 tests/{backend}/"+run) if ' ' not in run else run.replace(' ', f' tests/{backend}/'))
+        output = execute((f"tests/{backend}/"+run) if ' ' not in run else run.replace(' ', f' tests/{backend}/'))
         if 'FAILED' in output:
           print(output)
