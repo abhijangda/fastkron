@@ -77,12 +77,14 @@ for mode in single_or_multi:
             output = execute((f"TUNE=0 tests/{backend}/"+run) if ' ' not in run else run.replace(' ', f' tests/{backend}/'))
             if 'FAILED' in output:
               print(output)
-  if mode == 'multi':
-    for case in test_cases['cuda'][mode]:
-      execute(f'make {case}')
-      execute(f'make -j')
-      for run in test_cases['cuda'][mode][case]:
-        output = execute(f'make {run if " " not in run else run.split(" ")[1]} -j')
-        output = execute((f"tests/{backend}/"+run) if ' ' not in run else run.replace(' ', f' tests/{backend}/'))
-        if 'FAILED' in output:
-          print(output)
+
+if 'multi' in single_or_multi:
+  execute(f'cmake .. {cmake} -DFULL_TUNE=ON')
+  for case in test_cases['cuda'][mode]:
+    execute(f'make {case}')
+    execute(f'make -j')
+    for run in test_cases['cuda'][mode][case]:
+      output = execute(f'make {run if " " not in run else run.split(" ")[1]} -j')
+      output = execute((f"tests/{backend}/"+run) if ' ' not in run else run.replace(' ', f' tests/{backend}/'))
+      if 'FAILED' in output:
+        print(output)
