@@ -246,36 +246,6 @@ def multi_gpu(scaling):
       r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons, "N", "N")
       print(" & ".join((str(p) for p in r)))
 
-
-# print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron", "GPyTorch")))
-# #run_nn("cuda", tuningmode)
-
-# print("------- Single GPU NT-------")
-# print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-# # run_nt("cuda", tuningmode)
-
-# print("------- Single GPU TT-------")
-# print(" & ".join(("M_PxQ^N", "FastKron-wo-fuse", "FastKron")))
-# run_tt("cuda", tuningmode)
-
-# if False:
-#   print("------- Multi GPU Weak Scaling --------")
-#   print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
-#   multi_gpu("weak")
-
-#   print("------- Multi GPU Strong Scaling --------")
-#   print(" & ".join(("M_PxQ^N", "GM", "GK", "FastKron-wo-fuse", "FastKron")))
-#   multi_gpu("strong")
-
-# # print("------ x86 NN------")
-# # run_nn("x86")
-
-# # print("------ x86 NT------")
-# # run_nt("x86")
-
-# print("------ x86 TT------")
-# run_tt("x86")
-
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('-backends'    , required=True, type=str, nargs="+")
@@ -293,8 +263,8 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        # run_nn(backend, mode, elemtype, args.dataset)
-        # run_tt(backend, mode, elemtype, args.dataset)
+        run_nn(backend, mode, elemtype, args.dataset)
+        run_tt(backend, mode, elemtype, args.dataset)
 
         if backend == "cuda" and mode == "FullTune" and args.dataset == "large":
           multi_gpu("weak")
