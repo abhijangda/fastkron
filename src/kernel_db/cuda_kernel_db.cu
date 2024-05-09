@@ -159,7 +159,8 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
                                            bool distP2PStore,
                                            int warmups, int runs,
                                            float& runtime) {
-  // if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0) {
+  // if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0 || 
+  //     kernel->tileF.q() <= 32) {
   //   //skip probably slow kernels
   //   runtime = std::numeric_limits<float>::max();
   //   return fastKronSuccess;

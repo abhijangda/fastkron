@@ -106,7 +106,7 @@ class FastKronEval:
     os.mkdir('build/')
     os.chdir('build/')
     if self.backend == "cuda":
-      backend_flags = '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3" -DENABLE_CUDA=ON'
+      backend_flags = '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3" -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="80"'
     elif self.backend == "x86":
       backend_flags = "-DENABLE_X86=ON"
     if self.tuningmode == "FullTune":
@@ -116,11 +116,11 @@ class FastKronEval:
 
   def gen_kernels(self, shape, opX, opF, distKernels):
     if self.tuningmode == 'FullTune':
-      run_command("python3 src/gen_tuner_kernels.py -distinct-factors " + \
+      run_command("python3 src/gen_tuner_kernels.py -backend cuda -archs ampere -distinct-factors " + \
                   str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
                   " -opX " + opX + " -opF " + opF + \
                   (" -dist-kernels " if distKernels else "") + \
-                  " -backend " + self.backend + " -types " + self.elemtype)
+                  " -backend " + self.backend + " -types " + self.elemtype + " -opt-levels 3")
     elif self.tuningmode == 'FastTune' or self.tuningmode == 'NoTune':
       run_command("cd build/ && make gen-single-gpu-kernels")
 
@@ -234,7 +234,7 @@ def multi_gpu(scaling):
   for shape in cases:
     GMs = [1, 2, 2, 4, 4]
     GKs = [1, 1, 2, 2, 4]
-    fk = FastKronEval()
+    fk = FastKronEval("cuda", "FullTune", "float")
     fk.gen_kernels(shape, "N", "N", True)
     fk.setup_cmake()
     fk.build_kron()
@@ -243,7 +243,7 @@ def multi_gpu(scaling):
       gk = GKs[j]
       shapeGM = Shape(shape.m * (gpus if scaling == "weak" else 1), shape.n, shape.ps[0], shape.qs[0])
       LocalKrons = shapeGM.n if gk == 1 else shapeGM.n - 2
-      r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons)
+      r = fk.run_fastkron(shapeGM, gm, gk, LocalKrons, "N", "N")
       print(" & ".join((str(p) for p in r)))
 
 
@@ -293,5 +293,9 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        run_nn(backend, mode, elemtype, args.dataset)
-        #run_tt(backend, mode, elemtype, args.dataset)
+        # run_nn(backend, mode, elemtype, args.dataset)
+        # run_tt(backend, mode, elemtype, args.dataset)
+
+        if backend == "cuda" and mode == "FullTune" and args.dataset == "large":
+          multi_gpu("weak")
+          multi_gpu("strong")

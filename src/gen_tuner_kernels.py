@@ -426,7 +426,7 @@ def f_simd_len(backend : str, arch : str, cols, elem_type):
   lengths = simd_lengths(backend, arch, elem_type)
   return max([a for a in lengths if cols % a == 0])
 
-def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs):
+def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs, opt_levels):
   if not os.path.exists(all_kernels_dir):
     os.mkdir(all_kernels_dir)
 
@@ -490,7 +490,7 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
                               if shape not in configs:
                                 configs[shape] = []
                               __configs = []
-                              for opt_level in range(0, 4):
+                              for opt_level in (range(0, 4) if opt_levels == None or opt_levels == [] else opt_levels):
                                 if backend in ['cuda', 'hip']:
                                   aalign = x_mem_vector_len(tM, tK, opx, elem_type)
                                   kronalign = f_mem_vector_len(tQ, elem_type)
@@ -642,6 +642,7 @@ if __name__ == "__main__":
   parser.add_argument('-backend'           , required=True,  type=str)
   parser.add_argument('-types'             , required=True,  type=str, nargs="+")
   parser.add_argument('-archs'             , required=True, type=str, nargs="+")
+  parser.add_argument('-opt-levels'         , required=False, type=int, nargs="+")
   
   args = parser.parse_args()
   parsed_cases = []
@@ -699,4 +700,5 @@ if __name__ == "__main__":
         match_configs += [line]
   
   generate_kernel_decls(parsed_cases, args.opX, args.opF, args.types, not args.no_fuse, 
-                        args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs)
+                        args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs,
+                        args.opt_levels)

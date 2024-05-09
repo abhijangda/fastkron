@@ -170,9 +170,11 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
     return allKernels[0];
   }();
 
+  uint32_t kernelIdx = 0;
   for (auto kernel : kernelsForMaxOpt) {
+    kernelIdx += 1;
     if (!kernel->canCompute(problem, hardware[0], distP2PStore)) continue;
-    std::cout << kernel->str() << std::endl;
+    std::cout << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size() << ": " << kernel->str() << std::endl;
     float kernelTime = std::numeric_limits<float>::max();
     fastKronError status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
