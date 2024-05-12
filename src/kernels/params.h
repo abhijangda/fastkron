@@ -227,8 +227,12 @@ struct KernelParams {
   uint32_t XshSlices;
   uint32_t XSlices;
 
-  KernelParams(KMMProblem problem_, Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
-               problem(problem_), tileX(tileX), tileF(tileF),
+  void** TileXs, **TileYs, **TileFs;
+
+  KernelParams(KMMProblem problem_, void** TileXs, void** TileFs, void** TileYs,
+               Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
+               problem(problem_), TileXs(TileXs), TileYs(TileYs), TileFs(TileFs), 
+               tileX(tileX), tileF(tileF),
                XshSlices(tileX.n()/problem_.f(0).p()),
                XSlices(problem_.x().n()/problem_.f(0).p()),
                kp_idx(kp_idx), execMode(execMode) {}

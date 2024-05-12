@@ -199,6 +199,12 @@ struct std::hash<KMMProblem> {
   std::size_t operator()(const KMMProblem& k) const;
 };
 
+// template<>
+// const Matrix& std::max(const Matrix& x, const Matrix& y) {
+//   if (x.numel() < y.numel()) return x;
+//   return y;
+// }
+
 struct KMMProblemComparator {
   bool operator()(const KMMProblem& a, const KMMProblem& b) const {
     return std::hash<KMMProblem>()(a) < std::hash<KMMProblem>()(b);

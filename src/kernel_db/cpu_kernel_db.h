@@ -1,16 +1,39 @@
 #include <functional>
 #include <vector>
+#include <unistd.h>
 
 #include "kernel_db/kernel_db.h"
+
+struct CPUCache {
+  uint32_t threads;
+  uint32_t size;
+  void** ptr;
+
+  CPUCache() : threads(0), size(0), ptr(nullptr) {}
+
+  void alloc(uint32_t threads, uint32_t size) {
+    this->threads = threads;
+    this->size = size;
+    ptr = (void**)malloc(threads * sizeof(void*));
+    for (int i = 0; i < threads; i++) {
+      //getpagesize();
+      ptr[i] = aligned_alloc(4096, size);
+    }
+  }
+};
 
 class CPUKernelDatabase : public KernelDatabase {
 protected:
   char* trash1, *trash2;
+  CPUCache TileXs;
+  CPUCache TileYs;
+  CPUCache TileFs;
 
 public:
   CPUKernelDatabase();
 
   void init() {}
+  void allocate_caches();
   virtual fastKronError initTune() {return fastKronSuccess;}
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                    KMMProblem problem,

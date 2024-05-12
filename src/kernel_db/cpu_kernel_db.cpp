@@ -17,16 +17,38 @@ X86Kernel AllX86Kernels[] = {
 #endif
 };
 
-CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase() {}
+CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase(),
+ TileXs(), TileYs(), TileFs()
+ {}
+
+void CPUKernelDatabase::allocate_caches() {
+  //go through all loaded kernels and allocate cache for maximum size
+  uint32_t maxTileX = 0;
+  uint32_t maxTileF = 0;
+  uint32_t maxTileY = 0;
+
+  for (const auto & [_, kernels] : compiledKernels) {
+    for (auto k : kernels) {
+      maxTileX = std::max(k->tileX.numel(), maxTileX);
+      maxTileF = std::max(k->tileF.numel(), maxTileF);
+      maxTileY = std::max(k->getTileY().numel(), maxTileY);
+    }
+  }
+
+  TileXs.alloc(getMaxThreads(), maxTileX * sizeof(double));
+  TileFs.alloc(getMaxThreads(), maxTileF * sizeof(double));
+  TileYs.alloc(getMaxThreads(), maxTileY * sizeof(double));
+}
 
 template<uint FusedFacs>
-fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex, 
+fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
+                     void** TileXs, void** TileFs, void** TileYs,
                    KMMProblem problem,
                    DistributedParams distParams,
                    EpilogueParams epilogueParams,
                    KernelMode execMode) {
   //Create the grid and thread block
-  KernelParams<FusedFacs> params (problem, kernelInfo.getTileX(problem), 
+  KernelParams<FusedFacs> params (problem, TileXs, TileFs, TileYs, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
@@ -46,22 +68,22 @@ fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
 
   switch(problem.n()) {
     case 1:
-      return invoke<1>(cpuKernel, kronIndex, problem,
+      return invoke<1>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
                        distParams, epilogueParams, execMode);
     case 2:
-      return invoke<2>(cpuKernel, kronIndex, problem,
+      return invoke<2>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
                        distParams, epilogueParams, execMode);
     case 3:
-      return invoke<3>(cpuKernel, kronIndex, problem,
+      return invoke<3>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
                        distParams, epilogueParams, execMode);
     case 4:
-      return invoke<4>(cpuKernel, kronIndex, problem,
+      return invoke<4>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
                        distParams, epilogueParams, execMode);
     case 5:
-      return invoke<5>(cpuKernel, kronIndex, problem,
+      return invoke<5>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
                        distParams, epilogueParams, execMode);
     case 6:
-      return invoke<6>(cpuKernel, kronIndex, problem, 
+      return invoke<6>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem, 
                        distParams, epilogueParams, execMode);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;
@@ -323,4 +345,6 @@ X86KernelDatabase::X86KernelDatabase() {
   for (int i = 0; i < detail->totalL3Size(); i++) {
     trash1[i] = i % std::numeric_limits<char>::max();
   }
+
+  allocate_caches();
 }

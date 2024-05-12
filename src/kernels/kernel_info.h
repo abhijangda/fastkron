@@ -61,6 +61,10 @@ struct KernelInfo {
     return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 
+  Matrix getTileY() {
+    return Matrix(tileX.m(), (tileX.n()/f.p()) * tileF.q());
+  }
+
   Factor getTileF(KMMProblem problem) {
     Factor f_ = problem.f(0);
     return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));

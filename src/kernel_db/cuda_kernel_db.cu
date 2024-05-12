@@ -71,7 +71,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                      cudaStream_t stream) {
   cudaError_t status;
   //Create the grid and thread block
-  KernelParams<FusedFacs> params (problem, kernelInfo.getTileX(problem), 
+  KernelParams<FusedFacs> params (problem, nullptr, nullptr, nullptr, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), 
                                   kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());

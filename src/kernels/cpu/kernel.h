@@ -701,7 +701,7 @@ template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
 void threadWork(KernelParams<FusedFacs>& params,
-               FusedParams<FusedFacs>& fusedParams, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK, uint32_t P, uint32_t Q, ElemT** TileXs, ElemT** TileFs, ElemT** TileYs, Matrix& X, Matrix& Y) {
+               FusedParams<FusedFacs>& fusedParams, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK, uint32_t P, uint32_t Q, Matrix& X, Matrix& Y) {
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
@@ -719,10 +719,10 @@ void threadWork(KernelParams<FusedFacs>& params,
                             P, P, //TODO: setting this to P because XTile.data is not right for GPU backend
                             X);
   const uint tid = omp_get_thread_num();
-  ElemT* tileBuff = TileYs[tid];
+  ElemT* tileBuff = (ElemT*)params.TileYs[tid];
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-    ElemT* TileX = TileXs[tid];
+    ElemT* TileX = (ElemT*)params.TileXs[tid];
     //Transpose X data and store to TileX to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       for (uint32_t m = 0; m < XTile.m(); m++) {
@@ -793,7 +793,7 @@ void threadWork(KernelParams<FusedFacs>& params,
         }
       }
 
-      ElemT* TileF = TileFs[tid]; //[TileP][TileQ];
+      ElemT* TileF = (ElemT*)params.TileFs[tid]; //[TileP][TileQ];
       Factor F = params.problem.f(fac);
       if (OpF == fastKronOp_N) {
         for (int p = 0; p < TileP; p++) {
@@ -880,17 +880,17 @@ void cpuKernel(KernelParams<FusedFacs>& params,
 
   // uint threads = omp_get_max_threads();  
   //TODO: Allocate this in fastKron_initBackend
-  static ElemT* TileXs[128] = {nullptr};
-  static ElemT* TileYs[128] = {nullptr};
-  static ElemT* TileFs[128] = {nullptr};
+  // static ElemT** TileXs = params.TileXs;
+  // static ElemT** TileYs = {nullptr};
+  // static ElemT** TileFs = {nullptr};
 
-  if (TileXs[0] == nullptr) {
-    for (int i = 0; i < 128; i++)  {
-      TileXs[i] = (ElemT*)aligned_alloc(4096, TileM * kTileK * sizeof(ElemT));
-      TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/MaxP) * sizeof(ElemT));
-      TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
-    }
-  }
+  // if (TileXs[0] == nullptr) {
+  //   for (int i = 0; i < 128; i++)  {
+  //     TileXs[i] = (ElemT*)aligned_alloc(4096, TileM * kTileK * sizeof(ElemT));
+  //     TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/MaxP) * sizeof(ElemT));
+  //     TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
+  //   }
+  // }
 
   if (OpX == fastKronOp_N) {
     #pragma omp parallel for collapse(3)
@@ -898,7 +898,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
       threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
-        params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, TileXs, TileFs, TileYs, X, Y
+        params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, X, Y
       );
     }}}
   } else if (OpX == fastKronOp_T) {
@@ -907,7 +907,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
       threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
-        params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, TileXs, TileFs, TileYs, X, Y
+        params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, X, Y
       );
     }}}
   }
