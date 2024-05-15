@@ -746,6 +746,8 @@ void threadWork(KernelParams<FusedFacs>& params,
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
     ElemT* TileX = (ElemT*)params.TileXs[tid];
+    TransposedDirectShared3D<fastKronOp_N, ElemT, kXshSlicesSame, TileM, TileP, kTileK/MaxP> DirectTileX(TileX, kTileK/MaxP * TileP);
+
     //Transpose X data and store to TileX to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       for (uint32_t m = 0; m < XTile.m(); m++) {
@@ -781,7 +783,7 @@ void threadWork(KernelParams<FusedFacs>& params,
               }
 
               for (uint32_t pp = 0; pp < VectorLen; pp++) {
-                slices[pp].store(&TileX[m*TileP*(kTileK/MaxP) + (p + pp)*(kTileK/MaxP) + k/P]);
+                slices[pp].store(&DirectTileX.at(m, k/P, p+pp));
               }
             } else {
               uint32_t NumSlices1 = (TileK - k)/P;
@@ -790,15 +792,12 @@ void threadWork(KernelParams<FusedFacs>& params,
                 for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
                   const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*P + tileP + p, 0) :
                                                               &tileBuff[m * TileK + k + sliceIdx*P + tileP + p];
-                  TileX[m*TileP*(kTileK/MaxP) + p*(kTileK/MaxP) + k/P + sliceIdx] = *ptr;
+                  DirectTileX.at(m, k/P + sliceIdx, p) = *ptr;
+
                 }
               }
 
-              for (; p < TileP; p++) {
-                for (uint32_t sliceIdx = NumSlices1; sliceIdx < NumSlices; sliceIdx++) {
-                  TileX[m*TileP*(kTileK/MaxP) + p*(kTileK/MaxP) + k/P + sliceIdx] = 0.0f;
-                }
-              }
+              DirectTileX.zero(m, k/P + NumSlices1, p, m + 1, k/P + NumSlices, TileP);
             }
           }
         }
@@ -820,33 +819,6 @@ void threadWork(KernelParams<FusedFacs>& params,
       DirectShared<OpF, ElemT, TileP, TileQ> DirectTileF(TileF);
       Factor F = params.problem.f(fac);
       directCache<ElemT, OpF, kPMultipleOfTileP, kQMultipleOfTileQ>(F, DirectTileF, tileP, tileQ);
-
-      // if (OpF == fastKronOp_N) {
-      //   for (int p = 0; p < TileP; p++) {
-      //     if (kPMultipleOfTileP || tileP + p < P) {
-      //       memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), 
-      //               (kQMultipleOfTileQ ? TileQ : MIN(TileQ, Q - tileQ)) * sizeof(ElemT));
-      //       if (!kQMultipleOfTileQ && Q - tileQ < TileQ) {
-      //         memset(&TileF[p*TileQ + Q - tileQ], 0, (TileQ - (Q - tileQ)) * sizeof(ElemT));
-      //       }
-      //     }
-      //     else {
-      //       memset(&TileF[p*TileQ + 0], 0, TileQ * sizeof(ElemT));
-      //     }
-      //   }
-      // } else if (OpF == fastKronOp_T) {
-      //   //Access TileF in mma as transpose
-      //   for (int q = 0; q < TileQ; q++) {
-      //     if (tileQ + q < Q) {
-      //       memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), MIN(TileP, P - tileP) * sizeof(ElemT));
-      //       if (P - tileP < TileP) {
-      //         memset(&TileF[q*TileP + P - tileP], 0, (TileP - (P - tileP))*sizeof(ElemT));
-      //       }
-      //     } else {
-      //       memset(&TileF[q*TileP], 0, TileP * sizeof(ElemT));
-      //     }
-      //   }
-      // }
       
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
