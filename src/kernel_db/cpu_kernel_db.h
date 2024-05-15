@@ -15,10 +15,20 @@ struct CPUCache {
     this->threads = threads;
     this->size = size;
     ptr = (void**)malloc(threads * sizeof(void*));
+    uint32_t pageSize = getpagesize();
     for (int i = 0; i < threads; i++) {
-      //getpagesize();
-      ptr[i] = aligned_alloc(4096, size);
+      ptr[i] = aligned_alloc(pageSize, size);
     }
+  }
+
+  ~CPUCache() {
+    for (int i = 0; i < threads; i++) {
+      free(ptr[i]);
+    }
+    free(ptr);
+    ptr = nullptr;
+    threads = 0;
+    size = 0;
   }
 };
 
