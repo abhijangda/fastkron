@@ -150,6 +150,7 @@ public:
 template<fastKronOp Layout, typename T, uint32_t TileP, uint32_t TileQ>
 class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ>;
+  public:
   T* data;
 
 public:
@@ -176,6 +177,19 @@ public:
     }
   }
   
+  CUDA_DEVICE_HOST
+  void store_row(uint32_t row, uint32_t num, const T* ptr) {
+    memcpy(&((Layout == fastKronOp_N) ? at(row, 0) : at(0, row)), ptr, num * sizeof(T));
+    if (num < Base::shape(1)) {
+      memset(&((Layout == fastKronOp_N) ? at(row, num) : at(num, row)), 0, (Base::shape(1) - num)*sizeof(T));
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  void zero_row(uint32_t row) {
+    memset(&((Layout == fastKronOp_N) ? at(row, 0) : at(0, row)), 0, Base::shape(1) * sizeof(T));
+  }
+
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t col) {
     return Base::at(data, row, col);

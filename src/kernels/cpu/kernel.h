@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <omp.h>
+#include "kernels/cuda/fixed-shape-tensor.cuh"
 
 #pragma once
 
@@ -500,6 +501,28 @@ public:
   }
 };
 
+template<typename ElemT, fastKronOp OpF, bool kPMultipleOfTileP, bool kQMultipleOfTileQ, typename DirectShared>
+void directCache(Factor& F, DirectShared& TileF, uint32_t tileP, uint32_t tileQ) {
+  for (int row = 0; row < TileF.shape(0); row++) {
+    if ((OpF == fastKronOp_N && (kPMultipleOfTileP || tileP + row < F.p())) ||
+        (OpF == fastKronOp_T && (kQMultipleOfTileQ || tileQ + row < F.q()))) {
+      uint32_t row_elems;
+      ElemT* Fptr;
+      if (OpF == fastKronOp_N) {
+        row_elems = kQMultipleOfTileQ ? TileF.q() : MIN(TileF.q(), F.q() - tileQ);
+        Fptr = F.data<ElemT>(tileP + row, tileQ, OpF);
+      } else if (OpF == fastKronOp_T) {
+        row_elems = kPMultipleOfTileP ? TileF.p() : MIN(TileF.p(), F.p() - tileP);
+        Fptr = F.data<ElemT>(tileP, tileQ + row, OpF);
+      }
+
+      TileF.store_row(row, row_elems, Fptr);
+    } else {
+      TileF.zero_row(row);
+    } 
+  }
+}
+
 template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
@@ -794,33 +817,36 @@ void threadWork(KernelParams<FusedFacs>& params,
       }
 
       ElemT* TileF = (ElemT*)params.TileFs[tid]; //[TileP][TileQ];
+      DirectShared<OpF, ElemT, TileP, TileQ> DirectTileF(TileF);
       Factor F = params.problem.f(fac);
-      if (OpF == fastKronOp_N) {
-        for (int p = 0; p < TileP; p++) {
-          if (kPMultipleOfTileP || tileP + p < P) {
-            memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), 
-                    (kQMultipleOfTileQ ? TileQ : MIN(TileQ, Q - tileQ)) * sizeof(ElemT));
-            if (!kQMultipleOfTileQ && Q - tileQ < TileQ) {
-              memset(&TileF[p*TileQ + Q - tileQ], 0, (TileQ - (Q - tileQ)) * sizeof(ElemT));
-            }
-          }
-          else {
-            memset(&TileF[p*TileQ + 0], 0, TileQ * sizeof(ElemT));
-          }
-        }
-      } else if (OpF == fastKronOp_T) {
-        //Access TileF in mma as transpose
-        for (int q = 0; q < TileQ; q++) {
-          if (tileQ + q < Q) {
-            memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), MIN(TileP, P - tileP) * sizeof(ElemT));
-            if (P - tileP < TileP) {
-              memset(&TileF[q*TileP + P - tileP], 0, (TileP - (P - tileP))*sizeof(ElemT));
-            }
-          } else {
-            memset(&TileF[q*TileP], 0, TileP * sizeof(ElemT));
-          }
-        }
-      }
+      directCache<ElemT, OpF, kPMultipleOfTileP, kQMultipleOfTileQ>(F, DirectTileF, tileP, tileQ);
+
+      // if (OpF == fastKronOp_N) {
+      //   for (int p = 0; p < TileP; p++) {
+      //     if (kPMultipleOfTileP || tileP + p < P) {
+      //       memcpy(&TileF[p*TileQ + 0], F.data<ElemT>(tileP + p, tileQ, OpF), 
+      //               (kQMultipleOfTileQ ? TileQ : MIN(TileQ, Q - tileQ)) * sizeof(ElemT));
+      //       if (!kQMultipleOfTileQ && Q - tileQ < TileQ) {
+      //         memset(&TileF[p*TileQ + Q - tileQ], 0, (TileQ - (Q - tileQ)) * sizeof(ElemT));
+      //       }
+      //     }
+      //     else {
+      //       memset(&TileF[p*TileQ + 0], 0, TileQ * sizeof(ElemT));
+      //     }
+      //   }
+      // } else if (OpF == fastKronOp_T) {
+      //   //Access TileF in mma as transpose
+      //   for (int q = 0; q < TileQ; q++) {
+      //     if (tileQ + q < Q) {
+      //       memcpy(&TileF[q*TileP + 0], F.data<ElemT>(tileP, tileQ + q, OpF), MIN(TileP, P - tileP) * sizeof(ElemT));
+      //       if (P - tileP < TileP) {
+      //         memset(&TileF[q*TileP + P - tileP], 0, (TileP - (P - tileP))*sizeof(ElemT));
+      //       }
+      //     } else {
+      //       memset(&TileF[q*TileP], 0, TileP * sizeof(ElemT));
+      //     }
+      //   }
+      // }
       
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
@@ -878,20 +904,6 @@ void cpuKernel(KernelParams<FusedFacs>& params,
   const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
   const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
 
-  // uint threads = omp_get_max_threads();  
-  //TODO: Allocate this in fastKron_initBackend
-  // static ElemT** TileXs = params.TileXs;
-  // static ElemT** TileYs = {nullptr};
-  // static ElemT** TileFs = {nullptr};
-
-  // if (TileXs[0] == nullptr) {
-  //   for (int i = 0; i < 128; i++)  {
-  //     TileXs[i] = (ElemT*)aligned_alloc(4096, TileM * kTileK * sizeof(ElemT));
-  //     TileYs[i] = (ElemT*)aligned_alloc(4096, TileM * TileQ * (kTileK/MaxP) * sizeof(ElemT));
-  //     TileFs[i] = (ElemT*)aligned_alloc(4096, TileP * TileQ * sizeof(ElemT));
-  //   }
-  // }
-
   if (OpX == fastKronOp_N) {
     #pragma omp parallel for collapse(3)
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
@@ -911,6 +923,4 @@ void cpuKernel(KernelParams<FusedFacs>& params,
       );
     }}}
   }
-
-  // free(TileXs);
 }
