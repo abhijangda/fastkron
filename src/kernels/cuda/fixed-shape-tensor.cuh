@@ -98,7 +98,7 @@ public:
   void zero(T data[]) {
     #pragma unroll
     for (uint i = 0; i < numel(); i++) {
-      data[i] = (T)0;
+      data[i] = 0;
     }
   }
 

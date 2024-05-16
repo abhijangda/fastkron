@@ -261,11 +261,11 @@ public:
     vectorLoad<ElemT, UnderlyingVecT>(ptr, vec.data);
   }
 
-  void store(ElemT* ptr) {
+  void store(ElemT* ptr) const {
     vectorStore<ElemT, UnderlyingVecT>(ptr, vec.data);
   }
   
-  void store(ElemT* ptr, uint32_t sz) {
+  void store(ElemT* ptr, uint32_t sz) const {
     if (sz == VectorLen)
       store(ptr);
     else if (VectorLen > 1) {
@@ -321,6 +321,7 @@ class AVXFloat : public X86Vector<float, AVXFloatWrapper> {
 public:
   AVXFloat(AVXFloatWrapper::VecT v) : X86Vector<float, AVXFloatWrapper>(v) {}
   AVXFloat() {}
+  AVXFloat(float zero) {this->zero();}
 
   static void transpose(AVXFloat rows[]) {
     // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
@@ -357,6 +358,7 @@ class AVXDouble : public X86Vector<double, AVXDoubleWrapper> {
 public:
   AVXDouble(AVXDoubleWrapper::VecT v) : X86Vector<double, AVXDoubleWrapper>(v) {}
   AVXDouble() {}
+  AVXDouble(double zero) {this->zero();}
 
   static void transpose(AVXDouble rows[]) {
     // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
@@ -377,6 +379,7 @@ class AVX512Float : public X86Vector<float, AVX512FloatWrapper> {
 public:
   AVX512Float(AVX512FloatWrapper::VecT v) : X86Vector<float, AVX512FloatWrapper>(v) {}
   AVX512Float() {}
+  AVX512Float(float zero) {this->zero();}
 
   static void transpose(AVX512Float rows[]) {
     // https://gist.github.com/nihui/37d98b705a6a28911d77c502282b4748
@@ -454,6 +457,7 @@ class AVX512Double : public X86Vector<double, AVX512DoubleWrapper> {
 public:
   AVX512Double(AVX512DoubleWrapper::VecT v) : X86Vector<double, AVX512DoubleWrapper>(v) {}
   AVX512Double() {}
+  AVX512Double(double zero) {}
 
   static void transpose(AVX512Double rows[]) {
     //https://github.com/romeric/Fastor/blob/master/Fastor/backend/transpose/transpose_kernels.h:_MM_TRANSPOSE8_PD
@@ -501,8 +505,8 @@ public:
   }
 };
 
-template<typename ElemT, fastKronOp OpF, bool kPMultipleOfTileP, bool kQMultipleOfTileQ, typename DirectShared>
-void directCache(const Factor& F, DirectShared& TileF, uint32_t tileP, uint32_t tileQ) {
+template<typename ElemT, fastKronOp OpF, bool kPMultipleOfTileP, bool kQMultipleOfTileQ, typename DirectTileF>
+void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t tileQ) {
   for (int row = 0; row < TileF.shape(0); row++) {
     if ((OpF == fastKronOp_N && (kPMultipleOfTileP || tileP + row < F.p())) ||
         (OpF == fastKronOp_T && (kQMultipleOfTileQ || tileQ + row < F.q()))) {
@@ -592,6 +596,11 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, T
   }
 }
 
+template<typename XRegisters, typename FRegisters, typename YRegisters>
+void mma(XRegisters& Xr, FRegisters& Fr, YRegisters& Yr) {
+  
+}
+
 template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
@@ -606,126 +615,49 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
   const uint32_t VecRegQ = RegQ;
 
-  X86VecT yReg[VecRegM][VecRegQ][VecRegK];
+  YRegisters<X86VecT, VecRegM, VecRegK, VecRegQ> YReg;
 
   if (tileP == 0) {
-    for (uint32_t ym = 0; ym < VecRegM; ym++) {
-    for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-    for (uint32_t yk = 0; yk < VecRegK; yk++) {
-      yReg[ym][yq][yk].zero();
+    for (uint32_t ym = 0; ym < YReg.m(); ym++) {
+    for (uint32_t yq = 0; yq < YReg.q(); yq++) {
+    for (uint32_t yk = 0; yk < YReg.k(); yk++) {
+      YReg.at(ym, yk, yq).zero();
     }}}
   } else {
-    for (uint32_t ym = 0; ym < VecRegM; ym++) {
-    for (uint32_t yk = 0; yk < VecRegK; yk++) {
-    for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-      yReg[ym][yq][yk].load(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen]);
+    for (uint32_t ym = 0; ym < YReg.m(); ym++) {
+    for (uint32_t yq = 0; yq < YReg.q(); yq++) {
+    for (uint32_t yk = 0; yk < YReg.k(); yk++) {
+      YReg.at(ym, yk, yq).load(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen]);
     }}}
   }
 
-  if (false && VectorLen == 8 && VecRegM == 1 && VecRegK == 2 && VecRegQ == 4) {
-    #if 0
-    for (uint32_t p = 0; p < TileP; p += 2) {
-      {
-        ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + p * (TileK/P) + k/TileP + 0];
-        VectorType x0, x1;
-
-        x0.load(xptr);
-        x1.load(xptr + 1*VectorLen);
-
-        VectorType f0, f1, f2, f3;
-        if (OpF == fastKronOp_N) {
-          ElemT* fptr = &TileF[p*TileQ + q];
-          f0.broadcast(fptr);
-          f1.broadcast(fptr + 1);
-          f2.broadcast(fptr + 2);
-          f3.broadcast(fptr + 3);
-        } else {
-          ElemT* fptr = &TileF[q*TileP + p];
-          f0.broadcast(fptr);
-          f1.broadcast(fptr + TileP);
-          f2.broadcast(fptr + 2*TileP);
-          f3.broadcast(fptr + 3*TileP);
-        }
-
-        _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
-
-        yReg[0][0][0].fmadd(x0, f0);
-        yReg[0][1][0].fmadd(x0, f1);
-        yReg[0][2][0].fmadd(x0, f2);
-        yReg[0][3][0].fmadd(x0, f3);
-        yReg[0][0][1].fmadd(x1, f0);
-        yReg[0][1][1].fmadd(x1, f1);
-        yReg[0][2][1].fmadd(x1, f2);
-        yReg[0][3][1].fmadd(x1, f3);
-      }
-      {
-        ElemT* xptr = &TileX[(m)*TileP*(TileK/P) + (p + 1) * (TileK/P) + k/TileP + 0];
-        VectorType x0, x1;
-        x0.load(xptr);
-        x1.load(xptr + 1*VectorLen);
-
-        VectorType f0, f1, f2, f3;
-        if (OpF == fastKronOp_N) {
-          ElemT* fptr = &TileF[(p+1)*TileQ + q];
-          f0.broadcast(fptr);
-          f1.broadcast(fptr + 1);
-          f2.broadcast(fptr + 2);
-          f3.broadcast(fptr + 3);
-        } else {
-          ElemT* fptr = &TileF[q*TileP + p+1];
-          f0.broadcast(fptr);
-          f1.broadcast(fptr + TileP);
-          f2.broadcast(fptr + 2*TileP);
-          f3.broadcast(fptr + 3*TileP);
-        }
-
-        if (p + 2 < TileP) {
-          _mm_prefetch(&TileX[(m)*TileP*(TileK/P) + (p + 2) * (TileK/P) + k/TileP + 0], _MM_HINT_T1);
-          if (OpF == fastKronOp_N) {
-            ElemT* fptr = &TileF[(p+1)*TileQ + q];
-            _mm_prefetch(fptr + 4, _MM_HINT_T1);
-          }
-        }
-
-        yReg[0][0][0].fmadd(x0, f0);
-        yReg[0][1][0].fmadd(x0, f1);
-        yReg[0][2][0].fmadd(x0, f2);
-        yReg[0][3][0].fmadd(x0, f3);
-        yReg[0][0][1].fmadd(x1, f0);
-        yReg[0][1][1].fmadd(x1, f1);
-        yReg[0][2][1].fmadd(x1, f2);
-        yReg[0][3][1].fmadd(x1, f3);
-
-      }
-    }
-    #endif
-  } else {
+  {
     for (uint32_t p = 0; p < TileP; p++) {
-      X86VecT XReg[VecRegM][VecRegK];
-      X86VecT FReg[VecRegQ];
+      XRegisters<X86VecT, VecRegM, VecRegK, 1> XReg;
+      FRegisters<X86VecT, 1, VecRegQ> FReg;
       #pragma unroll
-      for (uint32_t em = 0; em < VecRegM; em++) {
+      for (uint32_t em = 0; em < XReg.m(); em++) {
         #pragma unroll
-        for (uint32_t ek = 0; ek < VecRegK; ek++) {
-          XReg[em][ek].load(&TileX[(m + em)*TileP*(kTileK/MaxP) + p * (kTileK/MaxP) + k/TileP + ek*VectorLen]);
+        for (uint32_t ek = 0; ek < XReg.k(); ek++) {
+          XReg.at(em, ek, 0).load(&TileX[(m + em)*TileP*(kTileK/MaxP) + p * (kTileK/MaxP) + k/TileP + ek*VectorLen]);
       }}
 
       #pragma unroll
-      for (uint32_t rq = 0; rq < VecRegQ; rq++) {
+      for (uint32_t rq = 0; rq < FReg.shape(1); rq++) {
         // if (q == 0 && rq == 0) printf("p %d %f\n", p, TileF[p*TileQ + q + rq]);
         if (OpF == fastKronOp_N)
-          FReg[rq].broadcast(&TileF[p*TileQ + q + rq]);
+          FReg.at(0, rq).broadcast(&TileF[p*TileQ + q + rq]);
         else
-          FReg[rq].broadcast(&TileF[(q+rq)*TileP + p]);
+          FReg.at(0, rq).broadcast(&TileF[(q+rq)*TileP + p]);
       }
 
       #pragma unroll
-      for (uint32_t rm = 0; rm < VecRegM; rm++) {
+      for (uint32_t rm = 0; rm < YReg.m(); rm++) {
       #pragma unroll
-      for (uint32_t rk = 0; rk < VecRegK; rk++) {
+      for (uint32_t rk = 0; rk < YReg.k(); rk++) {
       #pragma unroll
-      for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-        yReg[rm][rq][rk].fmadd(XReg[rm][rk], FReg[rq]);
+      for (uint32_t rq = 0; rq < YReg.q(); rq++) {
+        YReg.at(rm, rk, rq).fmadd(XReg.at(rm, rk, 0), FReg.at(0, rq));
       }}}
     }
   }
@@ -735,7 +667,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t yq = 0; yq < VecRegQ; yq++) {
     for (uint32_t yk = 0; yk < VecRegK; yk++) {
       uint32_t idx = (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen;
-      yReg[ym][yq][yk].store(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + idx]);
+      YReg.at(ym, yk, yq).store(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + idx]);
     }}}
   } else {
     const uint32_t XTileSlices = TileK/P;
@@ -744,7 +676,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t rm = 0; rm < VecRegM; rm++) {
     for (uint32_t rq = 0; rq < VecRegQ; rq++) {
     for (uint32_t rk = 0; rk < VecRegK; rk++) {
-      auto reg = yReg[rm][rq][rk];
+      const auto& reg = YReg.at(rm, rk, rq);
       const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
       if (fac > 0) {
         if (m + rm < XTile.m()) {
@@ -813,24 +745,25 @@ void threadWork(KernelParams<FusedFacs>& params,
   ElemT* tileBuff = (ElemT*)params.TileYs[tid];
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-    ElemT* TileX = (ElemT*)params.TileXs[tid];
-    TransposedDirectShared3D<fastKronOp_N, ElemT, kXshSlicesSame, TileM, TileP, kTileK/MaxP> DirectTileX(TileX, kTileK/MaxP * TileP);
+    ElemT* TileXptr = (ElemT*)params.TileXs[tid];
+    ElemT* TileFptr = (ElemT*)params.TileFs[tid]; //[TileP][TileQ];
+
+    TransposedDirectShared3D<fastKronOp_N, ElemT, kXshSlicesSame, TileM, TileP, kTileK/MaxP> TileX(TileXptr, kTileK/MaxP * TileP);
 
     //Transpose X data and store to TileX to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       const Factor F = Factor(P, Q, params.problem.f(fac).data());
       //TODO: pass only OptLevel as parameter and get optimizations from it 
-      transposeCache<ElemT, OpX, kKMultipleOfTileK, kPMultipleOfTileP, X86VecT, FusedFacs>(X, F, fac, XTile, DirectTileX, tileBuff, TileK, tileP);
+      transposeCache<ElemT, OpX, kKMultipleOfTileK, kPMultipleOfTileP, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, tileBuff, TileK, tileP);
 
-      ElemT* TileF = (ElemT*)params.TileFs[tid]; //[TileP][TileQ];
-      DirectShared<OpF, ElemT, TileP, TileQ> DirectTileF(TileF);
-      directCache<ElemT, OpF, kPMultipleOfTileP, kQMultipleOfTileQ>(F, DirectTileF, tileP, tileQ);
+      DirectShared<OpF, ElemT, TileP, TileQ> TileF(TileFptr);
+      directCache<ElemT, OpF, kPMultipleOfTileP, kQMultipleOfTileQ>(F, TileF, tileP, tileQ);
       
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < kTileK/MaxP * TileP; k += RegK * TileP) {
         vectorMMAAndStore<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF, kKMultipleOfTileK, kQMultipleOfTileQ>
-        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileX, TileF, P, Q, K, XTile, tileBuff, Y, fusedParams);
+        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileXptr, TileFptr, P, Q, K, XTile, tileBuff, Y, fusedParams);
       }}}
     }
   }
