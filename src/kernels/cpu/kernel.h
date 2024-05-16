@@ -618,11 +618,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   YRegisters<X86VecT, VecRegM, VecRegK, VecRegQ> YReg;
 
   if (tileP == 0) {
-    for (uint32_t ym = 0; ym < YReg.m(); ym++) {
-    for (uint32_t yq = 0; yq < YReg.q(); yq++) {
-    for (uint32_t yk = 0; yk < YReg.k(); yk++) {
-      YReg.at(ym, yk, yq).zero();
-    }}}
+    YReg.zero();
   } else {
     for (uint32_t ym = 0; ym < YReg.m(); ym++) {
     for (uint32_t yq = 0; yq < YReg.q(); yq++) {
