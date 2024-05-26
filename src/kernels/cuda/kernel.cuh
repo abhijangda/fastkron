@@ -92,12 +92,12 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
   const uint Q = (kFactorShapeSame) ? MaxQ : params.problem.f(0).q();
   const uint P = (kFactorShapeSame) ? MaxP : params.problem.f(0).p();
 
-  const uint XshSlices = getXshSlices<kFactorShapeSame, kTileK, MaxP>(params);
-  const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
+  const uint XshSlices = getXshSlices<OptLevel, kTileK, MaxP>(params);
+  const uint XSlices   = getXSlices  <OptLevel, MaxQ>(Y, params);
 
   const uint QThreads  = getQThreads <kXshSlicesSame, RegK>(XshSlices);
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
-  const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
+  const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
   // const uint ShTileK   = XshSlices*TileP;
 
   const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : (blockIdx.z * 32768 + blockIdx.y);

@@ -111,8 +111,9 @@ struct KernelOptimizations {
   }
 };
 
-template<uint kFactorShapeSame, uint kTileK, uint kP, typename KernelParams> 
+template<uint OptLevel, uint kTileK, uint kP, typename KernelParams>
 CUDA_DEVICE_HOST uint32_t getXshSlices(const KernelParams& params) {
+  constexpr bool kFactorShapeSame = KernelOptimizations::IsFactorShapeSame(OptLevel);
   if (kFactorShapeSame) {
     return kTileK/kP;
   } else {
@@ -120,10 +121,11 @@ CUDA_DEVICE_HOST uint32_t getXshSlices(const KernelParams& params) {
   }
 }
 
-template<uint kFactorShapeSame, uint kQ, typename KernelParams> 
+template<uint OptLevel, uint kQ, typename KernelParams> 
 CUDA_DEVICE_HOST uint32_t getXSlices(const Matrix& Y, const KernelParams& params) {
   //# of slices for a row. Same as X.n()/P but use Y.n()/Q to reduce
   //number of loads as store also requires reading Y.n()
+  constexpr bool kFactorShapeSame = KernelOptimizations::IsFactorShapeSame(OptLevel);
   if (kFactorShapeSame) {
     return Y.n()/kQ;
   } else {
@@ -145,8 +147,9 @@ CUDA_DEVICE_HOST uint32_t getQByTileQ(uint Q) {
   return DIVUP(Q, TileQ);
 }
 
-template<uint kTileKSame, uint kTileK, typename KernelParams> 
+template<uint OptLevel, uint kTileK, typename KernelParams> 
 CUDA_DEVICE_HOST uint32_t getXTileK(KernelParams& params) {
+  constexpr bool kTileKSame = KernelOptimizations::IsTileKSame(OptLevel);
   if (kTileKSame) return kTileK;
   return params.tileX.n();
 }

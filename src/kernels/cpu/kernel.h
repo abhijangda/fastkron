@@ -796,20 +796,14 @@ void cpuKernel(KernelParams<FusedFacs>& params,
                  MaxP <= TileP && MaxQ <= TileQ && MaxP == MaxQ && 
                  OptLevel == KernelOptimizations::MaxOptLevel()));
 
-  constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
-  constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
-  constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
-  constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
-  constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-  constexpr bool kQLeTileQ         = KernelOptimizations::IsQLeTileQ        (OptLevel);
-  constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
+  constexpr bool kFactorShapeSame = KernelOptimizations::IsFactorShapeSame(OptLevel);
 
   const uint Q = (kFactorShapeSame) ? MaxQ : F.q();
   const uint P = (kFactorShapeSame) ? MaxP : F.p();
 
-  const uint XshSlices = getXshSlices<kFactorShapeSame, kTileK, MaxP>(params);
-  const uint XSlices   = getXSlices  <kFactorShapeSame, MaxQ>(Y, params);
-  const uint TileK     = getXTileK   <kTileKSame, kTileK>(params);
+  const uint XshSlices = getXshSlices<OptLevel, kTileK, MaxP>(params);
+  const uint XSlices   = getXSlices  <OptLevel, MaxQ>(Y, params);
+  const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
 
   if (OpX == fastKronOp_N) {
     #pragma omp parallel for collapse(3)
