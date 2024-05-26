@@ -505,8 +505,11 @@ public:
   }
 };
 
-template<typename ElemT, fastKronOp OpF, bool kPMultipleOfTileP, bool kQMultipleOfTileQ, typename DirectTileF>
+template<uint OptLevel, typename ElemT, fastKronOp OpF, typename DirectTileF>
 void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t tileQ) {
+  constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
+  constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
+
   for (int row = 0; row < TileF.shape(0); row++) {
     if ((OpF == fastKronOp_N && (kPMultipleOfTileP || tileP + row < F.p())) ||
         (OpF == fastKronOp_T && (kQMultipleOfTileQ || tileQ + row < F.q()))) {
@@ -527,9 +530,11 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
   }
 }
 
-template<typename ElemT, fastKronOp OpX, bool kKMultipleOfTileK, bool kPMultipleOfTileP, typename X86VecT, uint FusedFacs, typename XTileTy, typename TileXTy>
+template<uint OptLevel, typename ElemT, fastKronOp OpX, typename X86VecT, uint FusedFacs, typename XTileTy, typename TileXTy>
 void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, TileXTy& TileX, ElemT* tileBuff, uint32_t EffectiveTileK, uint32_t tileP) {
   const uint32_t VectorLen = X86VecT::VectorLen;
+  constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
+  constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
 
   for (uint32_t m = 0; m < XTile.m(); m++) {
     const bool kTileKMultipleOfSlices = EffectiveTileK % VectorLen == 0;
@@ -601,14 +606,15 @@ void mma(XRegisters& Xr, FRegisters& Fr, YRegisters& Yr) {
   
 }
 
-template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
+template<uint OptLevel, typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
-         fastKronOp OpF,
-         bool kKMultipleOfTileK, bool kQMultipleOfTileQ, typename SliceX>
+         fastKronOp OpF, typename SliceX>
 __attribute__((always_inline)) static inline
 void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
-  //TODO: Different vector lengths. AVX512, AVX256, AVX, SSE4.2, no vector based on underlying architecture
+  constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
+  constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+
   const uint VectorLen = X86VecT::VectorLen;
   const uint32_t RegM = TileM;
   const uint32_t VecRegK = RegK/VectorLen;
@@ -722,13 +728,8 @@ template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP,
          fastKronOp OpX, fastKronOp OpF>
 void threadWork(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK, uint32_t P, uint32_t Q, Matrix& X, Matrix& Y) {
-  constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
-  constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
-  constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-  constexpr bool kQLeTileQ         = KernelOptimizations::IsQLeTileQ        (OptLevel);
-  constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
   const uint32_t K = X.n();
 
@@ -750,15 +751,15 @@ void threadWork(KernelParams<FusedFacs>& params,
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       const Factor F = Factor(P, Q, params.problem.f(fac).data());
       //TODO: pass only OptLevel as parameter and get optimizations from it 
-      transposeCache<ElemT, OpX, kKMultipleOfTileK, kPMultipleOfTileP, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, tileBuff, TileK, tileP);
+      transposeCache<OptLevel, ElemT, OpX, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, tileBuff, TileK, tileP);
 
       DirectShared<OpF, ElemT, TileP, TileQ> TileF(TileFptr);
-      directCache<ElemT, OpF, kPMultipleOfTileP, kQMultipleOfTileQ>(F, TileF, tileP, tileQ);
+      directCache<OptLevel, ElemT, OpF>(F, TileF, tileP, tileQ);
       
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < kTileK/MaxP * TileP; k += RegK * TileP) {
-        vectorMMAAndStore<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF, kKMultipleOfTileK, kQMultipleOfTileQ>
+        vectorMMAAndStore<OptLevel, ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>
         (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileXptr, TileFptr, P, Q, K, XTile, tileBuff, Y, fusedParams);
       }}}
     }
