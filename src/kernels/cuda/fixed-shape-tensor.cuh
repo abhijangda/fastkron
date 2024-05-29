@@ -248,7 +248,6 @@ public:
   CUDA_DEVICE_HOST
   uint32_t numel() const {return m() * n();}
   
-  //TODO: kXshSlicesSame is needed?
   CUDA_DEVICE_HOST
   uint32_t slices() const {return kSlices;}
 

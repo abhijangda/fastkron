@@ -212,7 +212,7 @@ public:
 };
 
 //TODO: Think about this
-template<typename T, fastKronOp Op, bool kKMultipleOfTileK>
+template<typename T, fastKronOp Op>
 class SliceCPU {
 public:
   const Matrix parent;
@@ -224,20 +224,18 @@ public:
   uint32_t rows;
   uint32_t cols;
   uint32_t P;
-  uint32_t TileP;
   T* ptr;
 
 public:
   CUDA_DEVICE_HOST
   SliceCPU(uint32_t startrow, uint32_t startcol, uint32_t tileRows, uint32_t tileCols,
-        uint32_t P, uint32_t TileP, Matrix parent) :
+           bool isKMultipleOfTileK, uint32_t P, Matrix parent) :
     startrow(startrow), startcol(startcol),
     tileRows_(tileRows), tileCols_(tileCols),
-    P(P), TileP(TileP), 
-    parent(parent),
+    P(P), parent(parent),
     ptr(parent.data<T>(startrow, startcol, Op)) {
       rows = (tileRows_ == 1) ? 1 : MIN(tileRows_, parent.m() - startrow);
-      cols = kKMultipleOfTileK ? tileCols_ : MIN(tileCols_, parent.n() - startcol);
+      cols = isKMultipleOfTileK ? tileCols_ : MIN(tileCols_, parent.n() - startcol);
     }
 
   CUDA_DEVICE_HOST
