@@ -533,11 +533,11 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 template<uint OptLevel, typename ElemT, fastKronOp OpX, typename X86VecT, uint FusedFacs, typename XTileTy, typename TileXTy>
 void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, TileXTy& TileX, ElemT* tileBuff, uint32_t EffectiveTileK, uint32_t tileP) {
   const uint32_t VectorLen = X86VecT::VectorLen;
-  constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
-  constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+  const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
+  const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+  const bool kTileKMultipleOfSlices = EffectiveTileK % VectorLen == 0;
 
   for (uint32_t m = 0; m < XTile.m(); m++) {
-    const bool kTileKMultipleOfSlices = EffectiveTileK % VectorLen == 0;
     for (uint32_t k = 0; k < EffectiveTileK; k += VectorLen * F.p()) {
       uint32_t p = 0;
       for (p = 0; p < TileX.p(); p += VectorLen) {
@@ -723,8 +723,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
 
 template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP, 
          uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
-         uint RegM, uint RegK, uint RegQ, uint OptLevel, 
-         int XAlignment, int FAlignment,
+         uint RegM, uint RegK, uint RegQ, uint OptLevel,
          fastKronOp OpX, fastKronOp OpF>
 void threadWork(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK, uint32_t P, uint32_t Q, Matrix& X, Matrix& Y) {
@@ -742,25 +741,25 @@ void threadWork(KernelParams<FusedFacs>& params,
   ElemT* tileBuff = (ElemT*)params.TileYs[tid];
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-    ElemT* TileXptr = (ElemT*)params.TileXs[tid];
-    ElemT* TileFptr = (ElemT*)params.TileFs[tid]; //[TileP][TileQ];
+    constexpr uint32_t kSlices = kTileK/MaxP;
 
-    TransposedDirectShared3D<fastKronOp_N, ElemT, kXshSlicesSame, TileM, TileP, kTileK/MaxP> TileX(TileXptr, kTileK/MaxP * TileP);
+    TransposedDirectShared3D<fastKronOp_N, ElemT, TileM, TileP, kSlices> 
+      TileX((ElemT*)params.TileXs[tid]);
 
     //Transpose X data and store to TileX to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       const Factor F = Factor(P, Q, params.problem.f(fac).data());
-      //TODO: pass only OptLevel as parameter and get optimizations from it 
+
       transposeCache<OptLevel, ElemT, OpX, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, tileBuff, TileK, tileP);
 
-      DirectShared<OpF, ElemT, TileP, TileQ> TileF(TileFptr);
+      DirectShared<OpF, ElemT, TileP, TileQ> TileF((ElemT*)params.TileFs[tid]);
       directCache<OptLevel, ElemT, OpF>(F, TileF, tileP, tileQ);
       
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
-      for (uint32_t k = 0; k < kTileK/MaxP * TileP; k += RegK * TileP) {
+      for (uint32_t k = 0; k < kSlices * TileP; k += RegK * TileP) {
         vectorMMAAndStore<OptLevel, ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>
-        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileXptr, TileFptr, P, Q, K, XTile, tileBuff, Y, fusedParams);
+        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, &TileX.at(0,0,0), &TileF.at(0,0), P, Q, K, XTile, tileBuff, Y, fusedParams);
       }}}
     }
   }
@@ -783,13 +782,6 @@ void cpuKernel(KernelParams<FusedFacs>& params,
 
   static_assert(RegM == TileM, "x86 requires RegM == TileM");
 
-  const uint32_t YRegs = RegM * RegK * RegQ;
-  const uint32_t XRegs = RegM * RegK;
-  const uint32_t FRegs = RegQ;
-
-  const uint32_t VectorLen = (XAlignment == 8 && RegK % 8 == 0) ? 8 : 1; //AVX256 length
-
-  // static_assert(XAlignment < 8 or (XAlignment == 8 and RegK % VectorLen == 0));
   static_assert(kTileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
   static_assert(FusedFacs == 1 || 
@@ -811,7 +803,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
-      threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
+      threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, OpX, OpF> (
         params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, X, Y
       );
     }}}
@@ -820,7 +812,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
-      threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, XAlignment, FAlignment, OpX, OpF> (
+      threadWork<ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegM, RegK, RegQ, OptLevel, OpX, OpF> (
         params, fusedParams, tileM, tileK, tileQ, TileK, P, Q, X, Y
       );
     }}}

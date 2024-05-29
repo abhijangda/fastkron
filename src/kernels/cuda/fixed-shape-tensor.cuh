@@ -200,16 +200,15 @@ public:
   uint32_t q() const {return TileQ;}
 };
 
-template<fastKronOp Layout, typename T, bool kXshSlicesSame, 
+template<fastKronOp Layout, typename T, 
          uint32_t kM, uint32_t kP, uint32_t kSlices>
 class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
   T* data;
-  uint32_t ShTileK;
 
 public:
   CUDA_DEVICE_HOST
-  TransposedDirectShared3D(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
+  TransposedDirectShared3D(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
@@ -251,7 +250,7 @@ public:
   
   //TODO: kXshSlicesSame is needed?
   CUDA_DEVICE_HOST
-  uint32_t slices() const {return (kXshSlicesSame) ? kSlices : ShTileK/kP;}
+  uint32_t slices() const {return kSlices;}
 
   CUDA_DEVICE_HOST
   uint32_t m() const {return kM;}
