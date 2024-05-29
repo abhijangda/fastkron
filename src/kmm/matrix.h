@@ -3,6 +3,7 @@
 #include <functional>
 #include <initializer_list> 
 
+#include "utils/utils.h"
 #include "fastkron.h"
 #include "kmm/stackarray.h"
 #include "config.h"
@@ -208,6 +209,90 @@ public:
   uint32_t m() const {return rows;}
   CUDA_DEVICE_HOST
   uint32_t numel() const {return rows * cols;}
+};
+
+//TODO: Think about this
+template<typename T, fastKronOp Op, bool kKMultipleOfTileK>
+class SliceCPU {
+public:
+  const Matrix parent;
+  //TODO: Create Coord2D
+  uint32_t startrow;
+  uint32_t startcol;
+  uint32_t tileRows_;
+  uint32_t tileCols_;
+  uint32_t rows;
+  uint32_t cols;
+  uint32_t P;
+  uint32_t TileP;
+  T* ptr;
+
+public:
+  CUDA_DEVICE_HOST
+  SliceCPU(uint32_t startrow, uint32_t startcol, uint32_t tileRows, uint32_t tileCols,
+        uint32_t P, uint32_t TileP, Matrix parent) :
+    startrow(startrow), startcol(startcol),
+    tileRows_(tileRows), tileCols_(tileCols),
+    P(P), TileP(TileP), 
+    parent(parent),
+    ptr(parent.data<T>(startrow, startcol, Op)) {
+      rows = (tileRows_ == 1) ? 1 : MIN(tileRows_, parent.m() - startrow);
+      cols = kKMultipleOfTileK ? tileCols_ : MIN(tileCols_, parent.n() - startcol);
+    }
+
+  CUDA_DEVICE_HOST
+  const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
+    //TODO: use the other data method
+    if (Op == fastKronOp_N) {
+      uint32_t idx = row * parent.n();
+      if (P <= TileP) {
+        idx += col;
+      } else {
+        idx += (col/TileP)*P + tileP + col%TileP;
+      }
+      return &ptr[idx];
+    } else if (Op == fastKronOp_T) {
+      uint32_t idx = 0;
+      if (P <= TileP) {
+        idx = col;
+      } else {
+        idx += (col/TileP)*P + tileP + col%TileP;
+      }
+
+      idx = idx * parent.m() + row;
+      return &ptr[idx];
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  uint32_t data(uint32_t row, uint32_t slice, uint32_t elem, uint32_t tileP) const {
+    //TODO: get common parts out
+    if (Op == fastKronOp_N) {
+      uint32_t idx = row * parent.n();
+      idx += slice*P + tileP + elem;
+      return idx;
+    } else if (Op == fastKronOp_T) {
+      uint32_t idx = slice*P + tileP + elem;
+      idx = idx * parent.m() + row;
+      return idx;
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  const T* data(uint32_t idx) const {
+    return &ptr[idx];
+  }
+
+  CUDA_DEVICE_HOST
+  uint32_t m() const {return rows;}
+  CUDA_DEVICE_HOST
+  uint32_t n() const {return cols;}
+  CUDA_DEVICE_HOST
+  uint32_t numel() const {return rows * cols;}
+  CUDA_DEVICE_HOST
+  uint32_t tileRows() const {return tileRows_;}
+  CUDA_DEVICE_HOST
+  uint32_t tileCols() const {return tileCols_;}
 };
 
 class Factor : public Matrix {

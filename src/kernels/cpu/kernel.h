@@ -535,14 +535,14 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, T
   const uint32_t VectorLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-  const bool kTileKMultipleOfSlices = EffectiveTileK % VectorLen == 0;
+  const bool kTileKMultipleOfSlices = XTile.cols % VectorLen == 0;
 
   for (uint32_t m = 0; m < XTile.m(); m++) {
-    for (uint32_t k = 0; k < EffectiveTileK; k += VectorLen * F.p()) {
+    for (uint32_t k = 0; k < XTile.cols; k += VectorLen * F.p()) {
       uint32_t p = 0;
       for (p = 0; p < TileX.p(); p += VectorLen) {
         const bool ValidAVXTranspose =
-              ((kKMultipleOfTileK && kTileKMultipleOfSlices) || EffectiveTileK - k >= VectorLen * F.p()) && 
+              ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols - k >= VectorLen * F.p()) && 
               ((kPMultipleOfTileP && TileX.p() % VectorLen == 0) || F.p() - tileP - p >= VectorLen) &&
               (TileX.p() >= VectorLen);
         if (VectorLen > 1 && ValidAVXTranspose) {
@@ -571,7 +571,7 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, T
             slices[pp].store(&TileX.at(m, k/F.p(), p+pp));
           }
         } else {
-          uint32_t NumSlices1 = (EffectiveTileK - k)/F.p();
+          uint32_t NumSlices1 = (XTile.cols - k)/F.p();
           uint32_t remainingP = F.p() - tileP - p;
           for (; p < MIN(TileX.p(), F.p() - tileP); p++) {
             for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
@@ -732,9 +732,8 @@ void threadWork(KernelParams<FusedFacs>& params,
 
   const uint32_t K = X.n();
 
-  Slice<ElemT, OpX> XTile(tileM, tileK, 
-                            (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
-                            (kKMultipleOfTileK) ? TileK : MIN(TileK, K - tileK),
+  SliceCPU<ElemT, OpX, kKMultipleOfTileK> XTile(tileM, tileK, 
+                            TileM, TileK,
                             P, P, //TODO: setting this to P because XTile.data is not right for GPU backend
                             X);
   const uint tid = omp_get_thread_num();
