@@ -599,16 +599,16 @@ void mma(XRegisters& Xr, FRegisters& Fr, YRegisters& Yr) {
 template<uint OptLevel, typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
-         fastKronOp OpF, typename SliceX, typename FCache_t, typename YTempBuffer>
+         fastKronOp OpF, typename SliceX, typename XCache_t, typename FCache_t, typename YTempBuffer>
 __attribute__((always_inline)) static inline
-void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, FCache_t& FCache, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, YTempBuffer& YCache, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
+void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, XCache_t& XCache, FCache_t& FCache, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, YTempBuffer& YCache, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
 
   const uint VectorLen = X86VecT::VectorLen;
   const uint32_t RegM = TileM;
   const uint32_t VecRegK = RegK/VectorLen;
-  const uint32_t VecRegM = RegM; //(RegK < VectorLen) ? VectorLen/RegK : RegM;
+  const uint32_t VecRegM = RegM;
   const uint32_t VecRegQ = RegQ;
 
   YRegisters<X86VecT, VecRegM, VecRegK, VecRegQ> YReg;
@@ -631,16 +631,12 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
       for (uint32_t em = 0; em < XReg.m(); em++) {
         #pragma unroll
         for (uint32_t ek = 0; ek < XReg.k(); ek++) {
-          XReg.at(em, ek, 0).load(&TileX[(m + em)*TileP*(kTileK/MaxP) + p * (kTileK/MaxP) + k/TileP + ek*VectorLen]);
+          XReg.at(em, ek, 0).load(&XCache.at((m + em), k/TileP + ek*VectorLen, p));
       }}
 
       #pragma unroll
       for (uint32_t rq = 0; rq < FReg.shape(1); rq++) {
-        // if (q == 0 && rq == 0) printf("p %d %f\n", p, TileF[p*TileQ + q + rq]);
-        // if (OpF == fastKronOp_N)
-          FReg.at(0, rq).broadcast(&FCache.at(p, q + rq));
-        // else
-        //   FReg.at(0, rq).broadcast(&FCache.at(q+rq, p));
+        FReg.at(0, rq).broadcast(&FCache.at(p, q + rq));
       }
 
       #pragma unroll
@@ -743,7 +739,7 @@ void threadWork(KernelParams<FusedFacs>& params,
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < kSlices * TileP; k += RegK * TileP) {
         vectorMMAAndStore<OptLevel, ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>
-        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, &TileX.at(0,0,0), TileF, P, Q, K, XTile, YCache, Y, fusedParams);
+        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, TileX, TileF, P, Q, K, XTile, YCache, Y, fusedParams);
       }}}
     }
   }
