@@ -531,7 +531,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 }
 
 template<uint OptLevel, typename ElemT, fastKronOp OpX, typename X86VecT, uint FusedFacs, typename XTileTy, typename TileXTy>
-void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, TileXTy& TileX, ElemT* tileBuff, uint32_t EffectiveTileK, uint32_t tileP) {
+void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, TileXTy& Xcache, ElemT* tileBuff, uint32_t EffectiveTileK, uint32_t tileP) {
   const uint32_t VectorLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
@@ -540,16 +540,16 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, T
   for (uint32_t m = 0; m < XTile.m(); m++) {
     for (uint32_t k = 0; k < XTile.cols; k += VectorLen * F.p()) {
       uint32_t p = 0;
-      for (p = 0; p < TileX.p(); p += VectorLen) {
+      for (p = 0; p < Xcache.p(); p += VectorLen) {
         const bool ValidAVXTranspose =
               ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols - k >= VectorLen * F.p()) && 
-              ((kPMultipleOfTileP && TileX.p() % VectorLen == 0) || F.p() - tileP - p >= VectorLen) &&
-              (TileX.p() >= VectorLen);
+              ((kPMultipleOfTileP && Xcache.p() % VectorLen == 0) || F.p() - tileP - p >= VectorLen) &&
+              (Xcache.p() >= VectorLen);
         if (VectorLen > 1 && ValidAVXTranspose) {
           X86VecT slices[VectorLen];
           if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
             for (uint32_t sliceIdx = 0; sliceIdx < VectorLen; sliceIdx++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*F.p() + tileP + p, 0) :
+              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k/F.p() + sliceIdx, tileP + p) :
                                                           &tileBuff[m * EffectiveTileK + k + sliceIdx*F.p() + tileP + p];
               slices[sliceIdx].load(ptr);
             }
@@ -568,21 +568,21 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, T
           }
 
           for (uint32_t pp = 0; pp < VectorLen; pp++) {
-            slices[pp].store(&TileX.at(m, k/F.p(), p+pp));
+            slices[pp].store(&Xcache.at(m, k/F.p(), p+pp));
           }
         } else {
           uint32_t NumSlices1 = (XTile.cols - k)/F.p();
           uint32_t remainingP = F.p() - tileP - p;
-          for (; p < MIN(TileX.p(), F.p() - tileP); p++) {
+          for (; p < MIN(Xcache.p(), F.p() - tileP); p++) {
             for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k + sliceIdx*F.p() + tileP + p, 0) :
+              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k/F.p() + sliceIdx, tileP + p) :
                                                           &tileBuff[m * EffectiveTileK + k + sliceIdx*F.p() + tileP + p];
-              TileX.at(m, k/F.p() + sliceIdx, p) = *ptr;
+              Xcache.at(m, k/F.p() + sliceIdx, p) = *ptr;
 
             }
           }
 
-          TileX.zero(m, k/F.p() + NumSlices1, p, m + 1, k/F.p() + VectorLen, TileX.p());
+          Xcache.zero(m, k/F.p() + NumSlices1, p, m + 1, k/F.p() + VectorLen, Xcache.p());
         }
       }
     }
