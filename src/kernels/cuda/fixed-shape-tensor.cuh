@@ -320,6 +320,28 @@ public:
   uint32_t p() const {return kP;}
 };
 
+template<typename T, uint32_t M, uint32_t Q, uint32_t Slices>
+class YTempBuffer : public AbstractFixedShapeTensor3D<T, M, Q, Slices> {
+  using Base = AbstractFixedShapeTensor3D<T, M, Q, Slices>;
+  T* data;
+
+public:
+  CUDA_DEVICE_HOST
+  YTempBuffer(T* data) : data(data) {}
+  
+  CUDA_DEVICE_HOST
+  uint32_t m() const {return M;}
+  CUDA_DEVICE_HOST
+  uint32_t slices() const {return Slices;}
+  CUDA_DEVICE_HOST
+  uint32_t q() const {return Q;}
+
+  CUDA_DEVICE_HOST
+  T& at(const uint32_t m, const uint32_t q, const uint32_t slice) {
+    return Base::at(data, m, q, slice);
+  }
+};
+
 //Register Tensors
 template<typename T, uint32_t M, uint32_t K, uint32_t Q>
 class YRegisters : public FixedShapeTensor3D<T, M, K, Q> {

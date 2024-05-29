@@ -599,9 +599,9 @@ void mma(XRegisters& Xr, FRegisters& Fr, YRegisters& Yr) {
 template<uint OptLevel, typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, 
          uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
-         fastKronOp OpF, typename SliceX>
+         fastKronOp OpF, typename SliceX, typename YTempBuffer>
 __attribute__((always_inline)) static inline
-void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, ElemT* tileBuff, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
+void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, ElemT* TileX, ElemT* TileF, uint32_t P, uint32_t Q, uint32_t K, SliceX& XTile, YTempBuffer& YCache, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
 
@@ -619,7 +619,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t ym = 0; ym < YReg.m(); ym++) {
     for (uint32_t yq = 0; yq < YReg.q(); yq++) {
     for (uint32_t yk = 0; yk < YReg.k(); yk++) {
-      YReg.at(ym, yk, yq).load(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen]);
+      YReg.at(ym, yk, yq).load(&YCache.at((m+ym), q + yq, k/TileP + yk * VectorLen));
     }}}
   }
 
@@ -658,8 +658,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     for (uint32_t ym = 0; ym < VecRegM; ym++) {
     for (uint32_t yq = 0; yq < VecRegQ; yq++) {
     for (uint32_t yk = 0; yk < VecRegK; yk++) {
-      uint32_t idx = (q+yq)*(kTileK/MaxP) + k/TileP+yk*VectorLen;
-      YReg.at(ym, yk, yq).store(&tileBuff[(m+ym)*TileQ*(kTileK/MaxP) + idx]);
+      YReg.at(ym, yk, yq).store(&YCache.at((m+ym), q + yq, k/TileP + yk * VectorLen));
     }}}
   } else {
     const uint32_t XTileSlices = TileK/P;
@@ -672,8 +671,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
       const uint32_t cacheK = (rq + q) * XTileSlices + rk*VectorLen + k/TileP;
       if (fac > 0) {
         if (m + rm < XTile.m()) {
-          // ElemT b[8]; _mm256_storeu_ps(b, reg); printf("%f %f %f %f\n", b[0], b[1], b[2], b[3]);
-          reg.store(&tileBuff[(m+rm)*TileK + cacheK]);
+          reg.store(&YCache.at(m+rm, q + rq, k/TileP + rk * VectorLen));
         }
       } else {
         //TODO: Need to fix
@@ -719,6 +717,7 @@ void threadWork(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK, uint32_t P, uint32_t Q, Matrix& X, Matrix& Y) {
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+  constexpr uint32_t kSlices = kTileK/MaxP;
 
   const uint32_t K = X.n();
 
@@ -726,11 +725,9 @@ void threadWork(KernelParams<FusedFacs>& params,
                              kKMultipleOfTileK, P, X);
 
   const uint tid = omp_get_thread_num();
-  ElemT* tileBuff = (ElemT*)params.TileYs[tid];
+  YTempBuffer<ElemT, TileM, TileQ, kSlices> YCache((ElemT*)params.TileYs[tid]);
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-    constexpr uint32_t kSlices = kTileK/MaxP;
-
     TransposedDirectShared3D<fastKronOp_N, ElemT, TileM, TileP, kSlices> 
       TileX((ElemT*)params.TileXs[tid]);
 
@@ -738,7 +735,7 @@ void threadWork(KernelParams<FusedFacs>& params,
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       const Factor F = Factor(P, Q, params.problem.f(fac).data());
 
-      transposeCache<OptLevel, ElemT, OpX, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, tileBuff, TileK, tileP);
+      transposeCache<OptLevel, ElemT, OpX, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, &YCache.at(0,0,0), TileK, tileP);
 
       DirectShared<OpF, ElemT, TileP, TileQ> TileF((ElemT*)params.TileFs[tid]);
       directCache<OptLevel, ElemT, OpF>(F, TileF, tileP, tileQ);
@@ -747,7 +744,7 @@ void threadWork(KernelParams<FusedFacs>& params,
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
       for (uint32_t k = 0; k < kSlices * TileP; k += RegK * TileP) {
         vectorMMAAndStore<OptLevel, ElemT, X86VecT, MaxQ, MaxP, TileP, TileQ, kTileK, TileM, FusedFacs, RegK, RegQ, OpF>
-        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, &TileX.at(0,0,0), &TileF.at(0,0), P, Q, K, XTile, tileBuff, Y, fusedParams);
+        (TileK, tileM, tileK, tileP, tileQ, m, q, k, fac, &TileX.at(0,0,0), &TileF.at(0,0), P, Q, K, XTile, YCache, Y, fusedParams);
       }}}
     }
   }
