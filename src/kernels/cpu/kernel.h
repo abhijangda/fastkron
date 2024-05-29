@@ -532,57 +532,56 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 
 template<uint OptLevel, typename ElemT, fastKronOp OpX, typename X86VecT, uint FusedFacs, typename XTileTy, typename TileXTy>
 void transposeCache(const Matrix& X, const Factor& F, int fac, XTileTy& XTile, TileXTy& Xcache, ElemT* tileBuff, uint32_t EffectiveTileK, uint32_t tileP) {
-  const uint32_t VectorLen = X86VecT::VectorLen;
+  const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-  const bool kTileKMultipleOfSlices = XTile.cols % VectorLen == 0;
+  const bool kTileKMultipleOfSlices = XTile.cols % VecTLen == 0;
 
   for (uint32_t m = 0; m < XTile.m(); m++) {
-    for (uint32_t k = 0; k < XTile.cols; k += VectorLen * F.p()) {
+    for (uint32_t k = 0; k < XTile.cols; k += VecTLen * F.p()) {
       uint32_t p = 0;
-      for (p = 0; p < Xcache.p(); p += VectorLen) {
-        const bool ValidAVXTranspose =
-              ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols - k >= VectorLen * F.p()) && 
-              ((kPMultipleOfTileP && Xcache.p() % VectorLen == 0) || F.p() - tileP - p >= VectorLen) &&
-              (Xcache.p() >= VectorLen);
-        if (VectorLen > 1 && ValidAVXTranspose) {
-          X86VecT slices[VectorLen];
+      for (p = 0; p < Xcache.p(); p += VecTLen) {
+        const bool UseAVXTrans = 
+            VecTLen > 1 &&
+            ((kKMultipleOfTileK && kTileKMultipleOfSlices)    || XTile.cols - k    >= VecTLen * F.p()) && 
+            ((kPMultipleOfTileP && Xcache.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen) &&
+            (Xcache.p() >= VecTLen);
+        if (UseAVXTrans) {
+          X86VecT slices[VecTLen];
           if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
-            for (uint32_t sliceIdx = 0; sliceIdx < VectorLen; sliceIdx++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k/F.p() + sliceIdx, tileP + p) :
-                                                          &tileBuff[m * EffectiveTileK + k + sliceIdx*F.p() + tileP + p];
-              slices[sliceIdx].load(ptr);
+            for (uint32_t slice = 0; slice < VecTLen; slice++) {
+              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k/F.p() + slice, tileP + p) :
+                                                          &tileBuff[m * EffectiveTileK + k + slice*F.p() + tileP + p];
+              slices[slice].load(ptr);
             }
             X86VecT::transpose(slices);
           } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
             //TODO: Gather requires AVX2
-            uint32_t gatherIdxs[VectorLen] = {0};
-            for (uint pp = 0; pp < VectorLen; pp++) {
-              const ElemT* ptr = XTile.data(m, k + 0*F.p() + tileP + p + pp, 0);
-              for (uint32_t sliceIdx = 0; sliceIdx < VectorLen; sliceIdx++) {
-                gatherIdxs[sliceIdx] = sliceIdx * X.m() * F.p(); //TODO: Assumes TileM == 1
+            uint32_t gatherIdxs[VecTLen] = {0};
+            for (uint pp = 0; pp < VecTLen; pp++) {
+              const ElemT* ptr = XTile.data(m, k/F.p() + 0, tileP + p + pp);
+              for (uint32_t slice = 0; slice < VecTLen; slice++) {
+                gatherIdxs[slice] = slice * X.m() * F.p(); //TODO: Assumes TileM == 1
               }
 
               slices[pp].gather(ptr, gatherIdxs);
             }
           }
 
-          for (uint32_t pp = 0; pp < VectorLen; pp++) {
+          for (uint32_t pp = 0; pp < VecTLen; pp++) {
             slices[pp].store(&Xcache.at(m, k/F.p(), p+pp));
           }
         } else {
-          uint32_t NumSlices1 = (XTile.cols - k)/F.p();
-          uint32_t remainingP = F.p() - tileP - p;
+          uint32_t LeftSlices = (XTile.cols - k)/F.p();
           for (; p < MIN(Xcache.p(), F.p() - tileP); p++) {
-            for (uint32_t sliceIdx = 0; sliceIdx < NumSlices1; sliceIdx++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k/F.p() + sliceIdx, tileP + p) :
-                                                          &tileBuff[m * EffectiveTileK + k + sliceIdx*F.p() + tileP + p];
-              Xcache.at(m, k/F.p() + sliceIdx, p) = *ptr;
-
+            for (uint32_t slice = 0; slice < LeftSlices; slice++) {
+              const ElemT* ptr = (fac == FusedFacs - 1) ? XTile.data(m, k/F.p() + slice, tileP + p) :
+                                                          &tileBuff[m * EffectiveTileK + k + slice*F.p() + tileP + p];
+              Xcache.at(m, k/F.p() + slice, p) = *ptr;
             }
           }
 
-          Xcache.zero(m, k/F.p() + NumSlices1, p, m + 1, k/F.p() + VectorLen, Xcache.p());
+          Xcache.zero(m, k/F.p() + LeftSlices, p, m + 1, k/F.p() + VecTLen, Xcache.p());
         }
       }
     }

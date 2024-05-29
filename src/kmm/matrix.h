@@ -241,30 +241,6 @@ public:
     }
 
   CUDA_DEVICE_HOST
-  const T* data(uint32_t row, uint32_t col, uint32_t tileP) const {
-    //TODO: use the other data method
-    if (Op == fastKronOp_N) {
-      uint32_t idx = row * parent.n();
-      if (P <= TileP) {
-        idx += col;
-      } else {
-        idx += (col/TileP)*P + tileP + col%TileP;
-      }
-      return &ptr[idx];
-    } else if (Op == fastKronOp_T) {
-      uint32_t idx = 0;
-      if (P <= TileP) {
-        idx = col;
-      } else {
-        idx += (col/TileP)*P + tileP + col%TileP;
-      }
-
-      idx = idx * parent.m() + row;
-      return &ptr[idx];
-    }
-  }
-
-  CUDA_DEVICE_HOST
   const T* data(uint32_t row, uint32_t slice, uint32_t elem) const {
     //TODO: get common parts out
     if (Op == fastKronOp_N) {
