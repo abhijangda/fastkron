@@ -30,7 +30,7 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t linearIdx(uint32_t i, uint32_t j) {
+  uint32_t linearIdx(uint32_t i, uint32_t j) const {
     if (Layout == fastKronOp_N)
       return i * shape(1) + j;
     else
@@ -39,6 +39,12 @@ public:
 
   CUDA_DEVICE_HOST
   T& at(T data[], uint32_t i, uint32_t j) {
+    // CUDA_DEVICE_ASSERT(linearIdx(i, j) < numel());
+    return data[linearIdx(i, j)];
+  }
+
+  CUDA_DEVICE_HOST
+  const T& at(const T data[], uint32_t i, uint32_t j) const {
     // CUDA_DEVICE_ASSERT(linearIdx(i, j) < numel());
     return data[linearIdx(i, j)];
   }
@@ -66,6 +72,11 @@ public:
 
   CUDA_DEVICE_HOST
   T& at(uint32_t i, uint32_t j) {
+    return Base::at(data, i, j);
+  }
+
+  CUDA_DEVICE_HOST
+  const T& at(uint32_t i, uint32_t j) const {
     return Base::at(data, i, j);
   }
 
@@ -108,6 +119,11 @@ public:
   }
 
   CUDA_DEVICE_HOST
+  const T& at(const T data[], uint32_t i, uint32_t j, uint32_t k) const {
+    return data[(i*shape(1)+j)*shape(2) + k];
+  }
+
+  CUDA_DEVICE_HOST
   void add(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
     set(data, i, j, k, at(data, i, j, k) + val);
   }
@@ -132,6 +148,11 @@ public:
   
   CUDA_DEVICE_HOST
   T& at(uint32_t i, uint32_t j, uint32_t k) {
+    return Base::at(data, i, j, k);
+  }
+
+  CUDA_DEVICE_HOST
+  const T& at(uint32_t i, uint32_t j, uint32_t k) const {
     return Base::at(data, i, j, k);
   }
 
@@ -193,6 +214,11 @@ public:
   T& at(uint32_t row, uint32_t col) {
     return Base::at(data, row, col);
   }
+
+  CUDA_DEVICE_HOST
+  const T& at(uint32_t row, uint32_t col) const {
+    return Base::at(data, row, col);
+  }
   
   CUDA_DEVICE_HOST
   uint32_t p() const {return TileP;}
@@ -232,6 +258,11 @@ public:
 
   CUDA_DEVICE_HOST
   T& at(uint32_t row, uint32_t slice, uint32_t elem) {
+    return Base::at(data, row, elem * slices() + slice);
+  }
+
+  CUDA_DEVICE_HOST
+  const T& at(uint32_t row, uint32_t slice, uint32_t elem) const {
     return Base::at(data, row, elem * slices() + slice);
   }
 
@@ -352,11 +383,23 @@ public:
   YRegisters() {Base::zero();}
   
   CUDA_DEVICE_HOST
-  uint32_t m() const {return M;}
+  constexpr uint32_t m() const {return M;}
   CUDA_DEVICE_HOST
-  uint32_t k() const {return K;}
+  constexpr uint32_t k() const {return K;}
   CUDA_DEVICE_HOST
-  uint32_t q() const {return Q;}
+  constexpr uint32_t q() const {return Q;}
+
+  CUDA_DEVICE_HOST
+  void apply(std::function<void (T&, const uint32_t, const uint32_t, const uint32_t)> fn) {
+    #pragma unroll
+    for (uint32_t ym = 0; ym < this->m(); ym++) {
+    #pragma unroll
+    for (uint32_t yq = 0; yq < this->q(); yq++) {
+    #pragma unroll
+    for (uint32_t yk = 0; yk < this->k(); yk++) {
+      fn(this->at(ym, yk, yq), ym, yk, yq);
+    }}}
+  }
 };
 
 template<typename T, uint32_t M, uint32_t K, uint32_t P>
@@ -366,18 +409,21 @@ public:
   XRegisters() {}
 
   CUDA_DEVICE_HOST
-  uint32_t m() const {return M;}
+  constexpr uint32_t m() const {return M;}
   CUDA_DEVICE_HOST
-  uint32_t k() const {return K;}
+  constexpr uint32_t k() const {return K;}
   CUDA_DEVICE_HOST
-  uint32_t p() const {return P;}
+  constexpr uint32_t p() const {return P;}
 };
 
-template<typename T, uint32_t TileP, uint32_t CRegCols>
-class FRegisters : public FixedShapeTensor2D<fastKronOp_N, T, TileP, CRegCols>{
+template<typename T, uint32_t TileP, uint32_t RegQ>
+class FRegisters : public FixedShapeTensor2D<fastKronOp_N, T, TileP, RegQ>{
   public:
     CUDA_DEVICE_HOST
     FRegisters() {}
+
+  CUDA_DEVICE_HOST
+  constexpr uint32_t q() const {return RegQ;}
 };
 
 class YElem : public Coord3D {

@@ -616,11 +616,9 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
   if (tileP == 0) {
     YReg.zero();
   } else {
-    for (uint32_t ym = 0; ym < YReg.m(); ym++) {
-    for (uint32_t yq = 0; yq < YReg.q(); yq++) {
-    for (uint32_t yk = 0; yk < YReg.k(); yk++) {
-      YReg.at(ym, yk, yq).load(&YCache.at((m+ym), q + yq, k/FCache.p() + yk * VectorLen));
-    }}}
+    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+      e.load(&YCache.at(m + ym, q + yq, k/FCache.p() + yk * VectorLen));
+    });
   }
 
   {
@@ -639,41 +637,31 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         FReg.at(0, rq).broadcast(&FCache.at(p, q + rq));
       }
 
-      #pragma unroll
-      for (uint32_t rm = 0; rm < YReg.m(); rm++) {
-      #pragma unroll
-      for (uint32_t rk = 0; rk < YReg.k(); rk++) {
-      #pragma unroll
-      for (uint32_t rq = 0; rq < YReg.q(); rq++) {
-        YReg.at(rm, rk, rq).fmadd(XReg.at(rm, rk, 0), FReg.at(0, rq));
-      }}}
+      YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+        e.fmadd(XReg.at(ym, yk, 0), FReg.at(0, yq));
+      });
     }
   }
 
   if (FCache.p() <= F.p() && tileP < F.p() - FCache.p()) {
-    for (uint32_t ym = 0; ym < VecRegM; ym++) {
-    for (uint32_t yq = 0; yq < VecRegQ; yq++) {
-    for (uint32_t yk = 0; yk < VecRegK; yk++) {
-      YReg.at(ym, yk, yq).store(&YCache.at((m+ym), q + yq, k/FCache.p() + yk * VectorLen));
-    }}}
+    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+      e.store(&YCache.at(m+ym, q + yq, k/FCache.p() + yk * VectorLen));
+    });
   } else {
     const uint32_t XTileSlices = TileK/F.p();
     const uint32_t XSlices     = X.n()/F.p();
 
-    for (uint32_t rm = 0; rm < VecRegM; rm++) {
-    for (uint32_t rq = 0; rq < VecRegQ; rq++) {
-    for (uint32_t rk = 0; rk < VecRegK; rk++) {
-      const auto& reg = YReg.at(rm, rk, rq);
+    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       if (fac > 0) {
         if (m + rm < XTile.m()) {
-          reg.store(&YCache.at(m+rm, q + rq, k/FCache.p() + rk * VectorLen));
+          e.store(&YCache.at(m+rm, q + rq, k/FCache.p() + rk * VectorLen));
         }
       } else {
         //TODO: Need to fix
         uint32_t memK;
         uint32_t slice = k/FCache.p() + rk*VectorLen;
-        if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) continue;
-        if (!kQMultipleOfTileQ && tileQ + q + rq >= F.q()) continue;
+        if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) return;
+        if (!kQMultipleOfTileQ && tileQ + q + rq >= F.q()) return;
 
         if (FusedFacs > 1) {
           uint32_t xshCol = (rq + q) * XTileSlices + rk*VectorLen + k/FCache.p();
@@ -697,10 +685,10 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
           uint32_t slices = (kKMultipleOfTileK && kTileK % VectorLen == 0) ? 
                              VectorLen : (XTile.cols/F.p() - slice);
           slices = MIN(VectorLen, slices);
-          reg.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
+          e.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
         }
       }
-    }}}
+    });
   }
 }
 
