@@ -600,18 +600,13 @@ template<uint OptLevel, typename ElemT, typename X86VecT,
          uint kTileK,
          uint TileM, uint FusedFacs, uint RegK, uint RegQ,
          fastKronOp OpF, typename SliceX, typename XCache_t, typename FCache_t, typename YTempBuffer>
-__attribute__((always_inline)) static inline
+static CUDA_DEVICE_HOST
 void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ, uint32_t m, uint32_t q, uint32_t k, uint32_t fac, const Matrix& X, const Factor& F, XCache_t& XCache, FCache_t& FCache, SliceX& XTile, YTempBuffer& YCache, Matrix& Y, FusedParams<FusedFacs>& fusedParams) {
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
 
   const uint VectorLen = X86VecT::VectorLen;
-  const uint32_t RegM = TileM;
-  const uint32_t VecRegK = RegK/VectorLen;
-  const uint32_t VecRegM = RegM;
-  const uint32_t VecRegQ = RegQ;
-
-  YRegisters<X86VecT, VecRegM, VecRegK, VecRegQ> YReg;
+  YRegisters<X86VecT, TileM, RegK/VectorLen, RegQ> YReg;
 
   if (tileP == 0) {
     YReg.zero();
@@ -621,75 +616,62 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     });
   }
 
-  {
-    for (uint32_t p = 0; p < FCache.p(); p++) {
-      XRegisters<X86VecT, VecRegM, VecRegK, 1> XReg;
-      FRegisters<X86VecT, 1, VecRegQ> FReg;
+  for (uint32_t p = 0; p < FCache.p(); p++) {
+    XRegisters<X86VecT, YReg.m(), YReg.k(), 1> XReg;
+    FRegisters<X86VecT, 1, YReg.q()> FReg;
+    #pragma unroll
+    for (uint32_t em = 0; em < XReg.m(); em++) {
       #pragma unroll
-      for (uint32_t em = 0; em < XReg.m(); em++) {
-        #pragma unroll
-        for (uint32_t ek = 0; ek < XReg.k(); ek++) {
-          XReg.at(em, ek, 0).load(&XCache.at((m + em), k/FCache.p() + ek*VectorLen, p));
-      }}
+      for (uint32_t ek = 0; ek < XReg.k(); ek++) {
+        XReg.at(em, ek, 0).load(&XCache.at((m + em), k/FCache.p() + ek*VectorLen, p));
+    }}
 
-      #pragma unroll
-      for (uint32_t rq = 0; rq < FReg.shape(1); rq++) {
-        FReg.at(0, rq).broadcast(&FCache.at(p, q + rq));
-      }
-
-      YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
-        e.fmadd(XReg.at(ym, yk, 0), FReg.at(0, yq));
-      });
+    #pragma unroll
+    for (uint32_t rq = 0; rq < FReg.shape(1); rq++) {
+      FReg.at(0, rq).broadcast(&FCache.at(p, q + rq));
     }
+
+    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+      e.fmadd(XReg.at(ym, yk, 0), FReg.at(0, yq));
+    });
   }
 
-  if (FCache.p() <= F.p() && tileP < F.p() - FCache.p()) {
-    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
-      e.store(&YCache.at(m+ym, q + yq, k/FCache.p() + yk * VectorLen));
-    });
-  } else {
-    const uint32_t XTileSlices = TileK/F.p();
-    const uint32_t XSlices     = X.n()/F.p();
+  YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
+    if ((fac > 0) || (FCache.p() <= F.p() && tileP < F.p() - FCache.p())) {
+      e.store(&YCache.at(m+rm, q + rq, k/FCache.p() + rk * VectorLen));
+    } else {
+      const uint32_t XTileSlices = TileK/F.p();
+      const uint32_t XSlices     = X.n()/F.p();
 
-    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
-      if (fac > 0) {
-        if (m + rm < XTile.m()) {
-          e.store(&YCache.at(m+rm, q + rq, k/FCache.p() + rk * VectorLen));
-        }
+      uint32_t memK;
+      uint32_t slice = k/FCache.p() + rk*VectorLen;
+      if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) return;
+      if (!kQMultipleOfTileQ && tileQ + q + rq >= F.q()) return;
+
+      if (FusedFacs > 1) {
+        uint32_t xshCol = (rq + q) * XTileSlices + rk*VectorLen + k/FCache.p();
+        //Scale shared mem slice idx to global mem idx
+        uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
+        //Scale shared fused slice to global mem
+        uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
+        //Elem idx in Fused Slice
+        uint32_t elem = (tileK/TileK) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
+        memK = glSlice + sliceElem + elem; 
       } else {
-        //TODO: Need to fix
-        uint32_t memK;
-        uint32_t slice = k/FCache.p() + rk*VectorLen;
-        if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) return;
-        if (!kQMultipleOfTileQ && tileQ + q + rq >= F.q()) return;
-
-        if (FusedFacs > 1) {
-          uint32_t xshCol = (rq + q) * XTileSlices + rk*VectorLen + k/FCache.p();
-          //Scale shared mem slice idx to global mem idx
-          uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
-          //Scale shared fused slice to global mem
-          uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
-          //Elem idx in Fused Slice
-          uint32_t elem = (tileK/TileK) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
-          memK = glSlice + sliceElem + elem; 
-        } else {
-          memK = (q + rq) * XSlices +
-                  (tileK/TileK) * XTileSlices +
-                  slice;
-          if (FCache.q() < F.q()) {
-            memK += tileQ * XSlices;
-          }
-        }
-
-        if (m + rm < XTile.m()) {
-          uint32_t slices = (kKMultipleOfTileK && kTileK % VectorLen == 0) ? 
-                             VectorLen : (XTile.cols/F.p() - slice);
-          slices = MIN(VectorLen, slices);
-          e.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
+        memK = (q + rq) * XSlices +
+                (tileK/TileK) * XTileSlices +
+                slice;
+        if (FCache.q() < F.q()) {
+          memK += tileQ * XSlices;
         }
       }
-    });
-  }
+
+      if (m + rm < XTile.m()) {
+        uint32_t slices = (kKMultipleOfTileK && kTileK % VectorLen == 0) ? 
+                            VectorLen : (XTile.cols/F.p() - slice);
+        slices = MIN(VectorLen, slices);
+        e.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
+  }}});
 }
 
 template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP, 

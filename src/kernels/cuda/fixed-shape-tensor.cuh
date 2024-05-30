@@ -165,6 +165,18 @@ public:
   void set(uint32_t i, uint32_t j, uint32_t k, T val) {
     Base::set(data, i, j, k, val);
   }
+
+  CUDA_DEVICE_HOST
+  void apply(std::function<void (T&, const uint32_t, const uint32_t, const uint32_t)> fn) {
+    #pragma unroll
+    for (uint32_t m = 0; m < M; m++) {
+    #pragma unroll
+    for (uint32_t n = 0; n < N; n++) {
+    #pragma unroll
+    for (uint32_t k = 0; k < K; k++) {
+      fn(this->at(m, n, k), m, n, k);
+    }}}
+  }
 };
 
 //Shared Memory Tensors
@@ -381,25 +393,13 @@ class YRegisters : public FixedShapeTensor3D<T, M, K, Q> {
 public:
   CUDA_DEVICE_HOST
   YRegisters() {Base::zero();}
-  
-  CUDA_DEVICE_HOST
-  constexpr uint32_t m() const {return M;}
-  CUDA_DEVICE_HOST
-  constexpr uint32_t k() const {return K;}
-  CUDA_DEVICE_HOST
-  constexpr uint32_t q() const {return Q;}
 
   CUDA_DEVICE_HOST
-  void apply(std::function<void (T&, const uint32_t, const uint32_t, const uint32_t)> fn) {
-    #pragma unroll
-    for (uint32_t ym = 0; ym < this->m(); ym++) {
-    #pragma unroll
-    for (uint32_t yq = 0; yq < this->q(); yq++) {
-    #pragma unroll
-    for (uint32_t yk = 0; yk < this->k(); yk++) {
-      fn(this->at(ym, yk, yq), ym, yk, yq);
-    }}}
-  }
+  constexpr uint32_t m() {return M;}
+  CUDA_DEVICE_HOST
+  constexpr uint32_t k() {return K;}
+  CUDA_DEVICE_HOST
+  constexpr uint32_t q() {return Q;}
 };
 
 template<typename T, uint32_t M, uint32_t K, uint32_t P>
@@ -409,11 +409,11 @@ public:
   XRegisters() {}
 
   CUDA_DEVICE_HOST
-  constexpr uint32_t m() const {return M;}
+  constexpr uint32_t m() {return M;}
   CUDA_DEVICE_HOST
-  constexpr uint32_t k() const {return K;}
+  constexpr uint32_t k() {return K;}
   CUDA_DEVICE_HOST
-  constexpr uint32_t p() const {return P;}
+  constexpr uint32_t p() {return P;}
 };
 
 template<typename T, uint32_t TileP, uint32_t RegQ>
