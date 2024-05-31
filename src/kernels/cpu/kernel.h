@@ -636,10 +636,13 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
     });
   }
 
-  YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
-    if ((fac > 0) || (FCache.p() <= F.p() && tileP < F.p() - FCache.p())) {
+  if (fac > 0 || (FCache.p() <= F.p() && tileP < F.p() - FCache.p())) {
+    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       e.store(&YCache.at(m+rm, q + rq, k/FCache.p() + rk * VectorLen));
-    } else {
+    });
+  } else {
+  YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
+    {
       const uint32_t XTileSlices = TileK/F.p();
       const uint32_t XSlices     = X.n()/F.p();
 
@@ -672,6 +675,7 @@ void vectorMMAAndStore(uint32_t TileK, uint32_t tileM, uint32_t tileK, uint32_t 
         slices = MIN(VectorLen, slices);
         e.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
   }}});
+  }
 }
 
 template<typename ElemT, typename X86VecT, uint MaxQ, uint MaxP, uint TileP, 

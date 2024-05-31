@@ -166,15 +166,16 @@ public:
     Base::set(data, i, j, k, val);
   }
 
+  template<typename F>
   CUDA_DEVICE_HOST
-  void apply(std::function<void (T&, const uint32_t, const uint32_t, const uint32_t)> fn) {
+  void apply(F&& fn){//std::function<void (T&, const uint32_t, const uint32_t, const uint32_t)> fn) {
     #pragma unroll
     for (uint32_t m = 0; m < M; m++) {
     #pragma unroll
-    for (uint32_t n = 0; n < N; n++) {
-    #pragma unroll
     for (uint32_t k = 0; k < K; k++) {
-      fn(this->at(m, n, k), m, n, k);
+    #pragma unroll
+    for (uint32_t n = 0; n < N; n++) {
+      fn(at(m, n, k), m, n, k);
     }}}
   }
 };
