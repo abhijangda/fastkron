@@ -84,6 +84,17 @@ public:
   void set(uint32_t i, uint32_t j, T val) {
     Base::set(data, i, j, val);
   }
+
+  template<typename F>
+  CUDA_DEVICE_HOST
+  void apply(F&& fn){
+    #pragma unroll
+    for (uint32_t m = 0; m < M; m++) {
+    #pragma unroll
+    for (uint32_t n = 0; n < N; n++) {
+      fn(at(m, n), m, n);
+    }}
+  }
 };
 
 template<typename T, uint32_t M, uint32_t N, uint32_t K>
@@ -168,7 +179,7 @@ public:
 
   template<typename F>
   CUDA_DEVICE_HOST
-  void apply(F&& fn){//std::function<void (T&, const uint32_t, const uint32_t, const uint32_t)> fn) {
+  void apply(F&& fn){
     #pragma unroll
     for (uint32_t m = 0; m < M; m++) {
     #pragma unroll
