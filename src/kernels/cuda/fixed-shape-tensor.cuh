@@ -407,11 +407,11 @@ public:
   YRegisters() {Base::zero();}
 
   CUDA_DEVICE_HOST
-  constexpr uint32_t m() {return M;}
+  static constexpr uint32_t m() {return M;}
   CUDA_DEVICE_HOST
-  constexpr uint32_t k() {return K;}
+  static constexpr uint32_t k() {return K;}
   CUDA_DEVICE_HOST
-  constexpr uint32_t q() {return Q;}
+  static constexpr uint32_t q() {return Q;}
 };
 
 template<typename T, uint32_t M, uint32_t K, uint32_t P>
