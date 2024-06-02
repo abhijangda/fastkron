@@ -537,7 +537,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-  const bool kTileKMultipleOfSlices = XTile.cols % VecTLen == 0;
+  const bool kTileKMultipleOfSlices = XTile.tileCols() % VecTLen == 0;
 
   for (uint32_t m = 0; m < XTile.m(); m++) {
     for (uint32_t k = 0; k < XTile.cols; k += VecTLen * F.p()) {
