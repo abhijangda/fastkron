@@ -212,7 +212,8 @@ public:
 };
 
 //TODO: Think about this
-template<typename T, fastKronOp Op>
+template<typename T, fastKronOp Op, bool isKMultipleOfTileK, bool kTileKSame,
+         uint32_t TileM, uint32_t TileK>
 class SliceCPU {
 public:
   const Matrix parent;
@@ -228,14 +229,14 @@ public:
 
 public:
   CUDA_DEVICE_HOST
-  SliceCPU(uint32_t startrow, uint32_t startcol, uint32_t tileRows, uint32_t tileCols,
-           bool isKMultipleOfTileK, uint32_t P, Matrix parent) :
+  SliceCPU(uint32_t startrow, uint32_t startcol, uint32_t paramTileK, uint32_t P, Matrix parent) :
     startrow(startrow), startcol(startcol),
-    tileRows_(tileRows), tileCols_(tileCols),
+    tileRows_(TileM),
     P(P), parent(parent),
     ptr(parent.data<T>(startrow, startcol, Op)) {
+      tileCols_ = kTileKSame ? TileK : paramTileK;
       rows = (tileRows_ == 1) ? 1 : MIN(tileRows_, parent.m() - startrow);
-      cols = isKMultipleOfTileK ? tileCols_ : MIN(tileCols_, parent.n() - startcol);
+      cols = isKMultipleOfTileK ? tileCols() : MIN(tileCols(), parent.n() - startcol);
     }
 
   CUDA_DEVICE_HOST
@@ -266,7 +267,7 @@ public:
   CUDA_DEVICE_HOST
   uint32_t tileRows() const {return tileRows_;}
   CUDA_DEVICE_HOST
-  uint32_t tileCols() const {return tileCols_;}
+  uint32_t tileCols() const {return kTileKSame ? TileK : tileCols_;}
 };
 
 class Factor : public Matrix {

@@ -651,6 +651,7 @@ void store(const FusedParams& fusedParams, uint32_t fac,
 
       const uint32_t XTileSlices = XTile.tileCols()/F.p();
       const uint32_t XSlices     = Y.n()/F.q();
+      uint32_t yN;
 
       if (fusedParams.NumFused > 1) {
         uint32_t xshCol = (rq + q) * XTileSlices + rk*VectorLen + k/Fch.p();
@@ -671,10 +672,10 @@ void store(const FusedParams& fusedParams, uint32_t fac,
       }
 
       if (m + rm < XTile.m()) {
-        uint32_t slices = (kKMultipleOfTileK && kTileK % VectorLen == 0) ? 
+        uint32_t slices = (kKMultipleOfTileK && XTile.tileCols() % VectorLen == 0) ? 
                             VectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(VectorLen, slices);
-        e.store(Y.data<ElemT>(tileM + m + rm, memK, fastKronOp_N), slices);
+        e.store(Y.data<ElemT>(tileM + m + rm, yN, fastKronOp_N), slices);
     }});
   }
 }
@@ -687,12 +688,13 @@ void threadWork(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK, uint32_t P, uint32_t Q, Matrix& X, Matrix& Y) {
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+  constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame(OptLevel);
+
   constexpr uint32_t kSlices = kTileK/MaxP;
 
   const uint32_t K = X.n();
 
-  SliceCPU<ElemT, OpX> XTile(tileM, tileK, TileM, TileK,
-                             kKMultipleOfTileK, P, X);
+  SliceCPU<ElemT, OpX, kKMultipleOfTileK, kTileKSame, TileM, kTileK> XTile(tileM, tileK, TileK, P, X);
 
   const uint tid = omp_get_thread_num();
   YTempBuffer<ElemT, TileM, TileQ, kSlices> YCache((ElemT*)params.TileYs[tid]);
@@ -716,12 +718,9 @@ void threadWork(KernelParams<FusedFacs>& params,
         const uint VectorLen = X86VecT::VectorLen;
         YRegisters<X86VecT, TileM, RegK/VectorLen, RegQ> YReg;
 
-        mma<X86VecT>
-        (tileP, m, q, k, TileX, TileF, YCache, YReg);
-        store<OptLevel,kTileK, ElemT, X86VecT>
-        (fusedParams, fac, tileM, tileK, tileP, tileQ,
-         m, q, k, F, Y, TileF, XTile,
-         YCache, YReg);
+        mma<X86VecT>(tileP, m, q, k, TileX, TileF, YCache, YReg);
+        store<OptLevel, kTileK, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
+         m, q, k, F, Y, TileF, XTile, YCache, YReg);
       }}}
     }
   }
