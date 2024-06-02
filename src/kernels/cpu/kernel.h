@@ -530,8 +530,10 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
   }
 }
 
-template<uint OptLevel, typename ElemT, fastKronOp OpX, typename X86VecT, uint FusedFacs, typename TileX_t, typename TrCache>
-void transposeCache(const Matrix& X, const Factor& F, int fac, TileX_t& XTile, TrCache& Xcache, ElemT* tileBuff, uint32_t EffectiveTileK, uint32_t tileP) {
+template<uint OptLevel, typename ElemT, typename X86VecT, fastKronOp OpX,
+         uint FusedFacs, typename TileX, typename XCache, typename YInterim>
+void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
+                    TileX& XTile, XCache& Xch, YInterim& Ych) {
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
@@ -540,19 +542,19 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, TileX_t& XTile, T
   for (uint32_t m = 0; m < XTile.m(); m++) {
     for (uint32_t k = 0; k < XTile.cols; k += VecTLen * F.p()) {
       uint32_t p = 0;
-      for (p = 0; p < Xcache.p(); p += VecTLen) {
+      for (; p < Xch.p(); p += VecTLen) {
         const bool UseAVXTrans = 
-            VecTLen > 1 &&
-            ((kKMultipleOfTileK && kTileKMultipleOfSlices)    || XTile.cols - k    >= VecTLen * F.p()) && 
-            ((kPMultipleOfTileP && Xcache.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen) &&
-            (Xcache.p() >= VecTLen);
+          VecTLen > 1 &&
+          ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols - k    >= VecTLen * F.p()) && 
+          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen) &&
+          (Xch.p() >= VecTLen);
         if (UseAVXTrans) {
           X86VecT slices[VecTLen];
-          if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac != FusedFacs - 1)) {
+          if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac < FusedFacs - 1)) {
             for (uint32_t slice = 0; slice < VecTLen; slice++) {
               const ElemT* ptr = (fac == FusedFacs - 1) ? 
                                  XTile.data(m, k/F.p() + slice, tileP + p) :
-                                 &tileBuff[m * EffectiveTileK + k + slice*F.p() + tileP + p];
+                                 &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
               slices[slice].load(ptr);
             }
             X86VecT::transpose(slices);
@@ -570,21 +572,21 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, TileX_t& XTile, T
           }
 
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
-            slices[pp].store(&Xcache.at(m, k/F.p(), p+pp));
+            slices[pp].store(&Xch.at(m, k/F.p(), p+pp));
           }
         } else {
           const uint32_t LeftSlices = (XTile.cols - k)/F.p();
-          for (; p < MIN(Xcache.p(), F.p() - tileP); p++) {
+          for (; p < MIN(Xch.p(), F.p() - tileP); p++) {
             for (uint32_t slice = 0; slice < LeftSlices; slice++) {
               const ElemT* ptr = (fac == FusedFacs - 1) ? 
                                   XTile.data(m, k/F.p() + slice, tileP + p) :
-                                  &tileBuff[m * EffectiveTileK + k + slice*F.p() + tileP + p];
-              Xcache.at(m, k/F.p() + slice, p) = *ptr;
+                                  &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
+              Xch.at(m, k/F.p() + slice, p) = *ptr;
             }
           }
 
-          Xcache.zero(m, k/F.p() + LeftSlices, p, 
-                      m + 1, k/F.p() + VecTLen, Xcache.p());
+          Xch.zero(m,     k/F.p() + LeftSlices, p,
+                   m + 1, k/F.p() + VecTLen,    Xch.p());
         }
       }
     }
@@ -592,13 +594,12 @@ void transposeCache(const Matrix& X, const Factor& F, int fac, TileX_t& XTile, T
 }
 
 template<typename X86VecT, 
-         typename XCache, typename FCache, typename YInterim,
+         typename FCache, typename YInterim,
          typename YRegisters>
-static CUDA_DEVICE_HOST
-void mma(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k, 
-         const XCache& Xch, const FCache& Fch,
-         YInterim& Ych, YRegisters& YReg) {
-   const uint VectorLen = X86VecT::VectorLen;
+static CUDA_DEVICE_HOST inline
+void load(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k, 
+          const FCache& Fch, YInterim& Ych, YRegisters& YReg) {
+  const uint VectorLen = X86VecT::VectorLen;
   if (tileP == 0) {
     YReg.zero();
   } else {
@@ -606,7 +607,17 @@ void mma(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k,
       e.load(&Ych.at(m + ym, q + yq, k/Fch.p() + yk * VectorLen));
     });
   }
- 
+}
+
+template<typename X86VecT, 
+         typename XCache, typename FCache, typename YInterim,
+         typename YRegisters>
+static CUDA_DEVICE_HOST inline
+void mma(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k, 
+         const XCache& Xch, const FCache& Fch,
+         YInterim& Ych, YRegisters& YReg) {
+  const uint VectorLen = X86VecT::VectorLen;
+
   for (uint32_t p = 0; p < Fch.p(); p++) {
      XRegisters<X86VecT, YReg.m(), YReg.k(), 1> XReg;
      FRegisters<X86VecT, 1, YReg.q()> FReg;
@@ -624,7 +635,7 @@ void mma(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k,
    } 
  }
 
-template<uint OptLevel, uint kTileK,
+template<uint OptLevel,
          typename ElemT, typename X86VecT,
          typename FusedParams,
          typename TileX, typename FCache, typename YInterim, typename YRegisters>
@@ -660,7 +671,8 @@ void store(const FusedParams& fusedParams, uint32_t fac,
         //Scale shared fused slice to global mem
         uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
         //Elem idx in Fused Slice
-        uint32_t elem = (tileK/XTile.tileCols()) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
+        uint32_t elem = (tileK/XTile.tileCols()) * fusedParams.XShFusedSlices +
+                        xshCol%fusedParams.XShFusedSlices;
         yN = glSlice + sliceElem + elem; 
       } else {
         yN = (q + rq) * XSlices +
@@ -672,8 +684,9 @@ void store(const FusedParams& fusedParams, uint32_t fac,
       }
 
       if (m + rm < XTile.m()) {
-        uint32_t slices = (kKMultipleOfTileK && XTile.tileCols() % VectorLen == 0) ? 
-                            VectorLen : (XTile.cols/F.p() - slice);
+        uint32_t slices = (kKMultipleOfTileK &&
+                           XTile.tileCols() % VectorLen == 0) ? 
+                           VectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(VectorLen, slices);
         e.store(Y.data<ElemT>(tileM + m + rm, yN, fastKronOp_N), slices);
     }});
@@ -701,16 +714,16 @@ void threadWork(KernelParams<FusedFacs>& params,
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
     TransposedDirectShared3D<fastKronOp_N, ElemT, TileM, TileP, kSlices> 
-      TileX((ElemT*)params.TileXs[tid]);
+      TrXCache((ElemT*)params.TileXs[tid]);
 
-    //Transpose X data and store to TileX to reduce TLB misses
+    //Transpose X data and store to TrXCache to reduce TLB misses
     for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
       const Factor F = Factor(P, Q, params.problem.f(fac).data());
 
-      transposeCache<OptLevel, ElemT, OpX, X86VecT, FusedFacs>(X, F, fac, XTile, TileX, &YCache.at(0,0,0), TileK, tileP);
+      transposeCache<OptLevel, ElemT, X86VecT, OpX,FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache);
 
-      DirectShared<OpF, ElemT, TileP, TileQ> TileF((ElemT*)params.TileFs[tid]);
-      directCache<OptLevel, ElemT, OpF>(F, TileF, tileP, tileQ);
+      DirectShared<OpF, ElemT, TileP, TileQ> FCache((ElemT*)params.TileFs[tid]);
+      directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
       
       for (uint32_t m = 0; m < XTile.m(); m += RegM) {
       for (uint32_t q = 0; q < TileQ; q += RegQ) {
@@ -718,9 +731,10 @@ void threadWork(KernelParams<FusedFacs>& params,
         const uint VectorLen = X86VecT::VectorLen;
         YRegisters<X86VecT, TileM, RegK/VectorLen, RegQ> YReg;
 
-        mma<X86VecT>(tileP, m, q, k, TileX, TileF, YCache, YReg);
-        store<OptLevel, kTileK, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
-         m, q, k, F, Y, TileF, XTile, YCache, YReg);
+        load<X86VecT>(tileP, m, q, k, FCache, YCache, YReg);
+        mma<X86VecT>(tileP, m, q, k, TrXCache, FCache, YCache, YReg);
+        store<OptLevel, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
+         m, q, k, F, Y, FCache, XTile, YCache, YReg);
       }}}
     }
   }
