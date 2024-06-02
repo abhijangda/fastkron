@@ -245,7 +245,8 @@ template<uint Fused>
 struct FusedParams {
   uint XShFusedSlices;
   uint XglFusedSlices;
-  
+  static const uint32_t NumFused = Fused;
+
   FusedParams(KMMProblem problem, const uint TileSizeColsA) {
     const Factor factorPower = std::reduce(problem.fs(), problem.fs() + Fused, Factor(1,1), [](Factor prev, Factor curr) {
       return Factor(prev.p() * curr.p(), prev.q() * curr.q());

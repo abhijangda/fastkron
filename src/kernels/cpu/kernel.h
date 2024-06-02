@@ -644,15 +644,15 @@ void store(const FusedParams& fusedParams, uint32_t fac,
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
       constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-      const uint32_t XTileSlices = XTile.tileCols()/F.p();
-      const uint32_t XSlices     = Y.n()/F.q();
-
-      uint32_t memK;
       uint32_t slice = k/Fch.p() + rk*VectorLen;
+
       if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) return;
       if (!kQMultipleOfTileQ && tileQ + q + rq >= F.q()) return;
 
-      if (false) {//FusedFacs > 1) {
+      const uint32_t XTileSlices = XTile.tileCols()/F.p();
+      const uint32_t XSlices     = Y.n()/F.q();
+
+      if (fusedParams.NumFused > 1) {
         uint32_t xshCol = (rq + q) * XTileSlices + rk*VectorLen + k/Fch.p();
         //Scale shared mem slice idx to global mem idx
         uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
@@ -660,13 +660,13 @@ void store(const FusedParams& fusedParams, uint32_t fac,
         uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
         //Elem idx in Fused Slice
         uint32_t elem = (tileK/XTile.tileCols()) * fusedParams.XShFusedSlices + xshCol%fusedParams.XShFusedSlices;
-        memK = glSlice + sliceElem + elem; 
+        yN = glSlice + sliceElem + elem; 
       } else {
-        memK = (q + rq) * XSlices +
+        yN = (q + rq) * XSlices +
                 (tileK/XTile.tileCols()) * XTileSlices +
                 slice;
         if (Fch.q() < F.q()) {
-          memK += tileQ * XSlices;
+          yN += tileQ * XSlices;
         }
       }
 
