@@ -115,7 +115,9 @@ if(ENABLE_X86)
   endif()
   include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake OPTIONAL)
   if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc) 
-    set(X86_HEADER_FILES ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc)
+    set(X86_HEADER_FILES
+        ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
+        ${KERNELS}/cpu/vector-types.h)
   else()
     set(X86_HEADER_FILES)
   endif()
