@@ -117,7 +117,8 @@ if(ENABLE_X86)
   if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc) 
     set(X86_HEADER_FILES
         ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
-        ${KERNELS}/cpu/vector-types.h)
+        ${KERNELS}/cpu/vector-types.h
+        ${KERNELS}/cpu/tensor.h)
   else()
     set(X86_HEADER_FILES)
   endif()

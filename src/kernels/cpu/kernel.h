@@ -2,12 +2,13 @@
 #include <cstdlib>
 #include <omp.h>
 
-#include "vector-types.h"
-#include "kernels/cuda/fixed-shape-tensor.cuh"
+#include "kernels/cpu/vector-types.h"
+#include "kernels/cpu/tensor.h"
 
 #pragma once
 
 template<uint OptLevel, typename ElemT, fastKronOp OpF, typename DirectTileF>
+static CUDA_DEVICE_HOST inline
 void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t tileQ) {
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
@@ -34,6 +35,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 
 template<uint OptLevel, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
+static CUDA_DEVICE_HOST inline
 void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
                     TileX& XTile, XCache& Xch, YInterim& Ych) {
   const uint32_t VecTLen = X86VecT::VectorLen;
@@ -212,7 +214,7 @@ void threadWork(KernelParams<FusedFacs>& params,
   SliceCPU<ElemT, OpX, kKMultipleOfTileK, kTileKSame, TileM, kTileK> XTile(tileM, tileK, TileK, P, X);
 
   const uint tid = omp_get_thread_num();
-  YTempBuffer<ElemT, TileM, TileQ, kSlices> YCache((ElemT*)params.TileYs[tid]);
+  YInterim<ElemT, TileM, TileQ, kSlices> YCache((ElemT*)params.TileYs[tid]);
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
     TransposedDirectShared3D<fastKronOp_N, ElemT, TileM, TileP, kSlices> 
