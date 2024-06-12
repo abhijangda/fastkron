@@ -51,6 +51,7 @@ static std::string strOfFastKronType(FastKronType t) {
 }
 
 class Matrix {
+protected:
   uint32_t rows;
   uint32_t cols;
 
@@ -74,6 +75,10 @@ public:
   uint32_t n() const {return cols;}
   CUDA_DEVICE_HOST
   uint32_t numel() const {return rows * cols;}
+
+  Matrix shapeLike(void* ptr) const {
+    return Matrix(rows, cols, ptr);
+  }
 
   uint32_t rowSize() const {return cols;}
   uint32_t colSize() const {return rows;}
@@ -284,6 +289,10 @@ public:
   uint32_t p() const {return Matrix::m();}
   CUDA_DEVICE_HOST
   uint32_t q() const {return Matrix::n();}
+
+  Factor shapeLike(void* ptr) const {
+    return Factor(rows, cols, ptr);
+  }
 
 protected:
   CUDA_DEVICE_HOST

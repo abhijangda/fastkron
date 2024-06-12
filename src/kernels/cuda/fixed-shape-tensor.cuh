@@ -13,7 +13,7 @@ public:
   static uint32_t numel() {return M*N;}
 
   CUDA_DEVICE_HOST
-  uint32_t shape(uint32_t dim) const {
+  static constexpr uint32_t shape(uint32_t dim) {
     if (Layout == fastKronOp_N) {
       switch(dim) {
         case  0: return M;
@@ -59,6 +59,15 @@ public:
     // CUDA_DEVICE_ASSERT(linearIdx(i, j) < numel());
     data[linearIdx(i, j)] = val;
   }
+};
+
+template<typename T, uint32_t M, uint32_t N>
+class FixedShapeFactor : AbstractFixedShapeTensor2D<fastKronOp_N, T, M, N> {
+public:
+  FixedShapeFactor() : AbstractFixedShapeTensor2D<fastKronOp_N, T, M, N>() {}
+
+  static constexpr uint32_t P() {return M;}
+  static constexpr uint32_t Q() {return N;}
 };
 
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
