@@ -101,14 +101,14 @@ template<typename X86VecT,
          typename FCache, typename YInterim,
          typename YRegisters>
 static CUDA_DEVICE_HOST inline
-void load(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k, 
+void load(uint32_t tileP, const YElem& y,
           const FCache& Fch, YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
   if (tileP == 0) {
     YReg.zero();
   } else {
     YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
-      e.load(&Ych.at(m + ym, q + yq, k/Fch.p() + yk * VectorLen));
+      e.load(&Ych.at(y.m() + ym, y.q() + yq, y.k()/Fch.p() + yk * VectorLen));
     });
   }
 }
@@ -117,7 +117,7 @@ template<typename X86VecT,
          typename XCache, typename FCache, typename YInterim,
          typename YRegisters>
 static CUDA_DEVICE_HOST inline
-void mma(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k, 
+void mma(uint32_t tileP, const YElem& y, 
          const XCache& Xch, const FCache& Fch,
          YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
@@ -126,11 +126,11 @@ void mma(uint32_t tileP, uint32_t m, uint32_t q, uint32_t k,
     XRegisters<X86VecT, YReg.m(), YReg.k(), 1> XReg;
     FRegisters<X86VecT, 1, YReg.q()> FReg;
     XReg.apply([&](X86VecT& e, const uint32_t em, const uint32_t ek, const uint32_t ep) {
-    e.load(&Xch.at((m + em), k/Fch.p() + ek*VectorLen, p + ep));
+      e.load(&Xch.at(y.m() + em, y.k()/Fch.p() + ek*VectorLen, p + ep));
     });
 
     FReg.apply([&](X86VecT& e, const uint32_t ep, const uint32_t eq) {
-    e.broadcast(&Fch.at(p + ep, q + eq));
+      e.broadcast(&Fch.at(p + ep, y.q() + eq));
     });
 
     YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
@@ -146,30 +146,30 @@ template<uint OptLevel,
 static CUDA_DEVICE_HOST inline
 void store(const FusedParams& fusedParams, uint32_t fac,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
-           uint32_t m, uint32_t q, uint32_t k, 
+           const YElem& y, 
            const Factor& F, Matrix& Y, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
 
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
-      e.store(&Ych.at(m+rm, q + rq, k/Fch.p() + rk * VectorLen));
+      e.store(&Ych.at(y.m()+rm, y.q() + rq, y.k()/Fch.p() + rk * VectorLen));
     });
   } else {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
       constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-      uint32_t slice = k/Fch.p() + rk*VectorLen;
+      uint32_t slice = y.k()/Fch.p() + rk*VectorLen;
 
       if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) return;
-      if (!kQMultipleOfTileQ && tileQ + q + rq >= F.q()) return;
+      if (!kQMultipleOfTileQ && tileQ + y.q() + rq >= F.q()) return;
 
       const uint32_t XTileSlices = XTile.tileCols()/F.p();
       const uint32_t XSlices     = Y.n()/F.q();
       uint32_t yN;
 
       if (fusedParams.NumFused > 1) {
-        uint32_t xshCol = (rq + q) * XTileSlices + rk*VectorLen + k/Fch.p();
+        uint32_t xshCol = (rq + y.q()) * XTileSlices + rk*VectorLen + y.k()/Fch.p();
         //Scale shared mem slice idx to global mem idx
         uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
         //Scale shared fused slice to global mem
@@ -179,20 +179,20 @@ void store(const FusedParams& fusedParams, uint32_t fac,
                         xshCol%fusedParams.XShFusedSlices;
         yN = glSlice + sliceElem + elem; 
       } else {
-        yN = (q + rq) * XSlices +
-                (tileK/XTile.tileCols()) * XTileSlices +
-                slice;
+        yN = (y.q() + rq) * XSlices +
+             (tileK/XTile.tileCols()) * XTileSlices +
+             slice;
         if (Fch.q() < F.q()) {
           yN += tileQ * XSlices;
         }
       }
 
-      if (m + rm < XTile.m()) {
+      if (y.m() + rm < XTile.m()) {
         uint32_t slices = (kKMultipleOfTileK &&
                            XTile.tileCols() % VectorLen == 0) ? 
                            VectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(VectorLen, slices);
-        e.store(Y.data<ElemT>(tileM + m + rm, yN, fastKronOp_N), slices);
+        e.store(Y.data<ElemT>(tileM + y.m() + rm, yN, fastKronOp_N), slices);
     }});
   }
 }
@@ -226,23 +226,24 @@ void threadWork(KernelParams<FusedFacs>& params,
 
     //Transpose X data and store to TrXCache to reduce TLB misses
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
-      F = F.shapeLike(params.problem.f(fac).data());
+      F = F.sameShape(params.problem.f(fac).data());
 
       transposeCache<OptLevel, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache);
 
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.TileFs[tid]);
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 
-      for (uint32_t m = 0; m < XTile.m();     m += YRegisters::m())   {
+      for (uint32_t m = 0; m < XTile.m()    ; m += YRegisters::m())   {
       for (uint32_t q = 0; q < OptTileF::Q(); q += YRegisters::q())   {
       for (uint32_t k = 0; k < OptTileX::Slices() * OptTileF::P();
            k += YRegisters::k() * X86VecT::VectorLen * OptTileF::P()) {
         YRegisters YReg;
+        YElem y(m, q, k);
 
-        load<X86VecT>(tileP, m, q, k, FCache, YCache, YReg);
-        mma<X86VecT>(tileP, m, q, k, TrXCache, FCache, YCache, YReg);
+        load<X86VecT>(tileP, y, FCache, YCache, YReg);
+        mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
         store<OptLevel, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
-                                        m, q, k, F, Y, FCache, XTile, YCache, YReg);
+                                        y, F, Y, FCache, XTile, YCache, YReg);
       }}}
     }
   }

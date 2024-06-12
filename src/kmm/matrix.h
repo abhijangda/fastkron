@@ -76,7 +76,7 @@ public:
   CUDA_DEVICE_HOST
   uint32_t numel() const {return rows * cols;}
 
-  Matrix shapeLike(void* ptr) const {
+  Matrix sameShape(void* ptr) const {
     return Matrix(rows, cols, ptr);
   }
 
@@ -290,7 +290,7 @@ public:
   CUDA_DEVICE_HOST
   uint32_t q() const {return Matrix::n();}
 
-  Factor shapeLike(void* ptr) const {
+  Factor sameShape(void* ptr) const {
     return Factor(rows, cols, ptr);
   }
 
@@ -351,4 +351,4 @@ struct MatrixComparator {
     if (a.m() < b.m()) return true;
     return a.n() < b.n(); 
   }
-}; 
+};
