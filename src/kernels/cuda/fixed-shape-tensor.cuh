@@ -70,6 +70,16 @@ public:
   static constexpr uint32_t Q() {return N;}
 };
 
+template<typename T, uint32_t M_, uint32_t N_, uint32_t P_>
+class FixedShapeMatrix : AbstractFixedShapeTensor2D<fastKronOp_N, T, M_, N_> {
+public:
+  FixedShapeMatrix() : AbstractFixedShapeTensor2D<fastKronOp_N, T, M_, N_>() {}
+
+  static constexpr uint32_t M() {return M_;}
+  static constexpr uint32_t N() {return N_;}
+  static constexpr uint32_t Slices() {return N_/P_;}
+};
+
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
 class FixedShapeTensor2D : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;

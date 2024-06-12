@@ -198,8 +198,8 @@ void store(const FusedParams& fusedParams, uint32_t fac,
 }
 
 template<typename ElemT, typename X86VecT, 
-         typename MaxF, typename TileF, 
-         uint kTileK, uint TileM, 
+         typename OptF, typename OptTileF, 
+         typename OptTileX,
          uint FusedFacs, 
          typename YRegisters, uint OptLevel,
          fastKronOp OpX, fastKronOp OpF>
@@ -210,31 +210,30 @@ void threadWork(KernelParams<FusedFacs>& params,
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
-  constexpr uint32_t kSlices = kTileK/MaxF::P();
-
   const uint32_t K = X.n();
 
-  SliceCPU<ElemT, OpX, kKMultipleOfTileK, kTileKSame, TileM, kTileK> XTile(tileM, tileK, TileK, F.p(), X);
+  SliceCPU<ElemT, OpX, kKMultipleOfTileK, kTileKSame, OptTileX::M(), OptTileX::N()> XTile(tileM, tileK, TileK, F.p(), X);
 
   const uint tid = omp_get_thread_num();
-  YInterim<ElemT, TileM, TileF::Q(), kSlices> YCache((ElemT*)params.TileYs[tid]);
+  YInterim<ElemT, OptTileX::M(), OptTileF::Q(), OptTileX::Slices()> YCache((ElemT*)params.TileYs[tid]);
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-    TransposedDirectShared3D<fastKronOp_N, ElemT, TileM, TileF::P(), kSlices> 
+    TransposedDirectShared3D<fastKronOp_N, ElemT, OptTileX::M(), OptTileF::P(), OptTileX::Slices()> 
       TrXCache((ElemT*)params.TileXs[tid]);
 
     //Transpose X data and store to TrXCache to reduce TLB misses
-    for (uint32_t tileP = 0; tileP < F.p(); tileP += TileF::P()) {
+    for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       const Factor NextFac = F.shapeLike(params.problem.f(fac).data());
 
-      transposeCache<OptLevel, ElemT, X86VecT, OpX,FusedFacs>(X, NextFac, tileP, fac, XTile, TrXCache, YCache);
+      transposeCache<OptLevel, ElemT, X86VecT, OpX, FusedFacs>(X, NextFac, tileP, fac, XTile, TrXCache, YCache);
 
-      DirectShared<OpF, ElemT, TileF::P(), TileF::Q()> FCache((ElemT*)params.TileFs[tid]);
+      DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.TileFs[tid]);
       directCache<OptLevel, ElemT, OpF>(NextFac, FCache, tileP, tileQ);
 
       for (uint32_t m = 0; m < XTile.m(); m += YRegisters::m()) {
-      for (uint32_t q = 0; q < TileF::Q(); q += YRegisters::q()) {
-      for (uint32_t k = 0; k < kSlices * TileF::P(); k += YRegisters::k() * X86VecT::VectorLen * TileF::P()) {
+      for (uint32_t q = 0; q < OptTileF::Q(); q += YRegisters::q()) {
+      for (uint32_t k = 0; k < OptTileX::Slices() * OptTileF::P(); 
+           k += YRegisters::k() * X86VecT::VectorLen * OptTileF::P()) {
         YRegisters YReg;
 
         load<X86VecT>(tileP, m, q, k, FCache, YCache, YReg);
@@ -259,9 +258,10 @@ void cpuKernel(KernelParams<FusedFacs>& params,
   Matrix Y = params.problem.y();
   Factor F = params.problem.f(0);
 
-  using MaxF  = FixedShapeFactor<ElemT, MaxP, MaxQ>;
-  using TileF = FixedShapeFactor<ElemT, TileP, TileQ>;
+  using OptF  = FixedShapeFactor<ElemT, MaxP, MaxQ>;
+  using OptTileF = FixedShapeFactor<ElemT, TileP, TileQ>;
   using YRegs = YRegisters<X86VecT, RegM, RegK/X86VecT::VectorLen, RegQ>;
+  using OptTileX = FixedShapeMatrix<ElemT, TileM, kTileK, MaxP>;
 
   const uint32_t K = X.n();
 
@@ -289,7 +289,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
-      threadWork<ElemT, X86VecT, MaxF, TileF, kTileK, TileM, FusedFacs, YRegs, OptLevel, OpX, OpF> (
+      threadWork<ElemT, X86VecT, OptF, OptTileF, OptTileX, FusedFacs, YRegs, OptLevel, OpX, OpF> (
         params, fusedParams, tileM, tileK, tileQ, TileK, F, X, Y
       );
     }}}
@@ -298,7 +298,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < K    ; tileK += TileK) {
-      threadWork<ElemT, X86VecT, MaxF, TileF, kTileK, TileM, FusedFacs, YRegs, OptLevel, OpX, OpF> (
+      threadWork<ElemT, X86VecT, OptF, OptTileF, OptTileX, FusedFacs, YRegs, OptLevel, OpX, OpF> (
         params, fusedParams, tileM, tileK, tileQ, TileK, F, X, Y
       );
     }}}
