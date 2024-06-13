@@ -76,7 +76,7 @@ public:
   YInterim(T* data) : data(data) {}
   
   CUDA_DEVICE_HOST
-  uint32_t m()      const {return OptTileX::M;}
+  uint32_t m()      const {return OptTileX::M();}
   CUDA_DEVICE_HOST
   uint32_t slices() const {return OptTileX::N()/OptF::P();}
   CUDA_DEVICE_HOST
