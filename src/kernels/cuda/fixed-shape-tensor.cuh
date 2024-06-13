@@ -61,22 +61,24 @@ public:
   }
 };
 
-template<typename T, uint32_t M, uint32_t N>
-class FixedShapeFactor : AbstractFixedShapeTensor2D<fastKronOp_N, T, M, N> {
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
+class FixedShapeFactor : AbstractFixedShapeTensor2D<Layout, T, M, N> {
 public:
-  FixedShapeFactor() : AbstractFixedShapeTensor2D<fastKronOp_N, T, M, N>() {}
+  FixedShapeFactor() : AbstractFixedShapeTensor2D<Layout, T, M, N>() {}
 
-  static constexpr uint32_t P() {return M;}
-  static constexpr uint32_t Q() {return N;}
+  static constexpr fastKronOp Op() {return Layout;}
+  static constexpr uint32_t P()  {return M;}
+  static constexpr uint32_t Q()  {return N;}
 };
 
-template<typename T, uint32_t M_, uint32_t N_, uint32_t P_>
-class FixedShapeMatrix : AbstractFixedShapeTensor2D<fastKronOp_N, T, M_, N_> {
+template<fastKronOp Layout, typename T, uint32_t M_, uint32_t N_, uint32_t P_>
+class FixedShapeMatrix : AbstractFixedShapeTensor2D<Layout, T, M_, N_> {
 public:
-  FixedShapeMatrix() : AbstractFixedShapeTensor2D<fastKronOp_N, T, M_, N_>() {}
+  FixedShapeMatrix() : AbstractFixedShapeTensor2D<Layout, T, M_, N_>() {}
 
-  static constexpr uint32_t M() {return M_;}
-  static constexpr uint32_t N() {return N_;}
+  static constexpr fastKronOp Op() {return Layout;}
+  static constexpr uint32_t M()  {return M_;}
+  static constexpr uint32_t N()  {return N_;}
   static constexpr uint32_t Slices() {return N_/P_;}
 };
 

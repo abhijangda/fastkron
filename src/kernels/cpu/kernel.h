@@ -215,7 +215,7 @@ void threadWork(KernelParams<FusedFacs>& params,
   Factor F = (kFactorShapeSame) ? Factor(OptF::P(), OptF::Q(), params.problem.f(0).data()) :
                                   params.problem.f(0);
 
-  SliceCPU<ElemT, OpX, kKMultipleOfTileK, kTileKSame, OptTileX::M(), OptTileX::N()> XTile(tileM, tileK, TileK, F.p(), X);
+  SliceCPU<ElemT, kKMultipleOfTileK, kTileKSame, OptTileX> XTile(tileM, tileK, TileK, F.p(), X);
 
   const uint tid = omp_get_thread_num();
   YInterim<ElemT, OptTileX::M(), OptTileF::Q(), OptTileX::Slices()> YCache((ElemT*)params.TileYs[tid]);
@@ -258,10 +258,10 @@ void cpuKernel(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams,
                DistributedParams& distParams,
                EpilogueParams& epilogueParams) {
-  using OptF  = FixedShapeFactor<ElemT, MaxP, MaxQ>;
-  using OptTileF = FixedShapeFactor<ElemT, TileP, TileQ>;
+  using OptF  = FixedShapeFactor<fastKronOp_N, ElemT, MaxP, MaxQ>;
+  using OptTileF = FixedShapeFactor<OpF, ElemT, TileP, TileQ>;
   using YRegs = YRegisters<X86VecT, RegM, RegK/X86VecT::VectorLen, RegQ>;
-  using OptTileX = FixedShapeMatrix<ElemT, TileM, kTileK, MaxP>;
+  using OptTileX = FixedShapeMatrix<OpX, ElemT, TileM, kTileK, MaxP>;
 
   static_assert(RegM == TileM, "x86 requires RegM == TileM");
 
