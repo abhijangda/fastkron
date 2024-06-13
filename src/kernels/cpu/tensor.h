@@ -2,10 +2,10 @@
 
 #pragma once
 
-template<fastKronOp Layout, typename T, 
-         uint32_t kM, uint32_t kP, uint32_t kSlices>
-class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP> {
-  using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
+template<typename T, 
+         typename OptTileX, typename OptF, typename OptTileF>
+class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<fastKronOp_N, T, OptTileX::M(), OptTileX::N()> {
+  using Base = AbstractFixedShapeTensor2D<fastKronOp_N, T, OptTileX::M(), OptTileX::N()>;
   T* data;
 
 public:
@@ -56,19 +56,19 @@ public:
   uint32_t numel() const {return m() * n();}
   
   CUDA_DEVICE_HOST
-  uint32_t slices() const {return kSlices;}
+  uint32_t slices() const {return OptTileX::N()/OptF::P();}
 
   CUDA_DEVICE_HOST
-  uint32_t m() const {return kM;}
+  uint32_t m() const {return OptTileX::M();}
   CUDA_DEVICE_HOST
-  uint32_t n() const {return slices() * p();}
+  uint32_t n() const {return OptTileX::N();}
   CUDA_DEVICE_HOST
-  uint32_t p() const {return kP;}
+  uint32_t p() const {return OptTileF::P();}
 };
 
-template<typename T, uint32_t M, uint32_t Q, uint32_t Slices>
-class YInterim : public AbstractFixedShapeTensor3D<T, M, Q, Slices> {
-  using Base = AbstractFixedShapeTensor3D<T, M, Q, Slices>;
+template<typename T, typename OptTileX, typename OptTileF, typename OptF>
+class YInterim : public AbstractFixedShapeTensor3D<T, OptTileX::M(), OptTileF::Q(), OptTileX::N()/OptF::P()> {
+  using Base = AbstractFixedShapeTensor3D<T, OptTileX::M(), OptTileF::Q(), OptTileX::N()/OptF::P()>;
   T* data;
 
 public:
@@ -76,11 +76,11 @@ public:
   YInterim(T* data) : data(data) {}
   
   CUDA_DEVICE_HOST
-  uint32_t m() const {return M;}
+  uint32_t m()      const {return OptTileX::M;}
   CUDA_DEVICE_HOST
-  uint32_t slices() const {return Slices;}
+  uint32_t slices() const {return OptTileX::N()/OptF::P();}
   CUDA_DEVICE_HOST
-  uint32_t q() const {return Q;}
+  uint32_t q()      const {return OptTileF::Q();}
 
   CUDA_DEVICE_HOST
   T& at(const uint32_t m, const uint32_t q, const uint32_t slice) {

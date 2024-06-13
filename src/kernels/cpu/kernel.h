@@ -218,10 +218,10 @@ void threadWork(KernelParams<FusedFacs>& params,
   SliceCPU<ElemT, kKMultipleOfTileK, kTileKSame, OptTileX> XTile(tileM, tileK, TileK, F.p(), X);
 
   const uint tid = omp_get_thread_num();
-  YInterim<ElemT, OptTileX::M(), OptTileF::Q(), OptTileX::Slices()> YCache((ElemT*)params.TileYs[tid]);
+  YInterim<ElemT, OptTileX, OptTileF, OptF> YCache((ElemT*)params.TileYs[tid]);
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-    TransposedDirectShared3D<fastKronOp_N, ElemT, OptTileX::M(), OptTileF::P(), OptTileX::Slices()> 
+    TransposedDirectShared3D<ElemT, OptTileX, OptF, OptTileF> 
       TrXCache((ElemT*)params.TileXs[tid]);
 
     //Transpose X data and store to TrXCache to reduce TLB misses
