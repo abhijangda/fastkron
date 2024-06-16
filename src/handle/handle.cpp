@@ -135,7 +135,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   auto kernelDb = getKernelDb(backend);
 
   TunedKernelsSeries kernelSeries;
-  if (env::getTune()) {
+  if (canTune()) {
     uint32_t Ps[problem.n()];
     uint32_t Qs[problem.n()];
     problem.ps(Ps);
@@ -283,7 +283,6 @@ autotuner(*this)
 #endif
 {
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
-  useFusion_ = true;  
 }
 
 void FastKronHandle::free() {

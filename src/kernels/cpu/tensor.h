@@ -2,6 +2,65 @@
 
 #pragma once
 
+//TODO: Think about this
+template<typename T, bool isKMultipleOfTileK, bool isTileKSame,
+         typename OptTileX>
+class SliceCPU {
+public:
+  const Matrix parent;
+  //TODO: Create Coord2D
+  uint32_t startrow;
+  uint32_t startcol;
+  uint32_t tileRows_;
+  uint32_t tileCols_;
+  uint32_t rows;
+  uint32_t cols;
+  uint32_t P;
+  T* ptr;
+
+public:
+  CUDA_DEVICE_HOST
+  SliceCPU(uint32_t startrow, uint32_t startcol, uint32_t paramTileK, uint32_t P, Matrix parent) :
+    startrow(startrow), startcol(startcol),
+    tileRows_(OptTileX::M()),
+    P(P), parent(parent),
+    ptr(parent.data<T>(startrow, startcol, OptTileX::Op())) {
+      tileCols_ = isTileKSame ? OptTileX::N() : paramTileK;
+      rows = (tileRows_ == 1) ? 1 : MIN(tileRows_, parent.m() - startrow);
+      cols = isKMultipleOfTileK ? tileCols() : MIN(tileCols(), parent.n() - startcol);
+    }
+
+  CUDA_DEVICE_HOST
+  const T* data(uint32_t row, uint32_t slice, uint32_t elem) const {
+    //TODO: get common parts out
+    if (OptTileX::Op() == fastKronOp_N) {
+      uint32_t idx = row * parent.n();
+      idx += slice*P + elem;
+      return &ptr[idx];
+    } else if (OptTileX::Op() == fastKronOp_T) {
+      uint32_t idx = slice*P + elem;
+      idx = idx * parent.m() + row;
+      return &ptr[idx];
+    }
+  }
+
+  CUDA_DEVICE_HOST
+  const T* data(uint32_t idx) const {
+    return &ptr[idx];
+  }
+
+  CUDA_DEVICE_HOST
+  uint32_t m() const {return rows;}
+  CUDA_DEVICE_HOST
+  uint32_t n() const {return cols;}
+  CUDA_DEVICE_HOST
+  uint32_t numel() const {return rows * cols;}
+  CUDA_DEVICE_HOST
+  uint32_t tileRows() const {return tileRows_;}
+  CUDA_DEVICE_HOST
+  uint32_t tileCols() const {return isTileKSame ? OptTileX::N() : tileCols_;}
+};
+
 template<typename T, 
          typename OptTileX, typename OptF, typename OptTileF>
 class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<fastKronOp_N, T, OptTileX::M(), OptTileX::N()> {

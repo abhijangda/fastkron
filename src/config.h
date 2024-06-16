@@ -8,6 +8,6 @@
     #define CUDA_DEVICE_HOST CUDA_HOST CUDA_DEVICE
 #else
     #define CUDA_HOST
-    #define CUDA_DEVICE
+    #define CUDA_DEVICE inline
     #define CUDA_DEVICE_HOST CUDA_HOST CUDA_DEVICE
 #endif

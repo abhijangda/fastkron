@@ -24,6 +24,12 @@ enum fastKronBackend {
   fastKronBackend_HIP = 1 << 4
 };
 
+enum fastKronOptions {
+  fastKronOptionsNone = 0,
+  fastKronOptionsUseFusion = 1 << 0,
+  fastKronOptionsTune = 1 << 1,
+};
+
 enum fastKronError {
   fastKronSuccess = 0,
   //FastKron not compiled with requested backend
@@ -45,6 +51,7 @@ typedef struct FastKronHandle* fastKronHandle;
 
 //backends is a bitwise OR
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends);
+fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options);
 void fastKronDestroy(fastKronHandle handle);
 
 const char* fastKronGetErrorString(fastKronError err);
@@ -58,15 +65,24 @@ fastKronError fastKronInitX86(fastKronHandle handle);
 fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                        size_t* resultSize, size_t* tempSize);
 
-fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], float* X, 
-                   fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
-                   float alpha, float beta, float *Z, float* temp1, float* temp2);
-fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], int* X, 
-                   fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
-                   int alpha, int beta, int *Z, int* temp1, int* temp2);
-fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], double* X, 
-                   fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
-                   double alpha, double beta, double *Z, double* temp1, double* temp2);
+fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
+                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                     float* X, fastKronOp opX,
+                     float* Fs[], fastKronOp opFs,
+                     float* Y, float alpha, float beta,
+                     float *Z, float* temp1, float* temp2);
+fastKronError igekmm(fastKronHandle handle, fastKronBackend backend,
+                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                     int* X, fastKronOp opX,
+                     int* Fs[], fastKronOp opFs, 
+                     int* Y, int alpha, int beta,
+                     int *Z, int* temp1, int* temp2);
+fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
+                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                     double* X, fastKronOp opX,
+                     double* Fs[], fastKronOp opFs,
+                     double* Y, double alpha, double beta,
+                     double *Z, double* temp1, double* temp2);
 
 // fastKronError sgekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
 //                        fastKronOp opX, fastKronOp opFs);

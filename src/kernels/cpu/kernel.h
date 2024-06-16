@@ -8,7 +8,7 @@
 #pragma once
 
 template<uint OptLevel, typename ElemT, fastKronOp OpF, typename DirectTileF>
-static CUDA_DEVICE_HOST inline
+static CUDA_DEVICE_HOST
 void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t tileQ) {
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
@@ -35,7 +35,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 
 template<uint OptLevel, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
-static CUDA_DEVICE_HOST inline
+static CUDA_DEVICE_HOST
 void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
                     TileX& XTile, XCache& Xch, YInterim& Ych) {
   const uint32_t VecTLen = X86VecT::VectorLen;
@@ -100,7 +100,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
 template<typename X86VecT, 
          typename FCache, typename YInterim,
          typename YRegisters>
-static CUDA_DEVICE_HOST inline
+static CUDA_DEVICE_HOST
 void load(uint32_t tileP, const YElem& y,
           const FCache& Fch, YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
@@ -116,7 +116,7 @@ void load(uint32_t tileP, const YElem& y,
 template<typename X86VecT, 
          typename XCache, typename FCache, typename YInterim,
          typename YRegisters>
-static CUDA_DEVICE_HOST inline
+static CUDA_DEVICE_HOST
 void mma(uint32_t tileP, const YElem& y, 
          const XCache& Xch, const FCache& Fch,
          YInterim& Ych, YRegisters& YReg) {
@@ -143,7 +143,7 @@ template<uint OptLevel,
          typename ElemT, typename X86VecT,
          typename FusedParams,
          typename TileX, typename FCache, typename YInterim, typename YRegisters>
-static CUDA_DEVICE_HOST inline
+static CUDA_DEVICE_HOST
 void store(const FusedParams& fusedParams, uint32_t fac,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
            const YElem& y, 
@@ -203,8 +203,8 @@ template<typename ElemT, typename X86VecT,
          typename OptF, typename OptTileF, typename OptTileX,
          typename YRegisters>
 void threadWork(KernelParams<FusedFacs>& params,
-               FusedParams<FusedFacs>& fusedParams, 
-               uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
+                FusedParams<FusedFacs>& fusedParams, 
+                uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
@@ -224,26 +224,27 @@ void threadWork(KernelParams<FusedFacs>& params,
     TransposedDirectShared3D<ElemT, OptTileX, OptF, OptTileF> 
       TrXCache((ElemT*)params.TileXs[tid]);
 
-    //Transpose X data and store to TrXCache to reduce TLB misses
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
-      F = F.sameShape(params.problem.f(fac).data());
-
-      transposeCache<OptLevel, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache);
-
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.TileFs[tid]);
+
+      F = F.sameShape(params.problem.f(fac).data());
+      //Transpose X data and store to TrXCache to reduce TLB misses
+      transposeCache<OptLevel, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache);
+      //Store F to FCache to reduce TLB misses
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 
       for (uint32_t m = 0; m < XTile.m()    ; m += YRegisters::m())   {
       for (uint32_t q = 0; q < OptTileF::Q(); q += YRegisters::q())   {
-      for (uint32_t k = 0; k < OptTileX::Slices() * OptTileF::P();
-           k += YRegisters::k() * X86VecT::VectorLen * OptTileF::P()) {
-        YRegisters YReg;
-        YElem y(m, q, k);
+        const uint32_t TileSlices = (OptTileX::N()/OptF::P()) * OptTileF::P();
+        const uint32_t SlicesIncr = YRegisters::k() * X86VecT::VectorLen * OptTileF::P();
+        for (uint32_t k = 0; k < TileSlices; k += SlicesIncr) {
+          YRegisters YReg;
+          YElem y(m, q, k);
 
-        load<X86VecT>(tileP, y, FCache, YCache, YReg);
-        mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
-        store<OptLevel, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
-                                        y, F, Y, FCache, XTile, YCache, YReg);
+          load<X86VecT>(tileP, y, FCache, YCache, YReg);
+          mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
+          store<OptLevel, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
+                                          y, F, Y, FCache, XTile, YCache, YReg);
       }}}
     }
   }
@@ -261,7 +262,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
   using OptF  = FixedShapeFactor<fastKronOp_N, ElemT, MaxP, MaxQ>;
   using OptTileF = FixedShapeFactor<OpF, ElemT, TileP, TileQ>;
   using YRegs = YRegisters<X86VecT, RegM, RegK/X86VecT::VectorLen, RegQ>;
-  using OptTileX = FixedShapeMatrix<OpX, ElemT, TileM, kTileK, MaxP>;
+  using OptTileX = FixedShapeMatrix<OpX, ElemT, TileM, kTileK>;
 
   static_assert(RegM == TileM, "x86 requires RegM == TileM");
 

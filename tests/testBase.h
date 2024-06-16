@@ -410,7 +410,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
                 fastKronOp opx, fastKronOp opfs,
                 uint numIters, uint warmup, 
                 bool useUVA, int gpuInRows, int gpuInCols, int gpus,
-                uint kronBatch, bool checkResults, bool useFusion, bool tune, fastKronBackend backend, bool verbose) {
+                uint kronBatch, bool checkResults, bool useFusion, 
+                bool tune, fastKronBackend backend, bool verbose) {
   verbose = true;
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
@@ -454,7 +455,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   fastKronHandle handle;
   if (verbose) printf("allocating\n");
   FastKronCHECK(fastKronInit(&handle, backend));
-  handle->setUseFusion(useFusion);
+  uint32_t options = 0;
+  if (useFusion) options = options | fastKronOptionsUseFusion;
+  if (tune) options = options | fastKronOptionsTune;
+  fastKronSetOptions(handle, options);
+
   switch (backend) {
     case fastKronBackend_CUDA:
       #ifdef TEST_BACKEND_CUDA

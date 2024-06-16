@@ -94,9 +94,18 @@ struct FastKronHandle {
   void free();
 
   //Options
-  bool useFusion_;
-  void setUseFusion(bool v) {useFusion_ = v;}
-  bool getUseFusion()       {return useFusion_;}
+  uint32_t options;
+
+  void setOptions(uint32_t options) {this->options = options;}
+  bool canTune() {
+    return (options & fastKronOptionsTune) ==
+            fastKronOptionsTune;
+  }
+
+  bool getUseFusion() {
+    return (options & fastKronOptionsUseFusion) ==
+            fastKronOptionsUseFusion;
+  }
   
   //SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
   //KernelInfo selectKernel(SlicedMulShape shape);

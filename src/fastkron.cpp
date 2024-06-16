@@ -12,10 +12,18 @@
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   FastKronHandle* h = new FastKronHandle(backends);
   *handle = h;
+  uint32_t fastKronOptionsAll = fastKronOptionsUseFusion;
+  fastKronSetOptions(*handle, fastKronOptionsAll);
+
   return (h->hasBackend(fastKronBackend_X86) || 
           h->hasBackend(fastKronBackend_CUDA) ||
           h->hasBackend(fastKronBackend_HIP)) ? 
           fastKronSuccess : fastKronInvalidArgument;
+}
+
+fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options) {
+  handle->setOptions(options);
+  return fastKronSuccess;
 }
 
 void fastKronDestroy(fastKronHandle handle) {
