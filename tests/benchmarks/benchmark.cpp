@@ -63,6 +63,8 @@ int main(int argc, char* argv[]) {
   bool useFusion = false;
   bool tune = false;
   fastKronBackend backend = fastKronBackend_NONE;
+  char* alpha;
+  char* beta;
 
   AnyOption *opt = new AnyOption();
 
@@ -90,6 +92,8 @@ int main(int argc, char* argv[]) {
   opt->setOption("type", 't');
   opt->setOption("runs", 'r');
   opt->setOption("warmup", 'w');
+  opt->setOption("alpha", 'a');
+  opt->setOption("beta", 'b');
   
   opt->setFlag("check", 'c');
   opt->setFlag("uva", 'u');
@@ -109,6 +113,20 @@ int main(int argc, char* argv[]) {
     opt->printUsage();
     delete opt;
     return 1;
+  }
+
+  if (opt->getValue('a') == NULL) {
+    std::cout << "Value of --alpha not provided " << std::endl;
+    return 1;
+  } else {
+    alpha = opt->getValue('a');
+  }
+
+  if (opt->getValue('b') == NULL) {
+    std::cout << "Value of --beta not provided " << std::endl;
+    return 1;
+  } else {
+    beta = opt->getValue('b');
   }
 
   if (opt->getValue("backend") == NULL) {
@@ -242,11 +260,11 @@ int main(int argc, char* argv[]) {
 
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
+    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, atof(alpha), atof(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
+    status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, atoi(alpha), atoi(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
+    status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, (double)atof(alpha), (double)atof(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else
     printf("type not supported %s\n", type);
 

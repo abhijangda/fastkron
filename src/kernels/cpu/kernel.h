@@ -141,10 +141,11 @@ void mma(uint32_t tileP, const YElem& y,
 
 template<uint OptLevel,
          typename ElemT, typename X86VecT,
-         typename FusedParams,
+         typename KernelParams, typename FusedParams,
          typename TileX, typename FCache, typename YInterim, typename YRegisters>
 static CUDA_DEVICE_HOST
-void store(const FusedParams& fusedParams, uint32_t fac,
+void store(const KernelParams& params, const FusedParams& fusedParams, const EpilogueParams& epilogueParams, 
+           uint32_t fac,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
            const YElem& y, 
            const Factor& F, Matrix& Y, FCache& Fch, TileX& XTile,
@@ -192,6 +193,23 @@ void store(const FusedParams& fusedParams, uint32_t fac,
                            XTile.tileCols() % VectorLen == 0) ? 
                            VectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(VectorLen, slices);
+        // if (params.getD<ElemT>() != nullptr) {
+        //   e.
+        // }
+
+        if (params.kp_idx == 0) {
+          if (epilogueParams.getD<ElemT>() != nullptr &&
+              epilogueParams.getBeta<ElemT>() != (ElemT)0) {
+            X86VecT z;
+            const ElemT* Z = epilogueParams.getD<ElemT>();
+            z.load(&Z[(tileM + y.m() + rm) * Y.n() + yN], slices);
+            z.mul(epilogueParams.getBeta<ElemT>());
+            z.fmadd(epilogueParams.getAlpha<ElemT>(), e);
+            e = z;
+          } else {
+            e.mul(epilogueParams.getAlpha<ElemT>());
+          }
+        }
         e.store(Y.data<ElemT>(tileM + y.m() + rm, yN, fastKronOp_N), slices);
     }});
   }
@@ -203,7 +221,8 @@ template<typename ElemT, typename X86VecT,
          typename OptF, typename OptTileF, typename OptTileX,
          typename YRegisters>
 void threadWork(KernelParams<FusedFacs>& params,
-                FusedParams<FusedFacs>& fusedParams, 
+                FusedParams<FusedFacs>& fusedParams,
+                EpilogueParams& epilogueParams,
                 uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
   constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
@@ -243,7 +262,7 @@ void threadWork(KernelParams<FusedFacs>& params,
 
           load<X86VecT>(tileP, y, FCache, YCache, YReg);
           mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
-          store<OptLevel, ElemT, X86VecT>(fusedParams, fac, tileM, tileK, tileP, tileQ,
+          store<OptLevel, ElemT, X86VecT>(params, fusedParams, epilogueParams, fac, tileM, tileK, tileP, tileQ,
                                           y, F, Y, FCache, XTile, YCache, YReg);
       }}}
     }
@@ -292,7 +311,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
       threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-        params, fusedParams, tileM, tileK, tileQ, TileK
+        params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
       );
     }}}
   } else if (OpX == fastKronOp_T) {
@@ -301,7 +320,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
       threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-        params, fusedParams, tileM, tileK, tileQ, TileK
+        params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
       );
     }}}
   }
