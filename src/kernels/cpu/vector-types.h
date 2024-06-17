@@ -14,8 +14,8 @@ static inline void vectorZero(VecT& data);
 template<typename VecT>
 inline void vectorFMA(const VecT& a, const VecT& b, VecT& c);
 
-template<typename ElemT, typename VecT>
-inline void vectorMul(const ElemT& a, const VecT& b, VecT& c);
+template<typename VecT>
+inline void vectorMul(const VecT& a, const VecT& b, VecT& c);
 
 template<typename ElemT, typename VecT>
 static inline void vectorGather(const ElemT* base, const uint32_t* gatherIdxs, VecT& data);
@@ -152,9 +152,8 @@ inline void vectorFMA(const __m256& a, const __m256& b, __m256& c) {
 }
 
 template<>
-inline void vectorMul(const float& a, const __m256& b, __m256& c) {
-  __m256 avec = _mm256_set1_ps(a);
-  c = _mm256_mul_ps(avec, b);
+inline void vectorMul(const __m256& a, const __m256& b, __m256& c) {
+  c = _mm256_mul_ps(a, b);
 }
 
 template<>
@@ -163,9 +162,8 @@ inline void vectorFMA(const __m256d& a, const __m256d& b, __m256d& c) {
 }
 
 template<>
-inline void vectorMul(const double& a, const __m256d& b, __m256d& c) {
-  __m256d avec = _mm256_set1_pd(a);
-  c = _mm256_mul_pd(avec, b);
+inline void vectorMul(const __m256d& a, const __m256d& b, __m256d& c) {
+  c = _mm256_mul_pd(a, b);
 }
 
 template<>
@@ -238,9 +236,8 @@ inline void vectorFMA(const __m512& a, const __m512& b, __m512& c) {
 }
 
 template<>
-inline void vectorMul(const float& a, const __m512& b, __m512& c) {
-  __m512 avec = _mm512_set1_ps(a);
-  c = _mm512_mul_ps(avec, b);
+inline void vectorMul(const __m512& a, const __m512& b, __m512& c) {
+  c = _mm512_mul_ps(a, b);
 }
 
 template<>
@@ -249,9 +246,8 @@ inline void vectorFMA(const __m512d& a, const __m512d& b, __m512d& c) {
 }
 
 template<>
-inline void vectorMul(const double& a, const __m512d& b, __m512d& c) {
-  __m512d avec = _mm512_set1_pd(a);
-  c = _mm512_mul_pd(avec, b);
+inline void vectorMul(const __m512d& a, const __m512d& b, __m512d& c) {
+  c = _mm512_mul_pd(a, b);
 }
 
 template<>
@@ -340,8 +336,8 @@ public:
     vectorGather(base, gatherIdxs, vec.data);
   }
 
-  void mul(ElemT a) {
-    vectorMul<ElemT, UnderlyingVecT>(a, vec.data, vec.data);
+  void mul(const X86Vector<ElemT, VecT>& a) {
+    vectorMul<UnderlyingVecT>(a.vec.data, vec.data, vec.data);
   }
 
   const typename VecT::VecT& data() {return vec.data;}
