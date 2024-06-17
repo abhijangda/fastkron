@@ -339,7 +339,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
         threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
             params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
         );
-      } else if (hasAlpha && hasBeta) {
+      } else if (hasBeta) {
         threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
             params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
         );
@@ -359,7 +359,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
         threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
             params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
         );
-      } else if (hasAlpha && hasBeta) {
+      } else if (hasBeta) {
         threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
             params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
         );
