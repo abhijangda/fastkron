@@ -82,7 +82,8 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
           }
 
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
-            if ((EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
+            if (fac == FusedFacs - 1 && 
+                (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
               slices[pp].mul(alphaVec);
             slices[pp].store(&Xch.at(m, k/F.p(), p+pp));
           }
@@ -94,8 +95,9 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
                                   XTile.data(m, k/F.p() + slice, tileP + p) :
                                   &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
               ElemT val = *ptr;
-              if ((EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
-                val = val * alpha;
+              if (fac == FusedFacs - 1 &&
+                  (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+                val = alpha * val;
               }
               Xch.at(m, k/F.p() + slice, p) = val;
             }
@@ -323,7 +325,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
   const bool hasAlpha  = epilogueParams.getAlpha<ElemT>() != (ElemT)1.0f;
   const bool hasBeta   = epilogueParams.getD<ElemT>() != nullptr && 
                          epilogueParams.getBeta<ElemT>() != (ElemT)0;
-  const bool notLastFactor = params.kp_idx > 0;
+  const bool notLastFactor = params.kp_idx > FusedFacs - 1;
 
   if (OpX == fastKronOp_N) {
     #pragma omp parallel for collapse(3)

@@ -550,7 +550,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       //Already done by allocDistributedX
     } else {
       FastKronCHECK(backendMemcpyHostToDevice(backend, dX[0], hX, sizeX));
-      FastKronCHECK(backendMemcpyHostToDevice(backend, dY[0], hY, sizeX));
+      FastKronCHECK(backendMemcpyHostToDevice(backend, dY[0], hY, resultSize));
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
@@ -742,6 +742,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
     FastKronCHECK(backendFree(backend, dX[g]));
+    FastKronCHECK(backendFree(backend, dY[g]));
     for (uint i = 0; i < NUM_KP_MATS; i++) {
       FastKronCHECK(backendFree(backend, dKpMats[g * NUM_KP_MATS + i]));
     }
@@ -753,6 +754,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   
   //Free CPU RAM
   delete[] hX;
+  delete[] hY;
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     delete[] hKpMats[i];
     if (checkResults) delete[] hKpMatmulResult[i];

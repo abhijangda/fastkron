@@ -15,7 +15,7 @@
         KP_MAT_K[i] = P;\
         KP_MAT_N[i] = Q;\
     }\
-    result = result and run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_T, fastKronOp_T, 1, 0, false, 1, 1, 1, 1, true, true, Tune, getTestBackend(), false);\
+    result = result and run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_T, fastKronOp_T, (Type)2.0f, (Type)3.0f, 1, 0, false, 1, 1, 1, 1, true, true, Tune, getTestBackend(), false);\
     if (!result) abort();\
   }\
   EXPECT_TRUE(result);\
