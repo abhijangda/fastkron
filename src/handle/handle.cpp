@@ -135,6 +135,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   auto kernelDb = getKernelDb(backend);
 
   TunedKernelsSeries kernelSeries;
+
   if (canTune()) {
     uint32_t Ps[problem.n()];
     uint32_t Qs[problem.n()];

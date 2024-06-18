@@ -214,14 +214,14 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       } else {
         cIdx = glM * Y.n() + glK;
         outputArray = (ElemT*)params.problem.y().data() + cIdx;
-        if (params.kp_idx == 0) {
+        if (params.kp_idx == FusedFacs - 1) {
           #pragma unroll
           for (int i = 0; i < StLen; i++) {
             yReg.set(rm, tk+i, tq,
               epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
-       }
+          }
+        }
       }
-    }
-    stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
+      stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
   }}}}
 }

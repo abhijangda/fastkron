@@ -86,7 +86,6 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
 
 fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend, TunedKernelsSeries& retKernelSeries) {
   //Only row major layout of all matrics is supported.
-  if (!env::getTune()) return fastKronSuccess;
   auto kernelDb = fastKron.getKernelDb(backend);
 
   if (tunedKernelSeries[kernelDb].count(problem) == 1) {

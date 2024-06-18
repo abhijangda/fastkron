@@ -31,9 +31,4 @@ namespace env {
     //Use fusion by default
     return boolFromIntEnv(FUSION, true);
   }
-
-  bool getTune() {
-    //DO tuning by default
-    return boolFromIntEnv(TUNE, true);
-  }
 }
