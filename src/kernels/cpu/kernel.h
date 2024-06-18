@@ -7,6 +7,12 @@
 
 #pragma once
 
+enum EpilogueKind {
+  None = 0,
+  Alpha = 1 << 0,
+  Beta = 1 << 1
+};
+
 template<uint OptLevel, typename ElemT, fastKronOp OpF, typename DirectTileF>
 static CUDA_DEVICE_HOST
 void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t tileQ) {
@@ -33,11 +39,11 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
   }
 }
 
-template<uint OptLevel, typename ElemT, typename X86VecT, fastKronOp OpX,
+template<uint OptLevel, uint32_t EpilogueKindVal, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
 static CUDA_DEVICE_HOST
 void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
-                    TileX& XTile, XCache& Xch, YInterim& Ych) {
+                    TileX& XTile, XCache& Xch, YInterim& Ych, X86VecT alphaVec, ElemT alpha) {
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   const bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
@@ -76,6 +82,8 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
           }
 
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
+            if ((EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
+              slices[pp].mul(alphaVec);
             slices[pp].store(&Xch.at(m, k/F.p(), p+pp));
           }
         } else {
@@ -85,7 +93,11 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
               const ElemT* ptr = (fac == FusedFacs - 1) ? 
                                   XTile.data(m, k/F.p() + slice, tileP + p) :
                                   &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
-              Xch.at(m, k/F.p() + slice, p) = *ptr;
+              ElemT val = *ptr;
+              if ((EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+                val = val * alpha;
+              }
+              Xch.at(m, k/F.p() + slice, p) = val;
             }
           }
 
@@ -96,12 +108,6 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
     }
   }
 }
-
-enum EpilogueKind {
-  None = 0,
-  Alpha = 1 << 0,
-  Beta = 1 << 1
-};
 
 template<typename X86VecT, 
          typename FCache, typename YInterim,
@@ -151,13 +157,14 @@ template<uint OptLevel, uint32_t EpilogueKindVal,
          typename TileX, typename FCache, typename YInterim, typename YRegisters>
 static CUDA_DEVICE_HOST
 void store(const KernelParams& params, const FusedParams& fusedParams, const EpilogueParams& epilogueParams, 
-           X86VecT alpha, X86VecT beta,
+           X86VecT beta,
            uint32_t fac,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
            const YElem& y, 
            const Factor& F, Matrix& Y, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
+  const ElemT* Z = epilogueParams.getD<ElemT>();
 
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
@@ -201,17 +208,10 @@ void store(const KernelParams& params, const FusedParams& fusedParams, const Epi
                            VectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(VectorLen, slices);
 
-        if (EpilogueKindVal != EpilogueKind::None) {
-          if ((EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
-            e.mul(alpha);
-          }
-
-          if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
-            X86VecT z;
-            const ElemT* Z = epilogueParams.getD<ElemT>();
-            z.load(&Z[(tileM + y.m() + rm) * Y.n() + yN], slices);
-            e.fmadd(beta, z);
-          }
+        if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
+          X86VecT z;
+          z.load(&Z[(tileM + y.m() + rm) * Y.n() + yN], slices);
+          e.fmadd(beta, z);
         }
         e.store(Y.data<ElemT>(tileM + y.m() + rm, yN, fastKronOp_N), slices);
     }});
@@ -263,7 +263,7 @@ void threadWork(KernelParams<FusedFacs>& params,
 
       F = F.sameShape(params.problem.f(fac).data());
       //Transpose X data and store to TrXCache to reduce TLB misses
-      transposeCache<OptLevel, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache);
+      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache, alphaVec, epilogueParams.getAlpha<ElemT>());
       //Store F to FCache to reduce TLB misses
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 
@@ -277,7 +277,7 @@ void threadWork(KernelParams<FusedFacs>& params,
 
           load<X86VecT>(tileP, y, FCache, YCache, YReg);
           mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
-          store<OptLevel, EpilogueKindVal, ElemT, X86VecT>(params, fusedParams, epilogueParams, alphaVec, betaVec,
+          store<OptLevel, EpilogueKindVal, ElemT, X86VecT>(params, fusedParams, epilogueParams, betaVec,
           fac, tileM, tileK, tileP, tileQ,
                                           y, F, Y, FCache, XTile, YCache, YReg);
       }}}
@@ -334,8 +334,7 @@ void cpuKernel(KernelParams<FusedFacs>& params,
         threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
           params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
         );
-      }
-      else if (hasAlpha && !hasBeta) {
+      } else if (hasAlpha && !hasBeta) {
         threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
             params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
         );
