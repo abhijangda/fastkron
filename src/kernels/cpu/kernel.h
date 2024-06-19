@@ -242,7 +242,7 @@ void threadWork(KernelParams<FusedFacs>& params,
   SliceCPU<ElemT, kKMultipleOfTileK, kTileKSame, OptTileX> XTile(tileM, tileK, TileK, F.p(), X);
 
   const uint tid = omp_get_thread_num();
-  YInterim<ElemT, OptTileX, OptTileF, OptF> YCache((ElemT*)params.TileYs[tid]);
+  YInterim<ElemT, OptTileX, OptTileF, OptF> YCache((ElemT*)params.caches->TileYs[tid]);
   X86VecT alphaVec;
   X86VecT betaVec;
 
@@ -258,10 +258,10 @@ void threadWork(KernelParams<FusedFacs>& params,
 
   for (int fac = FusedFacs - 1; fac >= 0; fac--) {
     TransposedDirectShared3D<ElemT, OptTileX, OptF, OptTileF> 
-      TrXCache((ElemT*)params.TileXs[tid]);
+      TrXCache((ElemT*)params.caches->TileXs[tid]);
 
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
-      DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.TileFs[tid]);
+      DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);
 
       F = F.sameShape(params.problem.f(fac).data());
       //Transpose X data and store to TrXCache to reduce TLB misses

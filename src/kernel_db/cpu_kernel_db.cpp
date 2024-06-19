@@ -48,7 +48,7 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
                    EpilogueParams epilogueParams,
                    KernelMode execMode) {
   //Create the grid and thread block
-  KernelParams<FusedFacs> params (problem, TileXs, TileFs, TileYs, kernelInfo.getTileX(problem), 
+  KernelParams<FusedFacs> params (problem, &caches, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
