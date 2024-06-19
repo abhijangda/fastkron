@@ -629,6 +629,7 @@ def parse_same_factors(case):
   return (m, k, n, ps, qs)
 
 if __name__ == "__main__":
+  print(sys.argv)
   parser = argparse.ArgumentParser()
   parser.add_argument('-distinct-factors'  , required=False, type=str,  action='append',     nargs="+")
   parser.add_argument('-same-factors'      , required=False, type=str,  action='append',     nargs="+")
@@ -668,10 +669,10 @@ if __name__ == "__main__":
   if args.backend is None or args.backend.lower() not in ['cuda', 'x86', 'hip', 'arm']:
     print(f"Invalid backend: {args.backend}")
     sys.exit(0)
-
+  args.archs = list(set(args.archs))
   if args.backend == "cuda":
     for sm in args.archs:
-      assert sm in ["volta", "ampere", "hopper"]
+      assert sm in ["maxwell", "volta", "ampere", "hopper"]
   elif args.backend == "x86":
     for cpu_flag in args.archs:
       assert cpu_flag in ["sisd", "avx", "avx512"]
