@@ -41,7 +41,9 @@ uint32_t fusedYColumn(const FusedParams& params, const Matrix& Y, const XShared&
 template<typename ElemT>
 CUDA_DEVICE
 ElemT epilogue(const EpilogueParams& params, uint32_t idx, ElemT yVal) {
-  ElemT d = params.getBeta<ElemT>() * ((params.getD<ElemT>() != nullptr) ? params.getD<ElemT>()[idx] : 0);
+  ElemT d = (params.getBeta<ElemT>() != 0 && params.getD<ElemT>() != nullptr) ? 
+             params.getBeta<ElemT>() * params.getD<ElemT>()[idx] :
+             0;
   return params.getAlpha<ElemT>() * yVal + d;
 }
 
