@@ -42,7 +42,7 @@ void CPUKernelDatabase::allocate_caches() {
 
 template<uint FusedFacs>
 fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
-                     void** TileXs, void** TileFs, void** TileYs,
+                     CPUCaches& caches,
                    KMMProblem problem,
                    DistributedParams distParams,
                    EpilogueParams epilogueParams,
@@ -65,25 +65,25 @@ fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
                                             KernelMode execMode) {
   DistributedParams distParams;
   CPUKernel& cpuKernel = dynamic_cast<CPUKernel&>(*kernel);
-
+  CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
   switch(problem.n()) {
     case 1:
-      return invoke<1>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
+      return invoke<1>(cpuKernel, kronIndex, caches, problem,
                        distParams, epilogueParams, execMode);
     case 2:
-      return invoke<2>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
+      return invoke<2>(cpuKernel, kronIndex, caches, problem,
                        distParams, epilogueParams, execMode);
     case 3:
-      return invoke<3>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
+      return invoke<3>(cpuKernel, kronIndex, caches, problem,
                        distParams, epilogueParams, execMode);
     case 4:
-      return invoke<4>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
+      return invoke<4>(cpuKernel, kronIndex, caches, problem,
                        distParams, epilogueParams, execMode);
     case 5:
-      return invoke<5>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem,
+      return invoke<5>(cpuKernel, kronIndex, caches, problem,
                        distParams, epilogueParams, execMode);
     case 6:
-      return invoke<6>(cpuKernel, kronIndex, TileXs.ptr, TileFs.ptr, TileYs.ptr, problem, 
+      return invoke<6>(cpuKernel, kronIndex, caches, problem, 
                        distParams, epilogueParams, execMode);
     default:
       std::cout << "Invalid number of fused kernels" << std::endl;

@@ -218,6 +218,13 @@ struct EpilogueParams {
   const ElemT* getD()     const {return (const ElemT*)glD;}
 };
 
+struct CPUCaches {
+  void** TileXs, **TileYs, **TileFs;
+
+  CPUCaches(void** TileXs, void** TileFs, void** TileYs) : 
+          TileXs(TileXs), TileYs(TileYs), TileFs(TileFs) {}
+};
+
 template<uint Fused>
 struct KernelParams {
   KMMProblemT<Fused> problem;
@@ -229,12 +236,11 @@ struct KernelParams {
   
   uint32_t XshSlices;
   uint32_t XSlices;
+  CPUCaches* caches;
 
-  void** TileXs, **TileYs, **TileFs;
-
-  KernelParams(KMMProblem problem_, void** TileXs, void** TileFs, void** TileYs,
+  KernelParams(KMMProblem problem_, CPUCaches* caches,
                Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
-               problem(problem_), TileXs(TileXs), TileYs(TileYs), TileFs(TileFs), 
+               problem(problem_), caches(caches),
                tileX(tileX), tileF(tileF),
                XshSlices(tileX.n()/problem_.f(0).p()),
                XSlices(problem_.x().n()/problem_.f(0).p()),
