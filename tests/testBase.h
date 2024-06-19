@@ -731,6 +731,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       tmpK = (tmpK/KP_MAT_K[i]) * KP_MAT_N[i];
       operations += tmpK * KP_MAT_K[i];
     }
+    //Add for Alpha and Beta
+    operations += N + ((beta != 0) ? 2*N : beta);
     operations = 2 * ((long)M) * operations;
     double flops = operations/perCallTime;
     double gFLOPS = flops/1e9*1e3;
