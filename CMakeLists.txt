@@ -96,6 +96,7 @@ if(ENABLE_CUDA)
       endif()
       set(FK_CUDA_ARCH ${arch} ${FK_CUDA_ARCH})
     endforeach()
+
     execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend cuda -archs ${FK_CUDA_ARCH} -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -match-configs-file ${SRC}/kernels/best-kernels/a100-kernels)
   endif()
   include(${CUDA}/kron-kernels/kernels.cmake OPTIONAL)
