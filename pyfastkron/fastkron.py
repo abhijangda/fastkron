@@ -24,6 +24,35 @@ FastKronBackendARM = FastKronBackend(2)
 FastKronBackendCUDA = FastKronBackend(3)
 FastKronBackendHIP = FastKronBackend(4)
 
+class FastKronError:
+  def __init__(self, value):
+    self.value = value
+
+  def __eq__(self, other):
+    return self.value == other.value
+
+FastKronSuccess             = FastKronError(0)
+FastKronBackendNotAvailable = FastKronError(1)
+FastKronInvalidMemoryAccess = FastKronError(2)
+FastKronKernelNotFound      = FastKronError(3)
+FastKronInvalidArgument     = FastKronError(4)
+FastKronInvalidKMMProblem   = FastKronError(5)
+FastKronOtherError          = FastKronError(6)
+
+class FastKronOptions:
+  def __init__(self, logval):
+    self.value = 1 << logval
+  
+  def combine(self, opt):
+    self.value |= opt.value
+
+  def has(self, opt):
+    return (self.value & opt.value) == opt.value
+
+FastKronOptionsNone = FastKronOptions(0)
+FastKronOptionsUseFusion = FastKronOptions(1)
+FastKronOptionsUseFusion = FastKronOptions(2)
+
 class PyFastKronWrapper:
   def __init__(self, cuda_stream):
     self.libKron = ctypes.CDLL("libFastKron.so")
@@ -34,13 +63,21 @@ class PyFastKronWrapper:
     self.initFn.argtypes = [ctypes.POINTER(cppHandleTy), ctypes.c_int]
     self.initFn.restype = ctypes.c_int
 
+    self.initFn = self.libKron.fastKronSetOptions
+    self.initFn.argtypes = [ctypes.POINTER(cppHandleTy), ctypes.c_int]
+    self.initFn.restype = ctypes.c_int
+
+    self.destroyFn = self.libKron.fastKronDestroy
+    self.destroyFn.argtypes = [cppHandleTy]
+    self.destroyFn.restype = ctypes.c_void
+
+    self.getErrorStr = self.libKron.fastKronGetErrorString
+    self.getErrorStr.argtypes = [ctypes.c_int]
+    self.getErrorStr.restype = ctypes.c_char_p
+
     self.cudaInitFn = self.libKron.fastKronInitCUDA
     self.cudaInitFn.argtypes = [cppHandleTy, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     self.cudaInitFn.restype = ctypes.c_int
-    
-    self.destroyFn = self.libKron.fastKronDestroy
-    self.destroyFn.argtypes = [cppHandleTy]
-    self.destroyFn.restype = ctypes.c_int
 
     self.gekmmSizesFn = self.libKron.gekmmSizes
     self.gekmmSizesFn.argtypes = [cppHandleTy, ctypes.c_uint, ctypes.c_uint,

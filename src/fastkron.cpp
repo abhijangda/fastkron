@@ -11,7 +11,7 @@
 ***************************************************/
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   FastKronHandle* h = new FastKronHandle(backends);
-  *handle = h;
+  *handle = (fastKronHandle)h;
   uint32_t fastKronOptionsAll = fastKronOptionsUseFusion;
   fastKronSetOptions(*handle, fastKronOptionsAll);
 
@@ -22,13 +22,13 @@ fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
 }
 
 fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options) {
-  handle->setOptions(options);
+  ((FastKronHandle*)handle)->setOptions(options);
   return fastKronSuccess;
 }
 
 void fastKronDestroy(fastKronHandle handle) {
-  handle->free();
-  delete handle;
+  ((FastKronHandle*)handle)->free();
+  delete (FastKronHandle*)handle;
 }
 
 const char* fastKronGetErrorString(fastKronError err) {
@@ -51,43 +51,43 @@ const char* fastKronGetErrorString(fastKronError err) {
 }
 
 fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
-  return handlePtr->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
+  return ((FastKronHandle*)handlePtr)->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
 fastKronError fastKronInitHIP(fastKronHandle handlePtr, void *ptrToStream) {
   //TODO: remove Backend
-  return handlePtr->initHIPBackend(ptrToStream);
+  return ((FastKronHandle*)handlePtr)->initHIPBackend(ptrToStream);
 }
 
 fastKronError fastKronInitX86(fastKronHandle handlePtr) {
-  return handlePtr->initX86Backend();
+  return ((FastKronHandle*)handlePtr)->initX86Backend();
 }
 
 fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
                        size_t* resultSize, size_t* tempSize) {
   KMMProblem problem(FastKronTypeNone, M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);
-  return handlePtr->gekmmSizes(problem, resultSize, tempSize);
+  return ((FastKronHandle*)handlePtr)->gekmmSizes(problem, resultSize, tempSize);
 }
 
 fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], float* X, 
                    fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
                    float alpha, float beta, float *Z, float* temp1, float* temp2) {
   KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  return handle->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
+  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
 fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], int* X, 
                    fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, int *Z, int* temp1, int* temp2) {
   KMMProblem problem(FastKronInt, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  return handle->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
+  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
 fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], double* X, 
                    fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, double *Z, double* temp1, double* temp2) {
   KMMProblem problem(FastKronDouble, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  return handle->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
+  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<double>(alpha, beta, Z));
 }
 
@@ -107,15 +107,15 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
 fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
                                  void* streams) {
-  return handle->distributedsgekmm(NumKronMats, (float**)x, (float**)kronMats, (float**)result, M, N, K, 
+  return ((FastKronHandle*)handle)->distributedsgekmm(NumKronMats, (float**)x, (float**)kronMats, (float**)result, M, N, K, 
                                    KronMatCols, KronMatRows, (float**)temp1, (float**)temp2, streams);
 }
 
 fastKronError allocDistributedX(fastKronHandle handle, void* dX[], void* hX, uint M, uint K) {
-  return handle->allocDistributedX((void**)dX, (void*)hX, M, K);
+  return ((FastKronHandle*)handle)->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
 fastKronError gatherDistributedY(fastKronHandle handle, void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
-  return handle->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
+  return ((FastKronHandle*)handle)->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 
 // fastKronError allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint M, uint K) {

@@ -25,9 +25,9 @@ enum fastKronBackend {
 };
 
 enum fastKronOptions {
-  fastKronOptionsNone = 0,
-  fastKronOptionsUseFusion = 1 << 0,
-  fastKronOptionsTune = 1 << 1,
+  fastKronOptionsNone = 1 << 0,
+  fastKronOptionsUseFusion = 1 << 1,
+  fastKronOptionsTune = 1 << 2,
 };
 
 enum fastKronError {
@@ -47,7 +47,7 @@ enum fastKronError {
 };
 
 extern "C" {
-typedef struct FastKronHandle* fastKronHandle;
+typedef void* fastKronHandle;
 
 //backends is a bitwise OR
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends);

@@ -4,3 +4,7 @@
 [submodule "tests/benchmarks/AnyOption"]
 	path = tests/benchmarks/AnyOption
 	url = https://github.com/hackorama/AnyOption.git
+[submodule "pybind11"]
+	path = pybind11
+	url = ../../pybind/pybind11
+	branch = stable

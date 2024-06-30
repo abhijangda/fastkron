@@ -202,3 +202,9 @@ set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
 install(TARGETS FastKron)
 
 add_subdirectory(tests/)
+
+## PyBind ##
+
+add_subdirectory(pybind11)
+pybind11_add_module(PyFastKronWrapper ${SRC}/../pyfastkron/pywrapper.cpp)
+target_link_libraries(PyFastKronWrapper PRIVATE FastKron)
