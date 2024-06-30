@@ -75,6 +75,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, const uint kronIndex,
                                   kernelInfo.getTileF(problem), 
                                   kronIndex, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
+
   //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t);
@@ -331,8 +332,11 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
   cudaStream_t* t = new cudaStream_t;
   *t = 0;
   for (int i = 0; i < gpus; i++) {
-    if (ptrToStream != NULL)
-	  streams.push_back(((cudaStream_t*)ptrToStream) + i);
+    if (ptrToStream != NULL) {
+      cudaStream_t* s = new cudaStream_t;
+      *s = *(((cudaStream_t*)ptrToStream) + i);
+	    streams.push_back((void*)s);
+    }
     else
 	    streams.push_back(t);
   }

@@ -1,149 +1,8 @@
 from functools import reduce
-import ctypes
-
-#TODO: Make these as fields of PyFastKronWrapper
-def to_ctype_array(elems, ctype_t):
-  return (ctype_t * len(elems))(*elems)
+import PyFastKronWrapper
 
 def product(values):
   return reduce((lambda a, b: a * b), values)
-
-class FastKronOp:
-  def __init__(self, op):
-    self.op = op
-
-FastKronOpT = FastKronOp(2)
-FastKronOpN = FastKronOp(1)
-
-class FastKronBackend:
-    def __init__(self, backend):
-      self.backend = backend
-
-FastKronBackendX86 = FastKronBackend(1)
-FastKronBackendARM = FastKronBackend(2)
-FastKronBackendCUDA = FastKronBackend(3)
-FastKronBackendHIP = FastKronBackend(4)
-
-class FastKronError:
-  def __init__(self, value):
-    self.value = value
-
-  def __eq__(self, other):
-    return self.value == other.value
-
-FastKronSuccess             = FastKronError(0)
-FastKronBackendNotAvailable = FastKronError(1)
-FastKronInvalidMemoryAccess = FastKronError(2)
-FastKronKernelNotFound      = FastKronError(3)
-FastKronInvalidArgument     = FastKronError(4)
-FastKronInvalidKMMProblem   = FastKronError(5)
-FastKronOtherError          = FastKronError(6)
-
-class FastKronOptions:
-  def __init__(self, logval):
-    self.value = 1 << logval
-  
-  def combine(self, opt):
-    self.value |= opt.value
-
-  def has(self, opt):
-    return (self.value & opt.value) == opt.value
-
-FastKronOptionsNone = FastKronOptions(0)
-FastKronOptionsUseFusion = FastKronOptions(1)
-FastKronOptionsUseFusion = FastKronOptions(2)
-
-class PyFastKronWrapper:
-  def __init__(self, cuda_stream):
-    self.libKron = ctypes.CDLL("libFastKron.so")
-
-    cppHandleTy = ctypes.c_ulong
-
-    self.initFn = self.libKron.fastKronInit
-    self.initFn.argtypes = [ctypes.POINTER(cppHandleTy), ctypes.c_int]
-    self.initFn.restype = ctypes.c_int
-
-    self.initFn = self.libKron.fastKronSetOptions
-    self.initFn.argtypes = [ctypes.POINTER(cppHandleTy), ctypes.c_int]
-    self.initFn.restype = ctypes.c_int
-
-    self.destroyFn = self.libKron.fastKronDestroy
-    self.destroyFn.argtypes = [cppHandleTy]
-    self.destroyFn.restype = ctypes.c_void
-
-    self.getErrorStr = self.libKron.fastKronGetErrorString
-    self.getErrorStr.argtypes = [ctypes.c_int]
-    self.getErrorStr.restype = ctypes.c_char_p
-
-    self.cudaInitFn = self.libKron.fastKronInitCUDA
-    self.cudaInitFn.argtypes = [cppHandleTy, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
-    self.cudaInitFn.restype = ctypes.c_int
-
-    self.gekmmSizesFn = self.libKron.gekmmSizes
-    self.gekmmSizesFn.argtypes = [cppHandleTy, ctypes.c_uint, ctypes.c_uint,
-                                  ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint),
-                                  ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t)]
-
-    self.cpp_handle = ctypes.c_ulong(0)
-    if self.initFn(ctypes.byref(self.cpp_handle), FastKronBackendCUDA.backend) != 0:
-      print("error 1")
-      return
-    
-    print(55, cuda_stream.cuda_stream, ctypes.c_void_p(cuda_stream.cuda_stream))
-    if self.cudaInitFn(self.cpp_handle, ctypes.c_void_p(cuda_stream.cuda_stream), 1, 1, 1, -1) != 0:
-      print("error 2")
-      return
-
-    self.sgekmmFn = self.libKron.sgekmm
-    self.sgekmmFn.argtypes = [cppHandleTy, ctypes.c_uint, ctypes.c_uint,
-                              ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint),
-                              ctypes.c_void_p, ctypes.c_uint,
-                              ctypes.POINTER(ctypes.c_void_p), ctypes.c_uint,
-                              ctypes.c_void_p,
-                              ctypes.c_float, ctypes.c_float, ctypes.c_void_p,
-                              ctypes.c_void_p, ctypes.c_void_p, 
-                              ctypes.c_void_p]
-
-    self.sgekmmTuneFn = self.libKron.sgekmmTune
-    self.sgekmmTuneFn.argtypes = [cppHandleTy, ctypes.c_uint, ctypes.c_uint,
-                                  ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint),
-                                  ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p]
-    self.sgekmmTuneFn.restype = ctypes.c_uint
-
-  def sgekmmSizes(self, m, ps, qs):
-    assert len(ps) == len(qs)
-
-    resultSize = ctypes.c_size_t(0)
-    tempSize   = ctypes.c_size_t(0)
-    self.gekmmSizesFn(self.cpp_handle, ctypes.c_uint(m), ctypes.c_uint(len(ps)), 
-                      to_ctype_array(ps, ctypes.c_uint), to_ctype_array(qs, ctypes.c_uint),
-                      ctypes.byref(resultSize), ctypes.byref(tempSize))
-    return resultSize.value//4, tempSize.value//4
-  
-  def sgekmm(self, m, ps, qs, x, opX, fs, opFs, y, alpha, beta, z, t1, t2, stream):
-    assert len(ps) == len(qs)
-    assert len(ps) == len(fs)
-
-    return self.sgekmmFn(self.cpp_handle, m, len(ps),
-                         to_ctype_array(ps, ctypes.c_uint), to_ctype_array(qs, ctypes.c_uint), 
-                         ctypes.c_void_p(x), opX.op, 
-                         to_ctype_array([ctypes.c_void_p(f) for f in fs], ctypes.c_void_p), opFs.op,
-                         ctypes.c_void_p(y), ctypes.c_float(alpha), ctypes.c_float(beta),
-                         ctypes.c_void_p(z), ctypes.c_void_p(t1), ctypes.c_void_p(t2), stream)
-
-  def sgekmmTune(self, m, ps, qs, opX, opFs, stream):
-    assert len(ps) == len(qs)
-    assert len(ps) == len(fs)
-
-    return self.sgekmmTuneFn(self.cpp_handle, m, len(ps),
-                             to_ctype_array(ps, ctypes.c_uint),
-                             to_ctype_array(qs, ctypes.c_uint),
-                             opX.op, opFs.op, stream)
-
-  def __del__(self):
-    #TODO: self.destroyFn(self.cpp_handle)
-    #self.cpp_handle = ctypes.c_ulong(0)
-    pass
 
 try:
   import torch
@@ -152,7 +11,13 @@ except:
 
 class FastKronTorch:
   def __init__(self):
-    self.pyfastkron = PyFastKronWrapper(torch.cuda.current_stream())
+    self.pyfastkron = None
+    backend = 0
+    if torch.cuda.is_available():
+      backend = PyFastKronWrapper.Backend.CUDA
+      self.pyfastkron = PyFastKronWrapper.init(backend)
+      print(torch.cuda.current_stream().cuda_stream)
+      PyFastKronWrapper.initCUDA(self.pyfastkron, [torch.cuda.current_stream().cuda_stream], 1, 1, 1, 1)
   
   def ps(self, fs):
     return [f.shape[0] for f in fs]
@@ -182,35 +47,7 @@ class FastKronTorch:
 
   def gekmmSizes(self, x, fs):
     self._check(x, fs, None, None)
-    fn = None
-    if x.dtype == torch.float:
-      fn = self.pyfastkron.sgekmmSizes
-    elif x.dtype == torch.double:
-      fn = self.pyfastkron.dgekmmSizes
-    elif x.dtype == torch.int:
-      fn = self.pyfastkron.igekmmSizes
-
-    return fn(x.shape[0], self.ps(fs), self.qs(fs))
-
-  def gekmmTune(self, x, fs, y,
-                trX = False, trF = False, stream = None):
-    if stream is None:
-      stream = torch.cuda.current_stream()
-
-    self._check(x, fs, y, stream)
-
-    fn = None
-    if x.dtype == torch.float:
-      fn = self.pyfastkron.sgekmmTune
-    elif x.dtype == torch.int:
-      fn = self.pyfastkron.igekmmTune
-    elif x.dtype == torch.double:
-      fn = self.pyfastkron.dgekmmTune
-
-    fn(x.shape[0], self.ps(fs), self.qs(fs),
-       FastKronOpN if not trX else FastKronOpT,
-       FastKronOpN if not trF else FastKronOpT, 
-       ctypes.c_void_p(stream.cuda_stream))
+    return PyFastKronWrapper.gekmmSizes(self.pyfastkron, x.shape[0], len(fs), self.ps(fs), self.qs(fs))
 
   def gekmm(self, x, fs, y, alpha, beta, z, temp, 
             trX = False, trF = False, stream = None):
@@ -221,19 +58,22 @@ class FastKronTorch:
 
     fn = None
     if x.dtype == torch.float:
-      fn = self.pyfastkron.sgekmm
+      fn = PyFastKronWrapper.sgekmm
     elif x.dtype == torch.int:
-      fn = self.pyfastkron.igekmm
+      fn = PyFastKronWrapper.igekmm
     elif x.dtype == torch.double:
-      fn = self.pyfastkron.dgekmm
+      fn = PyFastKronWrapper.dgekmm
 
-    fn(x.shape[0], self.ps(fs), self.qs(fs), 
-       x.data_ptr(), FastKronOpN if not trX else FastKronOpT, 
-       self.fptrs(fs), FastKronOpN if not trF else FastKronOpT,
+    backend = None
+    if x.is_cuda:
+      backend = PyFastKronWrapper.Backend.CUDA
+  
+    fn(self.pyfastkron, backend, x.shape[0], len(fs), self.ps(fs), self.qs(fs), 
+       x.data_ptr(), PyFastKronWrapper.Op.N if not trX else PyFastKronWrapper.Op.T,
+       self.fptrs(fs), PyFastKronWrapper.Op.N if not trF else PyFastKronWrapper.Op.T,
        y.data_ptr(),
-       alpha, beta, None if z is None else z.data_ptr(), 
-       temp.data_ptr(), None,
-       ctypes.c_void_p(stream.cuda_stream))
+       alpha, beta, 0 if z is None else z.data_ptr(), 
+       temp.data_ptr(), 0)
   
 if __name__ == "__main__":
   import torch
@@ -248,7 +88,6 @@ if __name__ == "__main__":
   fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float32).cuda() for i in range(0, N)]
 
   rs, ts = fastKron.gekmmSizes(x, fs)
-  fastKron.gekmmTune(x, fs, y)
 
   t1 = torch.zeros(rs, dtype=torch.float32).cuda()
 

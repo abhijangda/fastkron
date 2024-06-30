@@ -42,13 +42,13 @@ PYBIND11_MODULE(PyFastKronWrapper, m) {
 
   m.def("destroy", fastKronDestroy, "destroy");
 
-  m.def("initCUDA", [](fastKronHandle h, void *ptrToStream, uint32_t gpus, uint32_t gpusInM, uint32_t gpusInK, uint32_t gpuLocalKrons) {
-    auto err = fastKronInitCUDA(h, ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
+  m.def("initCUDA", [](fastKronHandle h, std::vector<uint32_t> ptrToStream, uint32_t gpus, uint32_t gpusInM, uint32_t gpusInK, uint32_t gpuLocalKrons) {
+    auto err = fastKronInitCUDA(h, (void*)ptrToStream.data(), gpus, gpusInM, gpusInK, gpuLocalKrons);
     THROW_ERROR(err);
   }, "initCUDA");
 
-  m.def("initHIP", [](fastKronHandle h, void* ptrToStream) {
-    auto err = fastKronInitHIP(h, ptrToStream);
+  m.def("initHIP", [](fastKronHandle h, std::vector<uint32_t> ptrToStream) {
+    auto err = fastKronInitHIP(h, (void*)ptrToStream.data());
     THROW_ERROR(err);
   }, "initHIP");
 
@@ -73,4 +73,24 @@ PYBIND11_MODULE(PyFastKronWrapper, m) {
     auto err = sgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (float*)X, opX, (float**)Fs.data(), opFs, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
     THROW_ERROR(err);
   }, "sgekmm");
+
+  m.def("igekmm", [](fastKronHandle handle, fastKronBackend backend, 
+                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
+                     uint64_t X, fastKronOp opX,
+                     std::vector<uint64_t> Fs, fastKronOp opFs,
+                     uint64_t Y, int alpha, int beta,
+                     uint64_t Z, uint64_t temp1, uint64_t temp2) {
+    auto err = igekmm(handle, backend, M, N, Ps.data(), Qs.data(), (int*)X, opX, (int**)Fs.data(), opFs, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
+    THROW_ERROR(err);
+  }, "igekmm");
+
+  m.def("dgekmm", [](fastKronHandle handle, fastKronBackend backend, 
+                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
+                     uint64_t X, fastKronOp opX,
+                     std::vector<uint64_t> Fs, fastKronOp opFs,
+                     uint64_t Y, double alpha, double beta,
+                     uint64_t Z, uint64_t temp1, uint64_t temp2) {
+    auto err = dgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (double*)X, opX, (double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
+    THROW_ERROR(err);
+  }, "dgekmm");
 }
