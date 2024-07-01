@@ -20,6 +20,8 @@ if(OpenMP_CXX_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+set(PKG_CONFIG_FILE libFastKron.pc)
+
 #### Options ####
 option(ENABLE_CUDA "Enable CUDA" ON)
 option(ENABLE_X86  "Enable X86" OFF)
@@ -200,6 +202,10 @@ target_include_directories(FastKron
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
 install(TARGETS FastKron)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libFastKron.pc.in ${PKG_CONFIG_FILE} @ONLY)
+add_custom_target(install_pkgconfig
+                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${PKG_CONFIG_FILE} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
 
 add_subdirectory(tests/)
 
