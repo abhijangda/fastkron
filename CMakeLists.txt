@@ -203,14 +203,11 @@ target_include_directories(FastKron
 set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
 install(TARGETS FastKron)
 
+add_subdirectory(tests/)
+
+
+## PkgConfig ##
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libFastKron.pc.in ${PKG_CONFIG_FILE} @ONLY)
 add_custom_target(install_pkgconfig
                   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${PKG_CONFIG_FILE} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
-
-add_subdirectory(tests/)
-
-## PyBind ##
-
-add_subdirectory(pybind11)
-pybind11_add_module(PyFastKronWrapper ${SRC}/../pyfastkron/pywrapper.cpp)
-target_link_libraries(PyFastKronWrapper PRIVATE FastKron)
