@@ -51,9 +51,11 @@ typedef void* fastKronHandle;
 
 //backends is a bitwise OR
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends);
+fastKronError fastKronInitAllBackends(fastKronHandle* handle);
 fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options);
 void fastKronDestroy(fastKronHandle handle);
 
+uint32_t fastKronGetBackends();
 const char* fastKronGetErrorString(fastKronError err);
 
 fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);

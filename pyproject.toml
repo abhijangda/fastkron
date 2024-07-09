@@ -10,3 +10,5 @@ build-frontend = {name = "build", args = ["--exports", "whole_archive"]}
 
 [tool.scikit-build.cmake.define]
 PYMODULE="ON"
+ENABLE_X86="ON"
+ENABLE_CUDA="ON"

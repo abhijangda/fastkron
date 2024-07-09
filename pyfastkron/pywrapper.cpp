@@ -26,14 +26,18 @@ PYBIND11_MODULE(FastKron, m) {
     .value("T", fastKronOp_T)
     .export_values();
 
-  m.def("init", [](uint32_t backends) {
+  m.def("init", []() {
     fastKronHandle handle;
 
-    auto err = fastKronInit(&handle, backends);
+    auto err = fastKronInitAllBackends(&handle);
     THROW_ERROR(err);
 
     return handle;
   }, "init");
+
+  m.def("backends", []() {
+    return fastKronGetBackends();
+  });
 
   m.def("setOptions", [](fastKronHandle h, uint32_t options) {
     auto err = fastKronSetOptions(h, options);

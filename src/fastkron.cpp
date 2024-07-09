@@ -15,10 +15,14 @@ fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   uint32_t fastKronOptionsAll = fastKronOptionsUseFusion;
   fastKronSetOptions(*handle, fastKronOptionsAll);
 
-  return (h->hasBackend(fastKronBackend_X86) || 
-          h->hasBackend(fastKronBackend_CUDA) ||
-          h->hasBackend(fastKronBackend_HIP)) ? 
-          fastKronSuccess : fastKronInvalidArgument;
+  if (backends & fastKronGetBackends() != backends)
+    return fastKronInvalidArgument;
+
+  return fastKronSuccess;
+}
+
+fastKronError fastKronInitAllBackends(fastKronHandle* handle) {
+  return fastKronInit(handle, fastKronGetBackends());
 }
 
 fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options) {
@@ -29,6 +33,21 @@ fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options) {
 void fastKronDestroy(fastKronHandle handle) {
   ((FastKronHandle*)handle)->free();
   delete (FastKronHandle*)handle;
+}
+
+uint32_t fastKronGetBackends() {
+  uint32_t backends = 0;
+  #ifdef ENABLE_CUDA
+    backends |= fastKronBackend_CUDA;
+  #endif
+  #ifdef ENABLE_X86
+    backends |= fastKronBackend_X86;
+  #endif
+  #ifdef ENABLE_HIP
+    backends |= fastKronBackend_HIP;
+  #endif
+
+  return backends;
 }
 
 const char* fastKronGetErrorString(fastKronError err) {

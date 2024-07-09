@@ -24,11 +24,11 @@ set(PKG_CONFIG_FILE libFastKron.pc)
 
 #### Options ####
 option(ENABLE_CUDA "Enable CUDA" ON)
-option(ENABLE_X86  "Enable X86" OFF)
+option(ENABLE_X86  "Enable X86" ON)
 option(ENABLE_ARM  "Enable ARM" OFF)
 option(ENABLE_HIP "Enable ROCM/HIP" OFF)
-option(FULL_TUNE  "Do Full Tuning")
-option(PYMODULE "Install and Build as PyModule")
+option(FULL_TUNE  "Do Full Tuning" OFF)
+option(PYMODULE "Install and Build as PyModule" OFF)
 
 if(ENABLE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
