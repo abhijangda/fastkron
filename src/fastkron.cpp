@@ -69,7 +69,11 @@ const char* fastKronGetErrorString(fastKronError err) {
   }
 }
 
-fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream) {
+  return ((FastKronHandle*)handlePtr)->initCUDABackend(ptrToStream, 1, 1, 1, 1);
+}
+
+fastKronError fastKronInitDistributedCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
   return ((FastKronHandle*)handlePtr)->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 

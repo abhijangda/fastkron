@@ -473,7 +473,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   switch (backend) {
     case fastKronBackend_CUDA:
       #ifdef TEST_BACKEND_CUDA
-        FastKronCHECK(fastKronInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
+        if (gpus == 1)
+          FastKronCHECK(fastKronInitCUDA(handle, &stream[0]));
+        else
+          FastKronCHECK(fastKronInitDistributedCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
       #endif
       break;
     case fastKronBackend_X86:

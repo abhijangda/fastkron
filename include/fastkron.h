@@ -58,7 +58,8 @@ void fastKronDestroy(fastKronHandle handle);
 uint32_t fastKronGetBackends();
 const char* fastKronGetErrorString(fastKronError err);
 
-fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
+fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream);
+fastKronError fastKronInitDistributedCUDA(fastKronHandle handle, void *ptrToStream, int gpus = 1, int gpusInM = -1, int gpusInK = -1, int gpuLocalKrons = -1);
 //TODO: Need to provide a setcudastream function
 fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream);
 fastKronError fastKronInitX86(fastKronHandle handle);
