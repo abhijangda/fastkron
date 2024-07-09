@@ -11,7 +11,7 @@ namespace py = pybind11;
   }\
 }
 
-PYBIND11_MODULE(PyFastKronWrapper, m) {
+PYBIND11_MODULE(FastKron, m) {
   m.doc() = "..."; // optional module docstring
 
   py::enum_<fastKronBackend>(m, "Backend")

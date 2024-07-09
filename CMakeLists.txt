@@ -28,6 +28,7 @@ option(ENABLE_X86  "Enable X86" OFF)
 option(ENABLE_ARM  "Enable ARM" OFF)
 option(ENABLE_HIP "Enable ROCM/HIP" OFF)
 option(FULL_TUNE  "Do Full Tuning")
+option(PYMODULE "Install and Build as PyModule")
 
 if(ENABLE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
@@ -183,31 +184,44 @@ else()
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cpp)
 endif()
 
-add_library(FastKron
-  SHARED
-    ${SOURCES}
-    ${HEADER_FILES}
-    ${KERNEL_HEADER_FILES}
-    ${CUDA_HEADER_FILES}
-    ${X86_HEADER_FILES}
-    ${HIP_HEADER_FILES}
-)
+if (PYMODULE)
+  ## PyBind ##
+  add_subdirectory(pybind11)
+  pybind11_add_module(FastKron
+    SHARED
+      ${SOURCES}
+      ${SRC}/../pyfastkron/pywrapper.cpp
+      ${HEADER_FILES}
+      ${KERNEL_HEADER_FILES}
+      ${CUDA_HEADER_FILES}
+      ${X86_HEADER_FILES}
+      ${HIP_HEADER_FILES})
+  install(TARGETS FastKron DESTINATION ${SKBUILD_PROJECT_NAME})
+else()
+  add_library(FastKron
+    SHARED
+      ${SOURCES}
+      ${HEADER_FILES}
+      ${KERNEL_HEADER_FILES}
+      ${CUDA_HEADER_FILES}
+      ${X86_HEADER_FILES}
+      ${HIP_HEADER_FILES}
+  )
+  add_subdirectory(tests/)
+  ## PkgConfig ##
 
-target_link_libraries(FastKron nccl)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libFastKron.pc.in ${PKG_CONFIG_FILE} @ONLY)
+  add_custom_target(install_pkgconfig
+                    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${PKG_CONFIG_FILE} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
+
+  set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
+  install(TARGETS FastKron)
+endif()
+
+target_link_libraries(FastKron PRIVATE nccl)
 target_include_directories(FastKron 
                            PRIVATE 
                               ${SRC}/
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
-install(TARGETS FastKron)
-
-add_subdirectory(tests/)
-
-
-## PkgConfig ##
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libFastKron.pc.in ${PKG_CONFIG_FILE} @ONLY)
-add_custom_target(install_pkgconfig
-                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${PKG_CONFIG_FILE} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
