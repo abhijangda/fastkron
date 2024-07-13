@@ -12,3 +12,9 @@ build-frontend = {name = "build", args = ["--exports", "whole_archive"]}
 PYMODULE="ON"
 ENABLE_X86="ON"
 ENABLE_CUDA="ON"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = [
+    "tests/python",
+]
