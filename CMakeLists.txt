@@ -38,7 +38,6 @@ if(ENABLE_CUDA)
   set(CMAKE_CUDA_STANDARD_REQUIRED True)
   add_definitions(-DENABLE_CUDA)
   enable_language(CUDA)
-  find_package(CUDA 11.0 REQUIRED)
   set(CMAKE_CUDA_STANDARD 17)
   set(CMAKE_CUDA_STANDARD_REQUIRED True)
   
