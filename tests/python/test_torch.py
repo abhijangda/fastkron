@@ -39,7 +39,6 @@ def test_cuda():
 def test_cpu():
   device_tests("cpu")
 
-
 if __name__ == "__main__":
   test_cuda()
   test_cpu()

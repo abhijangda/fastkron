@@ -59,5 +59,5 @@ class FastKronBase:
             self.tensor_data_ptr(x), FastKron.Op.N if not trX else FastKron.Op.T,
             self.fptrs(fs), FastKron.Op.N if not trF else FastKron.Op.T,
             self.tensor_data_ptr(y),
-            alpha, beta, 0 if z is None else z.data_ptr(), 
+            alpha, beta, 0 if z is None else self.tensor_data_ptr(z), 
             self.tensor_data_ptr(temp), 0)
