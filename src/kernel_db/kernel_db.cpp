@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "kernel_db/kernel_db.h"
-#include "utils/debug_print.h"
+#include "utils/logger.h"
 
 KernelDatabase::KernelDatabase() {
   fastestKernelForShape = new OptimizedKernelForShape();
@@ -133,9 +133,9 @@ TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) 
   }
 
 end:
-  DebugPrint(LogLevel::Debug) << "Minimum Time " << std::endl;
+  Logger(LogLevel::Debug) << "Minimum Time " << std::endl;
   for (auto iter = kernelSeries.rbegin(); iter != kernelSeries.rend(); iter++) {
-    DebugPrint(LogLevel::Debug) << "  " << (*iter) << std::endl;
+    Logger(LogLevel::Debug) << "  " << (*iter) << std::endl;
   }
 
   return kernelSeries;
@@ -162,7 +162,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
 
   minTime = std::numeric_limits<float>::max();
 
-  DebugPrint(LogLevel::Debug) << "Tuning for shape "  << problem << std::endl;
+  Logger(LogLevel::Debug) << "Tuning for shape "  << problem << std::endl;
   if (findAllKernels(problem, distP2PStore, allKernels)) {
   const std::vector<KernelInfo*>& kernelsForMaxOpt = [&allKernels]() {
     for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
@@ -175,13 +175,13 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   for (auto kernel : kernelsForMaxOpt) {
     kernelIdx += 1;
     if (!kernel->canCompute(problem, hardware[0], distP2PStore)) continue;
-    DebugPrint(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size() << ": " << kernel->str() << std::endl;
+    Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size() << ": " << kernel->str() << std::endl;
     float kernelTime = std::numeric_limits<float>::max();
     fastKronError status;
     status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
                distP2PStore, warmups, runs, kernelTime);
     if (status == fastKronSuccess) {
-      DebugPrint(LogLevel::Debug) << 
+      Logger(LogLevel::Debug) << 
                    "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
                    "  GFLOPs: " << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
                    occupancyDetails(kernel, problem) << std::endl;
@@ -193,7 +193,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
   }}
 
   if (minTime < std::numeric_limits<float>::max()) {
-    DebugPrint(LogLevel::Debug) << std::fixed << std::setprecision(4) <<
+    Logger(LogLevel::Debug) << std::fixed << std::setprecision(4) <<
                 "Fastest kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
     return std::make_pair(bestKernel, minTime);
   }

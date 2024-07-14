@@ -167,7 +167,7 @@ set(HEADER_FILES
     ${SRC}/kmm/matrix.h
     ${SRC}/utils/thread_pool.h
     ${SRC}/utils/utils.h
-    ${SRC}/utils/debug_print.h)
+    ${SRC}/utils/logger.h)
 
 set(SOURCES
     ${SRC}/fastkron.cpp

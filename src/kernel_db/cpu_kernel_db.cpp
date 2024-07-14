@@ -4,7 +4,7 @@
 #include <set>
 #include <immintrin.h>
 
-#include "utils/debug_print.h"
+#include "utils/logger.h"
 
 #include "kernels/params.h"
 #include "kernel_db/cpu_kernel_db.h"
@@ -88,7 +88,7 @@ fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
       return invoke<6>(cpuKernel, kronIndex, caches, problem, 
                        distParams, epilogueParams, execMode);
     default:
-      DebugPrint(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
+      Logger(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
       return fastKronKernelNotFound;
   }
 }
@@ -144,7 +144,7 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
     }
 
     if (status != fastKronSuccess) {
-      DebugPrint(LogLevel::Info) << "Error in CPU autotuning "     <<
+      Logger(LogLevel::Info) << "Error in CPU autotuning "     <<
                                     fastKronGetErrorString(status) <<
                                     std::endl;
       return status;
@@ -341,7 +341,7 @@ X86KernelDatabase::X86KernelDatabase() {
                                    sockets, cores, simd);
   hardware.push_back(detail);
 
-  DebugPrint(LogLevel::Info) << "Detected CPU " << std::endl <<
+  Logger(LogLevel::Info) << "Detected CPU " << std::endl <<
                                 (*detail) << std::endl;
 
   loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));

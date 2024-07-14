@@ -6,7 +6,7 @@
 #include "handle/handle.h"
 #include "kmm/kmmalgo.h"
 #include "utils/utils.h"
-#include "utils/debug_print.h"
+#include "utils/logger.h"
 
 static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
@@ -137,7 +137,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
     tune(tmpProblem, kernelDb, false, DistributedParams());
-    DebugPrint(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
+    Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
     TunedKernelsSeries tunedKernels;
     minTime = minExecTimeOfSeries(problem, 0, false,
                                   tunedKernels, tunedKernelsMap);
@@ -226,16 +226,16 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
     }
   }
   
-  DebugPrint(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
+  Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
-    DebugPrint(LogLevel::Info) << "  " << (*iter) << std::endl;
+    Logger(LogLevel::Info) << "  " << (*iter) << std::endl;
 #ifdef ENABLE_CUDA
     if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
         ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
         iter->start == 0)) {
       uint gpuM, gpuK;
       fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
-      DebugPrint(LogLevel::Info) << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
+      Logger(LogLevel::Info) << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
                    "[GM, " << fastKron.cudaKernels.gpusInK_ << "] using " << fastKron.cudaKernels.distComm_ << std::endl;
     }
 #endif

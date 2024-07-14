@@ -6,7 +6,7 @@
 #include <nccl.h>
 
 #include "utils/utils.h"
-#include "utils/debug_print.h"
+#include "utils/logger.h"
 
 #include "kernel_db/cuda_kernel_db.h"
 #include "kernels/cuda_kernel_info.h"
@@ -117,7 +117,7 @@ fastKronError CUDAKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kr
       return invoke<6>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     default:
-      DebugPrint(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
+      Logger(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
       return fastKronKernelNotFound;
   }
 }
@@ -149,7 +149,7 @@ fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo* kernel, const
       return invoke<6>(cudaKernel, kronIndex, problem, 
                        distParams, epilogueParams, execMode, stream);
     default:
-      DebugPrint(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
+      Logger(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
   }
 
   return fastKronKernelNotFound;
@@ -191,7 +191,7 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel, const uint fact
   if (status != fastKronSuccess) {
     CUDA_CHECK(cudaEventDestroy(startEvent));
     CUDA_CHECK(cudaEventDestroy(endEvent));
-    DebugPrint(LogLevel::Info) << "Error in CUDA autotuning: "   <<
+    Logger(LogLevel::Info) << "Error in CUDA autotuning: "   <<
                                   fastKronGetErrorString(status) <<
                                   std::endl;
     return status;
@@ -352,7 +352,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
   for (int i = 0; i < numGPUs_; i++) {
     auto detail = new CUDAArchDetails(i);
     hardware.push_back(detail);
-    DebugPrint(LogLevel::Info) << "Detected GPU " << i << std::endl << (*detail);
+    Logger(LogLevel::Info) << "Detected GPU " << i << std::endl << (*detail);
   }
 
   if (isDistributed_) {
@@ -373,7 +373,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
 
     if (distComm_ == DistComm::P2P) {
       if (!allP2PAccess) {
-        DebugPrint(LogLevel::Debug) << "P2P Access among GPUs is available" << std::endl;
+        Logger(LogLevel::Debug) << "P2P Access among GPUs is available" << std::endl;
         distComm_ = DistComm::DistCommNone;
       }
     } else if (distComm_ == DistComm::NCCL) {
@@ -381,7 +381,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
       distComm_ = DistComm::NCCL;
       ncclUniqueId ncclId;
       ncclGetUniqueId(&ncclId);
-      DebugPrint(LogLevel::Debug) << "Initializing NCCL"<<std::endl;
+      Logger(LogLevel::Debug) << "Initializing NCCL"<<std::endl;
       for (int i = 0; i < gpus; i++) {
         CUDA_CHECK(cudaSetDevice(i));
         ncclComms.push_back(nullptr);
@@ -398,7 +398,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
         distComm_ = DistComm::NCCL;
         ncclUniqueId ncclId;
         ncclGetUniqueId(&ncclId);
-        DebugPrint(LogLevel::Debug) << "Initializing NCCL"<<std::endl;
+        Logger(LogLevel::Debug) << "Initializing NCCL"<<std::endl;
         for (int i = 0; i < gpus; i++) {
           CUDA_CHECK(cudaSetDevice(i));
           ncclComms.push_back(nullptr);
@@ -408,7 +408,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
       }
     }
 
-    DebugPrint(LogLevel::Info) << "Using " << distComm_ << 
+    Logger(LogLevel::Info) << "Using " << distComm_ << 
                                   " for distributed communication" <<
                                   std::endl;
 
@@ -430,12 +430,12 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
 
     //TODO: Check if gpusInK_ == 1 then perGPUKronBatch = NumKrons
 
-    DebugPrint(LogLevel::Debug) << "gpusInRows " << gpusInM_ <<
+    Logger(LogLevel::Debug) << "gpusInRows " << gpusInM_ <<
                  " gpusInCols " << gpusInK_ << 
                  " gpuKronBatch " << perGPUKronBatch_ <<
                  std::endl;
     if (gpusInK_ * gpusInM_ != numGPUs_)  {
-      DebugPrint(LogLevel::Info) << "gpusInCols * gpusInRows != total gpus (" << 
+      Logger(LogLevel::Info) << "gpusInCols * gpusInRows != total gpus (" << 
                    gpusInK_ * gpusInM_ << "!= " << 
                    numGPUs_<< ")" << std::endl;
       abort();
