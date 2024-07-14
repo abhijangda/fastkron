@@ -5,9 +5,11 @@
 #include "env.h"
 
 namespace env {
+  #define ENV_FASTKRON(x) "FASTKRON_" x;
+
   static char DIST_COMM[] = "DIST_COMM";
-  static char FUSION[]    = "FUSION";
   static char TUNE[]      = "TUNE";
+  static char LOGLEVEL[]  = ENV_FASTKRON("LOG");
 
   bool boolFromIntEnv(char* env, bool defaultVal) {
     char* val = getenv(env);
@@ -27,8 +29,12 @@ namespace env {
     return DistComm::DistCommNone;
   }
 
-  bool getFusion() {
-    //Use fusion by default
-    return boolFromIntEnv(FUSION, true);
+  LogLevel getLogLevel() {
+    char *val = getenv(LOGLEVEL);
+    if (val == nullptr) return LogLevel::Nothing;
+    if (strcmp(val, "Info")  == 0) return LogLevel::Info;
+    if (strcmp(val, "Debug") == 0) return LogLevel::Debug;
+    std::cout << "Invalid log level '" << val << "'" << std::endl;
+    return LogLevel::Nothing;
   }
 }

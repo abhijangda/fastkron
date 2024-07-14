@@ -6,7 +6,13 @@ enum DistComm {
   NCCL,
 };
 
+enum LogLevel {
+  Nothing = 0,
+  Info = 1,
+  Debug = 2
+};
+
 namespace env {
   DistComm getDistComm();
-  bool getFusion();
+  LogLevel getLogLevel();
 }
