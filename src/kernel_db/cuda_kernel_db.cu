@@ -332,20 +332,8 @@ CUDAArchDetails::CUDAArchDetails(int dev) {
 }
 
 fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  streams.clear();
-  cudaStream_t* t = new cudaStream_t;
-  *t = 0;
-  for (int i = 0; i < gpus; i++) {
-    if (ptrToStream != NULL) {
-      cudaStream_t* s = new cudaStream_t;
-      *s = *(((cudaStream_t*)ptrToStream) + i);
-	    streams.push_back((void*)s);
-    }
-    else
-	    streams.push_back(t);
-  }
-
   numGPUs_ = gpus;
+  setCUDAStream(ptrToStream);
   if (numGPUs_ > numDevices()) return fastKronInvalidArgument;
   isDistributed_ = gpus > 1;
 
@@ -454,4 +442,19 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
   }
 
   return fastKronSuccess;
+}
+
+void CUDAKernelDatabase::setCUDAStream(void* ptrToStream) {
+  streams.clear();
+  cudaStream_t* t = new cudaStream_t;
+  *t = 0;
+  for (int i = 0; i < numGPUs_; i++) {
+    if (ptrToStream != NULL) {
+      cudaStream_t* s = new cudaStream_t;
+      *s = *(((cudaStream_t*)ptrToStream) + i);
+	    streams.push_back((void*)s);
+    }
+    else
+	    streams.push_back(t);
+  }
 }

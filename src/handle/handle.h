@@ -39,7 +39,7 @@ struct FastKronHandle {
   }
 
   // fastKronError initBackends();
-
+  
 #ifdef ENABLE_CUDA
   CUDAKernelDatabase cudaKernels;
 #endif
@@ -84,6 +84,7 @@ struct FastKronHandle {
   fastKronError initX86Backend();
   fastKronError initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   fastKronError initHIPBackend(void* ptrToStream);
+  fastKronError setStream(fastKronBackend backends, void* ptrToStream);
 
   //TODO: these two functions should be a part of utils?
   fastKronError allocDistributedX(void* dX[], void* hX, uint M, uint K);

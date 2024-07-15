@@ -86,6 +86,11 @@ fastKronError fastKronInitX86(fastKronHandle handlePtr) {
   return ((FastKronHandle*)handlePtr)->initX86Backend();
 }
 
+fastKronError fastKronSetStream(fastKronHandle handlePtr, fastKronBackend backend,
+                                void* ptrToStream) {
+  return ((FastKronHandle*)handlePtr)->setStream(backend, ptrToStream);
+}
+
 fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
                        size_t* resultSize, size_t* tempSize) {
   KMMProblem problem(FastKronTypeNone, M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);

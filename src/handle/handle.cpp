@@ -260,6 +260,27 @@ fastKronError FastKronHandle::initX86Backend() {
 #endif
 }
 
+fastKronError FastKronHandle::setStream(fastKronBackend backend, void* ptrToStream) {
+  if (!hasBackend(backend)) return fastKronBackendNotAvailable;
+  if (ptrToStream == NULL) return fastKronInvalidArgument;
+
+  if (backend == fastKronBackend_CUDA) {
+#if ENABLE_CUDA
+  cudaKernels.setCUDAStream(ptrToStream);
+#else
+  return fastKronBackendNotAvailable;
+#endif
+  } else if (backend == fastKronBackend_HIP) {
+#if ENABLE_HIP
+  hipKernels.setHIPStream(ptrToStream);
+#else
+  return fastKronBackendNotAvailable;
+#endif
+  }
+
+  return fastKronSuccess;
+}
+
 // fastKronError FastKronHandle::initBackends() {
 //   fastKronError err = fastKronSuccess;
   

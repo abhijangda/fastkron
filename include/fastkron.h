@@ -63,6 +63,7 @@ fastKronError fastKronInitDistributedCUDA(fastKronHandle handle, void *ptrToStre
 //TODO: Need to provide a setcudastream function
 fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream);
 fastKronError fastKronInitX86(fastKronHandle handle);
+fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, void* ptrToStream);
 
 //TODO: A different function for setting stream of handle
 fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
@@ -87,20 +88,6 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
                      double* Y, double alpha, double beta,
                      double *Z, double* temp1, double* temp2);
 
-// fastKronError sgekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
-//                        fastKronOp opX, fastKronOp opFs);
-// fastKronError dgekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
-//                        fastKronOp opX, fastKronOp opFs);
-// fastKronError igekmmTune(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], 
-//                        fastKronOp opX, fastKronOp opFs);
-
-// fastKronError kronSGEMMOutofCore(fastKronHandle handle, const uint32_t NumKronMats, float* x, float* kronMats[], float** result,
-//                                uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], cudaStream_t stream);
-// fastKronError kronSGEMMOutofCoreX(fastKronHandle handle, const uint32_t NumKronMats, float* x, float* kronMats[], float** result,
-//   uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], cudaStream_t stream[]);
-// fastKronError kronIGEMMOutofCoreX(fastKronHandle handle, const uint32_t NumKronMats, int* x, int* kronMats[], int** result,
-//   uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], cudaStream_t stream[]);
-
 //TODO: modify such that the results are always written to the supplied result pointer 
 fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint32_t NumKronMats, void* x[], void* kronMats[], void* result[],
                                  uint32_t M, uint32_t N, uint32_t K, uint32_t KronMatCols[], uint32_t KronMatRows[], 
@@ -108,8 +95,4 @@ fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint32_t NumKron
 
 fastKronError allocDistributedX(fastKronHandle handle, void* dX[], void* hX, uint32_t M, uint32_t K);
 fastKronError gatherDistributedY(fastKronHandle handle, void* dY[], void* hY, uint32_t M, uint32_t K, uint32_t NumKronMats, uint32_t KronMatCols[], uint32_t KronMatRows[]);
-// fastKronError allocDistributedX(fastKronHandle handle, int* dX[], int* hX, uint32_t M, uint32_t K);
-// fastKronError gatherDistributedY(fastKronHandle handle, int* dY[], int* hY, uint32_t M, uint32_t K, uint32_t NumKronMats, uint32_t KronMatCols[], uint32_t KronMatRows[]);
-// fastKronError allocDistributedX(fastKronHandle handle, double* dX[], double* hX, uint32_t M, uint32_t K);
-// fastKronError gatherDistributedY(fastKronHandle handle, double* dY[], double* hY, uint32_t M, uint32_t K, uint32_t NumKronMats, uint32_t KronMatCols[], uint32_t KronMatRows[]);
 }
