@@ -23,9 +23,9 @@ namespace env {
   DistComm getDistComm() {
     char* val = getenv(DIST_COMM);
     if (val == nullptr) return DistComm::DistCommNone;
-    if (strcmp(val, "P2P") == 0) return DistComm::P2P;
+    if (strcmp(val, "P2P")  == 0) return DistComm::P2P;
     if (strcmp(val, "NCCL") == 0) return DistComm::NCCL;
-    std::cout << "Invalid value for DIST_COMM=" << val << std::endl;
+    std::cout << "Invalid distributed communicator" << val << std::endl;
     return DistComm::DistCommNone;
   }
 

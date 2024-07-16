@@ -20,6 +20,16 @@ if(OpenMP_CXX_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "12.0")
+    message (FATAL_ERROR "Require Clang 12.0 or later")
+  endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11.0")
+    message (FATAL_ERROR "Require GCC/G++ 11.0 or later")
+  endif()
+endif()
+
 set(PKG_CONFIG_FILE libFastKron.pc)
 
 #### Options ####
