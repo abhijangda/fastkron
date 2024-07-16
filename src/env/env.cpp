@@ -7,7 +7,7 @@
 namespace env {
   #define ENV_FASTKRON(x) "FASTKRON_" x;
 
-  static char DIST_COMM[] = "DIST_COMM";
+  static char COMM[] = ENV_FASTKRON("COMM");
   static char TUNE[]      = "TUNE";
   static char LOGLEVEL[]  = ENV_FASTKRON("LOG");
 
@@ -21,7 +21,7 @@ namespace env {
   }
 
   DistComm getDistComm() {
-    char* val = getenv(DIST_COMM);
+    char* val = getenv(COMM);
     if (val == nullptr) return DistComm::DistCommNone;
     if (strcmp(val, "P2P")  == 0) return DistComm::P2P;
     if (strcmp(val, "NCCL") == 0) return DistComm::NCCL;
@@ -37,4 +37,19 @@ namespace env {
     std::cout << "Invalid log level '" << val << "'" << std::endl;
     return LogLevel::Nothing;
   }
+}
+
+std::ostream& operator<<(std::ostream &out, DistComm comm) {
+  switch (comm) {
+    case DistComm::DistCommNone:
+      out << "CommNone";
+      break;
+    case DistComm::P2P:
+      out << "P2P";
+      break;
+    case DistComm::NCCL:
+      out << "NCCL";
+      break;
+  }
+  return out;
 }

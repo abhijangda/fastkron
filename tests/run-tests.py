@@ -35,13 +35,13 @@ test_cases = {k : {'single':{}, 'multi': {}} for k in all_backends}
 
 test_cases['cuda']['single'] = {'gen-single-gpu-kernels' : ['single-gpu-cuda-NN', 'single-gpu-cuda-TT']}
 test_cases['cuda']['multi'] = {
-  'gen-multi-cuda-tests-kernel'         : ['DIST_COMM=NCCL multi-cuda-no-fusion-tests',
-                                           'DIST_COMM=P2P multi-cuda-no-fusion-tests'],
+  'gen-multi-cuda-tests-kernel'         : ['FASTKRON_COMM=NCCL multi-cuda-no-fusion-tests',
+                                           'FASTKRON_COMM=P2P multi-cuda-no-fusion-tests'],
   'gen-multi-cuda-tuner-kernels'        : ['multi-cuda-tuner-tests'],
-  'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['DIST_COMM=P2P multi-cuda-no-fusion-non-square-tests',
-                                                        'DIST_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
-  'gen-multi-cuda-distinct-shapes'      : ['DIST_COMM=P2P multi-cuda-distinct-shapes',
-                                           'DIST_COMM=NCCL multi-cuda-distinct-shapes']
+  'gen-multi-cuda-no-fusion-non-square-tests-kernel' : ['FASTKRON_COMM=P2P multi-cuda-no-fusion-non-square-tests',
+                                                        'FASTKRON_COMM=NCCL multi-cuda-no-fusion-non-square-tests'],
+  'gen-multi-cuda-distinct-shapes'      : ['FASTKRON_COMM=P2P multi-cuda-distinct-shapes',
+                                           'FASTKRON_COMM=NCCL multi-cuda-distinct-shapes']
 }
 
 test_cases['x86']['single'] = {'gen-x86-kernels' : ['x86-cpu-NN', 'x86-cpu-TT']}

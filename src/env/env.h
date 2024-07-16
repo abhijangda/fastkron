@@ -6,6 +6,9 @@ enum DistComm {
   NCCL,
 };
 
+
+std::ostream& operator<<(std::ostream &out, DistComm comm);
+
 enum LogLevel {
   Nothing = 0,
   Info = 1,
