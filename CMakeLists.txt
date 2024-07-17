@@ -5,12 +5,24 @@ set(CMAKE_HIP_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_HIP_STANDARD_REQUIRED True)
 
+#### Options ####
+option(ENABLE_CUDA "Enable CUDA"                    ON)
+option(ENABLE_X86  "Enable X86"                     ON)
+option(ENABLE_ARM  "Enable ARM"                    OFF)
+option(ENABLE_HIP  "Enable ROCM/HIP"               OFF)
+option(FULL_TUNE   "Do Full Tuning"                OFF)
+option(PYMODULE    "Install and Build as PyModule" OFF)
+
 project(FastKron 
   VERSION 1.0
   LANGUAGES CXX)
 
-find_package(OpenMP REQUIRED)
 find_package(Python3 REQUIRED)
+if (ENABLE_X86)
+  find_package(OpenMP REQUIRED)
+else()
+  find_package(OpenMP)
+endif()
 
 if(OpenMP_CXX_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -31,14 +43,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 set(PKG_CONFIG_FILE libFastKron.pc)
-
-#### Options ####
-option(ENABLE_CUDA "Enable CUDA"                    ON)
-option(ENABLE_X86  "Enable X86"                     ON)
-option(ENABLE_ARM  "Enable ARM"                    OFF)
-option(ENABLE_HIP  "Enable ROCM/HIP"               OFF)
-option(FULL_TUNE   "Do Full Tuning"                OFF)
-option(PYMODULE    "Install and Build as PyModule" OFF)
 
 if(ENABLE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)

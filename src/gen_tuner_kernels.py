@@ -291,10 +291,12 @@ class GPUKernel(Kernel):
   
   def optimizedCUDAArch(self):
     smXX = ""
-    if self.arch == "ampere":
+    if self.arch == "ampere" or self.arch == "hopper":
       return "800"
     elif self.arch == "volta":
       return "700"
+    elif self.arch == "maxwell" or self.arch == "pascal":
+      return "500"
 
   def hostInvokeFile(self):
     return "\n".join(['#include "kernels/cuda/kernel.cuh"', "",
@@ -353,6 +355,7 @@ class KernelTemplate:
     parts = iter(template.split('_'))
     self.backend = next(parts)
     self.arch = next(parts)
+    self.arch = self.arch.split('|')
     if self.backend.lower() == "cuda" or self.backend.lower() == "hip":
       self.num_threads = next(parts)
       if self.num_threads != "*":
@@ -379,7 +382,7 @@ class KernelTemplate:
   def is_template_of_kernel(self, kernel):
     if not (self.backend == "*" or self.backend == kernel.backend):
       return False
-    if not (self.arch == "*" or self.arch == kernel.arch):
+    if not (self.arch[0] == "*" or kernel.arch in self.arch):
       return False
     if self.backend.lower() == "cuda" or self.backend.lower() == "hip":
       if not (self.num_threads == "*" or kernel.num_threads == self.num_threads):
