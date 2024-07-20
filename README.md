@@ -5,13 +5,13 @@ FastKron contains a specialized algorithm and implementations of GeKMM rather th
 FastKron avoids extra transposes and adds more optimizations including fusion of multiple kernels.
 Therefore, FastKron performs orders of magnitude better than baseline GPyTorch, NVIDIA cuTensor, and HPTT.
 FastKron obtains upto 90% of the maximum FLOPs of a NVIDIA Tesla A100 and XX% of an AMD EPYC XXXX 64-Core with AVX512. 
+FastKron supports float and double data type.
+Fastkron provides a C++ library and a Python library compatible with PyTorch and Numpy.
 
-This repository provides the source code of FastKron, Makefile, test cases, and the API.
+# Add Graphs
 
-## Add Graphs
-
-## Hardware Support Matrix
-|  | float | double |
+# Hardware Support Matrix
+|  | Linux | WSL2 |
 |----------|----------|----------|
 | x86  SIMD   | :white_check_mark:   | :white_check_mark: |
 | AVX256   | :white_check_mark: | :white_check_mark: |
@@ -19,7 +19,67 @@ This repository provides the source code of FastKron, Makefile, test cases, and 
 | SM50+ CUDA cores    |:white_check_mark: | :white_check_mark: |
 | SM80+ Tensor cores  | :x: | :x: |
 
-### Build
+# Example Usage
+
+
+# Build from scratch
+Build the C++ library, libFastKron.so, to use with C++ programs or the Python library PyFastKron.  
+
+### Required Pre-requisites
+On Ubuntu :
+```
+sudo apt update && sudo apt install gcc linux-headers-$(uname -r) make g++ git python3-dev wget unzip python3-pip build-essential devscripts debhelper fakeroot intel-mkl cmake
+```
+
+### CUDA Pre-requisite
+Install CUDA 11+ from https://developer.nvidia.com/cuda/ .
+
+### Clone repository
+Clone repository with submodules using 
+```
+git clone --recurse-submodules https://github.com/parasailteam/cusync.git
+```
+
+If already cloned and want to only clone submodules, use
+```
+git submodule update --init --recursive
+```
+
+### libFastKron
+Build FastKron as C++ library using below commands: 
+
+```mkdir build/
+cd build/
+cmake ..
+make -j
+```
+
+To install run
+```make install```
+
+By default both x86 and CUDA backends are built. use CMAKE option `-DENABLE_CUDA=OFF` to disable CUDA backend or `-DENABLE_X86=OFF` to disable x86 backend.
+
+#### Run Tests
+
+Run tests using 
+```
+make tests
+```
+
+### PyFastKron
+Install PyFastKron using pip
+
+```
+pip install .
+```
+
+#### Run Tests
+Run Python tests using pytest
+
+```
+pytest
+```
+
 FastKron requires generating CUDA kernels for one or more problem sizes using
 `src/gen_tuner_kernels.py`. For example, generating CUDA kernels for M = 1024, N = 5, P = 8 with OpX and OpF set to N.
 
