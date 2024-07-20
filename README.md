@@ -13,10 +13,10 @@ This repository provides the source code of FastKron, Makefile, test cases, and 
 ## Hardware Support Matrix
 |  | float | double |
 |----------|----------|----------|
-| x86  SIMD   | :heavy_check_mark:   | :heavy_check_mark: |
-| AVX256   | :heavy_check_mark: | :heavy_check_mark: |
-| AVX512   | :heavy_check_mark: |:heavy_check_mark: |
-| SM50+ CUDA cores    |:heavy_check_mark: | :heavy_check_mark: |
+| x86  SIMD   | :white_check_mark:   | :white_check_mark: |
+| AVX256   | :white_check_mark: | :white_check_mark: |
+| AVX512   | :white_check_mark: |:white_check_mark: |
+| SM50+ CUDA cores    |:white_check_mark: | :white_check_mark: |
 | SM80+ Tensor cores  | :x: | :x: |
 
 ### Build
