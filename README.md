@@ -4,7 +4,7 @@ FastKron is a fast library for computing Generalized Kronecker-Matrix Matrix Mul
 FastKron contains a specialized algorithm and implementations of GeKMM rather than using existing linear algebra operations.
 FastKron avoids extra transposes and adds more optimizations including fusion of multiple kernels.
 Therefore, FastKron performs orders of magnitude better than baseline GPyTorch, NVIDIA cuTensor, and HPTT.
-FastKron obtains upto 90% of the maximum FLOPs of a NVIDIA Tesla A100 and XX% of an AMD EPYC XXXX 64-Core with AVX512. 
+FastKron obtains upto 90% of the maximum FLOPs of a NVIDIA Tesla A100 and same FLOPs as Intel MKL of an AMD EPYC 7V12 64-Core with AVX256. 
 FastKron supports float and double data type.
 Fastkron provides a C++ library and a Python library compatible with PyTorch and Numpy.
 
@@ -27,7 +27,7 @@ For more details look [Fast Kronecker Matrix-Matrix Multiplication on GPUs](http
 The directory `example/` provides example for using FastKron's CUDA and x86 backend using both C++ and Python.
 Before using an example, follow below instructions to build FastKron. 
 
-# Build from scratch
+# Build
 Build the C++ library, libFastKron.so, to use with C++ programs or the Python library, PyFastKron, to use with PyTorch or Numpy programs.
 
 ### Required Pre-requisites
