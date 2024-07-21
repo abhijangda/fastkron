@@ -42,7 +42,7 @@ Install CUDA 11+ from https://developer.nvidia.com/cuda/ .
 ### Clone repository
 Clone repository with submodules using 
 ```
-git clone --recurse-submodules https://github.com/parasailteam/cusync.git
+git clone --recurse-submodules https://github.com/abhijangda/fastkron.git
 ```
 
 If already cloned and want to only clone submodules, use
@@ -64,11 +64,9 @@ To install run
 
 By default both x86 and CUDA backends are built. use CMAKE option `-DENABLE_CUDA=OFF` to disable CUDA backend or `-DENABLE_X86=OFF` to disable x86 backend.
 
-#### Run Tests
-
 Run tests using 
 ```
-make tests
+make run_tests
 ```
 
 ### PyFastKron
@@ -78,10 +76,18 @@ Install PyFastKron using pip
 pip install .
 ```
 
+Run tests using 
+```
+pytest
+```
+
 # Documentation
 
-API: 
+API: [documents/api.md](https://github.com/abhijangda/KroneckerGPU/blob/main/documents/api.md)
 
+Autotuning: [documents/autotuning.md](https://github.com/abhijangda/KroneckerGPU/blob/main/documents/autotuning.md)
+
+Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/KroneckerGPU/blob/main/documents/multigpu.md)
 
 # Citation
 
