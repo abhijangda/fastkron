@@ -13,6 +13,7 @@ For more details look [Fast Kronecker Matrix-Matrix Multiplication on GPUs](http
 # Performance
 
 ![](https://github.com/abhijangda/fastkron/blob/main/tests/benchmarks/single-cuda-flops.png?raw=true)
+![](https://github.com/abhijangda/fastkron/blob/main/tests/benchmarks/single-x86-flops.png?raw=true)
 
 # Hardware and OS Support
 |  | Linux | WSL2 |
