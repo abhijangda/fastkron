@@ -83,11 +83,11 @@ pytest
 
 # Documentation
 
-API: [documents/api.md](https://github.com/abhijangda/KroneckerGPU/blob/main/documents/api.md)
+API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/api.md)
 
-Autotuning: [documents/autotuning.md](https://github.com/abhijangda/KroneckerGPU/blob/main/documents/autotuning.md)
+Autotuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)
 
-Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/KroneckerGPU/blob/main/documents/multigpu.md)
+Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)
 
 # Citation
 
