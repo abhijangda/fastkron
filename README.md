@@ -8,9 +8,11 @@ FastKron obtains upto 90% of the maximum FLOPs of a NVIDIA Tesla A100 and XX% of
 FastKron supports float and double data type.
 Fastkron provides a C++ library and a Python library compatible with PyTorch and Numpy.
 
-# Add Graphs
+# Performance
 
-# Hardware Support Matrix
+
+
+# Hardware and OS Support
 |  | Linux | WSL2 |
 |----------|----------|----------|
 | x86  SIMD   | :white_check_mark:   | :white_check_mark: |
@@ -23,7 +25,7 @@ Fastkron provides a C++ library and a Python library compatible with PyTorch and
 
 
 # Build from scratch
-Build the C++ library, libFastKron.so, to use with C++ programs or the Python library PyFastKron.  
+Build the C++ library, libFastKron.so, to use with C++ programs or the Python library, PyFastKron, to use with PyTorch or Numpy programs.
 
 ### Required Pre-requisites
 On Ubuntu :
@@ -118,42 +120,7 @@ python setup.py install
 ### Example
 An example CUDA program to use FastKron is written as follows:
 ```
-//example.cu
-#include <fastKron.h>
 
-int main() {
-  //Define Problem Sizes
-  int N = 5;
-  int M = 1024;
-  int P = 8, Q = 8;
-  
-  //Allocate inputs and output
-  float* x, *fs[], *y;
-  cudaMalloc(&x, M * (int)powf(P, N) * sizeof(float));
-  for (int i = 0; i < N; i++) cudaMalloc(&fs[i], P*Q * sizeof(float));
-  cudaMalloc(&y, M * (int)powf(Q, N) * sizeof(float));
-  
-  //Initialize FastKron
-  fastKronHandle handle;
-  fastKronInit(&handle);
-  
-  //Get Temporary size and allocate temporary
-  size_t tempSize;
-  gekmmSizes(handle, M, N, P, Q, nullptr, &tempSize);
-  float* temp;
-  cudaMalloc(&temp, tempSize * sizeof(float));
-
-  //Tune for best performing kernel
-  sgekmmTune(handle, M, N, P, Q, 0);
-
-  //Do KronMatmul using the tuned kernel
-  sgekmm(handle, M, N, P, Q,  
-         x, fs, y, 1, 0, nullptr, 
-         temp, nullptr, 0);
-  
-  //Destroy FastKron
-  fastKronDestroy(handle);
-}
 ```
 Compiling using nvcc, add the include directory, and link to `libFastKron.so`
 
