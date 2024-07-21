@@ -8,6 +8,8 @@ FastKron obtains upto 90% of the maximum FLOPs of a NVIDIA Tesla A100 and XX% of
 FastKron supports float and double data type.
 Fastkron provides a C++ library and a Python library compatible with PyTorch and Numpy.
 
+For more details look [Fast Kronecker Matrix-Matrix Multiplication on GPUs](https://dl.acm.org/doi/abs/10.1145/3627535.3638489).
+
 # Performance
 
 
@@ -21,8 +23,9 @@ Fastkron provides a C++ library and a Python library compatible with PyTorch and
 | SM50+ CUDA cores    |:white_check_mark: | :white_check_mark: |
 | SM80+ Tensor cores  | :x: | :x: |
 
-# Example Usage
-
+# Example
+The directory `example/` provides example for using FastKron's CUDA and x86 backend using both C++ and Python.
+Before using an example, follow below instructions to build FastKron. 
 
 # Build from scratch
 Build the C++ library, libFastKron.so, to use with C++ programs or the Python library, PyFastKron, to use with PyTorch or Numpy programs.
@@ -75,56 +78,28 @@ Install PyFastKron using pip
 pip install .
 ```
 
-#### Run Tests
-Run Python tests using pytest
+# Documentation
+
+API: 
+
+
+# Citation
 
 ```
-pytest
+@inproceedings{10.1145/3627535.3638489,
+author = {Jangda, Abhinav and Yadav, Mohit},
+title = {Fast Kronecker Matrix-Matrix Multiplication on GPUs},
+year = {2024},
+isbn = {9798400704352},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3627535.3638489},
+doi = {10.1145/3627535.3638489},
+booktitle = {Proceedings of the 29th ACM SIGPLAN Annual Symposium on Principles and Practice of Parallel Programming},
+pages = {390–403},
+numpages = {14},
+keywords = {graphics processing units, CUDA, kronecker product, linear algebra},
+location = {Edinburgh, United Kingdom},
+series = {PPoPP '24}
+}
 ```
-
-FastKron requires generating CUDA kernels for one or more problem sizes using
-`src/gen_tuner_kernels.py`. For example, generating CUDA kernels for M = 1024, N = 5, P = 8 with OpX and OpF set to N.
-
-`python src/gen_tuner_kernels.py -same-factors 5 8,8 -backend cuda -opX N -opF N`
-
-Then we can build `libFastKron.so` using 
-
-```mkdir build/
-cd build/
-cmake ..
-make -j
-```
-
-### Tests
-To run tests execute
-
-```
-python tests/run-tests.py
-```
-
-### API
-FastKron provide following API functions:
-* `fastKronInit/fastKronDestroy` initializes or destroys fastKron handle.
-* `<type>gekmm` does single GPU KronMatmul, where the type follows BLAS conventions, i.e., `s` for float, `d` for double, `i` for integer, and `l` for long.
-* `<type>gekmmTune` performs autotuning for a given size over all compiled CUDA kernels and stores the best CUDA kernel series in its internal state.
-* `kronDistributed<type>GEMM ` does multi GPU KronMatmul and follows the same convention as its single-GPU counterpart
-
-### Python Module
-The repository contains a Python module, `PyFastKron`. The module is a Python wrapper over CUDA API functions.
-It can be installed with 
-
-```
-python setup.py install
-```
-
-### Example
-An example CUDA program to use FastKron is written as follows:
-```
-
-```
-Compiling using nvcc, add the include directory, and link to `libFastKron.so`
-
-```nvcc example.cu -Isrc/ -L build/ -lFastKron -o example```
-
-Run the example 
-```./example```
