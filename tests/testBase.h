@@ -7,6 +7,9 @@
 #include <unistd.h>
 
 #include "fastkron.h"
+#ifdef ENABLE_MULTI_GPU
+#include "fastkronMg.h"
+#endif
 #include "handle/handle.h"
 
 #ifndef __TEST_BASE_H__
@@ -302,8 +305,9 @@ template<typename T>
 static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T* x[], T* kpMats[], T* result[],
             uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], 
             T* temp1[], T* temp2[], cudaStream_t stream[]) {
+#ifdef ENABLE_MULTI_GPU
   if (std::is_same<T, float>::value) {
-    FastKronCHECK(kronDistributedSGEMM(handle, NUM_KP_MATS,
+    FastKronCHECK(fastkronMgSGEMM(handle, NUM_KP_MATS,
                                   (void**)x, (void**)kpMats, (void**)result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, 
                                   (void**)temp1, (void**)temp2, 
@@ -320,6 +324,7 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
   }
 
   return;
+#endif
 }
 #endif
 
@@ -475,8 +480,11 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
       #ifdef TEST_BACKEND_CUDA
         if (gpus == 1)
           FastKronCHECK(fastKronInitCUDA(handle, &stream[0]));
-        else
-          FastKronCHECK(fastKronInitDistributedCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
+        else {
+          #ifdef ENABLE_MULTI_GPU
+            FastKronCHECK(fastKronMgInitCUDA(handle, &stream[0], gpus, gpuInRows, gpuInCols, kronBatch));
+          #endif
+          }
       #endif
       break;
     case fastKronBackend_X86:
@@ -505,8 +513,10 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = nullptr;}
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
-    FastKronCHECK(allocDistributedX(handle, (void**)dX, (void**)hX, M, K));
-    FastKronCHECK(allocDistributedX(handle, (void**)dY, (void**)hY, M, N));
+  #ifdef ENABLE_MULTI_GPU
+    FastKronCHECK(fastkronMgAllocX(handle, (void**)dX, (void**)hX, M, K));
+    FastKronCHECK(fastkronMgAllocX(handle, (void**)dY, (void**)hY, M, N));
+  #endif
   } else {
     FastKronCHECK(backendMalloc(backend, (void**)&dX[0], sizeX));
     FastKronCHECK(backendMalloc(backend, (void**)&dY[0], resultSize));
@@ -574,8 +584,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
     if (useDistributed) {
-#ifdef TEST_BACKEND_CUDA
-      kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
+#if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
+      fastkronMgSGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
     } else {
       printf("546: %p %p %p\n", dX[0], dResult[0], dTemp1[0]);
@@ -594,7 +604,9 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
     if (useDistributed) {
-      FastKronCHECK(gatherDistributedY(handle, (void**)dResult, (void**)dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+#ifdef ENABLE_MULTI_GPU
+      FastKronCHECK(fastkronMgGatherY(handle, (void**)dResult, (void**)dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+#endif
     } else {
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
@@ -637,7 +649,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //Warm Up iterations
     for (uint i = 0; i < warmup; i++) {
       if (useDistributed) {
-#ifdef TEST_BACKEND_CUDA
+#if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
       } else {
@@ -686,7 +698,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
           starttime = getCurrTime();
         }
         if (useDistributed) {
-#ifdef TEST_BACKEND_CUDA
+#if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
           kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
         } else {

@@ -43,6 +43,7 @@ CUDAKernelDatabase::CUDAKernelDatabase() : isDistributed_(false) {
 void CUDAKernelDatabase::free() {
   streams.clear();
   if (isDistributed_) {
+#ifdef ENABLE_MULTI_GPU
     for (uint g = 0; g < gpusInM_; g++) {
       int s = pthread_barrier_destroy(&barriers_[g]);
       PTHREAD_BARRIER_CHECK(s);
@@ -55,6 +56,7 @@ void CUDAKernelDatabase::free() {
       for (int i=0; i<ncclComms.size(); i++)
         ncclCommDestroy((ncclComm_t)ncclComms[i]);
     }
+#endif
   }
 }
 
@@ -344,6 +346,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
   }
 
   if (isDistributed_) {
+#ifdef ENABLE_MULTI_GPU
     bool allP2PAccess = true;
     for (int g1 = 0; g1 < gpus; g1++) {
       for (int g2 = 0; g2 < gpus; g2++) {
@@ -439,6 +442,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus, int gpusInM,
       int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
       PTHREAD_BARRIER_CHECK(s);
     }
+#endif
   }
 
   return fastKronSuccess;

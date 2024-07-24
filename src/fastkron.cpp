@@ -73,8 +73,8 @@ fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream) {
   return ((FastKronHandle*)handlePtr)->initCUDABackend(ptrToStream, 1, 1, 1, 1);
 }
 
-fastKronError fastKronInitDistributedCUDA(fastKronHandle handlePtr, void *ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
-  return ((FastKronHandle*)handlePtr)->initCUDABackend(ptrToStream, gpus, gpusInM, gpusInK, gpuLocalKrons);
+fastKronError fastKronMgInitCUDA(fastKronHandle handlePtr, void *streams, int gpus, int gpusInM, int gpusInK, int gpuLocalKrons) {
+  return ((FastKronHandle*)handlePtr)->initCUDABackend(streams, gpus, gpusInM, gpusInK, gpuLocalKrons);
 }
 
 fastKronError fastKronInitHIP(fastKronHandle handlePtr, void *ptrToStream) {
@@ -132,17 +132,17 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
 //   return Autotuner(*handle).tune(KMMProblem(FastKronInt, M, N, Ps, Qs, opX, opFs));
 // }
 
-fastKronError kronDistributedSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
+fastKronError fastkronMgSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
                                  void* streams) {
   return ((FastKronHandle*)handle)->distributedsgekmm(NumKronMats, (float**)x, (float**)kronMats, (float**)result, M, N, K, 
                                    KronMatCols, KronMatRows, (float**)temp1, (float**)temp2, streams);
 }
 
-fastKronError allocDistributedX(fastKronHandle handle, void* dX[], void* hX, uint M, uint K) {
+fastKronError fastkronMgAllocX(fastKronHandle handle, void* dX[], void* hX, uint M, uint K) {
   return ((FastKronHandle*)handle)->allocDistributedX((void**)dX, (void*)hX, M, K);
 }
-fastKronError gatherDistributedY(fastKronHandle handle, void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+fastKronError fastkronMgGatherY(fastKronHandle handle, void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
   return ((FastKronHandle*)handle)->gatherDistributedY((void**)dY, (void*)hY, M, K, NumKronMats, KronMatCols, KronMatRows);
 }
 

@@ -12,6 +12,11 @@ option(ENABLE_ARM  "Enable ARM"                    OFF)
 option(ENABLE_HIP  "Enable ROCM/HIP"               OFF)
 option(FULL_TUNE   "Do Full Tuning"                OFF)
 option(PYMODULE    "Install and Build as PyModule" OFF)
+option(ENABLE_MULTI_GPU "Enable Multi GPU"         OFF)
+
+if (ENABLE_MULTI_GPU AND NOT ENABLE_CUDA)
+  message(FATAL_ERROR "ENABLE_MULTI_GPU requires ENABLE_CUDA")
+endif()
 
 project(FastKron 
   VERSION 1.0
@@ -192,7 +197,7 @@ set(SOURCES
     ${SRC}/kmm/kmmalgo.cpp
     ${SRC}/kmm/matrix.cpp)
 
-if (ENABLE_CUDA)
+if (ENABLE_CUDA AND ENABLE_MULTI_GPU)
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cu)
 else()
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cpp)
@@ -227,12 +232,21 @@ else()
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libFastKron.pc.in ${PKG_CONFIG_FILE} @ONLY)
   add_custom_target(install_pkgconfig
                     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${PKG_CONFIG_FILE} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
+  
+  set(PUBLIC_HEADERS include/fastkron.h)
+  
+  if (ENABLE_MULTI_GPU AND ENABLE_CUDA) 
+    set (PUBLIC_HEADERS ${PUBLIC_HEADERS} include/fastkronMg.h)
+  endif()
 
-  set_target_properties(FastKron PROPERTIES PUBLIC_HEADER "include/fastkron.h")
+  set_target_properties(FastKron PROPERTIES PUBLIC_HEADER PUBLIC_HEADERS)
   install(TARGETS FastKron)
 endif()
 
-target_link_libraries(FastKron PRIVATE nccl)
+if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
+  target_link_libraries(FastKron PRIVATE nccl)
+endif()
+
 target_include_directories(FastKron 
                            PRIVATE 
                               ${SRC}/
