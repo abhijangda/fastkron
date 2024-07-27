@@ -3,7 +3,7 @@
 ### Types and Enums
 
 `enum fastKronBackend` represents backend type for FastKron with following possible values:
-* `  fastKronBackend_NONE`: No backend. Used as a placeholder.
+* `fastKronBackend_NONE`: No backend. Used as a placeholder.
 * `fastKronBackend_X86`: x86 backend.
 * `fastKronBackend_CUDA`: NVIDIA CUDA backend.
 * `fastKronBackend_ARM`: ARM backend. **Future Work**
@@ -92,29 +92,51 @@ Get error description for given fastKronError.
 
 `fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream)`
 
-fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream);
-fastKronError fastKronInitX86(fastKronHandle handle);
-fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, void* ptrToStream);
+Initializes the CUDA backend with stream only if fastKronHandle was initialized with CUDA backend.
 
-//TODO: A different function for setting stream of handle
-fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                       size_t* resultSize, size_t* tempSize);
+* **Parameters**
+    * `handle`: A fastKronHandle initialized with CUDA backend.
+    * `ptrToStream`: A pointer to CUDA stream.
 
-fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     float* X, fastKronOp opX,
-                     float* Fs[], fastKronOp opFs,
-                     float* Y, float alpha, float beta,
-                     float *Z, float* temp1, float* temp2);
-fastKronError igekmm(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     int* X, fastKronOp opX,
-                     int* Fs[], fastKronOp opFs, 
-                     int* Y, int alpha, int beta,
-                     int *Z, int* temp1, int* temp2);
-fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     double* X, fastKronOp opX,
-                     double* Fs[], fastKronOp opFs,
-                     double* Y, double alpha, double beta,
-                     double *Z, double* temp1, double* temp2);
+* **Returns**: `fastKronSuccess` for no error or the error occurred.
+
+`fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream)`
+
+Initializes the HIP backend with stream only if fastKronHandle was initialized with CUDA backend.
+**This function is not implemented yet but is provided for the future**
+
+* **Parameters**
+    * `handle`: A fastKronHandle initialized with CUDA backend.
+    * `ptrToStream`: A pointer to CUDA stream.
+
+* **Returns**: `fastKronSuccess` for no error or the error occurred.
+
+`fastKronError fastKronInitX86(fastKronHandle handle)`
+
+Initializes the x86 backend with stream only if fastKronHandle was initialized with x86 backend.
+
+* **Parameters**
+    * `handle`: A fastKronHandle initialized with x86 backend.
+
+* **Returns**: `fastKronSuccess` for no error or the error occurred.
+
+`fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, void* ptrToStream)`
+
+Set the CUDA/HIP stream for CUDA/HIP backend only if CUDA/HIP backend was initialized with the handle.
+
+* **Parameters**
+    * `handle`: A fastKronHandle initialized with CUDA or HIP backend.
+    * `backend` : `fastKronBackend_CUDA` or `fastKronBackend_HIP`.
+    * `ptrToStream`: A pointer to CUDA or HIP stream.
+
+* **Returns**: `fastKronSuccess` for no error or the error occurred.
+
+`fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[], size_t* resultSize, size_t* tempSize)`
+
+
+
+`fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],float* X, fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y, float alpha, float beta, float *Z, float* temp1, float* temp2)`
+
+`fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],int* X, fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y, int alpha, int beta, int *Z, int* temp1, int* temp2)`
+
+`fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],double* X, fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y, double alpha, double beta, double *Z, double* temp1, double* temp2)`
