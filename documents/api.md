@@ -1,6 +1,6 @@
 # FastKron API
 
-### Types and Enums
+## Types and Enums
 
 `enum fastKronBackend` represents backend type for FastKron with following possible values:
 * `fastKronBackend_NONE`: No backend. Used as a placeholder.
@@ -22,10 +22,14 @@
   * `fastKronInvalidKMMProblem`: Size values representing a problem are not valid.
   * `fastKronOtherError`: Undefined Error
 
+`enum fastKronOp` represents operation on input matrices. FastKron requires all matrices to be of row major order.
+* `fastKronOp_N`: No operation. The input matrix is considered as row major.
+* `fastKronOp_T`: Transpose the matrix from column major to row major.
+
 `fastKronHandle` is the type of handle for FastKron.
 
 
-### API Functions
+## Helper Functions
 
 `fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends)`
 
@@ -131,41 +135,53 @@ Set the CUDA/HIP stream for CUDA/HIP backend only if CUDA/HIP backend was initia
 
 * **Returns**: `fastKronSuccess` for no error or the error occurred.
 
-`fastKronError gekmmSizes(fastKronHandle handle, 
-                            uint32_t M, uint32_t N, 
-                            uint32_t Ps[], uint32_t Qs[], 
-                            size_t* resultSize, 
-                            size_t* tempSize)`
 
-sssssssssssssssssssssssssss
+## Generalized Kronecker Matrix-Matrix Multiplication Functions 
+
+These functions are used to do Generalized Kronecker Matrix-Matrix Multiplication (GeKMM) of the form:
+
+$Y = \alpha ~ op(X) \times (op(F^1) \otimes op(F^2) \otimes \dots op(F^N)) + \beta Z$
+
+where,
+* $op$ is no-transpose or transpose operation on a matrix.
+* each $op(F^i)$ is a row-major matrix of size $P^i \times Q^i$.
+* $F^i \otimes F^j$ is Kronecker Product of two matrices
+* $op(X)$ is a row-major matrix of size $M \times \left( \prod_{i = 1} ^ N P^i \right)$
+* $Y$ and $Z$ are row-major matrices of size $M \times \left( \prod_{i = 1} ^ N Q^i \right)$
+* $\alpha$ and $\beta$ are scalars
+
+`fastKronError gekmmSizes(fastKronHandle handle, 
+                          uint32_t M, uint32_t N, 
+                          uint32_t Ps[], uint32_t Qs[], 
+                          size_t* resultElems, 
+                          size_t* tempElems)`
+
+Obtain the number of elements of the result matrix and temporary matrices for GeKMM.
+The function writes to `resultElems` and `tempElems`.
+
+* **Parameters**
+    * `handle` is an initialized variable of fastKronHandle.
+    * `M` is number of rows of $X$, $Y$, and $Z$.
+    * `N` is number of Kronecker factors, $F^i$s.
+    * `Ps` and `Qs` are arrays containing rows and columns of all $N$ Kronecker factors.
+    * `resultElems` [OUT] is a pointer to the number of elements of $Y$.
+    * `tempElems` [OUT] is a pointer to the number of elements of temporary buffers required to do GeKMM.
+
+* **Returns**
+    Write values to resultElems and tempElems. Return `fastKronSuccess` for no error or the error occurred.
 
 `fastKronError sgekmm(fastKronHandle handle, 
                       fastKronBackend backend, 
                       uint32_t M, uint32_t N,
                       uint32_t Ps[], uint32_t Qs[],
-                      float* X, fastKronOp opX,
-                      float* Fs[], fastKronOp opFs,
+                      const float* X, fastKronOp opX,
+                      const float* Fs[], fastKronOp opFs,
                       float* Y, 
                       float alpha, float beta, 
-                      float *Z,
+                      const float *Z,
                       float* temp1, float* temp2)`
 
-ssssssssssssssssssssssss
-
-`fastKronError igekmm(fastKronHandle handle, 
-                      fastKronBackend backend, 
-                      uint32_t M, uint32_t N,
-                      uint32_t Ps[], uint32_t Qs[],
-                      int* X, fastKronOp opX,
-                      int* Fs[], fastKronOp opFs,
-                      int* Y,
-                      int alpha, int beta,
-                      int *Z,
-                      int* temp1, int* temp2)`
-
-sdsdsd
-
-
+                      
 `fastKronError dgekmm(fastKronHandle handle,
                       fastKronBackend backend,
                       uint32_t M, uint32_t N,
@@ -176,3 +192,26 @@ sdsdsd
                       double alpha, double beta,
                       double *Z,
                       double* temp1, double* temp2)`
+
+Perform GeKMM on 32-bit floating point or 64-bit double floating point values stored in input matrices, $X$, $F^i$ s, and $Z$ and write output to $Y$.
+The function requires temporary storage wh ..... TODO .
+Value of pointer to $Z$ can be NULL only if beta is 0.
+
+* **Parameters**:
+    * `handle` is an initialized variable of fastKronHandle.
+    * `backend` is the `fastKronBackend` to use to perform the computation.
+    * `M` is number of rows of $X$, $Y$, and $Z$.
+    * `N` is the number of Kronecker factors, $F^i$ s.
+    * `Ps` and `Qs` are arrays containing rows and columns of all $N$ Kronecker factors.
+    * `X` is the pointer to $X$.
+    * `opX` is operation on $X$ so that $op(X)$ is a row-major matrix.
+    * `Fs` is an array of N pointers for each $F^i$ s.
+    * `opFs` is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+    * `Y` [OUT] is pointer to the result of GeKMM.
+    * `alpha` and `beta` are the scalars
+    * `Z` is pointer to $Z$. This pointer can be NULL only if `beta` is 0.
+    * `temp1` is a temporary buffer required for the computation.
+    * `temp2` is another temporary buffer required only when .... 
+
+* **Returns**
+    Write result of GeKMM to `Y`. Return `fastKronSuccess` for no error or the error occurred.

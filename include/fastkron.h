@@ -67,24 +67,24 @@ fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, 
 
 //TODO: A different function for setting stream of handle
 fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                       size_t* resultSize, size_t* tempSize);
+                       size_t* resultElems, size_t* tempElems);
 
 fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     float* X, fastKronOp opX,
-                     float* Fs[], fastKronOp opFs,
+                     const float* X, fastKronOp opX,
+                     const float* Fs[], fastKronOp opFs,
                      float* Y, float alpha, float beta,
-                     float *Z, float* temp1, float* temp2);
+                     const float *Z, float* temp1, float* temp2);
 fastKronError igekmm(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     int* X, fastKronOp opX,
-                     int* Fs[], fastKronOp opFs, 
+                     const int* X, fastKronOp opX,
+                     const int* Fs[], fastKronOp opFs, 
                      int* Y, int alpha, int beta,
-                     int *Z, int* temp1, int* temp2);
+                     const int *Z, int* temp1, int* temp2);
 fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     double* X, fastKronOp opX,
-                     double* Fs[], fastKronOp opFs,
+                     const double* X, fastKronOp opX,
+                     const double* Fs[], fastKronOp opFs,
                      double* Y, double alpha, double beta,
-                     double *Z, double* temp1, double* temp2);
+                     const double *Z, double* temp1, double* temp2);
 }
