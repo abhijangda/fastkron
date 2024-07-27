@@ -11,10 +11,17 @@ Fastkron provides a C++ library and a Python library compatible with PyTorch and
 For more details look [Fast Kronecker Matrix-Matrix Multiplication on GPUs](https://dl.acm.org/doi/abs/10.1145/3627535.3638489).
 
 # Performance
+We compare FastKron with state-of-the-art baselines of existing algorithms.
+GPyTorch implements the traditional shuffle algorithm that uses matrix multiplication and transpose. GPyTorch runs on NVIDIA GPUs and x86 CPUs.
+NVIDIA cuTensor and TCCG (https://github.com/HPAC/tccg) are tensor contraction engines for NVIDIA GPUs and x86 CPUs respectively.
+Graphs below shows the performance of FastKron against these baselines.
 
 | NVIDIA A100 SXM 80GB | AMD 7742 64-Core with AVX2|
 |-|-|
 | ![](https://github.com/abhijangda/fastkron/blob/main/tests/benchmarks/single-a100-flops.png?raw=true)|![](https://github.com/abhijangda/fastkron/blob/main/tests/benchmarks/single-x86-flops.png?raw=true)|
+
+The graphs above multiplies a matrix of shape [M, P<sup>N</sup>] with a Kronecker Product of N matrices of size [P, Q].
+FastKron performs significantly better than existing baselines.
 
 # Hardware and OS Support
 |  | Linux | WSL2 |
@@ -26,7 +33,7 @@ For more details look [Fast Kronecker Matrix-Matrix Multiplication on GPUs](http
 | SM80+ Tensor cores  | :x: | :x: |
 
 # Example
-The directory `example/` provides example for using FastKron's CUDA and x86 backend using both C++ and Python.
+The directory `example/` pinclude examples of using FastKron's CUDA and x86 backend using both C++ and Python.
 Before using an example, follow below instructions to build FastKron. 
 
 # Build
