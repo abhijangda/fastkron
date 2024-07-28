@@ -1,6 +1,6 @@
 # FastKron
 
-FastKron is a fast library for computing Generalized Kronecker-Matrix Matrix Multiplication (GeKMM) on NVIDIA GPUs and X86 CPUs.
+FastKron is a fast library for computing *Generalized Kronecker-Matrix Matrix Multiplication (GeKMM)* on NVIDIA GPUs and X86 CPUs.
 FastKron contains a specialized algorithm and implementations of GeKMM rather than using existing linear algebra operations.
 FastKron avoids extra transposes and adds more optimizations including fusion of multiple kernels.
 Therefore, FastKron performs orders of magnitude better than baseline GPyTorch, NVIDIA cuTensor, and HPTT.

@@ -16,7 +16,7 @@ int main() {
   //Initialize FastKron with CUDA
   fastKronHandle handle;
   fastKronInit(&handle, fastKronBackend_CUDA);
-  
+
   //Initialize FastKron's CUDA with stream
   cudaStream_t stream;
   cudaStreamCreate(&stream);
