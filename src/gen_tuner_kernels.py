@@ -633,7 +633,8 @@ def parse_same_factors(case):
 
 if __name__ == "__main__":
   from argparse import RawTextHelpFormatter
-  parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter)
+  parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
+                                   description="Generate kernels for a GeKMM problem. For example usage see documents/autotuning.md.")
   parser.add_argument('-distinct-factors'  , required=False, type=str, nargs="+", action='append',
                                              help = "A list of factor rows and columns: N P1,Q1, P2,Q2, P3,Q3")
   parser.add_argument('-same-factors'      , required=False, type=str, nargs="+", action='append',

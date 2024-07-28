@@ -37,13 +37,13 @@ where,
 The first step is to generate all valid kernels for the problem sizes using `src/gen_tuner_kernels.py`.
 
 ```
-python ../src/gen_tuner_kernels.py -backend <x86 or cuda> -archs <x86 or cuda archs> -distinct-factors N P1,Q1 P2,Q2 P3,Q3 ... -types <float or double> -opt-levels 3
+python ../src/gen_tuner_kernels.py -backend <x86 or cuda> -archs <x86 or cuda archs> -distinct-factors N P1,Q1 P2,Q2 P3,Q3 ... -types <float or double> -opX <op> -opF <op> -opt-levels 3
 ```
 
-For example, generate CUDA kernels for Ampere architecture (SM80+) with N=4 and all Ps = Qs = 8.
+For example, generate CUDA kernels for Ampere architecture (SM80+) with opX = N, opF = T, N=4 and all Ps = Qs = 8.
 
 ```
-python ../src/gen_tuner_kernels.py -backend cuda -archs ampere -distinct-factors 3 8,8 8,8 8,8 -types float -opt-levels 3 
+python ../src/gen_tuner_kernels.py -backend cuda -archs ampere -distinct-factors 3 8,8 8,8 8,8 -types float -opX N -opF T -opt-levels 3
 ```
 
 The next step is to run CMake with `FULL_TUNE=ON` and enable the backend but switch off other backends, and do make.
