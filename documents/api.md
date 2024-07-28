@@ -140,7 +140,7 @@ Set the CUDA/HIP stream for CUDA/HIP backend only if CUDA/HIP backend was initia
 
 These functions are used to do Generalized Kronecker Matrix-Matrix Multiplication (GeKMM) of the form:
 
-$Y = \alpha ~ op(X) \times (op(F^1) \otimes op(F^2) \otimes \dots op(F^N)) + \beta Z$
+$Z = \alpha ~ op(X) \times (op(F^1) \otimes op(F^2) \otimes \dots op(F^N)) + \beta Y$
 
 where,
 * $op$ is no-transpose or transpose operation on a matrix.
@@ -153,19 +153,19 @@ where,
 `fastKronError gekmmSizes(fastKronHandle handle, 
                           uint32_t M, uint32_t N, 
                           uint32_t Ps[], uint32_t Qs[], 
-                          size_t* resultElems, 
-                          size_t* tempElems)`
+                          size_t* yElems, 
+                          size_t* tmpElems)`
 
 Obtain the number of elements of the result matrix and temporary matrices for GeKMM.
-The function writes to `resultElems` and `tempElems`.
+The function writes to `yElems` and `tmpElems`.
 
 * **Parameters**
     * `handle` is an initialized variable of fastKronHandle.
     * `M` is number of rows of $X$, $Y$, and $Z$.
     * `N` is number of Kronecker factors, $F^i$s.
     * `Ps` and `Qs` are arrays containing rows and columns of all $N$ Kronecker factors.
-    * `resultElems` [OUT] is a pointer to the number of elements of $Y$.
-    * `tempElems` [OUT] is a pointer to the number of elements of temporary buffers required to do GeKMM.
+    * `yElems` [OUT] is a pointer to the number of elements of $Y$.
+    * `tmpElems` [OUT] is a pointer to the number of elements of temporary buffers required to do GeKMM.
 
 * **Returns**
     Write values to resultElems and tempElems. Return `fastKronSuccess` for no error or the error occurred.
@@ -176,9 +176,9 @@ The function writes to `resultElems` and `tempElems`.
                       uint32_t Ps[], uint32_t Qs[],
                       const float* X, fastKronOp opX,
                       const float* Fs[], fastKronOp opFs,
-                      float* Y, 
+                      float* Z, 
                       float alpha, float beta, 
-                      const float *Z,
+                      const float *Y,
                       float* temp1, float* temp2)`
 
                       
@@ -188,14 +188,14 @@ The function writes to `resultElems` and `tempElems`.
                       uint32_t Ps[], uint32_t Qs[],
                       double* X, fastKronOp opX,
                       double* Fs[], fastKronOp opFs,
-                      double* Y, 
+                      double* Z, 
                       double alpha, double beta,
-                      double *Z,
+                      double *Y,
                       double* temp1, double* temp2)`
 
-Perform GeKMM on 32-bit floating point or 64-bit double floating point values stored in input matrices, $X$, $F^i$ s, and $Z$ and write output to $Y$.
-The function requires temporary storage wh ..... TODO .
-Value of pointer to $Z$ can be NULL only if beta is 0.
+Perform GeKMM on using 32-bit floating point or 64-bit double floating point operations on input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
+These functions require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points to the same memory location then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
+All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
 
 * **Parameters**:
     * `handle` is an initialized variable of fastKronHandle.
@@ -207,11 +207,11 @@ Value of pointer to $Z$ can be NULL only if beta is 0.
     * `opX` is operation on $X$ so that $op(X)$ is a row-major matrix.
     * `Fs` is an array of N pointers for each $F^i$ s.
     * `opFs` is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
-    * `Y` [OUT] is pointer to the result of GeKMM.
+    * `Z` [OUT] is pointer to the result of GeKMM.
     * `alpha` and `beta` are the scalars
-    * `Z` is pointer to $Z$. This pointer can be NULL only if `beta` is 0.
-    * `temp1` is a temporary buffer required for the computation.
-    * `temp2` is another temporary buffer required only when .... 
+    * `Y` is pointer to $Y$. This pointer can be NULL only if `beta` is 0.
+    * `temp1` is a temporary buffer required for the computation and cannot be NULL.
+    * `temp2` is another temporary buffer required only when `Z` and `Y` points to the same memory location.
 
 * **Returns**
-    Write result of GeKMM to `Y`. Return `fastKronSuccess` for no error or the error occurred.
+    Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error or the error occurred.
