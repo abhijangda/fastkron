@@ -1,4 +1,4 @@
-# Tune FastKron for a GeKMM Problem
+# Kernel Tuning for a GeKMM Problem
  
 The space of all valid x86/CUDA/HIP/ARM kernels to run a computation can contain 1000s of kernels.
 Hence, it is not practical to building all kernels for each possible kernel size and ship these kernels as part of FastKron.

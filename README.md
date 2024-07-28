@@ -94,7 +94,7 @@ pytest
 
 API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/api.md)
 
-Autotuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)
+Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)
 
 Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)
 

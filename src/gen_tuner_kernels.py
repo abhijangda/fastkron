@@ -632,21 +632,39 @@ def parse_same_factors(case):
   return (m, k, n, ps, qs)
 
 if __name__ == "__main__":
-  print(sys.argv)
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-distinct-factors'  , required=False, type=str,  action='append',     nargs="+")
-  parser.add_argument('-same-factors'      , required=False, type=str,  action='append',     nargs="+")
-  parser.add_argument('-opX'               , required=True , type=str,  nargs="+")
-  parser.add_argument('-opF'               , required=True , type=str,  nargs="+")
-  parser.add_argument('-num-kernels'       , required=False, type=int,   default=10000)
-  parser.add_argument('-no-fuse'           , required=False, action='store_true')
-  parser.add_argument('-dist-kernels'      , required=False, action='store_true', default=False)
-  parser.add_argument('-match-configs'     , required=False, type=str,  action='append',     nargs="+")
-  parser.add_argument('-match-configs-file', required=False, type=str)
-  parser.add_argument('-backend'           , required=True,  type=str)
-  parser.add_argument('-types'             , required=True,  type=str, nargs="+")
-  parser.add_argument('-archs'             , required=True, type=str, nargs="+")
-  parser.add_argument('-opt-levels'         , required=False, type=int, nargs="+")
+  from argparse import RawTextHelpFormatter
+  parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter)
+  parser.add_argument('-distinct-factors'  , required=False, type=str, nargs="+", action='append',
+                                             help = "A list of factor rows and columns: N P1,Q1, P2,Q2, P3,Q3")
+  parser.add_argument('-same-factors'      , required=False, type=str, nargs="+", action='append',
+                                             help = "Number of factors with same rows and columns: N P,Q")
+  parser.add_argument('-opX'               , required=True , type=str, nargs="+",
+                                             help = "Space separated operations on input matrix X.\n" 
+                                                    "   Valid values: N T")
+  parser.add_argument('-opF'               , required=True , type=str, nargs="+",
+                                             help = "Space separated operations on factors Fi.\n"
+                                                    "    Valid values: N T")
+  parser.add_argument('-backend'           , required=True,  type=str,
+                                             help = "Backend to generate kernels for. One of cuda or x86")
+  parser.add_argument('-types'             , required=True,  type=str, nargs="+",
+                                             help = "Space separated matrix element type(s).\n"
+                                                    "    Valid values: float double")
+  parser.add_argument('-archs'             , required=True,  type=str, nargs="+",
+                                             help = "Space separted arch of the backend to generate.\n"
+                                                    "    Valid values for x86: sisd avx avx512\n"
+                                                    "    Valid values for cuda: maxwell pascal volta ampere hopper")
+  parser.add_argument('-num-kernels'       , required=False, type=int, default=10000,
+                                             help = "(Optional) Max number of kernels to generate")
+  parser.add_argument('-no-fuse'           , required=False, action='store_true',
+                                             help = "(Optional) Do not generate fuse kernels")
+  parser.add_argument('-dist-kernels'      , required=False, action='store_true', default=False,
+                                             help = "(Optional) Generate fused multi-gpu kernels")
+  parser.add_argument('-match-configs'     , required=False, type=str, nargs="+",  action='append',
+                                             help = "(Optional) Only generate kernels that matches a template. See class KernelTemplate.")
+  parser.add_argument('-match-configs-file', required=False, type=str,
+                                             help = "(Optional) Only generate kernels that matches strings in the file")
+  parser.add_argument('-opt-levels'        , required=False, type=int, nargs="+",
+                                             help = "(Optional) Space separated optimization levels from 0 to 3 to generate")
   
   args = parser.parse_args()
   parsed_cases = []
