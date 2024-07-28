@@ -140,14 +140,14 @@ Set the CUDA/HIP stream for CUDA/HIP backend only if CUDA/HIP backend was initia
 
 These functions are used to do Generalized Kronecker Matrix-Matrix Multiplication (GeKMM) of the form:
 
-$Z = \alpha ~ op(X) \times (op(F^1) \otimes op(F^2) \otimes \dots op(F^N)) + \beta Y$
+$Z = \alpha ~ op(X) \times \left (op(F^1) \otimes op(F^2) \otimes \dots op(F^N) \right) + \beta Y$
 
 where,
 * $op$ is no-transpose or transpose operation on a matrix.
 * each $op(F^i)$ is a row-major matrix of size $P^i \times Q^i$.
 * $F^i \otimes F^j$ is Kronecker Product of two matrices
-* $op(X)$ is a row-major matrix of size $M \times \left( \prod_{i = 1} ^ N P^i \right)$
-* $Y$ and $Z$ are row-major matrices of size $M \times \left( \prod_{i = 1} ^ N Q^i \right)$
+* $op(X)$ is a row-major matrix of size $M \times \left(P^1 \cdot P^2 \cdot P^3 \dots P^N \right)$
+* $Y$ and $Z$ are row-major matrices of size $M \times \left(Q^1 \cdot Q^2 \cdot Q^3 \dots Q^N \right)$
 * $\alpha$ and $\beta$ are scalars
 
 `fastKronError gekmmSizes(fastKronHandle handle, 
@@ -162,13 +162,13 @@ The function writes to `yElems` and `tmpElems`.
 * **Parameters**
     * `handle` is an initialized variable of fastKronHandle.
     * `M` is number of rows of $X$, $Y$, and $Z$.
-    * `N` is number of Kronecker factors, $F^i$s.
+    * `N` is number of Kronecker factors, $F^i$ s.
     * `Ps` and `Qs` are arrays containing rows and columns of all $N$ Kronecker factors.
     * `yElems` [OUT] is a pointer to the number of elements of $Y$.
     * `tmpElems` [OUT] is a pointer to the number of elements of temporary buffers required to do GeKMM.
 
 * **Returns**
-    Write values to resultElems and tempElems. Return `fastKronSuccess` for no error or the error occurred.
+    Write values to `yElems` and `tmpElems`. Return `fastKronSuccess` for no error or the error occurred.
 
 `fastKronError sgekmm(fastKronHandle handle, 
                       fastKronBackend backend, 
