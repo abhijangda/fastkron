@@ -34,7 +34,8 @@ def device_tests(device):
   run(200, 2, 32, 32, np.double, device)
 
 def test_cpu():
-  device_tests("cpu")
+  if fastKron.hasX86():
+    device_tests("cpu")
 
 if __name__ == "__main__":
   test_cpu()

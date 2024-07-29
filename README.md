@@ -85,6 +85,8 @@ Install PyFastKron using pip
 pip install .
 ```
 
+To disable a backend add `--config-settings=cmake.define.ENABLE_<backend>=OFF` as argument to above command.
+
 Run tests using 
 ```
 pytest

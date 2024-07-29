@@ -3,10 +3,13 @@ requires = ["scikit-build-core"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "PyFastKron"
+name = "pyfastkron"
 version = "1.0"
 requires-python = ">=3.10"
 build-frontend = {name = "build", args = ["--exports", "whole_archive"]}
+
+[tool.scikit-build]
+cmake.verbose = "true"
 
 [tool.scikit-build.cmake.define]
 PYMODULE="ON"

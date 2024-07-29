@@ -34,10 +34,12 @@ def device_tests(device):
   run(200, 2, 32, 32, torch.double, device)
 
 def test_cuda():
-  device_tests("cuda")
+  if fastKron.hasCUDA():
+    device_tests("cuda")
 
 def test_cpu():
-  device_tests("cpu")
+  if fastKron.hasX86():
+    device_tests("cpu")
 
 if __name__ == "__main__":
   test_cuda()

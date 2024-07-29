@@ -74,7 +74,7 @@ PYBIND11_MODULE(FastKron, m) {
                      std::vector<uint64_t> Fs, fastKronOp opFs,
                      uint64_t Y, float alpha, float beta,
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = sgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (float*)X, opX, (float**)Fs.data(), opFs, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
+    auto err = sgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const float*)X, opX, (const float**)Fs.data(), opFs, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
     THROW_ERROR(err);
   }, "sgekmm");
 
@@ -84,7 +84,7 @@ PYBIND11_MODULE(FastKron, m) {
                      std::vector<uint64_t> Fs, fastKronOp opFs,
                      uint64_t Y, int alpha, int beta,
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = igekmm(handle, backend, M, N, Ps.data(), Qs.data(), (int*)X, opX, (int**)Fs.data(), opFs, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
+    auto err = igekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, (const int**)Fs.data(), opFs, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
     THROW_ERROR(err);
   }, "igekmm");
 
@@ -94,7 +94,7 @@ PYBIND11_MODULE(FastKron, m) {
                      std::vector<uint64_t> Fs, fastKronOp opFs,
                      uint64_t Y, double alpha, double beta,
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = dgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (double*)X, opX, (double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
+    auto err = dgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, (const double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
     THROW_ERROR(err);
   }, "dgekmm");
 }

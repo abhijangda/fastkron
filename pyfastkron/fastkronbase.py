@@ -13,10 +13,17 @@ class FastKronBase:
     self.backends = FastKron.backends()
     self.handle = FastKron.init()
 
-    if x86 and FastKronBase.hasBackend(self.backends, FastKron.Backend.X86):
+    self.x86 = x86 and FastKronBase.hasBackend(self.backends, FastKron.Backend.X86)
+    if self.x86:
       FastKron.initX86(self.handle)
 
     self.cuda = cuda and FastKronBase.hasBackend(self.backends, FastKron.Backend.CUDA)
+
+  def hasCUDA(self):
+    return self.cuda
+  
+  def hasX86(self):
+    return self.x86
 
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()

@@ -205,6 +205,7 @@ struct EpilogueParams {
                           (const void*)glD);
   }
 
+  //TODO: Change to alphaAs<type>
   template<typename ElemT>
   CUDA_DEVICE
   ElemT        getAlpha() const {return alpha.get((ElemT)0);}
@@ -216,6 +217,10 @@ struct EpilogueParams {
   template<typename ElemT>
   CUDA_DEVICE
   const ElemT* getD()     const {return (const ElemT*)glD;}
+  
+  template<typename ElemT>
+  CUDA_DEVICE
+  const ElemT* z()     const {return (const ElemT*)glD;}
 };
 
 struct CPUCaches {

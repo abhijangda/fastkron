@@ -252,6 +252,8 @@ else()
   install(TARGETS FastKron)
 endif()
 
+set_target_properties(FastKron PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
   target_link_libraries(FastKron PRIVATE nccl)
 endif()
