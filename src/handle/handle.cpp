@@ -33,6 +33,10 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   if (problem.y().data() == nullptr) return fastKronInvalidArgument;
   if (temp1              == nullptr) return fastKronInvalidArgument;
   if (not hasBackend(backend))       return fastKronInvalidArgument;
+  if (problem.y().data() == problem.z().data() && 
+      (temp1 == nullptr || temp2 == nullptr))
+      return fastKronInvalidArgument;
+
   fastKronError err;
 
   void* temps[2] = {temp1, temp2};

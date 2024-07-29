@@ -7,12 +7,6 @@ import functools
 
 all_kernels_dir = os.path.join(os.path.dirname(__file__), "kernels/")
 
-#Device limits
-#Volta
-MAX_SHARED_MEM = 96 * 1024
-#Ampere
-MAX_SHARED_MEM = 164 * 1024
-#Normal
 MAX_SHARED_MEM = 48 * 1024
 
 def slurp(file):
@@ -648,7 +642,7 @@ if __name__ == "__main__":
   parser.add_argument('-backend'           , required=True,  type=str,
                                              help = "Backend to generate kernels for. One of cuda or x86")
   parser.add_argument('-types'             , required=True,  type=str, nargs="+",
-                                             help = "Space separated matrix element type(s).\n"
+                                             help = "Space separated data type(s).\n"
                                                     "    Valid values: float double")
   parser.add_argument('-archs'             , required=True,  type=str, nargs="+",
                                              help = "Space separted arch of the backend to generate.\n"
@@ -703,7 +697,6 @@ if __name__ == "__main__":
     for cpu_flag in args.archs:
       assert cpu_flag in ["sisd", "avx", "avx512"]
 
-  print("Generating kernels for ", args.backend, args.archs, parsed_cases)
   for opX in args.opX:
     assert opX in ["N", "T"]
   for opF in args.opF:
@@ -713,6 +706,7 @@ if __name__ == "__main__":
 
   if args.match_configs != None:
     assert type(args.match_configs) == list and len(args.match_configs) == 1
+
   assert (args.match_configs == None and args.match_configs_file == None) or \
          (args.match_configs != None and args.match_configs_file == None) or \
          (args.match_configs == None and args.match_configs_file != None)
