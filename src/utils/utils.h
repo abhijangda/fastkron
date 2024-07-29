@@ -3,6 +3,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <cstring>
+#include <cstdint>
 
 #pragma once
 

@@ -3,6 +3,7 @@
 #include <mutex>
 #include <functional>
 #include <condition_variable>
+#include <cstdint>
 
 #pragma once
 
@@ -36,13 +37,13 @@ private:
   volatile task* tasks;
   volatile bool* done;
 
-  uint num_threads;
+  uint32_t num_threads;
   std::vector<std::mutex> wait_mutexes;
   std::vector<std::mutex> tasks_mutexes;
   std::vector<std::condition_variable> waiting_vars;
 
   struct thread_args {
-    uint thread_id;
+    uint32_t thread_id;
     thread_pool* pool;
   };
 
@@ -61,11 +62,11 @@ private:
 public:
   thread_pool(): num_threads(0) {}
 
-  thread_pool(uint num_threads_) : num_threads(num_threads_) {
+  thread_pool(uint32_t num_threads_) : num_threads(num_threads_) {
     init(num_threads_);
   }
 
-  void init(uint num_threads_) {
+  void init(uint32_t num_threads_) {
     num_threads = num_threads_;
     running = true;
     tasks = new task[num_threads];
@@ -73,7 +74,7 @@ public:
     wait_mutexes = std::vector<std::mutex>(num_threads);
     tasks_mutexes = std::vector<std::mutex>(num_threads);
     waiting_vars = std::vector<std::condition_variable>(num_threads);
-    for (uint t = 0; t < num_threads; t++) {
+    for (uint32_t t = 0; t < num_threads; t++) {
       threads.push_back(std::thread(thread_pool::thread_func, thread_args{t, this}));
       done[t] = false;
     }
@@ -84,26 +85,26 @@ public:
   void end() {
     running = false;
     notify_all();
-    for (uint t = 0; t < num_threads; t++) {
+    for (uint32_t t = 0; t < num_threads; t++) {
       threads[t].join();
     }
   }
 
-  void run_task(uint id) {
+  void run_task(uint32_t id) {
     std::unique_lock<std::mutex> tlk(tasks_mutexes[id]);
     volatile task* t = &tasks[id];
     t->f(t->args);
     tlk.unlock();
   }
 
-  void wait_for_task(int id) {
+  void wait_for_task(uint32_t id) {
     std::unique_lock<std::mutex> lk(wait_mutexes[id]);
     waiting_vars[id].wait(lk);
     lk.unlock();
   }
 
   void notify_all() {
-    for (uint i = 0; i < num_threads; i++) {
+    for (uint32_t i = 0; i < num_threads; i++) {
       done[i] = false;
       std::unique_lock<std::mutex> lk(wait_mutexes[i]);
       waiting_vars[i].notify_all();
@@ -112,7 +113,7 @@ public:
   }
 
   void execute_tasks(task* tasks_) {
-    for (uint i = 0; i < num_threads; i++) {
+    for (uint32_t i = 0; i < num_threads; i++) {
       std::unique_lock<std::mutex> tlk(tasks_mutexes[i]);
       tasks[i] = tasks_[i];
       tlk.unlock();
@@ -120,12 +121,12 @@ public:
     notify_all();
   }
 
-  void thread_done(uint thread_id) volatile {
+  void thread_done(uint32_t thread_id) volatile {
     done[thread_id] = true;
   }
 
   void join_tasks() {
-    for (uint t = 0; t < num_threads; t++) {
+    for (uint32_t t = 0; t < num_threads; t++) {
       volatile bool* d = (volatile bool*) &done[t];
       while (*d != true);
     }

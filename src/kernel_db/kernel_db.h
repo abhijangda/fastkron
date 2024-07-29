@@ -1,5 +1,6 @@
 #include <functional>
 #include <map>
+#include <algorithm>
 
 #include "kmm/kmmalgo.h"
 #include "kernels/kernel_info.h"
