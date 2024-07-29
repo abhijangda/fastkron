@@ -97,23 +97,23 @@ fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], ui
   return ((FastKronHandle*)handlePtr)->gekmmSizes(problem, resultSize, tempSize);
 }
 
-fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], float* X, 
-                   fastKronOp opX, float* Fs[], fastKronOp opFs, float* Y,
-                   float alpha, float beta, float *Z, float* temp1, float* temp2) {
+fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const float* X,
+                   fastKronOp opX, const float* Fs[], fastKronOp opFs, float* Y,
+                   float alpha, float beta, const float *Z, float* temp1, float* temp2) {
   KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
-fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], int* X, 
-                   fastKronOp opX, int* Fs[], fastKronOp opFs, int* Y,
-                   int alpha, int beta, int *Z, int* temp1, int* temp2) {
+fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const int* X,
+                   fastKronOp opX, const int* Fs[], fastKronOp opFs, int* Y,
+                   int alpha, int beta, const int *Z, int* temp1, int* temp2) {
   KMMProblem problem(FastKronInt, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
-fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], double* X, 
-                   fastKronOp opX, double* Fs[], fastKronOp opFs, double* Y,
-                   double alpha, double beta, double *Z, double* temp1, double* temp2) {
+fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
+                   fastKronOp opX, const double* Fs[], fastKronOp opFs, double* Y,
+                   double alpha, double beta, const double *Z, double* temp1, double* temp2) {
   KMMProblem problem(FastKronDouble, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<double>(alpha, beta, Z));

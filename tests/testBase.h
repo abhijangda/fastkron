@@ -282,16 +282,16 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, const
                      uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2) {
   if (std::is_same<T, float>::value) {
     FastKronCHECK(sgekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                     (float*)x, opx, (float**)kpMats, opfs, (float*)y,
-                     alpha, beta, (float*)z, (float*)temp1, (float*)temp2));
+                     (const float*)x, opx, (const float**)kpMats, opfs, (float*)y,
+                     alpha, beta, (const float*)z, (float*)temp1, (float*)temp2));
   } else if (std::is_same<T, int>::value) {
     FastKronCHECK(igekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                     (int*)x, opx, (int**)kpMats, opfs, (int*)y,
-                     alpha, beta, (int*)z, (int*)temp1, (int*)temp2));
+                     (const int*)x, opx, (const int**)kpMats, opfs, (int*)y,
+                     alpha, beta, (const int*)z, (int*)temp1, (int*)temp2));
   } else if (std::is_same<T, double>::value) {
     FastKronCHECK(dgekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                     (double*)x, opx, (double**)kpMats, opfs, (double*)y,
-                     alpha, beta, (double*)z, (double*)temp1, (double*)temp2));
+                     (const double*)x, opx, (const double**)kpMats, opfs, (double*)y,
+                     alpha, beta, (const double*)z, (double*)temp1, (double*)temp2));
   } else {
     printf("Invalid type\n");
     return;

@@ -6,7 +6,11 @@ enable_testing()
 include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
 
 set(TESTS_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} ${SRC})
-set(TESTS_LIBS GTest::gtest_main FastKron nccl)
+set(TESTS_LIBS GTest::gtest_main FastKron)
+if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
+  set(TESTS_LIBS ${TESTS_LIBS} nccl)
+endif()
+
 set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_subdirectory(benchmarks)
