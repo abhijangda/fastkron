@@ -25,7 +25,7 @@ class FastKronTorch(FastKronBase):
     if y is not None:
       assert x.device == y.device
 
-  def gekmm(self, x, fs, y, alpha, beta, z, temp, 
+  def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
     if x.device.type == "cuda" and stream is None:
       stream = torch.cuda.current_stream()
@@ -40,4 +40,4 @@ class FastKronTorch(FastKronBase):
     elif x.dtype == torch.double:
       fn = FastKron.dgekmm
 
-    self.xgekmm(fn, self.backend(x.device.type), x, fs, y, alpha, beta, z, temp, trX, trF)
+    self.xgekmm(fn, self.backend(x.device.type), x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)

@@ -16,7 +16,7 @@ class FastKronNumpy(FastKronBase):
   def check(self, x, fs, y):
     self.checkShapeAndTypes(x, fs, y)
 
-  def gekmm(self, x, fs, y, alpha, beta, z, temp, 
+  def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2,
             trX = False, trF = False):
 
     self.check(x, fs, y)
@@ -29,4 +29,4 @@ class FastKronNumpy(FastKronBase):
     elif x.dtype == np.double:
       fn = FastKron.dgekmm
 
-    self.xgekmm(fn, self.backend("cpu"), x, fs, y, alpha, beta, z, temp, trX, trF)
+    self.xgekmm(fn, self.backend("cpu"), x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)

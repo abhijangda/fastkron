@@ -20,7 +20,7 @@ def run(m, n, p, q, dtype, device):
   rs, ts = fastKron.gekmmSizes(x, fs)
   t = torch.zeros(rs, dtype=dtype).to(device)
 
-  fastKron.gekmm(x, fs, y, 1.0, 0.0, None, t)
+  fastKron.gekmm(x, fs, y, 1.0, 0.0, None, t, None)
 
   ref = reference(x, fs)
   val = torch.isclose(y, ref, rtol=1e-04).all().item()

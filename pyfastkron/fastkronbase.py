@@ -61,10 +61,17 @@ class FastKronBase:
     self.checkShapeAndTypes(x, fs, None)
     return FastKron.gekmmSizes(self.handle, x.shape[0], len(fs), self.ps(fs), self.qs(fs))
 
-  def xgekmm(self, fngekmm, backend, x, fs, y, alpha, beta, z, temp, trX = False, trF = False):
+  def xgekmm(self, fngekmm, backend, x, fs, y, alpha, beta, z, temp1, temp2, trX = False, trF = False):
+    #Are pointers valid?
+    assert temp1 is not None
+    assert y is not None
+
+    if z is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
+      assert temp2 is not None
+
     fngekmm(self.handle, backend, x.shape[0], len(fs), self.ps(fs), self.qs(fs),
             self.tensor_data_ptr(x), FastKron.Op.N if not trX else FastKron.Op.T,
             self.fptrs(fs), FastKron.Op.N if not trF else FastKron.Op.T,
             self.tensor_data_ptr(y),
             alpha, beta, 0 if z is None else self.tensor_data_ptr(z), 
-            self.tensor_data_ptr(temp), 0)
+            self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2))
