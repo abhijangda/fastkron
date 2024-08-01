@@ -42,6 +42,8 @@ public:
       idx = idx * parent.m() + row;
       return &ptr[idx];
     }
+
+    return nullptr;
   }
 
   CUDA_DEVICE_HOST

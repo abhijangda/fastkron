@@ -61,8 +61,10 @@ public:
     assert (rstart >= (subn - 1));
 
     uint32_t subk = x().n(), subl = y().n();
-    for (uint32_t i = 0; i <= rstart - subn; i++) {
-      subl = (subl/factors[i].q())*factors[i].p();
+    if (rstart >= subn) {
+      for (uint32_t i = 0; i <= rstart - subn; i++) {
+        subl = (subl/factors[i].q())*factors[i].p();
+      }
     }
     for (uint32_t i = n() - 1; i > rstart; i--) {
       subk = (subk/factors[i].p())*factors[i].q();
