@@ -2,24 +2,24 @@
 
 std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& problem) const {
   std::size_t h = hash<uint>()(problem.m()) ^ hash<uint>()(problem.k()) ^ hash<uint>()(problem.n());
-  for (int i = 0; i < problem.n(); i++) {
+  for (uint32_t i = 0; i < problem.n(); i++) {
     h = h ^ problem.f(i).hash();
   }
   return h;
 }
 
-bool checkDistributedKronSizes(const uint NumKronMats, 
-                               const uint M, const uint N, const uint K, 
-                               const uint KronMatCols[], const uint KronMatRows[],
-                               const uint LocalKrons, const uint gpusInK) {
+bool checkDistributedKronSizes(const uint32_t NumKronMats, 
+                               const uint32_t /*M*/, const uint32_t /*N*/, const uint32_t K, 
+                               const uint32_t KronMatCols[], const uint32_t KronMatRows[],
+                               const uint32_t LocalKrons, const uint32_t gpusInK) {
   uint prevTempN = K;
   
   if (prevTempN % gpusInK != 0) return false;
     
-  for (uint i = 0; i < NumKronMats; i += LocalKrons) {
+  for (uint32_t i = 0; i < NumKronMats; i += LocalKrons) {
     const uint kronMat = NumKronMats - i - 1;
     uint currTempN = prevTempN;
-    for (int k = 0; k < std::min(LocalKrons, NumKronMats - i); k++) {
+    for (uint32_t k = 0; k < std::min(LocalKrons, NumKronMats - i); k++) {
       currTempN = (currTempN/KronMatRows[kronMat - k])*KronMatCols[kronMat - k];
     }
   
@@ -41,8 +41,8 @@ bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
   bool correct = true;
 
   executeGeKMM(problem, nullptr, 0,
-    [](const KMMProblem kmm) {return 1;},
-    [&correct, gpusInK](const KMMProblem kmm, int, void* t1, Matrix result) {
+    [](const KMMProblem /*kmm*/) {return 1;},
+    [&correct, gpusInK](const KMMProblem kmm, int /*rstart*/, void* /*t1*/, Matrix /*result*/) {
       correct = correct && (kmm.l() % gpusInK == 0);
       return fastKronSuccess;
     });
@@ -82,7 +82,7 @@ fastKronError executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
     nextF = std::min(nextF, i+1);
     fastKronOp opX = problem.opX();
     //First iteration write output with op N
-    if (i < problem.n() - 1) {
+    if ((uint32_t)i < problem.n() - 1) {
       opX = fastKronOp_N;
     }
     if (i < nextF) problem = KMMProblem(problem.type(), problem.x(), opX, problem.n(), 
@@ -102,9 +102,9 @@ fastKronError executeGeKMM(KMMProblem problem, void* tmps[2], uint32_t swaps,
 fastKronError reverseExecuteGeKMM(KMMProblem problem, void* tmps[2], Matrix result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<fastKronError (const KMMProblem, int start, void*[2], Matrix)> func) {
-  int nextF = 1;
+  uint32_t nextF = 1;
   fastKronError err;
-  for (int i = 0; i < problem.n(); i = i + nextF) {
+  for (uint32_t i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
     if (i - (problem.n() - 1) < nextF) 
       problem = KMMProblem(problem.type(), problem.x(), problem.opX(), problem.n(), 

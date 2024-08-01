@@ -47,21 +47,28 @@ public:
   KMMProblemT(FastKronType eltype, const uint m, const int n, const uint *ps, const uint *qs, fastKronOp opX, fastKronOp opFs) :
     KMMProblemT(eltype, m, n, ps, qs, nullptr, opX, nullptr, opFs, nullptr) {}
 
+  //TODO: Also initialize opIn and opFactors, and eltype?
+  template<uint32_t OtherMaxFactors>
+  KMMProblemT(const KMMProblemT<OtherMaxFactors>& other) : 
+    in(other.x()), factors(other.fs(), other.n()), out(other.y()) {
+
+  }
+
   void setOpX(fastKronOp op) {opIn = op;}
 
   KMMProblemT rsub(uint32_t rstart, uint32_t subn) const {
-    int subk = x().n(), subl = y().n();
-    for (int i = 0; i <= rstart - subn; i++) {
+    assert (subn <= n());
+    assert (rstart >= (subn - 1));
+
+    uint32_t subk = x().n(), subl = y().n();
+    for (uint32_t i = 0; i <= rstart - subn; i++) {
       subl = (subl/factors[i].q())*factors[i].p();
     }
-    for (int i = n() - 1; i > rstart; i--) {
+    for (uint32_t i = n() - 1; i > rstart; i--) {
       subk = (subk/factors[i].p())*factors[i].q();
     }
 
-    assert (rstart >= 0);
-    assert (subn <= n());
-    assert (rstart - (subn - 1) >= 0);
-
+    
     return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
                        factors.sub(rstart - (subn - 1), subn), opFs(),
                        Matrix(y().m(), subl, y().data()));
@@ -84,12 +91,6 @@ public:
     return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
                        factors.sub(start, subn), opFs(),
                        Matrix(y().m(), subl, y().data()));
-  }
-
-  template<uint32_t OtherMaxFactors>
-  KMMProblemT(const KMMProblemT<OtherMaxFactors>& other) : 
-    in(other.x()), out(other.y()), factors(other.fs(), other.n()) {
-
   }
 
   uint32_t* ps(uint32_t *array) const {

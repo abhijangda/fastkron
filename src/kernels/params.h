@@ -233,23 +233,24 @@ struct CPUCaches {
 template<uint Fused>
 struct KernelParams {
   KMMProblemT<Fused> problem;
-  const uint kp_idx;
-  KernelMode execMode;
   
   Matrix tileX;
   Factor tileF;
   
   uint32_t XshSlices;
   uint32_t XSlices;
+  
+  const uint kp_idx;
+  KernelMode execMode;
   CPUCaches* caches;
 
   KernelParams(KMMProblem problem_, CPUCaches* caches,
                Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
-               problem(problem_), caches(caches),
+               problem(problem_), 
                tileX(tileX), tileF(tileF),
                XshSlices(tileX.n()/problem_.f(0).p()),
                XSlices(problem_.x().n()/problem_.f(0).p()),
-               kp_idx(kp_idx), execMode(execMode) {}
+               kp_idx(kp_idx), execMode(execMode), caches(caches) {}
 };
 
 template<uint Fused>

@@ -18,7 +18,7 @@ enum FastKronType {
   FastKronHalf
 };
 
-static size_t sizeOfFastKronType(FastKronType t) {
+static inline size_t sizeOfFastKronType(FastKronType t) {
   switch (t) {
     case FastKronTypeNone:
       return 0;
@@ -34,7 +34,7 @@ static size_t sizeOfFastKronType(FastKronType t) {
   return 0;
 }
 
-static std::string strOfFastKronType(FastKronType t) {
+static inline std::string strOfFastKronType(FastKronType t) {
   switch(t) {
     case FastKronTypeNone:
       return "NONE";

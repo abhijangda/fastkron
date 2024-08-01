@@ -19,7 +19,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
 
-  for (int row = 0; row < TileF.shape(0); row++) {
+  for (uint32_t row = 0; row < TileF.shape(0); row++) {
     if ((OpF == fastKronOp_N && (kPMultipleOfTileP || tileP + row < F.p())) ||
         (OpF == fastKronOp_T && (kQMultipleOfTileQ || tileQ + row < F.q()))) {
       uint32_t row_elems;
@@ -42,7 +42,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 template<uint OptLevel, uint32_t EpilogueKindVal, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
 static CUDA_DEVICE_HOST
-void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, int fac,
+void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t fac,
                     TileX& XTile, XCache& Xch, YInterim& Ych, X86VecT alphaVec, ElemT alpha) {
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
@@ -131,9 +131,9 @@ template<typename X86VecT,
          typename XCache, typename FCache, typename YInterim,
          typename YRegisters>
 static CUDA_DEVICE_HOST
-void mma(uint32_t tileP, const YElem& y, 
+void mma(uint32_t /*tileP*/, const YElem& y, 
          const XCache& Xch, const FCache& Fch,
-         YInterim& Ych, YRegisters& YReg) {
+         YInterim& /*Ych*/, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
 
   for (uint32_t p = 0; p < Fch.p(); p++) {
@@ -158,7 +158,7 @@ template<uint OptLevel, uint32_t EpilogueKindVal,
          typename KernelParams, typename FusedParams,
          typename TileX, typename FCache, typename YInterim, typename YRegisters>
 static CUDA_DEVICE_HOST
-void store(const KernelParams& params, const FusedParams& fusedParams, const EpilogueParams& epilogueParams, 
+void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const EpilogueParams& epilogueParams, 
            X86VecT beta,
            uint32_t fac,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
@@ -229,7 +229,7 @@ void threadWork(KernelParams<FusedFacs>& params,
                 FusedParams<FusedFacs>& fusedParams,
                 EpilogueParams& epilogueParams,
                 uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
-  constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
+  // constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
@@ -294,7 +294,7 @@ template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP,
          fastKronOp OpX, fastKronOp OpF>
 void cpuKernel(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams,
-               DistributedParams& distParams,
+               DistributedParams& /*distParams*/,
                EpilogueParams& epilogueParams) {
   using OptF  = FixedShapeFactor<fastKronOp_N, ElemT, MaxP, MaxQ>;
   using OptTileF = FixedShapeFactor<OpF, ElemT, TileP, TileQ>;
@@ -313,14 +313,14 @@ void cpuKernel(KernelParams<FusedFacs>& params,
   constexpr bool kFactorShapeSame = KernelOptimizations::IsFactorShapeSame(OptLevel);
 
   Matrix X = params.problem.x();
-  Matrix Y = params.problem.y();
+  // Matrix Y = params.problem.y();
   Factor F = params.problem.f(0);
 
   const uint Q = (kFactorShapeSame) ? MaxQ : F.q();
-  const uint P = (kFactorShapeSame) ? MaxP : F.p();
+  // const uint P = (kFactorShapeSame) ? MaxP : F.p();
 
-  const uint XshSlices = getXshSlices<OptLevel, kTileK, MaxP>(params);
-  const uint XSlices   = getXSlices  <OptLevel, MaxQ>(Y, params);
+  // const uint XshSlices = getXshSlices<OptLevel, kTileK, MaxP>(params);
+  // const uint XSlices   = getXSlices  <OptLevel, MaxQ>(Y, params);
   const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
   const bool hasAlpha  = epilogueParams.getAlpha<ElemT>() != (ElemT)1.0f;
   const bool hasBeta   = epilogueParams.getD<ElemT>() != nullptr && 

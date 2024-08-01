@@ -21,9 +21,9 @@ public:
 public:
   CUDA_DEVICE_HOST
   SliceCPU(uint32_t startrow, uint32_t startcol, uint32_t paramTileK, uint32_t P, Matrix parent) :
-    startrow(startrow), startcol(startcol),
+    parent(parent), startrow(startrow), startcol(startcol),
     tileRows_(OptTileX::M()),
-    P(P), parent(parent),
+    P(P),
     ptr(parent.data<T>(startrow, startcol, OptTileX::Op())) {
       tileCols_ = isTileKSame ? OptTileX::N() : paramTileK;
       rows = (tileRows_ == 1) ? 1 : MIN(tileRows_, parent.m() - startrow);

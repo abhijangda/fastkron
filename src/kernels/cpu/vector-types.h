@@ -370,7 +370,7 @@ class AVXFloat : public X86Vector<float, AVXFloatWrapper> {
 public:
   AVXFloat(AVXFloatWrapper::VecT v) : X86Vector<float, AVXFloatWrapper>(v) {}
   AVXFloat() {}
-  AVXFloat(float zero) {this->zero();}
+  AVXFloat(float /*zero*/) {this->zero();}
 
   static void transpose(AVXFloat rows[]) {
     // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
@@ -407,7 +407,7 @@ class AVXDouble : public X86Vector<double, AVXDoubleWrapper> {
 public:
   AVXDouble(AVXDoubleWrapper::VecT v) : X86Vector<double, AVXDoubleWrapper>(v) {}
   AVXDouble() {}
-  AVXDouble(double zero) {this->zero();}
+  AVXDouble(double /*zero*/) {this->zero();}
 
   static void transpose(AVXDouble rows[]) {
     // https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
@@ -428,7 +428,7 @@ class AVX512Float : public X86Vector<float, AVX512FloatWrapper> {
 public:
   AVX512Float(AVX512FloatWrapper::VecT v) : X86Vector<float, AVX512FloatWrapper>(v) {}
   AVX512Float() {}
-  AVX512Float(float zero) {this->zero();}
+  AVX512Float(float /*zero*/) {this->zero();}
 
   static void transpose(AVX512Float rows[]) {
     // https://gist.github.com/nihui/37d98b705a6a28911d77c502282b4748
@@ -506,7 +506,7 @@ class AVX512Double : public X86Vector<double, AVX512DoubleWrapper> {
 public:
   AVX512Double(AVX512DoubleWrapper::VecT v) : X86Vector<double, AVX512DoubleWrapper>(v) {}
   AVX512Double() {}
-  AVX512Double(double zero) {}
+  AVX512Double(double /*zero*/) {}
 
   static void transpose(AVX512Double rows[]) {
     //https://github.com/romeric/Fastor/blob/master/Fastor/backend/transpose/transpose_kernels.h:_MM_TRANSPOSE8_PD

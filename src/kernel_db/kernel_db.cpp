@@ -119,10 +119,10 @@ TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) 
 
   //No Fused kernel case found
   {
-    fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
+    executeGeKMM(problem, nullptr, problem.n(),
       [](const KMMProblem) {return 1;},
       [&kernelSeries, this]
-        (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+        (const KMMProblem subProblem, int rstart, void*[2], Matrix) {
           std::vector<std::vector<KernelInfo*>> kernels;
           findAllKernels(subProblem, false, kernels);
           auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, kernels), 
