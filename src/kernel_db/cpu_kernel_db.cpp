@@ -105,7 +105,7 @@ fastKronError CPUKernelDatabase::procMemset(uint32_t, Matrix& m, float val) {
 
 fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
   if (ptr == NULL) return fastKronInvalidArgument;
-  delete (char*)ptr;
+  delete[] (char*)ptr;
   return fastKronSuccess;
 }
 

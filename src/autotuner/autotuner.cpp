@@ -222,7 +222,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
     kernelDb->procFree(p, temp1[p]);
     kernelDb->procFree(p, temp2[p]);
     for (uint32_t f = 0; f < problem.n(); f++) {
-      //TODO: // CUDA_CHECK(cudaFree(Fs[g * problem.n() + f]));
+      kernelDb->procFree(p, Fs[p][f]);
     }
   }
   

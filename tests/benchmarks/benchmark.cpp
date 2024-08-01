@@ -66,74 +66,73 @@ int main(int argc, char* argv[]) {
   char* alpha;
   char* beta;
 
-  AnyOption *opt = new AnyOption();
+  AnyOption opt;
 
-  opt->addUsage("Performs KronMatmul of matrix X[M, K] with Kronecker Product of N matrices of shape F[Pi, Qi]");
-  opt->addUsage("rows: Number of Rows of X");
-  opt->addUsage("facs:  Number of Kron Factors");
-  opt->addUsage("fac_rows: Rows of each Kron Factor separated by comma");
-  opt->addUsage("fac_cols: Cols of each Kron Factor separated by comma");
-  opt->addUsage("type:  Type of matrices (float, double, int, long)");
-  opt->addUsage("check: Check results for first run");
-  opt->addUsage("runs:  Number of runs");
-  opt->addUsage("warmup:  Number of warmup runs");
-  opt->addUsage("uva: Allocate and run using NVIDIA UVA");
-  opt->addUsage("backend: Backend one of CUDA, ROCM, X86, ARM");
-  opt->addUsage("gpurows: Rows for temp on GPU. valid only with uva");
-  opt->addUsage("maxkronbatch: Factors rows per inner iteration. valid only with uva");
-  opt->addUsage("nummaxkronbatch");
+  opt.addUsage("Performs KronMatmul of matrix X[M, K] with Kronecker Product of N matrices of shape F[Pi, Qi]");
+  opt.addUsage("rows: Number of Rows of X");
+  opt.addUsage("facs:  Number of Kron Factors");
+  opt.addUsage("fac_rows: Rows of each Kron Factor separated by comma");
+  opt.addUsage("fac_cols: Cols of each Kron Factor separated by comma");
+  opt.addUsage("type:  Type of matrices (float, double, int, long)");
+  opt.addUsage("check: Check results for first run");
+  opt.addUsage("runs:  Number of runs");
+  opt.addUsage("warmup:  Number of warmup runs");
+  opt.addUsage("uva: Allocate and run using NVIDIA UVA");
+  opt.addUsage("backend: Backend one of CUDA, ROCM, X86, ARM");
+  opt.addUsage("gpurows: Rows for temp on GPU. valid only with uva");
+  opt.addUsage("maxkronbatch: Factors rows per inner iteration. valid only with uva");
+  opt.addUsage("nummaxkronbatch");
 
-  opt->setOption("rows", 'm');
-  opt->setOption("facs", 'n');
-  opt->setOption("opx");
-  opt->setOption("opf");
-  opt->setOption("fac_rows", 'p');
-  opt->setOption("fac_cols", 'q');
-  opt->setOption("type", 't');
-  opt->setOption("runs", 'r');
-  opt->setOption("warmup", 'w');
-  opt->setOption("alpha", 'a');
-  opt->setOption("beta", 'b');
+  opt.setOption("rows", 'm');
+  opt.setOption("facs", 'n');
+  opt.setOption("opx");
+  opt.setOption("opf");
+  opt.setOption("fac_rows", 'p');
+  opt.setOption("fac_cols", 'q');
+  opt.setOption("type", 't');
+  opt.setOption("runs", 'r');
+  opt.setOption("warmup", 'w');
+  opt.setOption("alpha", 'a');
+  opt.setOption("beta", 'b');
   
-  opt->setFlag("check", 'c');
-  opt->setFlag("uva", 'u');
-  opt->setOption("gpuLocalKrons");
-  opt->setOption("gpus");
-  opt->setOption("GM");
-  opt->setOption("GK");
+  opt.setFlag("check", 'c');
+  opt.setFlag("uva", 'u');
+  opt.setOption("gpuLocalKrons");
+  opt.setOption("gpus");
+  opt.setOption("GM");
+  opt.setOption("GK");
 
-  opt->setFlag("fuse");
-  opt->setFlag("tune");
+  opt.setFlag("fuse");
+  opt.setFlag("tune");
 
-  opt->setOption("backend");
+  opt.setOption("backend");
 
-  opt->processCommandArgs(argc, argv);
+  opt.processCommandArgs(argc, argv);
   
-  if (!opt->hasOptions()) { /* print usage if no options */
-    opt->printUsage();
-    delete opt;
+  if (!opt.hasOptions()) { /* print usage if no options */
+    opt.printUsage();
     return 1;
   }
 
-  if (opt->getValue('a') == NULL) {
+  if (opt.getValue('a') == NULL) {
     std::cout << "Value of --alpha not provided " << std::endl;
     return 1;
   } else {
-    alpha = opt->getValue('a');
+    alpha = opt.getValue('a');
   }
 
-  if (opt->getValue('b') == NULL) {
+  if (opt.getValue('b') == NULL) {
     std::cout << "Value of --beta not provided " << std::endl;
     return 1;
   } else {
-    beta = opt->getValue('b');
+    beta = opt.getValue('b');
   }
 
-  if (opt->getValue("backend") == NULL) {
+  if (opt.getValue("backend") == NULL) {
     std::cout << "No backend specific" << std::endl;
     return 1;
   } else {
-    char* backendStr = opt->getValue("backend");
+    char* backendStr = opt.getValue("backend");
     if (strcmp(strupr(backendStr), "CUDA") == 0) {
       backend = fastKronBackend_CUDA;
     } else if (strcmp(strupr(backendStr), "HIP") == 0) {
@@ -145,38 +144,38 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (opt->getValue('m') != NULL) {
-    rows = atoi(opt->getValue('m'));
+  if (opt.getValue('m') != NULL) {
+    rows = atoi(opt.getValue('m'));
   }
 
-  if (opt->getValue('n') != NULL) {
-    facs = atoi(opt->getValue('n'));
+  if (opt.getValue('n') != NULL) {
+    facs = atoi(opt.getValue('n'));
   }
 
-  if (opt->getValue('p') != NULL) {
-    fac_rows = opt->getValue('p');
+  if (opt.getValue('p') != NULL) {
+    fac_rows = opt.getValue('p');
   }
   
-  if (opt->getValue('q') != NULL) {
-    fac_cols = opt->getValue('q');
+  if (opt.getValue('q') != NULL) {
+    fac_cols = opt.getValue('q');
   }
   
-  if (opt->getValue('t') != NULL) {
-    type = opt->getValue('t');
+  if (opt.getValue('t') != NULL) {
+    type = opt.getValue('t');
   }
 
-  checkResults = opt->getFlag('c');
+  checkResults = opt.getFlag('c');
 
-  if (opt->getValue('r') != NULL) {
-    runs = atoi(opt->getValue('r'));
+  if (opt.getValue('r') != NULL) {
+    runs = atoi(opt.getValue('r'));
   }
 
-  if (opt->getValue('w') != NULL) {
-    warmup = atoi(opt->getValue('w'));
+  if (opt.getValue('w') != NULL) {
+    warmup = atoi(opt.getValue('w'));
   }
 
-  if (opt->getValue("opx") != NULL) {
-    char* str = opt->getValue("opx");
+  if (opt.getValue("opx") != NULL) {
+    char* str = opt.getValue("opx");
     if (strcmp(str, "N") == 0) {
       opx = fastKronOp_N;
     } else if (strcmp(str, "T") == 0) {
@@ -184,8 +183,8 @@ int main(int argc, char* argv[]) {
     }    
   }
 
-  if (opt->getValue("opf") != NULL) {
-    char* str = opt->getValue("opf");
+  if (opt.getValue("opf") != NULL) {
+    char* str = opt.getValue("opf");
     if (strcmp(str, "N") == 0) {
       opf = fastKronOp_N;
     } else if (strcmp(str, "T") == 0) {
@@ -193,24 +192,24 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  tune = opt->getFlag("tune");
-  useUVA = opt->getFlag('u');
+  tune = opt.getFlag("tune");
+  useUVA = opt.getFlag('u');
   if (useUVA == true) {
     printf("UVA is not supported\n");
     return 0;
   }
 
-  if (opt->getValue("gpuLocalKrons") != NULL)
-    gpuLocalKrons = atoi(opt->getValue("gpuLocalKrons"));
-  if (opt->getValue("gpus") != NULL)
-    gpus = atoi(opt->getValue("gpus"));
-  if (opt->getValue("GM") != NULL)
-    gpuInRows = atoi(opt->getValue("GM"));
-  if (opt->getValue("GK") != NULL)
-    gpuInCols = atoi(opt->getValue("GK"));
+  if (opt.getValue("gpuLocalKrons") != NULL)
+    gpuLocalKrons = atoi(opt.getValue("gpuLocalKrons"));
+  if (opt.getValue("gpus") != NULL)
+    gpus = atoi(opt.getValue("gpus"));
+  if (opt.getValue("GM") != NULL)
+    gpuInRows = atoi(opt.getValue("GM"));
+  if (opt.getValue("GK") != NULL)
+    gpuInCols = atoi(opt.getValue("GK"));
   if (gpus > 1) multiGPU = true;
 
-  useFusion = opt->getFlag("fuse");
+  useFusion = opt.getFlag("fuse");
 
   if (useUVA) {
     if (gpuInRows <= 0 || gpuLocalKrons <= 0) {

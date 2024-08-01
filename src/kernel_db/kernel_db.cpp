@@ -5,9 +5,7 @@
 #include "kernel_db/kernel_db.h"
 #include "utils/logger.h"
 
-KernelDatabase::KernelDatabase() {
-  fastestKernelForShape = new OptimizedKernelForShape();
-}
+KernelDatabase::KernelDatabase() {}
 
 std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> KernelDatabase::filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels) {
   std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> numFusedToKernels;

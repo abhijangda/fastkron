@@ -29,7 +29,7 @@
   } while(0)
 
 #else
-#define CUDACHECK(cmd) ;
+#define CUDACHECK(cmd) {}
 #endif
 
 #ifdef TEST_BACKEND_HIP
@@ -46,7 +46,7 @@
     }                                                 \
   } while(0)
 #else
-#define HIPCHECK(cmd) ;
+#define HIPCHECK(cmd) {}
 #endif
 
 // static double convertTimeValToDouble(struct timeval _time) {
@@ -355,7 +355,7 @@ static fastKronError backendFree(fastKronBackend backend, void* ptr) {
       HIPCHECK(hipFree(ptr));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
-      delete (char*)ptr;
+      delete[] (char*)ptr;
       return fastKronSuccess;
     default:
       return fastKronInvalidArgument;
@@ -749,6 +749,9 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
       }
     }
 
+    delete[] cpuL3Trash1;
+    delete[] cpuL3Trash2;
+
     double perCallTime = elapsedTime/numIters;
     size_t operations = 0;
     long tmpK = K;
@@ -775,6 +778,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     }
     FastKronCHECK(backendFree(backend, dTemp1[g]));
     FastKronCHECK(backendFree(backend, dTemp2[g]));
+    FastKronCHECK(backendFree(backend, dResult[g]));
   }
 
   fastKronDestroy(handle);

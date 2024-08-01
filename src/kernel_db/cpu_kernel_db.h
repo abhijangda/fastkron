@@ -70,6 +70,10 @@ public:
   }
   CPUArchDetails getCPUProperties() const {return *(dynamic_cast<const CPUArchDetails*>(hardware[0]));}
   void free();
+  ~CPUKernelDatabase() {
+    delete[] trash1; delete[] trash2;
+    for (auto detail : hardware) delete detail;
+  }
 };
 
 class X86KernelDatabase : public CPUKernelDatabase {

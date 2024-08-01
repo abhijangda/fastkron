@@ -8,7 +8,6 @@ namespace env {
   #define ENV_FASTKRON(x) "FASTKRON_" x;
 
   static char COMM[]      = ENV_FASTKRON("COMM");
-  static char TUNE[]      = "TUNE";
   static char LOGLEVEL[]  = ENV_FASTKRON("LOG");
 
   bool boolFromIntEnv(char* env, bool defaultVal) {

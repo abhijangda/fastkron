@@ -38,7 +38,6 @@ public:
   std::vector<KernelInfo*> allKernels;
   std::vector<HardwareDetails*> hardware;
   std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
-  OptimizedKernelForShape* fastestKernelForShape;
 
 public:
   KernelDatabase();
