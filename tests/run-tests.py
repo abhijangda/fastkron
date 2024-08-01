@@ -57,10 +57,8 @@ cmake = ""
 for b in backends:
   cmake += f"-DENABLE_{b.upper()}=ON "
 
-if 'cuda' in backends:
-  cmake += '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3"'
-
-execute(f'cmake .. {cmake}')
+if 'single' in single_or_multi:
+  execute(f'cmake .. {cmake}')
 
 for mode in single_or_multi:
   if mode == 'single':
@@ -79,7 +77,7 @@ for mode in single_or_multi:
               print(output)
 
 if 'multi' in single_or_multi:
-  execute(f'cmake .. {cmake} -DFULL_TUNE=ON')
+  execute(f'cmake .. {cmake} -DFULL_TUNE=ON -DENABLE_MULTI_GPU=ON')
   for case in test_cases['cuda'][mode]:
     execute(f'make {case}')
     execute(f'make -j')

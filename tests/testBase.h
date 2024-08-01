@@ -307,7 +307,7 @@ static void kronDistributedGEMM(fastKronHandle handle, const uint NUM_KP_MATS, T
             T* temp1[], T* temp2[], cudaStream_t stream[]) {
 #ifdef ENABLE_MULTI_GPU
   if (std::is_same<T, float>::value) {
-    FastKronCHECK(fastkronMgSGEMM(handle, NUM_KP_MATS,
+    FastKronCHECK(fastKronMgSGEMM(handle, NUM_KP_MATS,
                                   (void**)x, (void**)kpMats, (void**)result,
                                   M, N, K, KP_MAT_N, KP_MAT_K, 
                                   (void**)temp1, (void**)temp2, 
@@ -514,8 +514,8 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
   if (useDistributed) {
   #ifdef ENABLE_MULTI_GPU
-    FastKronCHECK(fastkronMgAllocX(handle, (void**)dX, (void**)hX, M, K));
-    FastKronCHECK(fastkronMgAllocX(handle, (void**)dY, (void**)hY, M, N));
+    FastKronCHECK(fastKronMgAllocX(handle, (void**)dX, (void**)hX, M, K));
+    FastKronCHECK(fastKronMgAllocX(handle, (void**)dY, (void**)hY, M, N));
   #endif
   } else {
     FastKronCHECK(backendMalloc(backend, (void**)&dX[0], sizeX));
@@ -585,7 +585,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     //Run GPU implementation
     if (useDistributed) {
 #if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
-      fastkronMgSGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
+      kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
     } else {
       printf("546: %p %p %p\n", dX[0], dResult[0], dTemp1[0]);
@@ -605,7 +605,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     T* dResultToHost = (T*)malloc(sizeResult);
     if (useDistributed) {
 #ifdef ENABLE_MULTI_GPU
-      FastKronCHECK(fastkronMgGatherY(handle, (void**)dResult, (void**)dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+      FastKronCHECK(fastKronMgGatherY(handle, (void**)dResult, (void**)dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
 #endif
     } else {
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));

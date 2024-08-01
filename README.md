@@ -94,7 +94,9 @@ pytest
 
 # Documentation
 
-API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/api.md)
+FastKron C++ API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/cpp-api.md)
+
+FastKron Python API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/python-api.md)
 
 Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)
 
