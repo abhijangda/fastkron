@@ -50,9 +50,8 @@ public:
   //TODO: Also initialize opIn and opFactors, and eltype?
   template<uint32_t OtherMaxFactors>
   KMMProblemT(const KMMProblemT<OtherMaxFactors>& other) : 
-    in(other.x()), factors(other.fs(), other.n()), out(other.y()) {
-
-  }
+    eltype(other.type()), in(other.x()), opIn(other.opX()), factors(other.fs(), other.n()),
+    opFactors(other.opFs()), out(other.y()) {}
 
   void setOpX(fastKronOp op) {opIn = op;}
 

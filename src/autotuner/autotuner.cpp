@@ -143,7 +143,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
                                   tunedKernels, tunedKernelsMap);
     retKernelSeries = tunedKernels;
   } else {
-#ifdef ENABLE_CUDA
+#if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
     assert(fastKron.hasBackend(fastKronBackend_CUDA));
     assert(fastKron.cudaKernels.isDistributed_ == true);
     if (!checkDistributedKronSizes(problem,
@@ -229,7 +229,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
     Logger(LogLevel::Info) << "  " << (*iter) << std::endl;
-#ifdef ENABLE_CUDA
+#if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
     if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
         ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
         iter->start == 0)) {

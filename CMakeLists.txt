@@ -50,6 +50,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 set(PKG_CONFIG_FILE libFastKron.pc)
+set(WARNING_FLAGS "-Wall -Wextra -Wno-unknown-pragmas") 
 
 if(ENABLE_CUDA)
   check_language(CUDA OPTIONAL)
@@ -67,9 +68,9 @@ if(ENABLE_CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED True)
   
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 ${WARNING_FLAGS}")
     if (CMAKE_BUILD_TYPE MATCHES "Debug")
-      set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
+      set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G ${WARNING_FLAGS}")
     endif()
   else()
      set(ENABLE_CUDA OFF)
@@ -100,9 +101,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # TODO set these as RELEASE flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64-v2 -O3 -Wall -Wextra -Wno-unknown-pragmas")
 
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra -Wno-unknown-pragmas")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64-v2 -O3 ${WARNING_FLAGS}")
+
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 ${WARNING_FLAGS}")
 
 set(CMAKE_HIP_FLAGS "-O3 -Rpass-analysis=kernel-resource-usage --save-temps")
 

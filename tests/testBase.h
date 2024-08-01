@@ -72,14 +72,14 @@
 /**************************************************
                 Matrix Functions
 ***************************************************/
-int one(int i, int j) {return 1;}
-int zero(int i, int j) {return 0;}
-int zeroOne(int i, int j) {return i % 2;}
-int zeroOneJ(int i, int j) {return j % 2;}
-int setToI(int i, int j) {return i;}
-int setToJ(int i, int j) {return j;}
+int one(int, int) {return 1;}
+int zero(int, int) {return 0;}
+int zeroOne(int i, int) {return i % 2;}
+int zeroOneJ(int, int j) {return j % 2;}
+int setToI(int i, int) {return i;}
+int setToJ(int, int j) {return j;}
 int iPlusJ(int i, int j) {return i + j;}
-int randMod(int i, int j) {return rand()%3 + 1;}
+int randMod(int, int) {return rand()%3 + 1;}
 
 template<typename T>
 static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
@@ -122,24 +122,24 @@ void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, T* y, uint M, uint N, uint K
 /**************************************************
           Equality Check Functions
 ***************************************************/
-template<typename T> static bool eqVal(T x, T y) {abort(); printf("invalid type\n"); return false;}
+template<typename T> static inline bool eqVal(T x, T y) {abort(); printf("invalid type\n"); return false;}
 
-template<> bool eqVal(int x, int y) {return x == y;}
+template<> inline bool eqVal(int x, int y) {return x == y;}
 
-template<> bool eqVal(float x, float y) {
+template<> inline bool eqVal(float x, float y) {
   if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
   if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
   return abs((x-y)/y) <= 1e-5;
 }
 
-template<> bool eqVal(double x, double y) {
+template<> inline bool eqVal(double x, double y) {
   if (abs(x) <= 1e-5 && abs(y) <= 1e-5) return true;
   if (abs(y) <= 1e-5) return abs((x-y)/x) <= 1e-5;
   return abs((x-y)/y) <= 1e-5;
 }
 
 template<typename T>
-static bool check(T* ref, T* computed, uint M, uint N) {
+static inline bool check(T* ref, T* computed, uint M, uint N) {
   for (uint i = 0; i < M; i++) {
     for (uint j = 0; j < N; j++) {
       if (!eqVal(ref[i*N + j], computed[i* N + j])) {
@@ -221,7 +221,7 @@ void baselineKPThenMatmul(uint NUM_KP_MATS, int* result, int* x, int* kpout[], i
 //Serial implementation of the new Kron GEMM implementation
 template<typename T>
 void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[], T* y,
-                  uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
+                  uint M, uint /*N*/, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
                   fastKronOp opx, fastKronOp opfs,
                   T alpha, T beta) {
   uint secFacRowMulSize = 1;
@@ -279,7 +279,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[], T* y
 ***************************************************/
 template<typename T>
 static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* z, T* y, T alpha, T beta,
-                     uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2) {
+                     uint M, uint/*N*/, uint/*K*/, uint KP_MAT_N[], uint KP_MAT_K[], T* temp1, T* temp2) {
   if (std::is_same<T, float>::value) {
     FastKronCHECK(sgekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                      (const float*)x, opx, (const float**)kpMats, opfs, (float*)y,
@@ -355,7 +355,7 @@ static fastKronError backendFree(fastKronBackend backend, void* ptr) {
       HIPCHECK(hipFree(ptr));   return fastKronSuccess;
     case fastKronBackend_ARM:
     case fastKronBackend_X86:
-      delete ptr;
+      delete (char*)ptr;
       return fastKronSuccess;
     default:
       return fastKronInvalidArgument;
@@ -415,20 +415,27 @@ static fastKronError backendMemcpyDeviceToHost(fastKronBackend backend, void* ds
               Test Driver
 ***************************************************/
 template<typename T>
-static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
-                uint* KP_MAT_N, uint* KP_MAT_K,
-                fastKronOp opx, fastKronOp opfs,
-                T alpha, T beta,
-                uint numIters, uint warmup, 
-                bool useUVA, int gpuInRows, int gpuInCols, int gpus,
-                uint kronBatch, bool checkResults, bool useFusion, 
-                bool tune, fastKronBackend backend, bool verbose) {
+static inline bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
+                       uint* KP_MAT_N, uint* KP_MAT_K,
+                      fastKronOp opx, fastKronOp opfs,
+                      T alpha, T beta,
+                      uint numIters, uint warmup, 
+                      bool useUVA, int gpuInRows, int gpuInCols, int gpus,
+                      uint kronBatch, bool checkResults, bool useFusion, 
+                      bool tune, fastKronBackend backend, bool verbose) {
   verbose = true;
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
   bool useDistributed = gpus > 1;
   // if (useDistributed and gpuInRows * gpuInCols != gpus)
   //   printf("gpuInRows * gpuInCols != gpus: %d != %d\n", gpuInRows * gpuInCols, gpus);
+  (void)useUVA;
+#if !defined(ENABLE_MULTI_GPU)
+  (void)gpuInCols;
+  (void)gpuInRows;
+  (void)gpus;
+  (void)kronBatch;
+#endif
 
 #ifdef TEST_BACKEND_CUDA
   cudaStream_t stream[gpus];
@@ -512,12 +519,13 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   T *dTemp2[gpus];
   for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = nullptr;}
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
+#ifdef ENABLE_MULTI_GPU
   if (useDistributed) {
-  #ifdef ENABLE_MULTI_GPU
     FastKronCHECK(fastKronMgAllocX(handle, (void**)dX, (void**)hX, M, K));
     FastKronCHECK(fastKronMgAllocX(handle, (void**)dY, (void**)hY, M, N));
-  #endif
-  } else {
+  } else
+#endif
+  {
     FastKronCHECK(backendMalloc(backend, (void**)&dX[0], sizeX));
     FastKronCHECK(backendMalloc(backend, (void**)&dY[0], resultSize));
   }
@@ -583,11 +591,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     printf("540\n");
     if (verbose) printf("running kron gemm\n");
     //Run GPU implementation
-    if (useDistributed) {
 #if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
+    if (useDistributed) {
       kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
+    } else 
 #endif
-    } else {
+    {
       printf("546: %p %p %p\n", dX[0], dResult[0], dTemp1[0]);
       kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1[0], dTemp2[0]);
     }
@@ -603,11 +612,12 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (verbose) printf("checking results\n");
     size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
-    if (useDistributed) {
 #ifdef ENABLE_MULTI_GPU
+    if (useDistributed) {
       FastKronCHECK(fastKronMgGatherY(handle, (void**)dResult, (void**)dResultToHost, M, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K));
+    } else
 #endif
-    } else {
+    {
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
 
@@ -628,8 +638,6 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
   hipEvent_t start[gpus];
   hipEvent_t end[gpus];
 #endif
-
-  float elapsedTime = 1e10;
 
   if (numIters > 0 || warmup > 0) {
     if (backend == fastKronBackend_CUDA) {
@@ -677,6 +685,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
     if (backend == fastKronBackend_X86)
       setMatrix(cpuL3Trash1, l3CacheSize/4, 1, setToI);
     
+    float elapsedTime = 1e10;
     for (int sample = 0; sample < 5; sample++) {
       if (backend == fastKronBackend_CUDA) {
         for (int g = 0; g < gpus; g++) {
@@ -717,7 +726,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
           CUDACHECK(cudaEventRecord(end[g], stream[g]));
           CUDACHECK(cudaEventSynchronize(end[g]));
           if (g == 0) {
-            float t;
+            float t = std::numeric_limits<float>::max();
             CUDACHECK(cudaEventElapsedTime(&t, start[g], end[g]));
             elapsedTime = std::min(elapsedTime, t);
           }
@@ -728,7 +737,7 @@ static bool run(const uint M, const uint N, const uint K, const uint NUM_KP_MATS
           HIPCHECK(hipEventRecord(end[g], stream[g]));
           HIPCHECK(hipEventSynchronize(end[g]));
           if (g == 0) {
-            float t;
+            float t = std::numeric_limits<float>::max();
             HIPCHECK(hipEventElapsedTime(&t, start[g], end[g]));
             elapsedTime = std::min(elapsedTime, t);
           }

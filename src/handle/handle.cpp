@@ -103,7 +103,7 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result
   
   uint gpuM;
 
-#ifdef ENABLE_CUDA
+#if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
   if (cudaKernels.isDistributed_) {
     getDistributedSizes(problem.m(), tempCols,   gpuM, tempCols);
     getDistributedSizes(problem.m(), resultCols, gpuM, resultCols);

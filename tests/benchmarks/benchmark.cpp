@@ -7,8 +7,8 @@
 #include <sstream>
 
 char* strupr(char* str) {
-  uint len = strlen(str);
-  for (int i = 0; i < len; i++) {
+  uint32_t len = strlen(str);
+  for (uint32_t i = 0; i < len; i++) {
     str[i] = toupper(str[i]);
   }
 
