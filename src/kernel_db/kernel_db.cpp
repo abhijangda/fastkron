@@ -154,7 +154,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
     uint factorIdx, DistributedParams distParams) {
   const uint runs = 5;
   const uint warmups = 5;
-  KernelInfo* bestKernel;
+  KernelInfo* bestKernel = nullptr;
   float minTime;
   std::vector<std::vector<KernelInfo*>> allKernels;
 

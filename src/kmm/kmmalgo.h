@@ -110,7 +110,7 @@ public:
 
   void swap(void* temp1, void* temp2) {
     void* x1 = y().data();
-    void* y1;
+    void* y1 = nullptr;
     if (x1 == temp1) {        
       y1 = temp2;
     } else if (x1 == temp2) {
