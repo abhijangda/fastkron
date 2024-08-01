@@ -93,35 +93,35 @@ fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
   }
 }
 
-fastKronError CPUKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& ptr) {
-  ptr = new float[size];
+fastKronError CPUKernelDatabase::procMalloc(uint32_t, size_t size, void*& ptr) {
+  ptr = new char[size];
   return ptr != nullptr ? fastKronSuccess : fastKronInvalidArgument; 
 }
 
-fastKronError CPUKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val) {
+fastKronError CPUKernelDatabase::procMemset(uint32_t, Matrix& m, float val) {
   memset<float>(m.data<float>(0), m.numel(), val);
   return fastKronSuccess;
 }
 
-fastKronError CPUKernelDatabase::procFree(uint32_t proc, void* ptr) {
-  if (ptr == NULL) fastKronInvalidArgument;
-  delete ptr;
+fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
+  if (ptr == NULL) return fastKronInvalidArgument;
+  delete (char*)ptr;
   return fastKronSuccess;
 }
 
-//f_128x128_32x128_1_1x16384_1x16x4_NN_0_0
 fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
                                  KernelMode execMode, 
                                  bool distP2PStore,
-                                 int warmups, int runs,
+                                 int, int runs,
                                  float& runtime) {
   runtime = std::numeric_limits<float>::max();
   //Avoid the SISD kernel when running on AVX/AVX512
   if ((*(dynamic_cast<const X86ArchDetails*>(hardware[0]))).simd != X86SIMD::SISD) {
     if (((X86Kernel*)kernel)->simd == X86SIMD::SISD) return fastKronSuccess;
   }
+  //TODO:use the same sample/run in cuda
   // if (kernel->tileX.n() < 8192 || kernel->tileF.q() < 64) return fastKronSuccess;
   fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
@@ -236,7 +236,7 @@ X86KernelDatabase::X86KernelDatabase() {
   // Get processor brand string
   // This seems to be working for both Intel & AMD vendors
   std::string model = "";
-  for(int i=0x80000002; i<0x80000005; ++i) {
+  for(uint32_t i=0x80000002; i<0x80000005; ++i) {
       cpuid(i, cpuidregs);
       char name[16];
       ((unsigned*)name)[0] = cpuidregs[0];
@@ -347,7 +347,7 @@ X86KernelDatabase::X86KernelDatabase() {
   loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));
   trash1 = new char[detail->totalL3Size()];
   trash2 = new char[detail->totalL3Size()];
-  for (int i = 0; i < detail->totalL3Size(); i++) {
+  for (uint32_t i = 0; i < detail->totalL3Size(); i++) {
     trash1[i] = i % std::numeric_limits<char>::max();
   }
 

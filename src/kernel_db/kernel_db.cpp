@@ -41,7 +41,7 @@ TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) 
   //TODO: fusion should considered for subproblems
   bool factorsSameShape = true, factorsSquare = true, 
        factorsPowerOfTwoShape = true, factorsLessThanMaxP = true;
-  for (int f = 0; f < problem.n(); f++) {
+  for (uint32_t f = 0; f < problem.n(); f++) {
     const Factor& fac = problem.f(f);
     factorsLessThanMaxP = factorsLessThanMaxP && (fac.p() <= MaxFuseP);
     factorsSquare = factorsSquare && (fac.p() == fac.q());
@@ -70,7 +70,7 @@ TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) 
       if (!numFusedToKernels_T.empty()) {
         auto maxFused = numFusedToKernels_T.begin();
         std::vector<std::vector<KernelInfo*>> k;
-        for (int i = 0; i <= KernelOptimizations::MaxOptLevel(); i++)
+        for (uint32_t i = 0; i <= KernelOptimizations::MaxOptLevel(); i++)
           if (i == KernelOptimizations::MaxOptLevel())  
             k.push_back(maxFused->second);
           else
@@ -98,10 +98,10 @@ TunedKernelsSeries KernelDatabase::__kernelSeriesForProblem(KMMProblem problem) 
     if (firstOpTKernelFound && !numFusedToKernels.empty()) {
       auto fusedIter = numFusedToKernels.begin();
 
-      fastKronError err = executeGeKMM(problem, nullptr, problem.n(),
+      executeGeKMM(problem, nullptr, problem.n(),
         [&fusedIter](const KMMProblem) {return fusedIter->first;},
         [&fusedIter, &kernelSeries, &numFusedToKernels, this]
-          (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+          (const KMMProblem subProblem, int rstart, void*[2], Matrix) {
             auto tk = TunedKernelFromStart(this->kernelForSubProblem(subProblem, fusedIter->second), 
                                           rstart - (subProblem.n() - 1), rstart, subProblem.k(), 0.0f);
             kernelSeries.push_back(tk);
@@ -217,7 +217,6 @@ fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
 }
 
 bool KernelInfo::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) {
-  using Opts = KernelOptimizations::Optimization;
   switch (opt) {
     case Opts::None:
       return true;
@@ -235,6 +234,9 @@ bool KernelInfo::validOptFor(KMMProblem problem, KernelOptimizations::Optimizati
       return getTileX(problem).n() == tileX.n();
     case Opts::FactorShapeSame:
       return f.p() == problem.f(0).p() && f.q() == problem.f(0).q();
+    
+    default:
+      return false;
   }
 
   return false;

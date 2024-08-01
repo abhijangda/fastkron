@@ -66,7 +66,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   err = executeGeKMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) {return kernelSeriesIter->kernel->FusedFacs;},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
-      (const KMMProblem subProblem, int rstart, void* temps[2], Matrix result) {
+      (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
         fastKronError err;
         auto kernel = *kernelSeriesIter;
 
@@ -93,9 +93,9 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, Matrix& result
   uint32_t tempCols = 0;
   uint32_t resultCols = 0;
   auto e = executeGeKMM(problem, nullptr, 0,
-    [](const KMMProblem kmm) {return 1;},
+    [](const KMMProblem) {return 1;},
     [&tempCols, &resultCols]
-    (const KMMProblem kmm, int rstart, void* temps[2], Matrix result) {
+    (const KMMProblem kmm, uint32_t, void*[2], Matrix) {
       tempCols = std::max(tempCols, std::max(kmm.k(), kmm.l()));
       resultCols = kmm.l();
       return fastKronSuccess;
@@ -145,6 +145,11 @@ fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int g
   cudaKernels.init(ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
   return fastKronSuccess;
 #else
+  (void)ptrToStream;
+  (void)gpus;
+  (void)gpusInM;
+  (void)gpusInK;
+  (void)gpuKrons;
   return fastKronBackendNotAvailable;
 #endif
 }
@@ -155,6 +160,7 @@ fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
   hipKernels.init(ptrToStream);
   return fastKronSuccess;
 #else
+  (void)ptrToStream; 
   return fastKronBackendNotAvailable;
 #endif
 }

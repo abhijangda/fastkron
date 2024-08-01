@@ -21,7 +21,7 @@ fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   uint32_t fastKronOptionsAll = fastKronOptionsUseFusion;
   fastKronSetOptions(*handle, fastKronOptionsAll);
 
-  if (backends & fastKronGetBackends() != backends)
+  if ((backends & fastKronGetBackends()) != backends)
     return fastKronInvalidArgument;
 
   return fastKronSuccess;

@@ -22,7 +22,7 @@ struct CPUCache {
   }
 
   ~CPUCache() {
-    for (int i = 0; i < threads; i++) {
+    for (uint32_t i = 0; i < threads; i++) {
       free(ptr[i]);
     }
     free(ptr);

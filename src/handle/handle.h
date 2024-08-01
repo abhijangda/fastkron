@@ -30,10 +30,11 @@ enum ProcType {
 
 struct FastKronHandle {
   void* result_;
+  uint32_t backends;
   Autotuner autotuner;
+
   FastKronHandle(uint32_t backends);
 
-  uint32_t backends;
   bool hasBackend(fastKronBackend backend) {
     return (backends & backend);
   }

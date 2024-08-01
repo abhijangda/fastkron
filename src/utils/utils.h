@@ -102,7 +102,7 @@ static inline int ffs(uint x) {
 
 template<typename T>
 static inline void memset(T* ptr, size_t nelem, T val) {
-  for (int i = 0; i < nelem; i++)
+  for (uint32_t i = 0; i < nelem; i++)
     ptr[i] = val;
 }
 

@@ -31,11 +31,12 @@ struct KernelInfo {
              uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
              fastKronOp opX, fastKronOp opF) :
              invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
-             FusedFacs(FusedFacs), DistributeToGPUs(DistributeToGPUs),
-             RegM(RegM), RegK(RegK), RegQ(RegQ), OptLevel(OptLevel), elemType(elemType),
-             opX(opX), opF(opF) {}
+             opX(opX), opF(opF),
+             RegM(RegM), RegK(RegK), RegQ(RegQ), FusedFacs(FusedFacs), 
+             elemType(elemType), OptLevel(OptLevel),
+             DistributeToGPUs(DistributeToGPUs) {}
   bool isValid() {return invokerFunc != nullptr;}
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
+  virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true) {
     using Opts = KernelOptimizations::Optimization;
 
     bool ret = problem.type() == elemType &&
@@ -72,7 +73,6 @@ struct KernelInfo {
 
   Matrix getTileX(KMMProblem problem) {
     Factor f_ = problem.f(0);
-    Factor tileF_ = getTileF(problem);
 
     uint32_t kernelTileSlices = tileX.n()/f.p();
     uint32_t problemTileSlices = problem.x().n()/f_.p();
@@ -89,7 +89,6 @@ struct KernelInfo {
 
   size_t totalTileSize(KMMProblem problem) {
     Matrix tileX_ = getTileX(problem);
-    Factor tileF_ = getTileF(problem);
     Factor f_ = problem.f(0);
 
     //Pad Xsh to TileP
@@ -145,7 +144,8 @@ struct X86Kernel : public CPUKernel {
             uint FusedFacs, bool DistributeToGPUs, 
             uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
             fastKronOp opX, fastKronOp opF) :
-            simd(simd), CPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {}
+            CPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF),
+            simd(simd) {}
   
   virtual std::string runtimeStr() const {
     return "X86";

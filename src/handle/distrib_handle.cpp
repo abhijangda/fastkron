@@ -3,20 +3,20 @@
 
 #include "handle/handle.h"
 
-fastKronError distributedKronMatmul(FastKronHandle& handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
-                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
-                                  void* streams) {
+fastKronError distributedKronMatmul(FastKronHandle&, const uint, void*[], void* [], void* [],
+                                  uint , uint , uint , uint [], uint [], void** , void** ,
+                                  void* ) {
   std::cout << "Not implemented" << std::endl;
   assert(false);
   return fastKronSuccess;
 }
 
-fastKronError FastKronHandle::allocDistributedX(void* dX[], void* hX, uint M, uint K) {
+fastKronError FastKronHandle::allocDistributedX(void* [], void* , uint , uint ) {
   std::cout << "Not implemented" << std::endl;
   return fastKronSuccess;
 }
 
-fastKronError FastKronHandle::gatherDistributedY(void* dY[], void* hY, uint M, uint K, uint NumKronMats, uint KronMatCols[], uint KronMatRows[]) {
+fastKronError FastKronHandle::gatherDistributedY(void* [], void* , uint , uint , uint , uint [], uint []) {
   //TODO: Make FastKronError type
   std::cout << "Not implemented" << std::endl;
   return fastKronSuccess;
