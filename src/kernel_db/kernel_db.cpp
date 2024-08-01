@@ -217,6 +217,7 @@ fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
 }
 
 bool KernelInfo::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) {
+  using Opts = KernelOptimizations::Optimization;
   switch (opt) {
     case Opts::None:
       return true;
