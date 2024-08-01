@@ -20,8 +20,8 @@ bool parseStringToIntegers(char* str, uint array[], const int numInts) {
   
   std::string stdstr(str);
   std::stringstream stream(stdstr);
-  uint n;
-  char comma;
+  uint n = 0;
+  char comma = '';
   while(stream >> n){
     array[parsedInts] = n;
     stream >> comma;

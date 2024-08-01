@@ -17,12 +17,12 @@ public:
   using Factors = FactorArray<MaxFactors>;
 
 private:
-  Factors factors;
-  Matrix in;
-  Matrix out; 
-  fastKronOp opIn;
-  fastKronOp opFactors; 
   FastKronType eltype;
+  Matrix in;
+  fastKronOp opIn;
+  Factors factors;
+  fastKronOp opFactors;
+  Matrix out;
 
 public:
   KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
@@ -36,7 +36,7 @@ public:
 
   KMMProblemT(FastKronType eltype, const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
               void* xptr, fastKronOp opX, void* const* fsptr, fastKronOp opFs, void* yptr, const int k, const int l) : 
-             eltype(eltype), in(m, k, xptr), out(m, l, yptr), opIn(opX), opFactors(opFs), factors(n, ps, qs, fsptr) {}
+             eltype(eltype), in(m, k, xptr), opIn(opX), factors(n, ps, qs, fsptr), opFactors(opFs), out(m, l, yptr) {}
   
   KMMProblemT(FastKronType eltype, const uint m, const int n, const uint *ps, const uint *qs,
              void* x, fastKronOp opX, void* const* fs, fastKronOp opFs, void* y) :
@@ -49,7 +49,7 @@ public:
 
   void setOpX(fastKronOp op) {opIn = op;}
 
-  KMMProblemT rsub(int rstart, int subn) const {    
+  KMMProblemT rsub(uint32_t rstart, uint32_t subn) const {
     int subk = x().n(), subl = y().n();
     for (int i = 0; i <= rstart - subn; i++) {
       subl = (subl/factors[i].q())*factors[i].p();
@@ -67,19 +67,19 @@ public:
                        Matrix(y().m(), subl, y().data()));
   }
 
-  KMMProblemT sub(int start, int subn) const {
-    int subk = x().n(), subl = y().n();
+  KMMProblemT sub(uint32_t start, uint32_t subn) const {
+    uint32_t subk = x().n(), subl = y().n();
+
+    assert(start <= n());
+    assert(subn <= n());
+    assert(start + (subn - 1) <= n());
     
-    for (int i = 0; i < start; i++) {
+    for (uint32_t i = 0; i < start; i++) {
       subl = (subl/factors[i].q())*factors[i].p();
     }
-    for (int i = n() - 1; i >= start + subn; i--) {
+    for (uint32_t i = n() - 1; i >= start + subn; i--) {
       subk = (subk/factors[i].p())*factors[i].q();
     }
-
-    assert (start >= 0);
-    assert (subn <= n());
-    assert (start + (subn - 1) <= n());
 
     return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
                        factors.sub(start, subn), opFs(),
@@ -160,7 +160,7 @@ public:
               n() == other.n() && opFs() == other.opFs() &&
               y() == other.y();
     if (eq) {
-      for (int i = 0; i < n(); i++) {
+      for (uint32_t i = 0; i < n(); i++) {
         eq = eq && factors[i] == other.factors[i];
       }
     }
@@ -169,7 +169,7 @@ public:
 
   bool sameFactorShapes() const {
     bool eq = true;
-    for (int i = 1; i < n(); i++) {
+    for (uint32_t i = 1; i < n(); i++) {
       eq = eq && factors[i-1].p() == factors[i].p() &&
                  factors[i-1].q() == factors[i].q();
     }
@@ -182,7 +182,7 @@ public:
     if (problem.sameFactorShapes()) 
       out << problem.factors[0] << "^" << problem.n();
     else
-      for (int i = 0; i < problem.n(); i++) {
+      for (uint32_t i = 0; i < problem.n(); i++) {
         out << problem.factors[i];
         if (i < problem.n() - 1) out << "(x)";
       }

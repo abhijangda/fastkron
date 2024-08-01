@@ -100,9 +100,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # TODO set these as RELEASE flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64-v2 -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64-v2 -O3 -Wall -Wextra")
 
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
 
 set(CMAKE_HIP_FLAGS "-O3 -Rpass-analysis=kernel-resource-usage --save-temps")
 

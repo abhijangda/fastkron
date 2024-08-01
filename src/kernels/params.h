@@ -170,13 +170,13 @@ union AllTypes {
   AllTypes(double d) : d(d) {}
 
   CUDA_DEVICE
-  float  get(float  p) const {return f;}
+  float  get(float) const {return f;}
   CUDA_DEVICE
-  long   get(long   p) const {return l;}
+  long   get(long) const {return l;}
   CUDA_DEVICE
-  int    get(int    p) const {return i;}
+  int    get(int) const {return i;}
   CUDA_DEVICE
-  double get(double p) const {return d;}
+  double get(double) const {return d;}
 };
 
 struct EpilogueParams {

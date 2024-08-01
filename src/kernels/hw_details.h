@@ -15,7 +15,7 @@ enum SMArch {
   maxwell,
 };
 
-static std::string smArchToStr(SMArch arch) {
+static inline std::string smArchToStr(SMArch arch) {
   switch (arch) {
     case SMArch::volta:
       return "volta";
@@ -28,7 +28,7 @@ static std::string smArchToStr(SMArch arch) {
   return "";
 }
 
-static SMArch computeCapabilityToSMArch(uint major, uint minor) {
+static inline SMArch computeCapabilityToSMArch(uint major, uint minor) {
   uint32_t c = major * 10 + minor;
   if (c >= 80 && c < 90) {
     return SMArch::ampere;
