@@ -16,7 +16,7 @@ struct CPUCache {
     this->size = size;
     ptr = (void**)malloc(threads * sizeof(void*));
     uint32_t pageSize = getpagesize();
-    for (int i = 0; i < threads; i++) {
+    for (uint32_t i = 0; i < threads; i++) {
       ptr[i] = aligned_alloc(pageSize, size);
     }
   }
@@ -45,14 +45,14 @@ public:
   void init() {}
   void allocate_caches();
   virtual fastKronError initTune() {return fastKronSuccess;}
-  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint32_t kronIndex, 
                                    KMMProblem problem,
                                    EpilogueParams epilogueParams,
                                    KernelMode execMode);
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                           KMMProblem problem, DistributedParams distParams, 
-                                           EpilogueParams epilogueParams,
-                                           KernelMode execMode) {return fastKronSuccess;}
+  virtual fastKronError invokeP2PStoreKernel(KernelInfo*, const uint32_t,
+                                           KMMProblem, DistributedParams,
+                                           EpilogueParams,
+                                           KernelMode) {return fastKronSuccess;}
   virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
@@ -60,13 +60,13 @@ public:
                                  bool distP2PStore,
                                  int warmups, int runs,
                                  float& runtime);
-  virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) {return "";}
+  virtual std::string   occupancyDetails(KernelInfo*, KMMProblem) {return "";}
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
   virtual fastKronError procFree(uint32_t proc, void* ptr);
 
   uint32_t getMaxThreads() const {
-    return MAX(omp_get_max_threads(), getCPUProperties().sockets * getCPUProperties().cores);
+    return MAX((uint32_t)omp_get_max_threads(), getCPUProperties().sockets * getCPUProperties().cores);
   }
   CPUArchDetails getCPUProperties() const {return *(dynamic_cast<const CPUArchDetails*>(hardware[0]));}
   void free();

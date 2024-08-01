@@ -222,10 +222,10 @@ void FastKronHandle::free() {
 #endif
 }
 
+#ifdef ENABLE_MULTI_GPU
 void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {
   //TODO: Should move to individual backends
-#ifdef ENABLE_CUDA  
   gpuM = M/cudaKernels.gpusInM_;
   gpuK = K/cudaKernels.gpusInK_;
-#endif
 }
+#endif

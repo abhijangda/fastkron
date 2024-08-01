@@ -180,14 +180,14 @@ union AllTypes {
 };
 
 struct EpilogueParams {
-  const void * __restrict__ glD;
   AllTypes alpha;
   AllTypes beta;
+  const void * __restrict__ glD;
   
   EpilogueParams(): alpha(1.0f), beta(0.0f), glD(nullptr) {}
 
   EpilogueParams(AllTypes alpha, AllTypes beta, const void* glD) :
-    glD(glD), alpha(alpha), beta(beta) {}
+    alpha(alpha), beta(beta), glD(glD) {}
 
   template<typename ElemT>
   static EpilogueParams create() {

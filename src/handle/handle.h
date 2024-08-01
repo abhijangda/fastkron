@@ -91,7 +91,10 @@ struct FastKronHandle {
   fastKronError gatherDistributedY(void* dY[], void* hY, uint M, uint K, 
                                  uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
 
+  #ifdef ENABLE_MULTI_GPU
   void getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK);
+  #endif
+
   void free();
 
   //Options

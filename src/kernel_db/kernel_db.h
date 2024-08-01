@@ -33,9 +33,6 @@ public:
     }
   };
 
-  bool isValidKernel(KernelInfo& info) {return true;} //TODO:
-  void initKernel(KernelInfo& info) {return;} //TODO:
-  
 public:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
   std::vector<KernelInfo*> allKernels;
@@ -52,9 +49,6 @@ public:
     //Load kernels into compiledKernels map
     for (uint i = 0; i < num; i++) {
       SubClassKernel& info = kernels[i];
-      if (!isValidKernel(info)) abort();
-      initKernel(info); //CUDA_CHECK(info.setSharedMemAttr());
-      //  {info.KronCols, info.KronRows, info.MaxColsA, 0, info.NumFusedKerns, info.DistributeToGPUs};
       DbKey key {info.f, info.opX, info.opF};
       auto iter = compiledKernels.find(key);
       if (iter == compiledKernels.end()) {
@@ -114,7 +108,7 @@ public:
   
   virtual bool findAllKernels(KMMProblem problem, bool distP2PStore, 
                               std::vector<std::vector<KernelInfo*>>& kernels) {
-    for (int i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
+    for (uint32_t i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
       kernels.push_back(std::vector<KernelInfo*>());
     }
 
@@ -162,8 +156,6 @@ public:
   virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
   virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) = 0;
   KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {
-    using Opts = KernelOptimizations::Optimization;
-
     for (int optlevel = KernelOptimizations::MaxOptLevel();
         optlevel >= 0; optlevel--) {
       std::vector<KernelInfo*> kernelsForOptLevel = kernels[optlevel];

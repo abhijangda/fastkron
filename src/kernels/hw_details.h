@@ -23,6 +23,8 @@ static inline std::string smArchToStr(SMArch arch) {
       return "ampere";
     case SMArch::maxwell:
       return "maxwell";
+    default:
+      return "";
   }
 
   return "";

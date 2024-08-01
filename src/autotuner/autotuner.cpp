@@ -18,8 +18,8 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDist
   auto nextSeries = problem.sub(startKron, problem.n() - startKron);
 
   reverseExecuteGeKMM(nextSeries, nullptr, Matrix(), 
-               [](const KMMProblem p){return 1;},
-  [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix result) {
+               [](const KMMProblem){return 1;},
+  [&](const KMMProblem firstPart, int rstart, void*[2], Matrix) {
     const int subn = rstart + 1;
     auto tunedProblem = problem.sub(startKron, subn);
     if (problem.opX() == fastKronOp_T && startKron + subn == problem.n()) {
@@ -64,9 +64,9 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
   //We need to get best kernel for all contiguous SlicedMats
 
   auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
-               [](const KMMProblem p){return 1;},
-  [&](const KMMProblem firstPart, int rstart, void* temps[2], Matrix r) {
-    for (int endP = rstart; endP < problem.n(); endP++) {
+               [](const KMMProblem){return 1;},
+  [&](const KMMProblem, int rstart, void*[2], Matrix) {
+    for (uint32_t endP = rstart; endP < problem.n(); endP++) {
       auto secondPart = problem.sub(rstart, endP-rstart+1);
       if (rstart + secondPart.n() < problem.n()) secondPart.setOpX(fastKronOp_N);
       bool distP2PStore = isDistributed && rstart == 0;
@@ -121,7 +121,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
     kernelDb->procMemset(p, temp1[p], 1.0f);
     kernelDb->procMemset(p, temp2[p], 1.0f);
 
-    for (int f = 0; f < problem.n(); f++) {
+    for (uint32_t f = 0; f < problem.n(); f++) {
       Fs[p][f] = problem.f(f);
       kernelDb->procMalloc(p, problem.type(), Fs[p][f]);
       kernelDb->procMemset(p, Fs[p][f], 1.0f);
@@ -218,10 +218,10 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
 #endif
   }
 
-  for (int p = 0; p < devicesPerProc; p++) {
+  for (uint32_t p = 0; p < devicesPerProc; p++) {
     kernelDb->procFree(p, temp1[p]);
     kernelDb->procFree(p, temp2[p]);
-    for (int f = 0; f < problem.n(); f++) {
+    for (uint32_t f = 0; f < problem.n(); f++) {
       //TODO: // CUDA_CHECK(cudaFree(Fs[g * problem.n() + f]));
     }
   }
