@@ -28,17 +28,17 @@ private:
   
 public:
   KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
-    eltype(eltype), in(x), opIn(opX), factors(fs), opFactors(opFs), out(y) {}
+    eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y), factors(fs) {}
 
   KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, int n, const Factor* fs, fastKronOp opFs, Matrix y) :
-    eltype(eltype), in(x), opIn(opX), factors(fs, n), opFactors(opFs), out(y) {}
+    eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y), factors(fs, n) {}
 
   KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
     KMMProblemT(eltype, x, opX, Factors(fs), opFs, y) {}
 
   KMMProblemT(FastKronType eltype, const uint m, const uint32_t n, const uint32_t *ps, const uint32_t *qs, 
               void* xptr, fastKronOp opX, void* const* fsptr, fastKronOp opFs, void* yptr, const int k, const int l) : 
-             eltype(eltype), in(m, k, xptr), opIn(opX), factors(n, ps, qs, fsptr), opFactors(opFs), out(m, l, yptr) {}
+             eltype(eltype), in(m, k, xptr), opIn(opX), opFactors(opFs), out(m, l, yptr), factors(n, ps, qs, fsptr) {}
   
   KMMProblemT(FastKronType eltype, const uint m, const int n, const uint *ps, const uint *qs,
              void* x, fastKronOp opX, void* const* fs, fastKronOp opFs, void* y) :
@@ -52,8 +52,8 @@ public:
   //TODO: Also initialize opIn and opFactors, and eltype?
   template<uint32_t OtherMaxFactors>
   KMMProblemT(const KMMProblemT<OtherMaxFactors>& other) : 
-    eltype(other.type()), in(other.x()), opIn(other.opX()), factors(other.fs(), other.n()),
-    opFactors(other.opFs()), out(other.y()) {}
+    eltype(other.type()), in(other.x()), opIn(other.opX()),
+    opFactors(other.opFs()), out(other.y()), factors(other.fs(), other.n()) {}
 
   void setOpX(fastKronOp op) {opIn = op;}
 
