@@ -20,10 +20,12 @@ private:
   FastKronType eltype;
   Matrix in;
   fastKronOp opIn;
-  Factors factors;
   fastKronOp opFactors;
   Matrix out;
-
+  //On CUDA keep Factors at the end of struct to get
+  //best performance
+  Factors factors;
+  
 public:
   KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
     eltype(eltype), in(x), opIn(opX), factors(fs), opFactors(opFs), out(y) {}
