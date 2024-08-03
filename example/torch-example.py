@@ -30,11 +30,10 @@ try:
     Qs = [8] * N
 
     # Numpy example
-    x = np.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=torch.float32)
-    y = np.zeros((M, reduce((lambda a, b: a * b), Qs)), dtype=torch.float32)
-    fs = [np.ones((Ps[0], Qs[0]), dtype=torch.float32) for i in range(0, N)]
-
-    y = fk.gekmm(x, fs)
+    x = np.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=np.double)
+    fs = [np.ones((Ps[0], Qs[0]), dtype=np.double) for i in range(0, N)]
+    z = np.ones((M, reduce((lambda a, b: a * b), Qs)), dtype=np.double)
+    y = fk.gekmm(x, fs, alpha=2.0, beta=1.0, z=z)
 
     print(y)
 except:
