@@ -41,3 +41,15 @@ class FastKronTorch(FastKronBase):
       fn = FastKron.dgekmm
 
     self.xgekmm(fn, self.backend(x.device.type), x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+  
+__fastkrontorch = FastKronTorch()
+
+def gekmm(x, fs, alpha, beta, z, trX = False, trF = False):
+  rs, ts = __fastkrontorch.gekmmSizes(x, fs)
+  temp1 = torch.zeros(ts, dtype=x.dtype, device=x.device)
+  if not trX:
+    y = x.new_empty((x.shape[0], rs//x.shape[0]))
+  else:
+    y = x.new_empty((x.shape[1], rs//x.shape[1]))
+  __fastkrontorch.gekmm(x, fs, y, alpha, beta, z, temp1, None, trX, trF)
+  return y

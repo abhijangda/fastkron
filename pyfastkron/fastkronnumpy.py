@@ -30,3 +30,15 @@ class FastKronNumpy(FastKronBase):
       fn = FastKron.dgekmm
 
     self.xgekmm(fn, self.backend("cpu"), x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+
+__fastkronnumpy = FastKronNumpy(True, False)
+
+def gekmm(x, fs, alpha, beta, z, trX = False, trF = False):
+  rs, ts = __fastkronnumpy.gekmmSizes(x, fs)
+  temp1 = np.zeros(ts, dtype=x.dtype)
+  if not trX:
+    y = np.zeros((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
+  else:
+    y = np.zeros((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
+  __fastkronnumpy.gekmm(x, fs, y, alpha, beta, z, temp1, None, trX, trF)
+  return y
