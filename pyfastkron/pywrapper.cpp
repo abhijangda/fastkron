@@ -97,4 +97,8 @@ PYBIND11_MODULE(FastKron, m) {
     auto err = dgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, (const double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
     THROW_ERROR(err);
   }, "dgekmm");
+
+  m.def("destroy", [](fastKronHandle handle) {
+    fastKronDestroy(handle);
+  }, "destroy");
 }

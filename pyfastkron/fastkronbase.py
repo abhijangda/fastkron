@@ -19,6 +19,10 @@ class FastKronBase:
 
     self.cuda = cuda and FastKronBase.hasBackend(self.backends, FastKron.Backend.CUDA)
 
+  def __del__(self):
+    FastKron.destroy(self.handle)
+    self.handle = self.backends = self.x86 = self.cuda = None
+
   def hasCUDA(self):
     return self.cuda
   

@@ -44,7 +44,7 @@ class FastKronTorch(FastKronBase):
   
 __fastkrontorch = FastKronTorch()
 
-def gekmm(x, fs, alpha, beta, z, trX = False, trF = False):
+def gekmm(x, fs, alpha=1.0, beta=0.0, z=None, trX = False, trF = False):
   rs, ts = __fastkrontorch.gekmmSizes(x, fs)
   temp1 = torch.zeros(ts, dtype=x.dtype, device=x.device)
   if not trX:
