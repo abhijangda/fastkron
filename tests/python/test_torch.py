@@ -3,30 +3,36 @@ import torch
 
 import pyfastkron.fastkrontorch as fk
 
-def reference(input, kronmats):
-  outputKron = kronmats[0]
-  for m in kronmats[1:]:
+def reference(x, fs, trX, trF):
+  if trX:
+    x = x.T
+  if trF:
+    fs = [f.T for f in fs]
+  outputKron = fs[0]
+  for m in fs[1:]:
       outputKron = torch.kron(outputKron, m)
-  return torch.matmul(input, outputKron)
+  return torch.matmul(x, outputKron)
 
-def run(m, n, p, q, dtype, device):
+def run(m, n, p, q, dtype, device, trX, trF):
   #Using integer values instead of real numbers because 
   #floating point is not associative
-  x = torch.randint(high=5,size=(m, p**n), dtype=dtype).to(device)
-  fs = [torch.randint(high=5,size=(p, q), dtype=dtype).to(device) for i in range(n)]
+  xshape = (m, p**n) if not trX else (p**n, m)
+  fsshape = (p, q) if not trF else (q, p)
+  x = torch.randint(high=5,size=xshape, dtype=dtype).to(device)
+  fs = [torch.randint(high=5,size=fsshape, dtype=dtype).to(device) for i in range(n)]
 
-  y = fk.gekmm(x, fs, 1.0, 0.0, None)
+  y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
 
-  ref = reference(x, fs)
+  ref = reference(x, fs, trX, trF)
   val = torch.isclose(y, ref, rtol=1e-04).all().item()
 
   assert val
 
 def device_tests(device):
-  run(1024, 5, 8, 8, torch.float32, device)
-  run(10, 5, 6, 6, torch.float32, device)
-  run(11, 10, 3, 3, torch.double, device)
-  run(200, 2, 32, 32, torch.double, device)
+  run(1024, 5, 8, 8, torch.float32, device, False, False)
+  run(10, 5, 6, 6, torch.float32, device, True, False)
+  run(11, 10, 3, 3, torch.double, device, False, True)
+  run(200, 2, 32, 32, torch.double, device, True, True)
 
 def test_cuda():
   if fk.__fastkrontorch.hasCUDA():
