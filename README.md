@@ -73,9 +73,14 @@ To install run
 
 By default both x86 and CUDA backends are built. use CMAKE option `-DENABLE_CUDA=OFF` to disable CUDA backend or `-DENABLE_X86=OFF` to disable x86 backend.
 
-Run tests using 
+Run X86 CPU tests using 
 ```
-make run_tests
+make run-x86-tests
+```
+
+Run CUDA tests using 
+```
+make run-cuda-tests
 ```
 
 ### PyFastKron
