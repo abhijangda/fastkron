@@ -13,13 +13,8 @@ class FastKronNumpy(FastKronBase):
   def tensor_data_ptr(self, tensor):
     return tensor.ctypes.data
 
-  def check(self, x, fs, y):
-    self.checkShapeAndTypes(x, fs, y)
-
   def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2,
             trX = False, trF = False):
-
-    self.check(x, fs, y)
 
     fn = None
     if x.dtype == np.float32:
@@ -34,7 +29,7 @@ class FastKronNumpy(FastKronBase):
 __fastkronnumpy = FastKronNumpy()
 
 def gekmm(x, fs, alpha=1.0, beta=0.0, z=None, trX = False, trF = False):
-  rs, ts = __fastkronnumpy.gekmmSizes(x, fs)
+  rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = np.zeros(ts, dtype=x.dtype)
   if not trX:
     y = np.zeros((x.shape[0], rs//x.shape[0]), dtype=x.dtype)

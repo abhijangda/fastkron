@@ -16,7 +16,6 @@ class FastKronTorch(FastKronBase):
     return tensor.data_ptr()
 
   def check(self, x, fs, y, stream):
-    self.checkShapeAndTypes(x, fs, y)
     assert x.device  == fs[0].device
 
     if x.device.type == "cuda" and stream is not None:
@@ -45,7 +44,7 @@ class FastKronTorch(FastKronBase):
 __fastkrontorch = FastKronTorch()
 
 def gekmm(x, fs, alpha=1.0, beta=0.0, z=None, trX = False, trF = False):
-  rs, ts = __fastkrontorch.gekmmSizes(x, fs)
+  rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = torch.zeros(ts, dtype=x.dtype, device=x.device)
   if not trX:
     y = x.new_empty((x.shape[0], rs//x.shape[0]))

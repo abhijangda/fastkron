@@ -9,7 +9,6 @@ class FastKronBase:
     return (backends & int(enumBackend)) == int(enumBackend)
 
   def __init__(self, x86, cuda):
-    self.handle = None
     self.backends = FastKron.backends()
     self.handle = FastKron.init()
 
@@ -32,28 +31,39 @@ class FastKronBase:
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
 
-  def ps(self, fs):
-    return [f.shape[0] for f in fs]
+  def ps(self, fsshape):
+    return [f[0] for f in fsshape]
   
-  def qs(self, fs):
-    return [f.shape[1] for f in fs]
+  def qs(self, fsshape):
+    return [f[1] for f in fsshape]
   
   def fptrs(self, fs):
     return [self.tensor_data_ptr(f) for f in fs]
 
-  def checkShapeAndTypes(self, x, fs, y):
-    if x.shape[1] != product(self.ps(fs)):
-      assert False
+  def matrixShape(self, m, tr):
+    if tr == False:
+      return (m.shape[0], m.shape[1])
+    else:
+      return (m.shape[1], m.shape[0])
 
-    assert x.shape[1] == product(self.ps(fs))
+  def checkShapeAndTypes(self, x, fs, y, trX, trF):
+    # Only operate on 2-dims matrices
+    assert len(x.shape) == 2
+    assert len(fs[0].shape) == 2
+
+    xshape = self.matrixShape(x, trX)
+    fsshape = [self.matrixShape(f, trF) for f in fs]
+
+    assert xshape[1] == product(self.ps(fsshape))
     
     assert x.dtype    == fs[0].dtype
     assert len(set([f.dtype for f in fs])) == 1
 
     if y is not None:
-      assert x.shape[0] == y.shape[0]
-      assert y.shape[1] == product(self.qs(fs))
-      assert x.dtype    == y.dtype
+      yshape = self.matrixShape(y, False)
+      assert xshape[0] == yshape[0]
+      assert yshape[1] == product(self.qs(fsshape))
+      assert x.dtype   == y.dtype
   
   def backend(self, device_type):
     if device_type == "cpu":
@@ -61,19 +71,28 @@ class FastKronBase:
     if device_type == "cuda":
       return FastKron.Backend.CUDA
 
-  def gekmmSizes(self, x, fs):
-    self.checkShapeAndTypes(x, fs, None)
-    return FastKron.gekmmSizes(self.handle, x.shape[0], len(fs), self.ps(fs), self.qs(fs))
+  def gekmmSizes(self, x, fs, trX = False, trF = False):
+    self.checkShapeAndTypes(x, fs, None, trX, trF)
+
+    xshape = self.matrixShape(x, trX)
+    fsshape = [self.matrixShape(f, trF) for f in fs]
+
+    return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
 
   def xgekmm(self, fngekmm, backend, x, fs, y, alpha, beta, z, temp1, temp2, trX = False, trF = False):
-    #Are pointers valid?
+    # Are pointers valid?
     assert temp1 is not None
     assert y is not None
 
     if z is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
       assert temp2 is not None
 
-    fngekmm(self.handle, backend, x.shape[0], len(fs), self.ps(fs), self.qs(fs),
+    self.checkShapeAndTypes(x, fs, y, trX, trF)
+
+    xshape = self.matrixShape(x, trX)
+    fsshape = [self.matrixShape(f, trF) for f in fs]
+
+    fngekmm(self.handle, backend, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape),
             self.tensor_data_ptr(x), FastKron.Op.N if not trX else FastKron.Op.T,
             self.fptrs(fs), FastKron.Op.N if not trF else FastKron.Op.T,
             self.tensor_data_ptr(y),
