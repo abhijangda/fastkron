@@ -32,6 +32,8 @@ FastKron performs significantly better than existing baselines.
 | SM50+ CUDA cores    |:white_check_mark: | :white_check_mark: |
 | SM80+ Tensor cores  | :x: | :x: |
 
+x86 CPUs older than x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not *yet* supported.
+
 # Example
 The directory `example/` pinclude examples of using FastKron's CUDA and x86 backend using both C++ and Python.
 Before using an example, follow below instructions to build FastKron. 

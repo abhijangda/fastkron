@@ -46,12 +46,12 @@ PYBIND11_MODULE(FastKron, m) {
 
   m.def("destroy", fastKronDestroy, "destroy");
 
-  m.def("initCUDA", [](fastKronHandle h, std::vector<uint32_t> ptrToStream) {
+  m.def("initCUDA", [](fastKronHandle h, std::vector<long> ptrToStream) {
     auto err = fastKronInitCUDA(h, (void*)ptrToStream.data());
     THROW_ERROR(err);
   }, "initCUDA");
 
-  m.def("initHIP", [](fastKronHandle h, std::vector<uint32_t> ptrToStream) {
+  m.def("initHIP", [](fastKronHandle h, std::vector<long> ptrToStream) {
     auto err = fastKronInitHIP(h, (void*)ptrToStream.data());
     THROW_ERROR(err);
   }, "initHIP");
