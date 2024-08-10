@@ -36,6 +36,16 @@ const char* fastKronVersion() {
   ;
 }
 
+const char* fastKronCUDAArchs() {
+  return 
+#ifdef ENABLE_CUDA
+  ""
+  STR(FASTKRON_CUDA_ARCHS);
+#else
+  NULL;
+#endif
+}
+
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   FastKronHandle* h = new FastKronHandle(backends);
   *handle = (fastKronHandle)h;

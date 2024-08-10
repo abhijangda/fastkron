@@ -59,6 +59,8 @@ void fastKronDestroy(fastKronHandle handle);
 uint32_t fastKronGetBackends();
 const char* fastKronGetErrorString(fastKronError err);
 const char* fastKronVersion();
+const char* fastKronCUDAArchs();
+
 /* fastKronFlags; fastKronCUDASupportedSMs ;  */
 fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream);
 //TODO: Need to provide a setcudastream function

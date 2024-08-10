@@ -26,7 +26,7 @@ def build_wheel(backends, cuda_versions, torch_version):
             split[1] = split[1]+"+cu"+ver+"torch"+torch_version
             shutil.move(f"dist/{f}", f"dist/{'-'.join(split)}")
   else:
-    (s, _) = run_command(f"python3 -m build --wheel --config-settings=cmake.define.ENABLE_X86=OFF")
+    (s, _) = run_command(f"python3 -m build --wheel -C cmake.define.ENABLE_CUDA=OFF")
     if s == 0:
         fs = os.listdir("dist/")
         for f in fs:
