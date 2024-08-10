@@ -12,9 +12,26 @@
   #include "fastkronMg.h"
 #endif
 
+#define STR_(x) #x
+#define STR(x) STR_(x)
+
 /**************************************************
           Library Functions
 ***************************************************/
+const char* fastKronVersion() {
+  return 
+  ""
+  STR(FASTKRON_VERSION) 
+#ifdef ENABLE_X86
+  "+x86_64"
+#endif
+#ifdef ENABLE_CUDA
+  "+CUDA"
+  STR(FASTKRON_CUDA_VERSION)
+#endif
+  ;
+}
+
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   FastKronHandle* h = new FastKronHandle(backends);
   *handle = (fastKronHandle)h;

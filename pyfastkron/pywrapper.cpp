@@ -39,6 +39,10 @@ PYBIND11_MODULE(FastKron, m) {
     return fastKronGetBackends();
   });
 
+  m.def("version", []() {
+    return fastKronVersion();
+  });
+
   m.def("setOptions", [](fastKronHandle h, uint32_t options) {
     auto err = fastKronSetOptions(h, options);
     THROW_ERROR(err);

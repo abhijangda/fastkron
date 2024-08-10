@@ -473,6 +473,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     setValues(NUM_KP_MATS, hKpMats, hX, hY, M, N, K, KP_MAT_N, KP_MAT_K, randMod, randMod);
   if (verbose) printf("values set\n");
   printf("Supported backends %d\n", fastKronGetBackends());
+  printf("FastKron %s\n", fastKronVersion());
   //Allocate GPU data
   fastKronHandle handle;
   if (verbose) printf("allocating\n");
