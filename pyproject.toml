@@ -7,9 +7,16 @@ name = "pyfastkron"
 version = "1.0"
 requires-python = ">=3.10"
 build-frontend = {name = "build", args = ["--exports", "whole_archive"]}
+dependencies = [
+    "scikit-build-core",
+    "numpy",
+    "torch",
+    "torchvision"
+]
 
 [tool.scikit-build]
 cmake.verbose = "true"
+cmake.version = ">=3.25"
 
 [tool.scikit-build.cmake.define]
 PYMODULE="ON"
