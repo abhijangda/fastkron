@@ -37,13 +37,14 @@ const char* fastKronVersion() {
 }
 
 const char* fastKronCUDAArchs() {
-  return 
-#ifdef ENABLE_CUDA
-  ""
-  STR(FASTKRON_CUDA_ARCHS);
-#else
-  NULL;
-#endif
+//   return 
+// #ifdef ENABLE_CUDA
+//   ""
+//   STR(FASTKRON_CUDA_ARCHS);
+// #else
+//   NULL;
+// #endif
+return NULL;
 }
 
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {

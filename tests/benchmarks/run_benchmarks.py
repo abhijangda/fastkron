@@ -10,6 +10,7 @@ import sys
 import argparse
 
 def run_command(command):
+  #print(f"Running {command} in {os.getcwd()}")
   (s, o) = subprocess.getstatusoutput(command)
   if s != 0:
     print (f"Running {command}\n", o)
@@ -106,9 +107,9 @@ class FastKronEval:
     os.mkdir('build/')
     os.chdir('build/')
     if self.backend == "cuda":
-      backend_flags = '-DCMAKE_CUDA_FLAGS="-Xptxas -v -O3" -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="80"'
+      backend_flags = '-DENABLE_CUDA=ON -DENABLE_X86=OFF -DCMAKE_CUDA_ARCHITECTURES="70;80"'
     elif self.backend == "x86":
-      backend_flags = "-DENABLE_X86=ON"
+      backend_flags = "-DENABLE_X86=ON -DENABLE_CUDA=OFF"
     if self.tuningmode == "FullTune":
       backend_flags += " -DFULL_TUNE=ON"
     run_command('cmake .. ' + backend_flags)
@@ -122,7 +123,7 @@ class FastKronEval:
                   (" -dist-kernels " if distKernels else "") + \
                   " -backend " + self.backend + " -types " + self.elemtype + " -opt-levels 3")
     elif self.tuningmode == 'FastTune' or self.tuningmode == 'NoTune':
-      run_command("cd build/ && make gen-single-gpu-kernels")
+      run_command("cd build/")
 
   def build_kron(self):
     run_command(f"cd build && make benchmark_{self.backend} -j")
