@@ -12,6 +12,10 @@
   #include "fastkronMg.h"
 #endif
 
+#ifdef ENABLE_CUDA
+  // #include <cuda.h>
+#endif
+
 #define STR_(x) #x
 #define STR(x) STR_(x)
 
