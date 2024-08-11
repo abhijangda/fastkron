@@ -10,7 +10,7 @@ import sys
 import argparse
 
 def run_command(command):
-  #print(f"Running {command} in {os.getcwd()}")
+#  print(f"Running {command} in {os.getcwd()}")
   (s, o) = subprocess.getstatusoutput(command)
   if s != 0:
     print (f"Running {command}\n", o)
@@ -92,11 +92,12 @@ class GPyTorchEval:
     return (flops/1e9,)
   
 class FastKronEval:
-  def __init__(self, backend, mode, elemtype):
+  def __init__(self, backend, mode, elemtype, multi_gpu=False):
     self.backend = backend
     self.tuningmode = mode
     self.built = False
     self.elemtype = elemtype
+    self.multi_gpu = multi_gpu
   
   def setup_cmake(self):
     if self.built == True:
@@ -107,7 +108,10 @@ class FastKronEval:
     os.mkdir('build/')
     os.chdir('build/')
     if self.backend == "cuda":
-      backend_flags = '-DENABLE_CUDA=ON -DENABLE_X86=OFF -DCMAKE_CUDA_ARCHITECTURES="70;80"'
+      #Select CUDA_ARCH based on underlying GPU
+      backend_flags = f'-DENABLE_CUDA=ON -DENABLE_X86=OFF -DCMAKE_CUDA_ARCHITECTURES="{torch.cuda.get_device_properties(0).major*10}"'
+      if self.multi_gpu:
+        backend_flags += f" -DENABLE_MULTI_GPU=ON"
     elif self.backend == "x86":
       backend_flags = "-DENABLE_X86=ON -DENABLE_CUDA=OFF"
     if self.tuningmode == "FullTune":
@@ -235,7 +239,7 @@ def multi_gpu(scaling):
   for shape in cases:
     GMs = [1, 2, 2, 4, 4]
     GKs = [1, 1, 2, 2, 4]
-    fk = FastKronEval("cuda", "FullTune", "float")
+    fk = FastKronEval("cuda", "FullTune", "float", multi_gpu=True)
     fk.gen_kernels(shape, "N", "N", True)
     fk.setup_cmake()
     fk.build_kron()
