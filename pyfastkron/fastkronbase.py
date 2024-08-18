@@ -68,15 +68,16 @@ class FastKronBase:
     
     if y is not None:
       yshape = self.matrixShape(y, False)
-      assert xshape[0] == yshape[0]
-      assert yshape[1] == product(self.qs(fsshape))
+      if yshape[0] == xshape[0] or yshape[1] == product(self.qs(fsshape)):
+        raise ValueError(f"Input operand 'y' shape ('{yshape}') mismatch with '({xshape[0], product(self.qs(fsshape))})'")
       assert x.dtype   == y.dtype
-  
+
   def backend(self, device_type):
     if device_type == "cpu":
       return FastKron.Backend.X86
     if device_type == "cuda":
       return FastKron.Backend.CUDA
+    raise RuntimeError(f"Invalid device {device_type}")
 
   def gekmmSizes(self, x, fs, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, None, None, trX, trF)
