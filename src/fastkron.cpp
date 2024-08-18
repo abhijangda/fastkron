@@ -91,17 +91,17 @@ uint32_t fastKronGetBackends() {
 const char* fastKronGetErrorString(fastKronError err) {
   switch(err) {
     case fastKronSuccess:
-      return "fastKronSuccess";
+      return "Operation successfull";
     case fastKronBackendNotAvailable:
-      return "fastKronBackendNotAvailable";
+      return "Requested backend is not available";
     case fastKronInvalidMemoryAccess:
-      return "fastKronInvalidMemoryAccess";
+      return "Illegal memory access";
     case fastKronKernelNotFound:
-      return "fastKronKernelNotFound";
+      return "Kernel to execute the problem not found";
     case fastKronInvalidArgument:
-      return "fastKronInvalidArgument";
+      return "An argument to the function is invalid";
     case fastKronOtherError:
-      return "fastKronOtherError";
+      return "Unknown error occurred";
     default:
       return NULL;
   }

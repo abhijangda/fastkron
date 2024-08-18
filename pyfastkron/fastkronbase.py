@@ -68,7 +68,7 @@ class FastKronBase:
     
     if y is not None:
       yshape = self.matrixShape(y, False)
-      if yshape[0] == xshape[0] or yshape[1] == product(self.qs(fsshape)):
+      if yshape[0] != xshape[0] or yshape[1] != product(self.qs(fsshape)):
         raise ValueError(f"Input operand 'y' shape ('{yshape}') mismatch with '({xshape[0], product(self.qs(fsshape))})'")
       assert x.dtype   == y.dtype
 

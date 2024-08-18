@@ -1,6 +1,6 @@
 from functools import reduce
 
-if True:
+try:
   # CUDA example in PyTorch
 
   import torch
@@ -32,10 +32,10 @@ if True:
 
   print(z)
 
-# except:
-#   pass
+except:
+  pass
 
-if True:
+try:
   # Numpy example
 
   import numpy as np
@@ -68,5 +68,5 @@ if True:
   z = fk.gekmm(x, fs, alpha=2.0, beta= 1.0, y=None, trF = True)
 
   print(z)
-# except:
-#   pass
+except:
+  pass

@@ -12,7 +12,7 @@ namespace py = pybind11;
 }
 
 PYBIND11_MODULE(FastKron, m) {
-  m.doc() = "..."; // optional module docstring
+  m.doc() = "Python wrapper for FastKron C++ API. For more information on each function refers to C++ API.";
 
   py::enum_<fastKronBackend>(m, "Backend")
     .value("X86", fastKronBackend_X86)
@@ -33,44 +33,42 @@ PYBIND11_MODULE(FastKron, m) {
     THROW_ERROR(err);
 
     return handle;
-  }, "init");
+  }, "Initialize and return FastKron handle for all supported backends.");
 
   m.def("backends", []() {
     return fastKronGetBackends();
-  });
+  }, "Return a bitwise OR of all supported FastKron.Backends.");
 
   m.def("version", []() {
     return fastKronVersion();
-  });
+  }, "Return FastKron version.");
 
   m.def("setOptions", [](fastKronHandle h, uint32_t options) {
     auto err = fastKronSetOptions(h, options);
     THROW_ERROR(err);
-  }),
-
-  m.def("destroy", fastKronDestroy, "destroy");
+  }, "Set options for a FastKron handle."),
 
   m.def("initCUDA", [](fastKronHandle h, std::vector<long> ptrToStream) {
     auto err = fastKronInitCUDA(h, (void*)ptrToStream.data());
     THROW_ERROR(err);
-  }, "initCUDA");
+  }, "Initializes the CUDA backend with stream only if fastKronHandle was initialized with CUDA backend.");
 
   m.def("initHIP", [](fastKronHandle h, std::vector<long> ptrToStream) {
     auto err = fastKronInitHIP(h, (void*)ptrToStream.data());
     THROW_ERROR(err);
-  }, "initHIP");
+  }, "Initializes the HIP backend with stream only if fastKronHandle was initialized with HIP backend.");
 
   m.def("initX86", [](fastKronHandle h) {
     auto err = fastKronInitX86(h);
     THROW_ERROR(err);
-  }, "initX86");
+  }, "Initializes the x86 backend with stream only if fastKronHandle was initialized with x86 backend.");
 
   m.def("gekmmSizes", [](fastKronHandle handle, uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs) {
     size_t resultSize, tempSize;
     auto err = gekmmSizes(handle, M, N, Ps.data(), Qs.data(), &resultSize, &tempSize);
     THROW_ERROR(err);
     return py::make_tuple(resultSize, tempSize);
-  }, "gekmmSizes");
+  }, "Returns a tuple of number of elements of the result matrix and temporary matrices for GeKMM.");
 
   m.def("sgekmm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
@@ -80,7 +78,7 @@ PYBIND11_MODULE(FastKron, m) {
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
     auto err = sgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const float*)X, opX, (const float**)Fs.data(), opFs, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
     THROW_ERROR(err);
-  }, "sgekmm");
+  }, "Perform GeKMM on using 32-bit floating point operations on input matrices.");
 
   m.def("igekmm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
@@ -100,9 +98,9 @@ PYBIND11_MODULE(FastKron, m) {
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
     auto err = dgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, (const double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
     THROW_ERROR(err);
-  }, "dgekmm");
+  }, "Perform GeKMM on using 64-bit double floating point operations on input matrices");
 
   m.def("destroy", [](fastKronHandle handle) {
     fastKronDestroy(handle);
-  }, "destroy");
+  }, "Destroy and deallocate a FastKron handle.");
 }
