@@ -46,19 +46,26 @@ class FastKronBase:
     else:
       return (m.shape[1], m.shape[0])
 
-  def checkShapeAndTypes(self, x, fs, y, trX, trF):
+  def checkShapeAndTypes(self, x, fs, y, z, trX, trF):
     # Only operate on 2-dims matrices
-    assert len(x.shape) == 2
-    assert len(fs[0].shape) == 2
-
     xshape = self.matrixShape(x, trX)
     fsshape = [self.matrixShape(f, trF) for f in fs]
 
-    assert xshape[1] == product(self.ps(fsshape))
+    if xshape[1] != product(self.ps(fsshape)):
+      raise ValueError(f"Input operand x has a mismatch with its dimension 1 ('{xshape[1]}') with dimension 0 of kronecker product of fs ('{product(self.ps(fsshape))}')")
     
-    assert x.dtype    == fs[0].dtype
-    assert len(set([f.dtype for f in fs])) == 1
+    if x.dtype != fs[0].dtype:
+      raise ValueError(f"Operand types mismatches {x.dtype} != {fs[0].dtype}")
+    
+    if len(set([f.dtype for f in fs])) != 1:
+      raise ValueError(f"Type of Kronecker factors do not match. Found {len(set([f.dtype for f in fs]))} different types")
 
+    if z is not None:
+      zshape = self.matrixShape(z, False)
+      assert xshape[0] == zshape[0]
+      assert zshape[1] == product(self.qs(fsshape))
+      assert x.dtype   == z.dtype
+    
     if y is not None:
       yshape = self.matrixShape(y, False)
       assert xshape[0] == yshape[0]
@@ -72,22 +79,25 @@ class FastKronBase:
       return FastKron.Backend.CUDA
 
   def gekmmSizes(self, x, fs, trX = False, trF = False):
-    self.checkShapeAndTypes(x, fs, None, trX, trF)
+    self.checkShapeAndTypes(x, fs, None, None, trX, trF)
 
     xshape = self.matrixShape(x, trX)
     fsshape = [self.matrixShape(f, trF) for f in fs]
 
     return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
 
-  def xgekmm(self, fngekmm, backend, x, fs, y, alpha, beta, z, temp1, temp2, trX = False, trF = False):
-    # Are pointers valid?
-    assert temp1 is not None
-    assert y is not None
+  def xgekmm(self, fngekmm, backend, x, fs, z, alpha, beta, y, temp1, temp2, trX = False, trF = False):
+    if temp1 is None:
+      raise ValueError("Operand temp1 must be valid 2D Tensor")
 
-    if z is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
-      assert temp2 is not None
+    if z is None:
+      raise ValueError("Operand z must be valid 2D Tensor")
 
-    self.checkShapeAndTypes(x, fs, y, trX, trF)
+    if y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
+      if temp2 is None:
+        raise ValueError("Operand temp2 must be a valid Tensor when z == y")
+
+    self.checkShapeAndTypes(x, fs, z, y, trX, trF)
 
     xshape = self.matrixShape(x, trX)
     fsshape = [self.matrixShape(f, trF) for f in fs]
@@ -95,6 +105,6 @@ class FastKronBase:
     fngekmm(self.handle, backend, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape),
             self.tensor_data_ptr(x), FastKron.Op.N if not trX else FastKron.Op.T,
             self.fptrs(fs), FastKron.Op.N if not trF else FastKron.Op.T,
-            self.tensor_data_ptr(y),
-            alpha, beta, 0 if z is None else self.tensor_data_ptr(z), 
+            self.tensor_data_ptr(z),
+            alpha, beta, 0 if y is None else self.tensor_data_ptr(y), 
             self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2))
