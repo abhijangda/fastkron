@@ -40,7 +40,7 @@ CUDAKernelDatabase::CUDAKernelDatabase() : isDistributed_(false) {
   //TODO: Add if debug
 }
 
-void CUDAKernelDatabase::free() {
+CUDAKernelDatabase::~CUDAKernelDatabase() {
   streams.clear();
   if (isDistributed_) {
 #ifdef ENABLE_MULTI_GPU

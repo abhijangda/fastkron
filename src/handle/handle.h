@@ -21,26 +21,10 @@
 
 #pragma once
 
-enum ProcType {
-  ProcNone = 0,
-  SingleThread,
-  MultipleThread,
-  MultipleProcess
-};
-
 struct FastKronHandle {
   void* result_;
   uint32_t backends;
   Autotuner autotuner;
-
-  FastKronHandle(uint32_t backends);
-
-  bool hasBackend(fastKronBackend backend) {
-    return (backends & backend);
-  }
-
-  // fastKronError initBackends();
-  
 #ifdef ENABLE_CUDA
   CUDAKernelDatabase cudaKernels;
 #endif
@@ -50,6 +34,14 @@ struct FastKronHandle {
 #ifdef ENABLE_X86
   X86KernelDatabase x86Kernels;
 #endif
+  uint32_t options;
+
+  FastKronHandle(uint32_t backends);
+  ~FastKronHandle();
+
+  bool hasBackend(fastKronBackend backend) {
+    return (backends & backend);
+  }
 
   KernelDatabase* getKernelDb(fastKronBackend backend) {
     switch (backend) {
@@ -83,23 +75,10 @@ struct FastKronHandle {
   }
 
   fastKronError initX86Backend();
-  fastKronError initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
+  fastKronError initCUDABackend(void* ptrToStream, int gpus, 
+                                int gpusInM, int gpusInK, int gpuKrons);
   fastKronError initHIPBackend(void* ptrToStream);
   fastKronError setStream(fastKronBackend backends, void* ptrToStream);
-
-  //TODO: these two functions should be a part of utils?
-  fastKronError allocDistributedX(void* dX[], void* hX, uint M, uint K);
-  fastKronError gatherDistributedY(void* dY[], void* hY, uint M, uint K, 
-                                 uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
-
-  #ifdef ENABLE_MULTI_GPU
-  void getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK);
-  #endif
-
-  void free();
-
-  //Options
-  uint32_t options;
 
   void setOptions(uint32_t options) {this->options = options;}
   bool canTune() {
@@ -111,21 +90,20 @@ struct FastKronHandle {
     return (options & fastKronOptionsUseFusion) ==
             fastKronOptionsUseFusion;
   }
-  
-  //SlicedMulShape maxCompiledColsA(SlicedMulShape shape);
-  //KernelInfo selectKernel(SlicedMulShape shape);
-  //uint maxFusedKernels(SlicedMulShape shape);
 
-  fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend, void* temp1, void* temp2, 
-                       EpilogueParams epilogueParams);
-
-  fastKronError distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
-                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
-                                  void* streams);
+  fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend,
+                       void* temp1, void* temp2, EpilogueParams epilogueParams);
   fastKronError gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp);
 
-  //TunedKernelsSeries selectKernelSeries(const uint NumKronMats,
-  //                                    uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[],
-  //                                    bool distributedKernel);
+  #ifdef ENABLE_MULTI_GPU
+  void getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK);
+  #endif
+  //TODO: these two functions should be a part of utils?
+  fastKronError allocDistributedX(void* dX[], void* hX, uint M, uint K);
+  fastKronError gatherDistributedY(void* dY[], void* hY, uint M, uint K, 
+                                 uint NumKronMats, uint KronMatCols[], uint KronMatRows[]);
+  fastKronError distributedsgekmm(const uint NumKronMats, float* x[], float* kronMats[], float* result[],
+                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
+                                  void* streams);
 };

@@ -29,13 +29,12 @@ public:
 
 public:
   CUDAKernelDatabase();
-  ~CUDAKernelDatabase() {}
+  ~CUDAKernelDatabase();
 
   fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
   static int numDevices();
   CUDAArchDetails parseDeviceProperties(int dev);
   CUDAArchDetails getCUDADeviceProperties() {return *(dynamic_cast<CUDAArchDetails*>(hardware[0]));}
-  void free();
   void setCUDAStream(void* ptrToStream);
   virtual fastKronError initTune();
   virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 

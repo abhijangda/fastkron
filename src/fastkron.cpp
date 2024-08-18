@@ -96,7 +96,6 @@ fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options) {
 }
 
 void fastKronDestroy(fastKronHandle handle) {
-  ((FastKronHandle*)handle)->free();
   delete (FastKronHandle*)handle;
 }
 
@@ -134,6 +133,7 @@ fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
+
 fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const int* X,
                    fastKronOp opX, const int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, const int *Z, int* temp1, int* temp2) {
@@ -141,6 +141,7 @@ fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
+
 fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
                    fastKronOp opX, const double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, const double *Z, double* temp1, double* temp2) {

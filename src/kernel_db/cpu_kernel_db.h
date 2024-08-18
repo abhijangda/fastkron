@@ -69,7 +69,6 @@ public:
     return MAX((uint32_t)omp_get_max_threads(), getCPUProperties().sockets * getCPUProperties().cores);
   }
   CPUArchDetails getCPUProperties() const {return *(dynamic_cast<const CPUArchDetails*>(hardware[0]));}
-  void free();
   ~CPUKernelDatabase() {
     delete[] trash1; delete[] trash2;
     for (auto detail : hardware) delete detail;

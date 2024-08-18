@@ -222,11 +222,7 @@ autotuner(*this)
   //TODO: Support both modes. Single Process multi gpu and multi process multi gpu
 }
 
-void FastKronHandle::free() {
-#ifdef ENABLE_CUDA
-  cudaKernels.free();
-#endif
-}
+FastKronHandle::~FastKronHandle() {}
 
 #ifdef ENABLE_MULTI_GPU
 void FastKronHandle::getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK) {

@@ -273,12 +273,14 @@ fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend,
                      const float* Fs[], fastKronOp opFs,
                      float* Z, float alpha, float beta,
                      const float *Y, float* temp1, float* temp2);
+
 fastKronError igekmm(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const int* X, fastKronOp opX,
                      const int* Fs[], fastKronOp opFs, 
                      int* Z, int alpha, int beta,
                      const int *Y, int* temp1, int* temp2);
+
 fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const double* X, fastKronOp opX,
