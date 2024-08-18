@@ -102,7 +102,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
 
   if (fastKron.hasBackend(fastKronBackend_CUDA)) {
     #ifdef ENABLE_CUDA
-      devicesPerProc = fastKron.cudaKernels.numGPUs_;
+      devicesPerProc = ((CUDAKernelDatabase*)fastKron.getKernelDb(fastKronBackend_CUDA))->numGPUs_;
     #endif
   } else if (fastKron.hasBackend(fastKronBackend_X86)) {
       devicesPerProc = 1;
