@@ -13,72 +13,80 @@
 } while(0)                                          \
 
 
-/*
-  `enum fastKronOp` represents operation on input matrices.
-  FastKron requires all matrices to be of row major order.
+/****************
+  Types and Enums
+ ****************/
+
+/**
+ * enum fastKronOp - represents operation on input matrices.
+ * FastKron requires all matrices to be of row major order.
+ * @fastKronOp_N: No operation.
+                  The input matrix is considered as row major.
+ * @fastKronOp_T: Transpose the matrix from column major to row major.
  */
 enum fastKronOp {
-  //No operation. The input matrix is considered as row major.
   fastKronOp_N = 1,
-  //Transpose the matrix from column major to row major.
   fastKronOp_T = 2
 };
 
-/*
-  `enum fastKronBackend` represents backend type 
-   for FastKron with following possible values:
+/**
+ * enum fastKronBackend - represents backend type 
+ * for FastKron with following possible values:
+ * @fastKronBackend_NONE : No backend. Used as a placeholder.
+ * @fastKronBackend_X86  : x86 backend.
+ * @fastKronBackend_ARM  : ARM backend. **Future Work**
+ * @fastKronBackend_CUDA : NVIDIA CUDA backend.
+ * @fastKronBackend_HIP  : AMD HIP backend. **Future Work**
  */
 enum fastKronBackend {
-  //No backend. Used as a placeholder.
   fastKronBackend_NONE = 1 << 0,
-  //x86 backend.
-  fastKronBackend_X86 = 1 << 1,
-  //ARM backend. **Future Work**
-  fastKronBackend_ARM = 1 << 2,
-  //NVIDIA CUDA backend.
+  fastKronBackend_X86  = 1 << 1,
+  fastKronBackend_ARM  = 1 << 2,
   fastKronBackend_CUDA = 1 << 3,
-  //AMD HIP backend. **Future Work**
-  fastKronBackend_HIP = 1 << 4
+  fastKronBackend_HIP  = 1 << 4
 };
 
-/*
-  `enum fastKronOptions` represents possible options for 
-  FastKron and has possible values:
+/**
+ * enum fastKronOptions - represents possible options for 
+ * FastKron and has possible values:
+ * @fastKronOptionsNone      : No extra options and default behavior.
+ * @fastKronOptionsUseFusion : Avoid selecting fused kernels.
+ * @fastKronOptionsTune      : Tune for the fastest series of kernels for the given problem and
+ *                             use this series for subsequent calls for given problem
  */
 enum fastKronOptions {
-  //No extra options and default behavior.
-  fastKronOptionsNone = 1 << 0,
-  //Avoid selecting fused kernels
+  fastKronOptionsNone      = 1 << 0,
   fastKronOptionsUseFusion = 1 << 1,
-  //Tune for the fastest series of kernels for the given problem and 
-  //use this series for subsequent calls for given problem
-  fastKronOptionsTune = 1 << 2,
+  fastKronOptionsTune      = 1 << 2,
 };
 
-/*
-  `enum fastKronError` represents errors returned by FastKron API functions.
+/**
+ * enum fastKronError - represents errors returned by FastKron API functions.
+ * @fastKronSuccess             : No error. The operation was successfully executed.
+ * @fastKronBackendNotAvailable : FastKron not compiled with requested backend
+ * @fastKronInvalidMemoryAccess : An invalid memory access occurred has occurred possibly 
+ *                                because the input arrays are not of the given size.
+ * @fastKronKernelNotFound      : A kernel not found for the requested problem.
+ * @fastKronInvalidArgument     : An argument to the API function is invalid.
+ * @fastKronInvalidKMMProblem   : Size values representing a problem are not valid.
+ * @fastKronOtherError          : Undefined Error
  */
 enum fastKronError {
-  //No error. The operation was successfully executed.
-  fastKronSuccess = 0,
-  //FastKron not compiled with requested backend
+  fastKronSuccess             = 0,
   fastKronBackendNotAvailable = 1,
-  //An invalid memory access occurred has occurred possibly because the input 
-  //arrays are not of the given size.
   fastKronInvalidMemoryAccess = 2,
-  //A kernel not found for the requested problem.
-  fastKronKernelNotFound = 3,
-  //An argument to the API function is invalid.
-  fastKronInvalidArgument = 4,
-  //Size values representing a problem are not valid.
-  fastKronInvalidKMMProblem = 5, 
-  //Undefined Error
-  fastKronOtherError = 6,
+  fastKronKernelNotFound      = 3,
+  fastKronInvalidArgument     = 4,
+  fastKronInvalidKMMProblem   = 5,
+  fastKronOtherError          = 6,
 };
 
 extern "C" {
 typedef void* fastKronHandle;
 
+/******************
+  Helper Functions
+ ******************/
 /**
  * fastKronVersion() - Get FastKron version.
  *
@@ -196,6 +204,7 @@ fastKronError fastKronInitX86(fastKronHandle handle);
 fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, void* ptrToStream);
 
 /**
+ * Generalized Kronecker Matrix Multiplication fuctions
  * These functions are used to do Generalized Kronecker Matrix-Matrix Multiplication (GeKMM) of the form:
  * 
  * $Z = \alpha ~ op(X) \times \left (op(F^1) \otimes op(F^2) \otimes \dots op(F^N) \right) + \beta Y$
