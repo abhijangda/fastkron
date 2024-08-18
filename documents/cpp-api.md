@@ -106,12 +106,12 @@ Initializes the CUDA backend with stream only if fastKronHandle was initialized 
 
 `fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream)`
 
-Initializes the HIP backend with stream only if fastKronHandle was initialized with CUDA backend.
+Initializes the HIP backend with stream only if fastKronHandle was initialized with HIP backend.
 **This function is not implemented yet but is provided for the future**
 
 * **Parameters**
-    * `handle`: A fastKronHandle initialized with CUDA backend.
-    * `ptrToStream`: A pointer to CUDA stream.
+    * `handle`: A fastKronHandle initialized with HIP backend.
+    * `ptrToStream`: A pointer to HIP stream.
 
 * **Returns**: `fastKronSuccess` for no error or the error occurred.
 

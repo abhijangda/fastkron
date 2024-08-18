@@ -12,36 +12,65 @@
   }                                                 \
 } while(0)                                          \
 
+
+/*
+  `enum fastKronOp` represents operation on input matrices.
+  FastKron requires all matrices to be of row major order.
+ */
 enum fastKronOp {
+  //No operation. The input matrix is considered as row major.
   fastKronOp_N = 1,
+  //Transpose the matrix from column major to row major.
   fastKronOp_T = 2
 };
 
+/*
+  `enum fastKronBackend` represents backend type 
+   for FastKron with following possible values:
+ */
 enum fastKronBackend {
+  //No backend. Used as a placeholder.
   fastKronBackend_NONE = 1 << 0,
+  //x86 backend.
   fastKronBackend_X86 = 1 << 1,
+  //ARM backend. **Future Work**
   fastKronBackend_ARM = 1 << 2,
+  //NVIDIA CUDA backend.
   fastKronBackend_CUDA = 1 << 3,
+  //AMD HIP backend. **Future Work**
   fastKronBackend_HIP = 1 << 4
 };
 
+/*
+  `enum fastKronOptions` represents possible options for 
+  FastKron and has possible values:
+ */
 enum fastKronOptions {
+  //No extra options and default behavior.
   fastKronOptionsNone = 1 << 0,
+  //Avoid selecting fused kernels
   fastKronOptionsUseFusion = 1 << 1,
+  //Tune for the fastest series of kernels for the given problem and 
+  //use this series for subsequent calls for given problem
   fastKronOptionsTune = 1 << 2,
 };
 
+/*
+  `enum fastKronError` represents errors returned by FastKron API functions.
+ */
 enum fastKronError {
+  //No error. The operation was successfully executed.
   fastKronSuccess = 0,
   //FastKron not compiled with requested backend
   fastKronBackendNotAvailable = 1,
-  //Invalid memory access occurred
+  //An invalid memory access occurred has occurred possibly because the input 
+  //arrays are not of the given size.
   fastKronInvalidMemoryAccess = 2,
-  //Kernel not found for requested case
+  //A kernel not found for the requested problem.
   fastKronKernelNotFound = 3,
-  //An argument to the API function is invalid
+  //An argument to the API function is invalid.
   fastKronInvalidArgument = 4,
-  
+  //Size values representing a problem are not valid.
   fastKronInvalidKMMProblem = 5, 
   //Undefined Error
   fastKronOtherError = 6,
@@ -50,28 +79,185 @@ enum fastKronError {
 extern "C" {
 typedef void* fastKronHandle;
 
-//backends is a bitwise OR
-fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends);
-fastKronError fastKronInitAllBackends(fastKronHandle* handle);
-fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options);
-void fastKronDestroy(fastKronHandle handle);
-
-uint32_t fastKronGetBackends();
-const char* fastKronGetErrorString(fastKronError err);
+/**
+ * fastKronVersion() - Get FastKron version.
+ *
+ * Return: A string constant representing the version. 
+ */
 const char* fastKronVersion();
+/**
+ * fastKronCUDAArchs() - Get CUDA architectures supported by FastKron.
+ *
+ * Return:
+ */
 const char* fastKronCUDAArchs();
 
-/* fastKronFlags; fastKronCUDASupportedSMs ;  */
+/**
+ * fastKronGetErrorString() - Get error description for given fastKronError.
+ * @err: A fastKronError
+ *
+ * Return: A null-terminated string description of error.
+ */
+const char* fastKronGetErrorString(fastKronError err);
+
+/**
+ * fastKronGetBackends() - Get a bit-wise set of all backends built in FastKron.
+ *
+ * Return: A bit-wise OR (`||`) of all `fastKronBackends` enum built into FastKron.
+ */
+uint32_t fastKronGetBackends();
+
+/**
+ * fastKronInit() - Initialize a `fastKronHandle` for one or more backends.
+ * @handle: [OUT] Pointer to a variable of `fastKronHandle`. After initialization this pointer is written.
+ * @backends: A bit-set of all backends that `fastKronHandle` can use. 
+              To use multiple backends, pass a bit-wise OR (`||`) of multiple 
+              `fastKronBackends` enums.
+ * Return: `fastKronSuccess` for no error or the error occurred.
+ */
+fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends);
+
+/**
+ * fastKronInitAllBackends() - Initialize a `fastKronHandle` with all backends that FastKron is compiled with.
+ * @handle: [OUT] Pointer to a variable of `fastKronHandle`. 
+            After initialization this pointer is written.
+ *
+ * This function has the same effect as `fastKronInit(&handle, fastKronGetBackends())`.
+
+ * Return: `fastKronSuccess` for no error or the error occurred.
+ */
+fastKronError fastKronInitAllBackends(fastKronHandle* handle);
+
+/**
+ * fastKronSetOptions() - Set one or more options to `fastKronHandle`.
+ * @handle: An initialized object of `fastKronHandle`.
+ * @options: A bit-wise OR (`||`) of `fastKronOptions` enum.
+
+ * Return: `fastKronSuccess` for no error or the error occurred.
+ */
+fastKronError fastKronSetOptions(fastKronHandle handle, uint32_t options);
+
+/**
+ * fastKronDestroy() - Destroy an initialized `fastKronHandle` handle.
+ * @handle: An initialized variable of `fastKronHandle`.
+
+  Destroy an initialized `fastKronHandle` handle and release all memories associated 
+  with the handle. The handle must have been initialized before and cannot be used after 
+  without initializing it again.
+  
+  * Return: 
+ */
+void fastKronDestroy(fastKronHandle handle);
+
+/**
+ * fastKronInitCUDA() - Initializes the CUDA backend with stream.
+ * @handle: A fastKronHandle initialized with CUDA backend.
+ * @ptrToStream: A pointer to the CUDA stream.
+ *
+ * Initializes the CUDA backend with stream only if fastKronHandle was 
+ * initialized with CUDA backend.
+ * 
+ * Return: `fastKronSuccess` for no error or the error occurred.
+ */
 fastKronError fastKronInitCUDA(fastKronHandle handle, void *ptrToStream);
-//TODO: Need to provide a setcudastream function
+
+/** 
+ * fastKronInitHIP() - Initializes the HIP backend with stream.
+ * @handle: A fastKronHandle initialized with HIP backend.
+ * @ptrTostream: A pointer to HIP stream.
+ *
+ * Initializes the HIP backend with stream only if fastKronHandle was 
+ * initialized with HIP backend.
+ * This function is not implemented yet but is provided for the future
+ *
+ * Return: `fastKronSuccess` for no error or the error occurred.
+*/
 fastKronError fastKronInitHIP(fastKronHandle handle, void *ptrToStream);
+
+/**
+ * fastKronInitX86() - Initializes the x86 backend with stream.
+ * @handle: A fastKronHandle initialized with x86 backend.
+ *
+ * Initializes the x86 backend with stream only if fastKronHandle was 
+ * initialized with x86 backend.
+ *
+ * Return: `fastKronSuccess` for no error or the error occurred.
+ */
 fastKronError fastKronInitX86(fastKronHandle handle);
+
+/**
+ * fastKronSetStream() - Set the CUDA/HIP stream for CUDA/HIP backend only if CUDA/HIP backend was initialized with the handle.
+ * @handle: A fastKronHandle initialized with CUDA or HIP backend.
+ * @backend: `fastKronBackend_CUDA` or `fastKronBackend_HIP`.
+ * @ptrToStream: A pointer to CUDA or HIP stream.
+ *
+ * Return: `fastKronSuccess` for no error or the error occurred.
+ */
 fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, void* ptrToStream);
 
-//TODO: A different function for setting stream of handle
+/**
+ * These functions are used to do Generalized Kronecker Matrix-Matrix Multiplication (GeKMM) of the form:
+ * 
+ * $Z = \alpha ~ op(X) \times \left (op(F^1) \otimes op(F^2) \otimes \dots op(F^N) \right) + \beta Y$
+ *
+* where,
+  * $op$ is no-transpose or transpose operation on a matrix.
+  * each $op(F^i)$ is a row-major matrix of size $P^i \times Q^i$.
+  * $F^i \otimes F^j$ is Kronecker Product of two matrices
+  * $op(X)$ is a row-major matrix of size $M \times \left(P^1 \cdot P^2 \cdot P^3 \dots P^N \right)$
+  * $Y$ and $Z$ are row-major matrices of size $M \times \left(Q^1 \cdot Q^2 \cdot Q^3 \dots Q^N \right)$
+  * $\alpha$ and $\beta$ are scalars
+*/
+
+
+/**
+ * gekmmSizes() - Obtain the number of elements of the result matrix and temporary matrices for GeKMM.
+ *                The function writes to `yElems` and `tmpElems`.
+ * @handle: is an initialized variable of fastKronHandle.
+ * @M: is number of rows of $X$, $Y$, and $Z$.
+ * @N: is number of Kronecker factors, $F^i$ s.
+ * @Ps: is an array containing rows of all N Kronecker factors.
+ * @Qs: is an array containing columns of all N Kronecker factors.
+ * @yElems: [OUT] is a pointer to the number of elements of $Y$.
+ * tmpElems: [OUT] is a pointer to the number of elements of temporary buffers required to do GeKMM.
+ *
+ * Returns: Return `fastKronSuccess` for no error or the error occurred.
+ *          Write values to `yElems` and `tmpElems`.
+ */
 fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                        size_t* yElems, size_t* tmpElems);
 
+
+/**
+ * sgekmm(), igekmm(), dgekmm() - Perform GeKMM.
+ * @handle: is an initialized variable of fastKronHandle.
+ * @backend: is the `fastKronBackend` to use to perform the computation.
+ * @M: is number of rows of $X$, $Y$, and $Z$.
+ * @N: is the number of Kronecker factors, $F^i$ s.
+ * @Ps: is an array containing rows of all N Kronecker factors.
+ * @Qs: is an array containing columns of all N Kronecker factors.
+ * @X: is the pointer to $X$.
+ * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+ * @Fs: is an array of N pointers for each $F^i$ s.
+ * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+ * @Z: [OUT] is pointer to the result of GeKMM.
+ * @alpha: scalar 
+ * @beta: scalar
+ * @Y: is pointer to $Y$. This pointer can be NULL only if `beta` is 0.
+ * @temp1: is a temporary buffer required for the computation and cannot be NULL.
+ * @temp2: is another temporary buffer required only when `Z` and `Y` points to the same memory location.
+
+ * Perform GeKMM using 32-bit floating point or 64-bit double floating point operations on 
+ * input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$. These functions 
+ * require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points 
+ * to the same memory location then both temp1 and temp2 must be passed as valid 
+ * memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and 
+ * temp2 can be NULL. All pointers should point to either x86 CPU RAM if 
+ * `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+ * Return: Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error
+   or the error occurred.
+ */
 fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const float* X, fastKronOp opX,
