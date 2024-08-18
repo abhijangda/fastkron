@@ -1,6 +1,6 @@
 from functools import reduce
 
-try:
+if True:
   # CUDA example in PyTorch
 
   import torch
@@ -15,9 +15,9 @@ try:
   x = torch.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=torch.float32).cuda()
   fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float32).cuda() for i in range(0, N)]
 
-  y = fk.gekmm(x, fs)
+  z = fk.gekmm(x, fs)
 
-  print(y)
+  print(z)
 
   # KMM of X.T with F[0] ... F[N]
   M = 10
@@ -25,17 +25,17 @@ try:
   Ps = [16] * N
   Qs = [32] * N
 
-  x = torch.ones((reduce((lambda a, b: a * b), Ps), M), dtype=torch.float32).cuda()
-  fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float32).cuda() for i in range(0, N)]
+  x = torch.ones((reduce((lambda a, b: a * b), Ps), M), dtype=torch.float32)
+  fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float32) for i in range(0, N)]
 
-  y = fk.gekmm(x, fs, trX = True)
+  z = fk.gekmm(x, fs, trX = True)
 
-  print(y)
+  print(z)
 
-except:
-  pass
+# except:
+#   pass
 
-try:
+if True:
   # Numpy example
 
   import numpy as np
@@ -50,11 +50,11 @@ try:
 
   x = np.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=np.double)
   fs = [np.ones((Ps[0], Qs[0]), dtype=np.double) for i in range(0, N)]
-  z = np.ones((M, reduce((lambda a, b: a * b), Qs)), dtype=np.double)
+  y = np.ones((M, reduce((lambda a, b: a * b), Qs)), dtype=np.double)
 
-  y = fk.gekmm(x, fs, alpha=2.0, beta=1.0, z=z)
+  z = fk.gekmm(x, fs, alpha=2.0, beta=1.0, y=y)
 
-  print(y)
+  print(z)
 
   # KMM of X with F.T[0] ... F.T[N]
   M = 10
@@ -65,8 +65,8 @@ try:
   x = np.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=np.double)
   fs = [np.ones((Qs[0], Ps[0]), dtype=np.double) for i in range(0, N)]
 
-  y = fk.gekmm(x, fs, alpha=2.0, beta= 1.0, z=z, trF = True)
+  z = fk.gekmm(x, fs, alpha=2.0, beta= 1.0, y=None, trF = True)
 
-  print(y)
-except:
-  pass
+  print(z)
+# except:
+#   pass

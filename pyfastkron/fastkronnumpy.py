@@ -36,7 +36,7 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
 
   Parameters
   ----------
-  x  : 2D numpy array 
+  x  : 2D numpy array
   fs : A list of 2D numpy array
   alpha and beta: constants
   y  : 2D numpy array 
@@ -48,6 +48,14 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   z : 2D numpy array
   '''
 
+  if type(x) is not np.ndarray or x.ndim != 2:
+    raise ValueError("Input 'x' should be a ndarray")
+  if type(fs) is not list:
+    raise ValueError("Input 'fs' should be a list of np.ndarray")
+  for i,f in enumerate(fs):
+    if type(f) is not np.ndarray or f.ndim != 2:
+      raise ValueError(f"Input fs[{i}] should be a ndarray")
+
   rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = np.zeros(ts, dtype=x.dtype)
   if not trX:
@@ -55,4 +63,4 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   else:
     z = np.zeros((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
   __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
-  return y
+  return z
