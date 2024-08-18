@@ -58,7 +58,7 @@ if(ENABLE_CUDA)
   check_language(CUDA OPTIONAL)
   if (CMAKE_CUDA_COMPILER)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-      set(CMAKE_CUDA_ARCHITECTURES "70;80")
+      set(CMAKE_CUDA_ARCHITECTURES "50;70;80")
     endif()
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED True)
@@ -197,7 +197,8 @@ endif()
 set(HEADER_FILES 
     ${SRC}/env/env.h 
     ${SRC}/autotuner/autotuner.h
-    ${SRC}/handle/handle.h 
+    ${SRC}/handle/handle.h
+    ${SRC}/handle/handle.inline.h
     ${SRC}/handle/op.h 
     ${SRC}/kernel_db/kernel_defs.h 
     ${SRC}/kmm/kmmalgo.h

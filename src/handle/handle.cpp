@@ -140,7 +140,7 @@ fastKronError FastKronHandle::gekmmSizes(KMMProblem problem, size_t* resultSize,
 }
 
 fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons) {
-  if (!hasBackend(fastKronBackend_CUDA)) return fastKronInvalidArgument;
+  if (!hasBackend(fastKronBackend_CUDA)) return fastKronBackendNotAvailable;
 #ifdef ENABLE_CUDA
   cudaKernels.init(ptrToStream, gpus, gpusInM, gpusInK, gpuKrons);
   return fastKronSuccess;
@@ -155,7 +155,7 @@ fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus, int g
 }
 
 fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
-  if (!hasBackend(fastKronBackend_HIP)) return fastKronInvalidArgument;
+  if (!hasBackend(fastKronBackend_HIP)) return fastKronBackendNotAvailable;
 #ifdef ENABLE_HIP
   hipKernels.init(ptrToStream);
   return fastKronSuccess;
@@ -166,7 +166,7 @@ fastKronError FastKronHandle::initHIPBackend(void* ptrToStream) {
 }
 
 fastKronError FastKronHandle::initX86Backend() {
-  if (!hasBackend(fastKronBackend_X86)) return fastKronInvalidArgument;
+  if (!hasBackend(fastKronBackend_X86)) return fastKronBackendNotAvailable;
 #ifdef ENABLE_X86
   x86Kernels.init();
   return fastKronSuccess;

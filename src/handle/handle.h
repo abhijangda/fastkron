@@ -21,10 +21,30 @@
 
 #pragma once
 
-struct FastKronHandle {
-  void* result_;
+class FastKronHandle {
+  private:
+
+  /**
+   * FastKronHandle::backends - Store a set of all initialized backends as a
+   * bitwise OR of enum fastKronBackends 
+   */
   uint32_t backends;
+
+  /**
+   * FastKronHandle::options - Store set of options as bitwise OR of 
+   * enum fastKronOptions
+   */
+  uint32_t options;
+
+  /**
+   * FastKronHandle::autotuner - The autotuner object to tune kernels
+   */
   Autotuner autotuner;
+
+  /**
+   * FastKronHandle::cudaKernels , hipKernels, x86Kernels - Kernel Database 
+   * for all backendss
+   */
 #ifdef ENABLE_CUDA
   CUDAKernelDatabase cudaKernels;
 #endif
@@ -34,66 +54,134 @@ struct FastKronHandle {
 #ifdef ENABLE_X86
   X86KernelDatabase x86Kernels;
 #endif
-  uint32_t options;
 
+  public:
+  /**
+   * FastKronHandle::FastKronHandle() - Initialize FastKronHandle for given backends
+   * @backends: A set of fastKronBackends as a bitwise OR (||)
+   *
+   */
   FastKronHandle(uint32_t backends);
+
+  /**
+   * FastKronHandle::~FastKronHandle - Destroy FastKronHandle and frees all memory
+   */
   ~FastKronHandle();
 
-  bool hasBackend(fastKronBackend backend) {
-    return (backends & backend);
-  }
+  /**
+   * FastKronHandle::hasBackend() - Check if FastKron supports a backend
+   * @backend: The backend to check
+   *
+   * Return - True if FastKron supports the backend otherwise no
+   */
+  bool hasBackend  (fastKronBackend backend);
 
-  KernelDatabase* getKernelDb(fastKronBackend backend) {
-    switch (backend) {
-      case fastKronBackend_X86:
-        #ifdef ENABLE_X86
-          return &x86Kernels;
-        #endif
-      case fastKronBackend_CUDA:
-        #ifdef ENABLE_CUDA
-          return &cudaKernels;
-        #endif
-      case fastKronBackend_HIP:
-        #ifdef ENABLE_HIP
-          return &hipKernels;
-        #endif
-      default:
-        return nullptr;
-    }
-  }
+  /**
+   * FastKronHandle::setOptions() - Set options in a bitwise OR fastKronOptions
+   * @options: A set of fastKronOptions as bitwise OR (||)
+   *
+   * Return - void
+   */
+  void setOptions  (uint32_t        options);
 
-  std::vector<KernelDatabase*> getAllKernelDbs() {
-    std::vector<KernelDatabase*> out;
-    if        (hasBackend(fastKronBackend_X86))  {
-      out.push_back(getKernelDb(fastKronBackend_X86));
-    } else if (hasBackend(fastKronBackend_CUDA)) {
-      out.push_back(getKernelDb(fastKronBackend_CUDA));
-    } else if (hasBackend(fastKronBackend_HIP))  {
-      out.push_back(getKernelDb(fastKronBackend_HIP));
-    }
-    return out;
-  }
+  /**
+   * FastKronHandle::canTune() - Determine if tuned option is set
+   * 
+   * Return - True if tuned option is set otherwise false
+   */
+  bool canTune     ();
 
+  /**
+   * FastKronHandle::getUseFusion() - Determine if fused option is set
+   * 
+   * Return - True if fusion is set otherwise false
+   */
+  bool getUseFusion();
+
+  /**
+   * FastKronHandle::getKernelDb() - Get pointer to kernel database for backend
+   * @backend: fastkronBackend to get database for
+   *
+   * Return - The kernel database for backend if the FastKronHandle is 
+   *          initialized with the handle otherwise nullptr
+   */
+  KernelDatabase* getKernelDb(fastKronBackend backend);
+
+  /**
+   * FastKronHandle::getAllKernelDbs() - Get a vector of all kernel databases of initialized backends
+   *
+   * Return - A vector of kernel database
+   */
+  std::vector<KernelDatabase*> getAllKernelDbs();
+
+  /**
+   * FastKronHandle::initX86Backend() - Initialize x86 backend
+   *
+   * Return - fastKronSuccess if initialization is successfull
+   *          fastKronBackendNotAvailable if the handle is not initialized or not compiled with x86 backend is
+   */
   fastKronError initX86Backend();
+
+  /**
+   * FastKronHandle::initCUDABackend() - Initialize CUDA backend
+   * @ptrToStream: A pointer to the CUDA stream
+   *
+   * Return - fastKronSuccess if initialization is successfull
+   *          fastKronBackendNotAvailable if the handle is not initialized or not compiled with x86 backend is
+   */
+  //TODO: also make CUDAMgBackend
   fastKronError initCUDABackend(void* ptrToStream, int gpus, 
                                 int gpusInM, int gpusInK, int gpuKrons);
+
+  /**
+   * FastKronHandle::initHIPBackend() - Initialize HIP backend
+   * @ptrToStream: A pointer to the HIP stream
+   *
+   * Return - fastKronSuccess if initialization is successfull
+   *          fastKronBackendNotAvailable if the handle is not initialized or not compiled with x86 backend is
+   */
   fastKronError initHIPBackend(void* ptrToStream);
+
+  /**
+   * FastKronHandle::setStream() - Set CUDA/HIP stream
+   * @backends: One of fastKronBackend_CUDA or fastKronBackend_HIP
+   * @ptrToStream: A pointer to the CUDA/HIP stream
+   *
+   * Return - fastKronSuccess if initialization is successfull
+   *          fastKronBackendNotAvailable if the handle is not initialized or not compiled with x86 backend is
+   */
   fastKronError setStream(fastKronBackend backends, void* ptrToStream);
 
-  void setOptions(uint32_t options) {this->options = options;}
-  bool canTune() {
-    return (options & fastKronOptionsTune) ==
-            fastKronOptionsTune;
-  }
-
-  bool getUseFusion() {
-    return (options & fastKronOptionsUseFusion) ==
-            fastKronOptionsUseFusion;
-  }
-
+  /**
+   * FastKronHandle::xgekmm() - Perform GeKMM
+   * @problem: The GeKMM problem as an object of KMMProblem
+   * @backend: the `fastKronBackend` of kernels
+   * @temp1: Temporary array to use
+   * @temp2: Temporary array to use
+   * @epilogueParams: Epilogue parameters
+   *
+   * Return - fastKronError representing the error occurred in the operation
+   */
   fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend,
                        void* temp1, void* temp2, EpilogueParams epilogueParams);
+  /**
+   * FastKronHandle::gekmmSizes() - Obtain GeKMM result and temporary sizes
+   * @problem: The GeKMM problem as an object of KMMProblem
+   * @resultSize: [OUT] number of elements of result matrix
+   * @tempSize: [OUT] number of elements of a temporary matrix
+   *
+   * Return - fastKronError representing the error in the operation
+   */
   fastKronError gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
+
+  /**
+   * FastKronHandle::gekmmResultTemp() - Initialize GeKMM result and temporary matrix with shapes
+   * @problem: The GeKMM problem as an object of KMMProblem
+   * @result: [OUT] The result matrix 
+   * @temp: [OUT] The temporary matrix
+   *
+   * Return - fastKronError representing the error in the operation
+   */
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp);
 
   #ifdef ENABLE_MULTI_GPU
@@ -107,3 +195,5 @@ struct FastKronHandle {
                                   uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], float** temp1, float** temp2,
                                   void* streams);
 };
+
+#include "handle/handle.inline.h"
