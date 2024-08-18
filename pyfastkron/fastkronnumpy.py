@@ -28,12 +28,31 @@ class FastKronNumpy(FastKronBase):
 
 __fastkronnumpy = FastKronNumpy()
 
-def gekmm(x, fs, alpha=1.0, beta=0.0, z=None, trX = False, trF = False):
+def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+  '''
+  Perform Generalized Kronecker-Matrix Multiplication:
+  
+  $Z = \alpha ~ X \times \left( F^1 \otimes F^2 \otimes \dots F^N \right) + \beta Y$
+
+  Parameters
+  ----------
+  x  : 2D numpy array 
+  fs : A list of 2D numpy array
+  alpha and beta: constants
+  y  : 2D numpy array 
+  trX: Transpose x before computing GeKMM
+  trF: Transpose each element of fs before computing GeKMM
+
+  Returns
+  -------
+  z : 2D numpy array
+  '''
+
   rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = np.zeros(ts, dtype=x.dtype)
   if not trX:
-    y = np.zeros((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
+    z = np.zeros((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
   else:
-    y = np.zeros((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
-  __fastkronnumpy.gekmm(x, fs, y, alpha, beta, z, temp1, None, trX, trF)
+    z = np.zeros((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
+  __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
   return y

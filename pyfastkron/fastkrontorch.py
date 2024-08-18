@@ -44,6 +44,24 @@ class FastKronTorch(FastKronBase):
 __fastkrontorch = FastKronTorch()
 
 def gekmm(x, fs, alpha=1.0, beta=0.0, z=None, trX = False, trF = False):
+  '''
+  Perform Generalized Kronecker-Matrix Multiplication:
+  
+  $Z = \alpha ~ X \times \left( F^1 \otimes F^2 \otimes \dots F^N \right) + \beta Y$
+
+  Parameters
+  ----------
+  x  : 2D torch tensor 
+  fs : A list of 2D torch tensor
+  alpha and beta: constants
+  y  : 2D torch tensor
+  trX: Transpose x before computing GeKMM
+  trF: Transpose each element of fs before computing GeKMM
+
+  Returns
+  -------
+  z : 2D torch tensor
+  '''
   rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = torch.zeros(ts, dtype=x.dtype, device=x.device)
   if not trX:
