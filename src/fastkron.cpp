@@ -12,16 +12,9 @@
   #include "fastkronMg.h"
 #endif
 
-#ifdef ENABLE_CUDA
-  // #include <cuda.h>
-#endif
-
 #define STR_(x) #x
 #define STR(x) STR_(x)
 
-/**************************************************
-          Library Functions
-***************************************************/
 const char* fastKronVersion() {
   return 
   ""
@@ -45,6 +38,40 @@ const char* fastKronCUDAArchs() {
 //   NULL;
 // #endif
 return NULL;
+}
+
+const char* fastKronGetErrorString(fastKronError err) {
+  switch(err) {
+    case fastKronSuccess:
+      return "Operation successfull";
+    case fastKronBackendNotAvailable:
+      return "Requested backend is not available";
+    case fastKronInvalidMemoryAccess:
+      return "Illegal memory access";
+    case fastKronKernelNotFound:
+      return "Kernel to execute the problem not found";
+    case fastKronInvalidArgument:
+      return "An argument to the function is invalid";
+    case fastKronOtherError:
+      return "Unknown error occurred";
+    default:
+      return NULL;
+  }
+}
+
+uint32_t fastKronGetBackends() {
+  uint32_t backends = 0;
+  #ifdef ENABLE_CUDA
+    backends |= fastKronBackend_CUDA;
+  #endif
+  #ifdef ENABLE_X86
+    backends |= fastKronBackend_X86;
+  #endif
+  #ifdef ENABLE_HIP
+    backends |= fastKronBackend_HIP;
+  #endif
+
+  return backends;
 }
 
 fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
@@ -73,40 +100,6 @@ void fastKronDestroy(fastKronHandle handle) {
   delete (FastKronHandle*)handle;
 }
 
-uint32_t fastKronGetBackends() {
-  uint32_t backends = 0;
-  #ifdef ENABLE_CUDA
-    backends |= fastKronBackend_CUDA;
-  #endif
-  #ifdef ENABLE_X86
-    backends |= fastKronBackend_X86;
-  #endif
-  #ifdef ENABLE_HIP
-    backends |= fastKronBackend_HIP;
-  #endif
-
-  return backends;
-}
-
-const char* fastKronGetErrorString(fastKronError err) {
-  switch(err) {
-    case fastKronSuccess:
-      return "Operation successfull";
-    case fastKronBackendNotAvailable:
-      return "Requested backend is not available";
-    case fastKronInvalidMemoryAccess:
-      return "Illegal memory access";
-    case fastKronKernelNotFound:
-      return "Kernel to execute the problem not found";
-    case fastKronInvalidArgument:
-      return "An argument to the function is invalid";
-    case fastKronOtherError:
-      return "Unknown error occurred";
-    default:
-      return NULL;
-  }
-}
-
 fastKronError fastKronInitCUDA(fastKronHandle handlePtr, void *ptrToStream) {
   return ((FastKronHandle*)handlePtr)->initCUDABackend(ptrToStream, 1, 1, 1, 1);
 }
@@ -116,7 +109,6 @@ fastKronError fastKronMgInitCUDA(fastKronHandle handlePtr, void *streams, int gp
 }
 
 fastKronError fastKronInitHIP(fastKronHandle handlePtr, void *ptrToStream) {
-  //TODO: remove Backend
   return ((FastKronHandle*)handlePtr)->initHIPBackend(ptrToStream);
 }
 
@@ -130,14 +122,14 @@ fastKronError fastKronSetStream(fastKronHandle handlePtr, fastKronBackend backen
 }
 
 fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
-                       size_t* resultSize, size_t* tempSize) {
+                         size_t* resultSize, size_t* tempSize) {
   KMMProblem problem(FastKronTypeNone, M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);
   return ((FastKronHandle*)handlePtr)->gekmmSizes(problem, resultSize, tempSize);
 }
 
 fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const float* X,
-                   fastKronOp opX, const float* Fs[], fastKronOp opFs, float* Y,
-                   float alpha, float beta, const float *Z, float* temp1, float* temp2) {
+                     fastKronOp opX, const float* Fs[], fastKronOp opFs, float* Y,
+                     float alpha, float beta, const float *Z, float* temp1, float* temp2) {
   KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
