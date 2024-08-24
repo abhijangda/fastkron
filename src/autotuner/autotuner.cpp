@@ -89,8 +89,8 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   //Only row major layout of all matrics is supported.
   auto kernelDb = fastKron.getKernelDb(backend);
 
-  if (tunedKernelSeries[kernelDb].count(problem) == 1) {
-    retKernelSeries = tunedKernelSeries[kernelDb][problem];
+  if (tunedProblemCache[kernelDb].count(problem) == 1) {
+    retKernelSeries = tunedProblemCache[kernelDb][problem];
     return fastKronSuccess;
   }
 
@@ -241,13 +241,13 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
 #endif
   }
 
-  tunedKernelSeries[kernelDb][problem] = retKernelSeries;
+  tunedProblemCache[kernelDb][problem] = retKernelSeries;
 
   return fastKronSuccess;
 }
 
 Autotuner::Autotuner(FastKronHandle& fastKron) : fastKron(fastKron) {
   for (auto db : fastKron.getAllKernelDbs()) {
-    tunedKernelSeries[db] = std::unordered_map<KMMProblem, TunedKernelsSeries>();
+    tunedProblemCache[db] = std::unordered_map<KMMProblem, TunedKernelsSeries>();
   }
 }

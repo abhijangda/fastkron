@@ -11,7 +11,7 @@
 
 #define NULL_CHECK(x) if ((x) == nullptr) return fastKronInvalidArgument;
 
-static std::string fastKronOpToStr(const fastKronOp& op) {
+std::string fastKronOpToStr(const fastKronOp& op) {
   switch (op) {
     case fastKronOp_N:
       return "N";
