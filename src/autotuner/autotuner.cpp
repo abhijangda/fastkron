@@ -8,79 +8,109 @@
 #include "utils/utils.h"
 #include "utils/logger.h"
 
-static float minExecTimeOfSeries(KMMProblem problem, uint startKron, bool isDistributed,
+/**
+ * minExecTimeOfSeries() - Obtains execution time of fastest tuned kernel series for a problem.
+ * @problem: The base KMMProblem.
+ * @startF: Obtain fastest tuned kernel series of problem starting from this factor index.
+ * @isDistributed: True if multiple GPUs are used or False.
+ * @tunedKernels: [OUT] Output tuned kernel series
+ * @tunedKernelsMap: Map of tuned kernels to KMMProblems
+ * 
+ * Return - Minimum execution time of the fastest tuned kernel series.
+ *
+ * A recursive combonitarial approach to go through every sub problem of the base problem and selects
+ * a series of kernels that minimizes the total execution time of the base problem.
+ */
+static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
                                  TunedKernelsMap tunedKernelsMap) {
-  if (startKron >= problem.n()) return 0;
+  if (startF >= problem.n()) return 0;
   float minTime = std::numeric_limits<float>::max();
   TunedKernelsSeries minEpilogueKernels;
   TunedKernelFromStart minPrologueKernel;
-  auto nextSeries = problem.sub(startKron, problem.n() - startKron);
 
-  reverseExecuteGeKMM(nextSeries, nullptr, Matrix(), 
-               [](const KMMProblem){return 1;},
-  [&](const KMMProblem firstPart, int rstart, void*[2], Matrix) {
-    const int subn = rstart + 1;
-    auto tunedProblem = problem.sub(startKron, subn);
-    if (problem.opX() == fastKronOp_T && startKron + subn == problem.n()) {
-      //If opX is T and the tunedProblem has reached end of the problem
-      //then consider only TT or TN kernels
-      tunedProblem.setOpX(fastKronOp_T);
-    } else {
-      tunedProblem.setOpX(fastKronOp_N);
-    }
-    bool isP2P = isDistributed && startKron == 0;
-    if (tunedKernelsMap.hasKernel(tunedProblem, isP2P)) {
-      TunedKernelsSeries epilogueKernels;
-      float kernelTime = tunedKernelsMap.getKernelTime(tunedProblem, isP2P);
-      float epilogueTime = minExecTimeOfSeries(problem, startKron + rstart + 1,
-                                               isDistributed,
-                                               epilogueKernels, tunedKernelsMap);
-      if (minTime > kernelTime + epilogueTime) {
-        minTime = kernelTime + epilogueTime;
-        minEpilogueKernels = epilogueKernels;
-        minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(tunedProblem, isP2P),
-                                                 startKron, startKron + rstart, firstPart.k(), kernelTime);
+  //Obtain the subproblem starting at startF
+  auto subProblem = problem.sub(startF, problem.n() - startF);
+
+  //Divide the subproblem into two parts. Go through all first/second part pairs 
+  //of the subproblem. Search for tuned kernel of the first part 
+  //and recursively compute minimum time for the second part.
+  reverseExecuteGeKMM(subProblem, nullptr, Matrix(), 
+                      [](const KMMProblem){return 1;},
+    [&](const KMMProblem, int rstart, void*[2], Matrix) {
+      const int subn = rstart + 1;
+      auto firstPart = problem.sub(startF, subn);
+      if (problem.opX() == fastKronOp_T && startF + subn == problem.n()) {
+        //If opX is T and the firstPart has reached end of the problem
+        //then consider only TT or TN kernels
+        firstPart.setOpX(fastKronOp_T);
+      } else {
+        firstPart.setOpX(fastKronOp_N);
       }
-    }
+      //P2P is needed when the output of subproblem is distributed
+      bool isP2P = isDistributed && startF == 0;
+      if (tunedKernelsMap.hasKernel(firstPart, isP2P)) {
+        //If the first part is tuned then recursively search for best kernel series for
+        //the second part.
+        TunedKernelsSeries epilogueKernels;
+        float kernelTime = tunedKernelsMap.getKernelTime(firstPart, isP2P);
+        float epilogueTime = minExecTimeOfSeries(problem, startF + rstart + 1,
+                                                 isDistributed,
+                                                 epilogueKernels, tunedKernelsMap);
+        if (minTime > kernelTime + epilogueTime) {
+          minTime = kernelTime + epilogueTime;
+          minEpilogueKernels = epilogueKernels;
+          minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(firstPart, isP2P),
+                                                   startF, startF + rstart,
+                                                   firstPart.k(), kernelTime);
+        }
+      }
 
-    return fastKronSuccess;
-  });
+      return fastKronSuccess;
+    });
 
+  //Combine tuned kernels for both parts
   tunedKernels = minEpilogueKernels;
   tunedKernels.push_back(minPrologueKernel);
   assert(minTime < std::numeric_limits<float>::max());
   return minTime;
 }
 
+/**
+  * tune() - Tune kernels for all subproblems in the KMMProblem.
+  * @problem: The base KMMProblem.
+  * @kernelDb: KernelDatabase containing kernels.
+  * @isDistributed: If the KMMProblem is computed using distributed GPUs
+  * @distParams: Distributed paramaters if needed.
+  */
 fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
                             bool isDistributed, DistributedParams distParams) {
-  //Only row major layout of all matrics is supported.
-  //For performance eval we do not need these to contain any value
-  
-  //Use double buffering for writing result and using output 
-  //of previous iteration as input to current
-  //A KronMat is a series of SlicedMats
-  //We need to get best kernel for all contiguous SlicedMats
-
+  //Iterate over all subproblems of the base problem
   auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
-               [](const KMMProblem){return 1;},
-  [&](const KMMProblem, int rstart, void*[2], Matrix) {
-    for (uint32_t endP = rstart; endP < problem.n(); endP++) {
-      auto secondPart = problem.sub(rstart, endP-rstart+1);
-      if (rstart + secondPart.n() < problem.n()) secondPart.setOpX(fastKronOp_N);
-      bool distP2PStore = isDistributed && rstart == 0;
-      if (tunedKernelsMap.hasKernel(secondPart, distP2PStore)) continue;
-      if (!this->fastKron.getUseFusion() and secondPart.n() > 1) continue;
-      auto bestKernelWithTime = kernelDb->tuneKernelForProblem(secondPart, distP2PStore, rstart, distParams);
-      if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
-        tunedKernelsMap.add(secondPart, distP2PStore,
-                            bestKernelWithTime);
+                                 [](const KMMProblem){return 1;},
+    [&](const KMMProblem, int rstart, void*[2], Matrix) {
+      for (uint32_t endP = rstart; endP < problem.n(); endP++) {
+        //Obtain a subprob
+        auto subprob = problem.sub(rstart, endP-rstart+1);
+        //Only the first executed subprob has OpX as T otherwise
+        //all subprob requires OpX as N
+        if (rstart + subprob.n() < problem.n()) {
+          subprob.setOpX(fastKronOp_N);
+        }
+        //P2P is needed when the output of subproblem is distributed
+        bool p2p = isDistributed && rstart == 0;
+        if (tunedKernelsMap.hasKernel(subprob, p2p) || 
+            (!this->fastKron.getUseFusion() and subprob.n() > 1)) {
+          continue;
+        }
+        auto bestKernelWithTime = kernelDb->tuneKernelForProblem(subprob, p2p, rstart, distParams);
+        if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
+          tunedKernelsMap.add(subprob, p2p, bestKernelWithTime);
+        }
       }
-    }
 
-    return fastKronSuccess;
-  });
+      return fastKronSuccess;
+    });
 
   return err;
 }
@@ -113,7 +143,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   //TODO: Make this FactorArray
   Factor Fs[devicesPerProc][problem.n()];
   for (uint32_t p = 0; p < devicesPerProc; p++) {
-    //TODO: Init temp to 1
+    //For performance eval we do not need these to contain any value
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
     kernelDb->procMalloc(p, problem.type(), temp1[p]);

@@ -107,7 +107,7 @@ class Autotuner {
 
   /**
    * tune() - Tune kernels for all subproblems in the KMMProblem.
-   * @problem: The parent KMMProblem.
+   * @problem: The base KMMProblem.
    * @kernelDb: KernelDatabase containing kernels.
    * @isDistributed: If the KMMProblem is computed using distributed GPUs
    * @distParams: Distributed paramaters if needed.
