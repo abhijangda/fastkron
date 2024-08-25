@@ -8,13 +8,9 @@
 
 #pragma once
 
-template<>
-struct std::hash<std::pair<Factor, uint32_t>> {
-  std::size_t operator()(const std::pair<Factor, uint32_t>& m) const;
-};
-
-class OptimizedKernelForShape;
-
+/**
+ * KernelDatabase contains a database of all compiled kernels for a backend
+ */
 class KernelDatabase {
 public:
   struct DbKey {
@@ -29,7 +25,9 @@ public:
 
   struct DbKeyHash {
     size_t operator()(const DbKey& k) const {
-      return std::hash<Factor>()(k.f) ^ std::hash<uint32_t>()(k.opX) ^ std::hash<uint32_t>()(k.opF);
+      return std::hash<Factor>  ()(k.f)   ^
+             std::hash<uint32_t>()(k.opX) ^
+             std::hash<uint32_t>()(k.opF);
     }
   };
 
@@ -169,27 +167,5 @@ public:
 
   void free() {
     compiledKernels.clear();
-  }
-};
-
-//TODO: Needs to be removed
-class OptimizedKernelForShape {
-  std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, KernelInfo*, MatrixComparator>> shapeToKernel;
-public:
-  void init(KernelDatabase* db, std::unordered_map<std::pair<Factor, uint>, std::map<Matrix, std::string, MatrixComparator>> shapeToKernelStr) {
-    for (auto factorIter : shapeToKernelStr) {
-      shapeToKernel[factorIter.first] = {};
-      for (auto iter : factorIter.second) {
-        shapeToKernel[factorIter.first][iter.first] = db->getKernel(iter.second);
-      }
-    }
-
-    if (true) {
-      for (auto factorIter : shapeToKernel) {
-        for (auto iter : factorIter.second) {
-          std::cout << iter.second->str() << std::endl;
-        }
-      }
-    }
   }
 };

@@ -21,9 +21,6 @@ CUDAKernel AllCUDAKernels[] = {
 #endif
 };
 
-std::size_t std::hash<std::pair<Factor, uint>>::operator()(const std::pair<Factor, uint>& m) const {
-  return hash<uint>()(m.second) ^ hash<Factor>()(m.first);
-}
 
 CUDAKernelDatabase::CUDAKernelDatabase() : isDistributed_(false) {
   streams.push_back(NULL);

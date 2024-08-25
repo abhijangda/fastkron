@@ -95,9 +95,9 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
                                      const fastKronBackend backend, 
                                      void* temp1, void* temp2,
                                      EpilogueParams epilogueParams) {
-  if (problem.y().data()  == nullptr) return fastKronInvalidArgument;
-  if (temp1               == nullptr) return fastKronInvalidArgument;
-  if (hasBackend(backend) ==   false) return fastKronInvalidArgument;
+  if (problem.y().data()  == nullptr || temp1 == nullptr ||
+      hasBackend(backend) == false) 
+      return fastKronInvalidArgument;
 
   if (problem.y().data() == epilogueParams.z<void>() && 
       (temp1 == nullptr || temp2 == nullptr))
@@ -110,7 +110,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
   auto kernelDb = getKernelDb(backend);
 
   if (canTune()) {
-    //If enabled, tune for the fastest kernel series for the problem
+    //Tune for the fastest kernel series for the problem
     uint32_t Ps[problem.n()];
     uint32_t Qs[problem.n()];
     problem.ps(Ps);
