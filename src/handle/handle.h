@@ -24,6 +24,9 @@
 class FastKronHandle {
   private:
 
+  #ifdef ENABLE_MULTI_GPU
+  public:
+  #endif
   /**
    * FastKronHandle::backends - Store a set of all initialized backends as a
    * bitwise OR of enum fastKronBackends 

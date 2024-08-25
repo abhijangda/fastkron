@@ -12,7 +12,7 @@
  * KernelDatabase contains a database of all compiled kernels for a backend
  */
 class KernelDatabase {
-public:
+protected:
   struct DbKey {
     Factor f;
     fastKronOp opX;
@@ -31,7 +31,6 @@ public:
     }
   };
 
-public:
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
   std::vector<KernelInfo*> allKernels;
   std::vector<HardwareDetails*> hardware;
