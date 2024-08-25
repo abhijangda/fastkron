@@ -9,26 +9,8 @@
 #include "autotuner/autotuner.h"
 #include "kmm/kmmalgo.h"
 
-#define NULL_CHECK(x) if ((x) == nullptr) return fastKronInvalidArgument;
-
-std::string fastKronOpToStr(const fastKronOp& op) {
-  switch (op) {
-    case fastKronOp_N:
-      return "N";
-    case fastKronOp_T:
-      return "T";
-  }
-
-  return NULL;
-}
-
-std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
-  os << fastKronOpToStr(op);
-  return os;
-}
-
-FastKronHandle::FastKronHandle(uint32_t backends) : backends(backends),
-autotuner(*this)
+FastKronHandle::FastKronHandle(uint32_t backends) :
+  backends(backends), autotuner(*this)
 #ifdef ENABLE_CUDA
   , cudaKernels()
 #endif

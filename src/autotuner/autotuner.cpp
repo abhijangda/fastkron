@@ -101,6 +101,8 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
         bool p2p = isDistributed && rstart == 0;
         if (tunedKernelsMap.hasKernel(subprob, p2p) || 
             (!this->fastKron.getUseFusion() and subprob.n() > 1)) {
+          //Avoid tuning if subprob is already tuned or
+          //if fusion is disabled
           continue;
         }
         auto bestKernelWithTime = kernelDb->tuneKernelForProblem(subprob, p2p, rstart, distParams);
@@ -115,10 +117,16 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
   return err;
 }
 
-fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend, TunedKernelsSeries& retKernelSeries) {
-  //Only row major layout of all matrics is supported.
+/**
+  * tune() - Find the best performing kernel series for a KMMProblem on a backend
+  * @problem: KMMProblem
+  * @backend: fastKronBackend containing kernels
+  * @retKernelSeries: [OUT] the tuned kernel series 
+  */
+fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
+                              TunedKernelsSeries& retKernelSeries) {
   auto kernelDb = fastKron.getKernelDb(backend);
-
+  //Return cached kernel series for the problem
   if (tunedProblemCache[kernelDb].count(problem) == 1) {
     retKernelSeries = tunedProblemCache[kernelDb][problem];
     return fastKronSuccess;
@@ -143,7 +151,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   //TODO: Make this FactorArray
   Factor Fs[devicesPerProc][problem.n()];
   for (uint32_t p = 0; p < devicesPerProc; p++) {
-    //For performance eval we do not need these to contain any value
+    //For performance eval we do not need these to contain any specific value
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
     kernelDb->procMalloc(p, problem.type(), temp1[p]);
@@ -161,19 +169,20 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   kernelDb->initTune();
 
   if (devicesPerProc <= 1) {
+    //Tuning for Single CPU / Single GPU
     //Use temporary as input/output matrix
-    //TODO: fix this
-    auto tmpProblem = KMMProblem(problem.type(), Matrix(problem.x().m(), problem.x().n(), temp1[0].data()), 
-                                 problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
-                                 Matrix(problem.y().m(), problem.y().n(), temp2[0].data()));
+    Matrix x(problem.x().m(), problem.x().n(), temp1[0].data());
+    Matrix y(problem.y().m(), problem.y().n(), temp2[0].data());
+
+    KMMProblem tmpProblem(problem.type(), x, problem.opX(), 
+                          problem.n(), &Fs[0][0], problem.opFs(), y);
     tune(tmpProblem, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
-    TunedKernelsSeries tunedKernels;
-    minTime = minExecTimeOfSeries(problem, 0, false,
-                                  tunedKernels, tunedKernelsMap);
-    retKernelSeries = tunedKernels;
+    minTime = minExecTimeOfSeries(problem, 0, false, retKernelSeries, tunedKernelsMap);
   } else {
 #if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
+    //Tuning for Multi GPU
+    //TODO: Document this code
     assert(fastKron.hasBackend(fastKronBackend_CUDA));
     assert(fastKron.cudaKernels.isDistributed_ == true);
     if (!checkDistributedKronSizes(problem,
@@ -271,6 +280,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
 #endif
   }
 
+  //Update cache
   tunedProblemCache[kernelDb][problem] = retKernelSeries;
 
   return fastKronSuccess;

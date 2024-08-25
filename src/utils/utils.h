@@ -61,6 +61,7 @@
 #define ROUNDDOWN(x,y) (x/y)*y
 
 #define CUDA_WARP_SIZE 32U
+#define NULL_CHECK(x) if ((x) == nullptr) return fastKronInvalidArgument;
 
 static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
 static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
