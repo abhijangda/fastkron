@@ -176,7 +176,7 @@ std::pair<KernelInfo*, float> KernelDatabase::tuneKernelForProblem(KMMProblem pr
     Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size() << ": " << kernel->str() << std::endl;
     float kernelTime = std::numeric_limits<float>::max();
     fastKronError status;
-    status = timeKernel(kernel, factorIdx, problem, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
+    status = timeKernel(kernel, problem, factorIdx, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
                distP2PStore, warmups, runs, kernelTime);
     if (status == fastKronSuccess) {
       Logger(LogLevel::Debug) << 
@@ -239,4 +239,70 @@ bool KernelInfo::validOptFor(KMMProblem problem, KernelOptimizations::Optimizati
   }
 
   return false;
+}
+
+KernelInfo* KernelDatabase::getKernel(std::string repr) {
+    for (auto iter : compiledKernels) {
+      for (auto kernel : iter.second) {
+        if (kernel->str() == repr)
+          return kernel;
+      }
+    }
+    return nullptr;
+  }
+
+bool KernelDatabase::findAllKernels(KMMProblem problem, bool distP2PStore, 
+                            std::vector<std::vector<KernelInfo*>>& kernels) {
+  for (uint32_t i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
+    kernels.push_back(std::vector<KernelInfo*>());
+  }
+
+  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+  auto it = compiledKernels.find(key);
+  if (it != compiledKernels.end()) {
+    for (auto k : it->second) {
+      if (k->canCompute(problem, hardware[0], distP2PStore) &&
+          k->OptLevel == KernelOptimizations::MaxOptLevel()) {
+        kernels[k->OptLevel].push_back(k);
+      }
+    }
+  }
+
+  if (it != compiledKernels.end() and 
+      kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
+      return true;
+
+  for (auto it : compiledKernels) {
+    for (auto kernel : it.second) {
+      if (kernel->canCompute(problem, hardware[0], distP2PStore)) {
+        kernels[kernel->OptLevel].push_back(kernel);
+      }
+    }
+  }
+
+  return true;
+}
+
+bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
+  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+  auto it = compiledKernels.find(key);
+  if (it == compiledKernels.end()) return false;
+  std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
+  [distP2PStore, problem, this](auto& kernel){return kernel->FusedFacs <= problem.n() && 
+                                        kernel->OptLevel == KernelOptimizations::MaxOptLevel() &&
+                                        kernel->canCompute(problem, this->hardware[0], distP2PStore, false);});
+  return true;
+}
+
+KernelInfo* KernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {
+  for (int optlevel = KernelOptimizations::MaxOptLevel();
+      optlevel >= 0; optlevel--) {
+    std::vector<KernelInfo*> kernelsForOptLevel = kernels[optlevel];
+    if (kernelsForOptLevel.size() > 0) {
+      KernelInfo* info = kernelForSubProblem(subProblem, kernelsForOptLevel);
+      if (info) return info;
+    }
+  }
+
+  return nullptr;
 }

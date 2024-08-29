@@ -140,8 +140,8 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
 
         KernelInfo* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-        err = kernelDb->invokeKernel(selectedKernel, rstart, 
-                                     subProblem, epilogueParams,
+        err = kernelDb->invokeKernel(selectedKernel, subProblem, 
+                                     rstart, epilogueParams,
                                      KernelModeNormal);
         kernelSeriesIter++;
         return err;

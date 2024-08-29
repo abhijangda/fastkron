@@ -45,21 +45,23 @@ public:
   void init() {}
   void allocate_caches();
   virtual fastKronError initTune() {return fastKronSuccess;}
-  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint32_t kronIndex, 
-                                   KMMProblem problem,
+  virtual fastKronError invokeKernel(KernelInfo* kernel, KMMProblem problem,
+                                     const uint fidx,
+                                     EpilogueParams epilogueParams,
+                                     KernelMode execMode);
+  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernel, KMMProblem problem,
+                                             const uint fidx,  
+                                             DistributedParams distParams, 
+                                             EpilogueParams epilogueParams,
+                                             KernelMode execMode) {return fastKronSuccess;}
+  virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode);
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo*, const uint32_t,
-                                           KMMProblem, DistributedParams,
-                                           EpilogueParams,
-                                           KernelMode) {return fastKronSuccess;}
-  virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                 KMMProblem problem, DistributedParams distParams, 
-                                 EpilogueParams epilogueParams,
-                                 KernelMode execMode, 
-                                 bool distP2PStore,
-                                 int warmups, int runs,
-                                 float& runtime);
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime);
   virtual std::string   occupancyDetails(KernelInfo*, KMMProblem) {return "";}
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);

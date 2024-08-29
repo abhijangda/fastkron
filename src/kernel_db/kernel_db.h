@@ -5,14 +5,19 @@
 #include "kmm/kmmalgo.h"
 #include "kernels/kernel_info.h"
 #include "kernels/params.h"
+#include "utils/logger.h"
 
 #pragma once
 
 /**
- * KernelDatabase contains a database of all compiled kernels for a backend
+ * A KernelDatabase contains a database of all compiled kernels for a backend.
+ * Each backend has a subclass of KernelDatabase.
  */
 class KernelDatabase {
 protected:
+  /**
+   * DbKey is key for to map (Factor, fastKronOp for X, and fastKronOp for F) to kernel.
+   */
   struct DbKey {
     Factor f;
     fastKronOp opX;
@@ -23,6 +28,9 @@ protected:
     }
   };
 
+  /**
+   * DbKeyHash is a functor to obtain hash for DbKey.
+   */
   struct DbKeyHash {
     size_t operator()(const DbKey& k) const {
       return std::hash<Factor>  ()(k.f)   ^
@@ -30,120 +38,155 @@ protected:
              std::hash<uint32_t>()(k.opF);
     }
   };
-
+  
+  /**
+   * @compiledKernels: A map of DbKey, i.e., (Factor, fastKronOp for X, and fastKronOp for F) to kernels 
+   *                   that can process this Factor, OpX, and OpF.
+   */
   std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
-  std::vector<KernelInfo*> allKernels;
+
+  /**
+   * @hardware: A vector of all underlying hardware (CPUs or GPUs) for this backend.
+   */
   std::vector<HardwareDetails*> hardware;
+  
+  /**
+   * @problemToKernelCache: A map of KMMProblem to already tuned kernels for this backend.
+   */
   std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
 
 public:
   KernelDatabase();
   ~KernelDatabase() {}
 
-  template<typename SubClassKernel>
-  void loadKernels(SubClassKernel* kernels, uint32_t num) {
-    //Load kernels into compiledKernels map
-    for (uint i = 0; i < num; i++) {
-      SubClassKernel& info = kernels[i];
-      DbKey key {info.f, info.opX, info.opF};
-      auto iter = compiledKernels.find(key);
-      if (iter == compiledKernels.end()) {
-        compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
-      }
-      compiledKernels.at(key).push_back(&info);
-    }
-  
-    //TODO: Check that if distP2PStore is needed then there is a kernel that can 
-    //do it
-    //TODO: Add if debug
-    if (false) {
-      uint numKernels = 0;
-      std::cout << "Loading compiled kernels" << std::endl;
-      for (auto iter : compiledKernels) {
-        for (auto kernel : iter.second) {
-          std::cout << kernel->str() << std::endl;
-        }
-        numKernels += iter.second.size();
-      }
-      std::cout << "Number of kernels loaded: " << numKernels << std::endl;
-    }
-  }
+  /**
+   * loadKernels() - Process all kernels and add kernels to the database.
+   * @SubClassKernel: Type of kernel for backend's subclass. 
+   * @kernels: Array of kernels.
+   * @num: Number of elements of the array.
+   */
+  template<typename SubClassKernel> void loadKernels(SubClassKernel* kernels, uint32_t num);
 
-  virtual fastKronError initTune() {return fastKronSuccess;}
-  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                   KMMProblem problem,
-                                   EpilogueParams epilogueParams,
-                                   KernelMode execMode) = 0;
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                           KMMProblem problem, DistributedParams distParams, 
-                                           EpilogueParams epilogueParams,
-                                           KernelMode execMode) = 0;
-  virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                 KMMProblem problem, DistributedParams distParams, 
-                                 EpilogueParams epilogueParams,
-                                 KernelMode execMode, 
-                                 bool distP2PStore,
-                                 int warmups, int runs,
-                                 float& runtime) = 0;
-  virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) = 0;
-  virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
-  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
-  virtual fastKronError procFree(uint32_t proc, void* ptr) = 0;
-  KernelInfo* getKernel(std::string repr) {
-    for (auto iter : compiledKernels) {
-      for (auto kernel : iter.second) {
-        if (kernel->str() == repr)
-          return kernel;
-      }
-    }
-    return nullptr;
-  }
-
+  /*********************** Memory Allocation Functions ***********************/
+  /**
+   * procMalloc() - Allocate buffer for matrix on a given process.
+   * @proc: Process number, e.g., GPU number in a multi-GPU case.
+   * @type: Datatype.
+   * @m: [OUT] Output Matrix.
+   * 
+   * Return: fastKronSuccess if no error otherwise a fastKronError.
+   */
   fastKronError procMalloc(uint32_t proc, FastKronType type, Matrix& m);
+
+  /**
+   * procFree() - Frees buffer for matrix on a given process.
+   * @proc: Process number, e.g., GPU number in a multi-GPU case.
+   * @m: Matrix containing buffer.
+   *
+   * Return: fastKronSuccess if no error otherwise a fastKronError.
+   */
   fastKronError procFree(uint32_t proc, Matrix m);
+
+  /**
+   * Following procMalloc/Memset/Free functions are defined by each KernelDatabase.
+   */
+  
+  /**
+   * procMalloc(), procFree() - Allocate/free buffer on a given process.
+   * @proc: Process number, e.g., GPU number in a multi-GPU case.
+   * @size: Size of buffer in bytes to allocate.
+   * @ptr: [OUT] allocated/freed pointer
+   *
+   * Return: fastKronSuccess if no error otherwise a fastKronError.
+   */
+  virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
+  virtual fastKronError procFree(uint32_t proc, void* ptr) = 0;
+
+  /**
+   * procMemset() - Set same value to each element of the Matrix on a given process.
+   * @proc: Process number, e.g., GPU number in a multi-GPU case.
+   * @m: [OUT] Matrix
+   * @val: float value to set
+   *
+   * Return: fastKronSuccess if no error otherwise a fastKronError.
+   */
+  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
+    
+  /***************************************************************************/
+
+  /*********************** Kernel Invocation Functions ***********************/
+
+  /**
+   * invokeKernel() - Invokes a kernel to compute GeKMM for a factor. 
+   *                  This function must be defined by each KernelDatabase.
+   * @kernel: kernel to invoke.
+   * @problem: KMMProblem to compute.
+   * @fidx: Factor index in the KMMProblem.
+   * @eplogueParams: Parameter for Epilogue (alpha, beta, and Y)
+   * @execMode: Execution mode
+   */
+  virtual fastKronError invokeKernel(KernelInfo* kernel, KMMProblem problem,
+                                     const uint fidx,
+                                     EpilogueParams epilogueParams,
+                                     KernelMode execMode) = 0;
+
+  /**
+   * invokeP2PStoreKernel()- Invokes a P2P kernel to compute GeKMM for a factor 
+   *                         and write output among all nodes using RDMA.
+   *                         This function must be defined by each KernelDatabase.
+   * @kernel: kernel to invoke.
+   * @problem: KMMProblem to compute.
+   * @fidx: Factor index in the KMMProblem.
+   * @distParams: Parameters for Distributed 
+   * @eplogueParams: Parameter for Epilogue (alpha, beta, and Y)
+   * @execMode: Execution mode
+   */
+  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernel, KMMProblem problem,
+                                             const uint fidx,  
+                                             DistributedParams distParams, 
+                                             EpilogueParams epilogueParams,
+                                             KernelMode execMode) = 0;
+  /***************************************************************************/
+
+  /************************* Auto tuning Functions ***************************/
+
+  /**
+   * initTune() - Initialize auto tuning. This function is called by autotuner before starting
+   *              the auto tuning process. This function must be defined by every KernelDatabase.
+   */
+  virtual fastKronError initTune() = 0;
+
+  /**
+   * timeKernel() - Obtain execution time of a kernel for computing GeKMM for a factor.
+   * @kernel: kernel to invoke.
+   * @problem: KMMProblem to compute.
+   * @fidx: Factor index in the KMMProblem.
+   * @distParams: Parameters for Distributed.
+   * @eplogueParams: Parameter for Epilogue (alpha, beta, and Y).
+   * @execMode: Execution mode.
+   * @useP2PStore: True if uses RDMA P2P store otherwise false.
+   * @warmups: Number of warming up runs.
+   * @runs: Number of times to run kernel.
+   * @runtime: [OUT] Average time of @runs after @warmups.
+   */
+  virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
+                                   EpilogueParams epilogueParams,
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime) = 0;
+  /***************************************************************************/
+
+  virtual std::string occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) = 0;
+
+  KernelInfo* getKernel(std::string repr);
   
   virtual bool findAllKernels(KMMProblem problem, bool distP2PStore, 
-                              std::vector<std::vector<KernelInfo*>>& kernels) {
-    for (uint32_t i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
-      kernels.push_back(std::vector<KernelInfo*>());
-    }
+                              std::vector<std::vector<KernelInfo*>>& kernels);
 
-    DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
-    auto it = compiledKernels.find(key);
-    if (it != compiledKernels.end()) {
-      for (auto k : it->second) {
-        if (k->canCompute(problem, hardware[0], distP2PStore) &&
-            k->OptLevel == KernelOptimizations::MaxOptLevel()) {
-          kernels[k->OptLevel].push_back(k);
-        }
-      }
-    }
-  
-    if (it != compiledKernels.end() and 
-        kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
-        return true;
-
-    for (auto it : compiledKernels) {
-      for (auto kernel : it.second) {
-        if (kernel->canCompute(problem, hardware[0], distP2PStore)) {
-          kernels[kernel->OptLevel].push_back(kernel);
-        }
-      }
-    }
-
-    return true;
-  }
-
-  bool findAllFusedKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels) {
-    DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
-    auto it = compiledKernels.find(key);
-    if (it == compiledKernels.end()) return false;
-    std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
-    [distP2PStore, problem, this](auto& kernel){return kernel->FusedFacs <= problem.n() && 
-                                          kernel->OptLevel == KernelOptimizations::MaxOptLevel() &&
-                                          kernel->canCompute(problem, this->hardware[0], distP2PStore, false);});
-    return true;
-  }
+  bool findAllFusedKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels);
 
 
   std::pair<KernelInfo*, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
@@ -151,20 +194,7 @@ public:
   TunedKernelsSeries __kernelSeriesForProblem(KMMProblem problem);
   virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
   virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) = 0;
-  KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {
-    for (int optlevel = KernelOptimizations::MaxOptLevel();
-        optlevel >= 0; optlevel--) {
-      std::vector<KernelInfo*> kernelsForOptLevel = kernels[optlevel];
-      if (kernelsForOptLevel.size() > 0) {
-        KernelInfo* info = kernelForSubProblem(subProblem, kernelsForOptLevel);
-        if (info) return info;
-      }
-    }
-
-    return nullptr;
-  }
-
-  void free() {
-    compiledKernels.clear();
-  }
+  KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
 };
+
+#include "kernel_db/kernel_db.inline.h"

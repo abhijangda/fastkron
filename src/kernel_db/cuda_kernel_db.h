@@ -37,21 +37,23 @@ public:
   CUDAArchDetails getCUDADeviceProperties() {return *(dynamic_cast<CUDAArchDetails*>(hardware[0]));}
   void setCUDAStream(void* ptrToStream);
   virtual fastKronError initTune();
-  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                   KMMProblem problem,
+  virtual fastKronError invokeKernel(KernelInfo* kernel, KMMProblem problem,
+                                     const uint fidx,
+                                     EpilogueParams epilogueParams,
+                                     KernelMode execMode);
+  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernel, KMMProblem problem,
+                                             const uint fidx,  
+                                             DistributedParams distParams, 
+                                             EpilogueParams epilogueParams,
+                                             KernelMode execMode);
+  virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode);
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                           KMMProblem problem, DistributedParams distParams, 
-                                           EpilogueParams epilogueParams,
-                                           KernelMode execMode);
-  virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
-                                 KMMProblem problem, DistributedParams distParams, 
-                                 EpilogueParams epilogueParams,
-                                 KernelMode execMode, 
-                                 bool distP2PStore,
-                                 int warmups, int runs,
-                                 float& runtime);
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime);
 
   virtual std::string   occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem);
   virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);

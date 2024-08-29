@@ -43,15 +43,14 @@ void CPUKernelDatabase::allocate_caches() {
 }
 
 template<uint FusedFacs>
-fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
-                     CPUCaches& caches,
-                   KMMProblem problem,
-                   DistributedParams distParams,
-                   EpilogueParams epilogueParams,
-                   KernelMode execMode) {
+fastKronError invoke(CPUKernel& kernelInfo, KMMProblem problem,
+                     const uint fidx, CPUCaches& caches,
+                     DistributedParams distParams,
+                     EpilogueParams epilogueParams,
+                     KernelMode execMode) {
   //Create the grid and thread block
   KernelParams<FusedFacs> params (problem, &caches, kernelInfo.getTileX(problem), 
-                                  kernelInfo.getTileF(problem), kronIndex, execMode);
+                                  kernelInfo.getTileF(problem), fidx, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
   //Call kernel
@@ -61,31 +60,31 @@ fastKronError invoke(CPUKernel& kernelInfo, const uint kronIndex,
   return fastKronSuccess;
 }
 
-fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronIndex, 
-                                            KMMProblem problem,
-                                            EpilogueParams epilogueParams,
-                                            KernelMode execMode) {
+fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, KMMProblem problem,
+                                     const uint fidx,
+                                     EpilogueParams epilogueParams,
+                                     KernelMode execMode) {
   DistributedParams distParams;
   CPUKernel& cpuKernel = dynamic_cast<CPUKernel&>(*kernel);
   CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
   switch(problem.n()) {
     case 1:
-      return invoke<1>(cpuKernel, kronIndex, caches, problem,
+      return invoke<1>(cpuKernel, problem, fidx, caches,
                        distParams, epilogueParams, execMode);
     case 2:
-      return invoke<2>(cpuKernel, kronIndex, caches, problem,
+      return invoke<2>(cpuKernel, problem, fidx, caches,
                        distParams, epilogueParams, execMode);
     case 3:
-      return invoke<3>(cpuKernel, kronIndex, caches, problem,
+      return invoke<3>(cpuKernel, problem, fidx, caches,
                        distParams, epilogueParams, execMode);
     case 4:
-      return invoke<4>(cpuKernel, kronIndex, caches, problem,
+      return invoke<4>(cpuKernel, problem, fidx, caches,
                        distParams, epilogueParams, execMode);
     case 5:
-      return invoke<5>(cpuKernel, kronIndex, caches, problem,
+      return invoke<5>(cpuKernel, problem, fidx, caches,
                        distParams, epilogueParams, execMode);
     case 6:
-      return invoke<6>(cpuKernel, kronIndex, caches, problem, 
+      return invoke<6>(cpuKernel, problem, fidx, caches, 
                        distParams, epilogueParams, execMode);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
@@ -109,13 +108,14 @@ fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
   return fastKronSuccess;
 }
 
-fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
-                                 KMMProblem problem, DistributedParams distParams, 
-                                 EpilogueParams epilogueParams,
-                                 KernelMode execMode, 
-                                 bool distP2PStore,
-                                 int, int runs,
-                                 float& runtime) {
+fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, KMMProblem problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
+                                   EpilogueParams epilogueParams,
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime) {
   runtime = std::numeric_limits<float>::max();
   //Avoid the SISD kernel when running on AVX/AVX512
   if ((*(dynamic_cast<const X86ArchDetails*>(hardware[0]))).simd != X86SIMD::SISD) {
@@ -132,11 +132,11 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, const uint facto
       if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3size)
         parallelCopy(trash1, trash2, l3size);
       double startTime = getCurrTime();
-      if (distP2PStore) {
-        status = invokeP2PStoreKernel(kernel, factorIdx, problem,
+      if (useP2PStore) {
+        status = invokeP2PStoreKernel(kernel, problem, fidx,
                                       distParams, epilogueParams, execMode);
       } else {
-        status = invokeKernel(kernel, factorIdx, problem,
+        status = invokeKernel(kernel, problem, fidx,
                               epilogueParams, execMode);
       }
       double endTime = getCurrTime();
