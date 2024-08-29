@@ -59,6 +59,7 @@ public:
   KernelDatabase();
   ~KernelDatabase() {}
 
+protected:
   /**
    * loadKernels() - Process all kernels and add kernels to the database.
    * @SubClassKernel: Type of kernel for backend's subclass. 
@@ -68,6 +69,7 @@ public:
   template<typename SubClassKernel> void loadKernels(SubClassKernel* kernels, uint32_t num);
 
   /*********************** Memory Allocation Functions ***********************/
+public:
   /**
    * procMalloc() - Allocate buffer for matrix on a given process.
    * @proc: Process number, e.g., GPU number in a multi-GPU case.
@@ -88,9 +90,16 @@ public:
   fastKronError procFree(uint32_t proc, Matrix m);
 
   /**
-   * Following procMalloc/Memset/Free functions are defined by each KernelDatabase.
+   * procMemset() - Set same value to each element of the Matrix on a given process.
+   * @proc: Process number, e.g., GPU number in a multi-GPU case.
+   * @m: [OUT] Matrix
+   * @val: float value to set
+   *
+   * Return: fastKronSuccess if no error otherwise a fastKronError.
    */
-  
+  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
+
+protected:
   /**
    * procMalloc(), procFree() - Allocate/free buffer on a given process.
    * @proc: Process number, e.g., GPU number in a multi-GPU case.
@@ -101,21 +110,11 @@ public:
    */
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr) = 0;
   virtual fastKronError procFree(uint32_t proc, void* ptr) = 0;
-
-  /**
-   * procMemset() - Set same value to each element of the Matrix on a given process.
-   * @proc: Process number, e.g., GPU number in a multi-GPU case.
-   * @m: [OUT] Matrix
-   * @val: float value to set
-   *
-   * Return: fastKronSuccess if no error otherwise a fastKronError.
-   */
-  virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
     
   /***************************************************************************/
 
   /*********************** Kernel Invocation Functions ***********************/
-
+public:
   /**
    * invokeKernel() - Invokes a kernel to compute GeKMM for a factor. 
    *                  This function must be defined by each KernelDatabase.
@@ -150,6 +149,7 @@ public:
 
   /************************* Auto tuning Functions ***************************/
 
+public:
   /**
    * initTune() - Initialize auto tuning. This function is called by autotuner before starting
    *              the auto tuning process. This function must be defined by every KernelDatabase.
@@ -177,24 +177,108 @@ public:
                                    bool useP2PStore,
                                    int warmups, int runs,
                                    float& runtime) = 0;
+
+  /**
+   * tuneKernelForProblem() - Find tuned kernel for problem.
+   * @problem: Find tuned kernel for computing this problem.
+   * @useP2PStore: True if computing this problem requires P2P RDMA store.
+   * @fidx: Index of factor in the parent problem.
+   * @distParams: Distributed parameters.
+   *
+   * Return - A pair of tuned kernel and execution time of this kernel.
+   */
+  std::pair<KernelInfo*, float> findTunedKernel(KMMProblem subproblem, 
+                                                bool useP2PStore, uint fidx,
+                                                DistributedParams distParams);
+
   /***************************************************************************/
 
+  /*********************** Kernel Search Functions ***************************/
+public:
+  /**
+   * kernelSeriesForProblem() - Top level function to get kernel series for a problem using FastKron's 
+   *                            kernel search algorithm.
+   * @problem: The problem to search kernel series for.
+   *
+   * Return - An object of TunedKernelSeries.
+   */
+  TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
+
+private:
+  /**
+   * findAllFusedKernels() - Find all fused kernels that can compute given problem.
+   * @problem: The problem to find kernels for.
+   * @useP2PStore: True if kernels should use P2P RDMA stores.
+   * @kernels: [OUT] A vector of found fused kernels.
+   *
+   * Return - True if atleast one kernel is found, otherwise false.
+   */
+  bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, std::vector<KernelInfo*>& kernels);
+  
+  /**
+   * findAllKernels() - Find all non-fused kernels that can compute given problem.
+   * @problem: The problem to find kernels for.
+   * @useP2PStore: True if kernels should use P2P RDMA stores.
+   * @kernels: [OUT] A vector of kernels for each optimization level.
+   *
+   * Return - True if atleast one kernel is found, otherwise false. 
+   */
+  bool findAllKernels(KMMProblem problem, bool useP2PStore,
+                      std::vector<std::vector<KernelInfo*>>& kernels);
+
+protected:
+  /**
+   * findKernelForSubProblem() - Find best kernel for a sub problem 
+   *                             (of single factor) from a map of opt level to kernels. 
+   * @subProblem: A sub problem with n() == 1
+   * @kernels: A vector of OptLevel to a vector of kernels at that level.
+   * 
+   * Return - The best kernel for the sub problem using FastKron's kernel search algorithm.
+   */
+  KernelInfo* findKernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
+
+  /**
+   * findKernelAtOptLevel() - Find best kernel for a subproblem at an opt level. This function should be 
+   *                          implemented by each Kernel Database.
+   * @subproblem: A sub problem with n() == 1.
+   * @kernelsForOptLevel: A vector of kernels at an opt level.
+   *
+   * Return - The best kernel found for the opt level.
+   */
+  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) = 0;
+
+  /**
+   * filterFastestFusedKernels() - Filter all fused kernels to find fastest fused kernels for a problem.
+   * @problem: The problem to find kernels for.
+   * @kernels: The set of kernels to filter from.
+   * 
+   * Return - A map of number of fusion -> a vector of all fused kernels at this number of fusion.
+   */
+  virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> 
+          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
+  /***************************************************************************/
+
+  /**************************** Helper Functions *****************************/
+protected:
+  /**
+   * occupancyDetails() - A pure virtual function to obtain Kernel Occupancy detail as a string. 
+   *                      This function should be implemented by every KernelDatabase.
+   * @kernel: The kernel to get occupancy details.
+   * @problem: The problem computed by the kernel.
+   *
+   * Return: A string of occupancy details.
+   */
   virtual std::string occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) = 0;
 
+public:
+  /**
+   * getKernel() - Obtain a kernel with the given string representation.
+   * @repr: string representation.
+   *
+   * Return: The kernel found or nullptr if no kernel found.
+   */
   KernelInfo* getKernel(std::string repr);
-  
-  virtual bool findAllKernels(KMMProblem problem, bool distP2PStore, 
-                              std::vector<std::vector<KernelInfo*>>& kernels);
-
-  bool findAllFusedKernels(KMMProblem problem, bool distP2PStore, std::vector<KernelInfo*>& kernels);
-
-
-  std::pair<KernelInfo*, float> tuneKernelForProblem(KMMProblem problem, bool distP2PStore, uint factorIdx, DistributedParams distParams);
-  TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
-  TunedKernelsSeries __kernelSeriesForProblem(KMMProblem problem);
-  virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
-  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels) = 0;
-  KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
+  /***************************************************************************/
 };
 
 #include "kernel_db/kernel_db.inline.h"

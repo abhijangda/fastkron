@@ -255,7 +255,7 @@ fastKronError CUDAKernelDatabase::procMemset(uint32_t proc, Matrix& m, float val
   return fastKronSuccess;
 }
 
-KernelInfo* CUDAKernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
+KernelInfo* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
     std::vector<KernelInfo*> kernelsWithSamePOrQ;

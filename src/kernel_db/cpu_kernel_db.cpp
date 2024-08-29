@@ -156,7 +156,7 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, KMMProblem probl
   return status;
 }
 
-KernelInfo* X86KernelDatabase::kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
+KernelInfo* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
     std::vector<KernelInfo*> kernelsWithSamePOrQ;

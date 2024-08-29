@@ -49,11 +49,11 @@ public:
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode);
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernel, KMMProblem problem,
-                                             const uint fidx,  
-                                             DistributedParams distParams, 
-                                             EpilogueParams epilogueParams,
-                                             KernelMode execMode) {return fastKronSuccess;}
+  virtual fastKronError invokeP2PStoreKernel(KernelInfo*, KMMProblem,
+                                             const uint,
+                                             DistributedParams, 
+                                             EpilogueParams,
+                                             KernelMode) {return fastKronSuccess;}
   virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
                                    const uint fidx, 
                                    DistributedParams distParams,
@@ -63,10 +63,15 @@ public:
                                    int warmups, int runs,
                                    float& runtime);
   virtual std::string   occupancyDetails(KernelInfo*, KMMProblem) {return "";}
-  virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
+
+public:
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
+  
+protected:
+  virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
   virtual fastKronError procFree(uint32_t proc, void* ptr);
 
+public:
   uint32_t getMaxThreads() const {
     return MAX((uint32_t)omp_get_max_threads(), getCPUProperties().sockets * getCPUProperties().cores);
   }
@@ -81,5 +86,5 @@ class X86KernelDatabase : public CPUKernelDatabase {
 public:
   X86KernelDatabase();
   X86ArchDetails getX86CPUProperties() const {return *(dynamic_cast<const X86ArchDetails*>(hardware[0]));}
-  virtual KernelInfo* kernelForSubProblem(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
+  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
 };

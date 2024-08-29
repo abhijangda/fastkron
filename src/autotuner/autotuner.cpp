@@ -105,7 +105,7 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
           //if fusion is disabled
           continue;
         }
-        auto bestKernelWithTime = kernelDb->tuneKernelForProblem(subprob, p2p, rstart, distParams);
+        auto bestKernelWithTime = kernelDb->findTunedKernel(subprob, p2p, rstart, distParams);
         if (bestKernelWithTime.second < std::numeric_limits<float>::max()) {
           tunedKernelsMap.add(subprob, p2p, bestKernelWithTime);
         }
