@@ -7,21 +7,78 @@
 
 KernelDatabase::KernelDatabase() {}
 
-std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> KernelDatabase::filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels) {
-  std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> numFusedToKernels;
+fastKronError KernelDatabase::procMalloc(uint32_t proc, FastKronType type, Matrix& m) {
+  void* ptr = nullptr;
+  fastKronError e = procMalloc(proc, m.numel() * sizeOfFastKronType(type), ptr);
 
-  for (auto kernel : kernels) {
-    if (kernel->FusedFacs <= problem.n()) {
-      if (numFusedToKernels.find(kernel->FusedFacs) == numFusedToKernels.end())
-        numFusedToKernels[kernel->FusedFacs] = std::vector<KernelInfo*>();
-      numFusedToKernels[kernel->FusedFacs].push_back(kernel);
-    }      
+  if (e == fastKronSuccess) {
+    m.ptr = ptr;
   }
 
-  return numFusedToKernels;
+  return e;
+}
+
+fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
+  return procFree(proc, m.data());
+}
+
+std::pair<KernelInfo*, float> KernelDatabase::findTunedKernel(KMMProblem problem, bool useP2PStore, 
+                                                              uint fidx, DistributedParams distParams) {
+  KernelInfo* bestKernel = nullptr;
+  //A map of opt level to kernels at the opt level
+  std::vector<std::vector<KernelInfo*>> allKernels;
+  float minTime;
+  const uint runs = 5;
+  const uint warmups = 5;
+  
+  minTime = std::numeric_limits<float>::max();
+
+  Logger(LogLevel::Debug) << "Tuning for shape "  << problem << std::endl;
+
+  //Find all kernels for each opt level that can compute the problem
+  if (findAllKernels(problem, useP2PStore, allKernels)) {
+    //Only execute kernels that are at the max opt level.
+    const std::vector<KernelInfo*>& kernelsForMaxOpt = [&allKernels]() {
+      for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
+        if (iter->size() > 0) return *iter;
+      }
+      return allKernels[0];
+    }();
+
+    uint32_t kernelIdx = 0;
+    //Go through each kernel at the max opt level
+    for (auto kernel : kernelsForMaxOpt) {
+      kernelIdx += 1;
+      if (!kernel->canCompute(problem, hardware[0], useP2PStore)) continue;
+      Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size()
+                              << ": " << kernel->str() << std::endl;
+      float kernelTime = std::numeric_limits<float>::max();
+      fastKronError status;
+      status = timeKernel(kernel, problem, fidx, distParams, 
+                          EpilogueParams::create<float>(), KernelModeTuning, 
+                          useP2PStore, warmups, runs, kernelTime);
+      if (status == fastKronSuccess) {
+        Logger(LogLevel::Debug) << 
+                    "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
+                    "  GFLOPs: " << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
+                    occupancyDetails(kernel, problem) << std::endl;
+        if (kernelTime < minTime) {
+          bestKernel = kernel;
+          minTime = kernelTime;
+        }
+  }}}
+
+  if (minTime < std::numeric_limits<float>::max()) {
+    Logger(LogLevel::Debug) << std::fixed << std::setprecision(4) <<
+                "Fastest kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
+    return std::make_pair(bestKernel, minTime);
+  }
+
+  return std::make_pair(bestKernel, minTime);
 }
 
 TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
+  //If a kernel series for the problem is already found then return that
   if (problemToKernelCache.find(problem) != problemToKernelCache.end())
     return problemToKernelCache[problem];
   
@@ -30,9 +87,11 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
     //Use a fast algorithm to search for a good kernel series
     uint32_t MaxFuseP = 32;
 
-    //TODO: fusion should considered for subproblems
-    bool factorsSameShape = true, factorsSquare = true, 
-        factorsPowerOfTwoShape = true, factorsLessThanMaxP = true;
+    //Check if the problem can be computed by fused kernels 
+    bool factorsSameShape = true,       //Are all factors have same shape 
+         factorsSquare = true,          //Are all factors square matrices
+         factorsPowerOfTwoShape = true, //Are all factors dimensions power of 2
+         factorsLessThanMaxP = true;    //Are all factors dimensions less than MaxFuseP
     for (uint32_t f = 0; f < problem.n(); f++) {
       const Factor& fac = problem.f(f);
       factorsLessThanMaxP = factorsLessThanMaxP && (fac.p() <= MaxFuseP);
@@ -48,16 +107,19 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
     if (canFuse) {
       std::vector<KernelInfo*> kernels;
       findAllFusedKernels(problem, false, kernels);
-      //Use a kernel that processes full problem
+
+      //Find if a kernel can fuse all factors of the problem in
+      //one invocation
       for (auto kernel : kernels) {
         if (problem.n() == kernel->FusedFacs) {
           kernelSeries.push_back(TunedKernelFromStart(kernel, 0, kernel->FusedFacs-1, problem.k(), 0.0f));
           goto end;
         }
       }
+
       bool firstOpTKernelFound = false;
       if (problem.opX() == fastKronOp_T) {
-        //First kernel for OpX = T
+        //First fused kernel for OpX = T is the one that has maximum number of fusion
         auto numFusedToKernels_T = filterFastestFusedKernels(problem, kernels);
         if (!numFusedToKernels_T.empty()) {
           auto maxFused = numFusedToKernels_T.begin();
@@ -73,7 +135,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
           kernelSeries.push_back(tk);
           firstOpTKernelFound = true;
 
-          //Find kernels for OpX = N
+          //Filter remaining kernels for OpX = N and remaining number of factors
           KMMProblem subProblem = problem.rsub(problem.n() - 1 - maxFused->first, problem.n() - maxFused->first);
           subProblem.setOpX(fastKronOp_N);
           std::vector<KernelInfo*> kernels_OpN;
@@ -88,6 +150,9 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
       auto numFusedToKernels = filterFastestFusedKernels(problem, kernels);
 
       if (firstOpTKernelFound && !numFusedToKernels.empty()) {
+        //From above filtered kernels find the kernel series using a greedy approach.
+        //The approach always selects the kernel with the maximum number of fusion
+
         auto fusedIter = numFusedToKernels.begin();
 
         executeGeKMM(problem, nullptr, problem.n(),
@@ -97,9 +162,8 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
               auto tk = TunedKernelFromStart(this->findKernelAtOptLevel(subProblem, fusedIter->second), 
                                             rstart - (subProblem.n() - 1), rstart, subProblem.k(), 0.0f);
               kernelSeries.push_back(tk);
-              // std::cout << "370 " << fusedIter->first << " " << rstart << "  " << (rstart - subProblem.n() + 1) << std::endl; 
-              while (fusedIter->first > rstart - subProblem.n() + 1&& fusedIter != numFusedToKernels.end()) {
-                          // std::cout << "372 " << fusedIter->first << " " << rstart << "  " << (rstart - (subProblem.n() - 1)) << std::endl;
+              while (fusedIter->first > rstart - subProblem.n() + 1 &&
+                     fusedIter != numFusedToKernels.end()) {
                 fusedIter++;
               }
               return fastKronSuccess;
@@ -125,9 +189,9 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
     }
 
   end:
-    Logger(LogLevel::Debug) << "Minimum Time " << std::endl;
+    Logger(LogLevel::Info) << "Minimum Time " << std::endl;
     for (auto iter = kernelSeries.rbegin(); iter != kernelSeries.rend(); iter++) {
-      Logger(LogLevel::Debug) << "  " << (*iter) << std::endl;
+      Logger(LogLevel::Info) << "  " << (*iter) << std::endl;
     }
   }
 
@@ -136,109 +200,20 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
   return kernelSeries;
 }
 
-std::pair<KernelInfo*, float> KernelDatabase::findTunedKernel(KMMProblem problem, bool useP2PStore, 
-    uint fidx, DistributedParams distParams) {
-  const uint runs = 5;
-  const uint warmups = 5;
-  KernelInfo* bestKernel = nullptr;
-  float minTime;
-  std::vector<std::vector<KernelInfo*>> allKernels;
-
-  minTime = std::numeric_limits<float>::max();
-
-  Logger(LogLevel::Debug) << "Tuning for shape "  << problem << std::endl;
-  if (findAllKernels(problem, useP2PStore, allKernels)) {
-  const std::vector<KernelInfo*>& kernelsForMaxOpt = [&allKernels]() {
-    for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
-      if (iter->size() > 0) return *iter;
-    }
-    return allKernels[0];
-  }();
-
-  uint32_t kernelIdx = 0;
-  for (auto kernel : kernelsForMaxOpt) {
-    kernelIdx += 1;
-    if (!kernel->canCompute(problem, hardware[0], useP2PStore)) continue;
-    Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size() << ": " << kernel->str() << std::endl;
-    float kernelTime = std::numeric_limits<float>::max();
-    fastKronError status;
-    status = timeKernel(kernel, problem, fidx, distParams, EpilogueParams::create<float>(), KernelModeTuning, 
-               useP2PStore, warmups, runs, kernelTime);
-    if (status == fastKronSuccess) {
-      Logger(LogLevel::Debug) << 
-                   "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
-                   "  GFLOPs: " << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
-                   occupancyDetails(kernel, problem) << std::endl;
-      if (kernelTime < minTime) {
-        bestKernel = kernel;
-        minTime = kernelTime;
-      }
-    }
-  }}
-
-  if (minTime < std::numeric_limits<float>::max()) {
-    Logger(LogLevel::Debug) << std::fixed << std::setprecision(4) <<
-                "Fastest kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
-    return std::make_pair(bestKernel, minTime);
-  }
-
-  return std::make_pair(bestKernel, minTime);
+bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore,
+                                         std::vector<KernelInfo*>& kernels) {
+  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+  auto it = compiledKernels.find(key);
+  if (it == compiledKernels.end()) return false;
+  std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
+    [useP2PStore, problem, this](auto& kernel){return kernel->FusedFacs <= problem.n() && 
+                                               kernel->OptLevel == KernelOptimizations::MaxOptLevel() &&
+                                               kernel->canCompute(problem, this->hardware[0], useP2PStore, false);});
+  return true;
 }
-
-fastKronError KernelDatabase::procMalloc(uint32_t proc, FastKronType type, Matrix& m) {
-  void* ptr = nullptr;
-  fastKronError e = procMalloc(proc, m.numel() * sizeOfFastKronType(type), ptr);
-
-  if (e == fastKronSuccess) {
-    m.ptr = ptr;
-  }
-
-  return e;
-}
-
-fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
-  return procFree(proc, m.data());
-}
-
-bool KernelInfo::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) {
-  using Opts = KernelOptimizations::Optimization;
-  switch (opt) {
-    case Opts::None:
-      return true;
-    case Opts::XshSlicesSame:
-      return getTileX(problem).n()/problem.f(0).p() == tileX.n()/f.p();
-    case Opts::QMultipleOfTileQ:
-      return problem.f(0).q() % tileF.q() == 0;
-    case Opts::PMultipleOfTileP:
-      return problem.f(0).p() % tileF.p() == 0;
-    case Opts::KMultipleOfTileK:
-      return problem.k() % getTileX(problem).n() == 0;
-    case Opts::QLeTileQ:
-      return problem.f(0).q() <= f.q();
-    case Opts::TileKSame:
-      return getTileX(problem).n() == tileX.n();
-    case Opts::FactorShapeSame:
-      return f.p() == problem.f(0).p() && f.q() == problem.f(0).q();
-    
-    default:
-      return false;
-  }
-
-  return false;
-}
-
-KernelInfo* KernelDatabase::getKernel(std::string repr) {
-    for (auto iter : compiledKernels) {
-      for (auto kernel : iter.second) {
-        if (kernel->str() == repr)
-          return kernel;
-      }
-    }
-    return nullptr;
-  }
 
 bool KernelDatabase::findAllKernels(KMMProblem problem, bool useP2PStore, 
-                            std::vector<std::vector<KernelInfo*>>& kernels) {
+                                    std::vector<std::vector<KernelInfo*>>& kernels) {
   for (uint32_t i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
     kernels.push_back(std::vector<KernelInfo*>());
   }
@@ -269,18 +244,8 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, bool useP2PStore,
   return true;
 }
 
-bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore, std::vector<KernelInfo*>& kernels) {
-  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
-  auto it = compiledKernels.find(key);
-  if (it == compiledKernels.end()) return false;
-  std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
-  [useP2PStore, problem, this](auto& kernel){return kernel->FusedFacs <= problem.n() && 
-                                        kernel->OptLevel == KernelOptimizations::MaxOptLevel() &&
-                                        kernel->canCompute(problem, this->hardware[0], useP2PStore, false);});
-  return true;
-}
-
-KernelInfo* KernelDatabase::findKernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels) {
+KernelInfo* KernelDatabase::findKernelForSubProblem(KMMProblem subProblem, 
+                                                    const std::vector<std::vector<KernelInfo*>>& kernels) {
   //TODO: Only works for subproblem.n() == 1
   for (int optlevel = KernelOptimizations::MaxOptLevel();
        optlevel >= 0; optlevel--) {
@@ -292,4 +257,57 @@ KernelInfo* KernelDatabase::findKernelForSubProblem(KMMProblem subProblem, const
   }
 
   return nullptr;
+}
+
+std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> 
+  KernelDatabase::filterFastestFusedKernels(const KMMProblem& problem, 
+                                            const std::vector<KernelInfo*>& kernels) {
+  std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> numFusedToKernels;
+
+  for (auto kernel : kernels) {
+    if (kernel->FusedFacs <= problem.n()) {
+      if (numFusedToKernels.find(kernel->FusedFacs) == numFusedToKernels.end())
+        numFusedToKernels[kernel->FusedFacs] = std::vector<KernelInfo*>();
+      numFusedToKernels[kernel->FusedFacs].push_back(kernel);
+    }      
+  }
+
+  return numFusedToKernels;
+}
+
+KernelInfo* KernelDatabase::getKernel(std::string repr) {
+  for (auto iter : compiledKernels) {
+    for (auto kernel : iter.second) {
+      if (kernel->str() == repr)
+        return kernel;
+    }
+  }
+  return nullptr;
+}
+
+bool KernelInfo::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) {
+  using Opts = KernelOptimizations::Optimization;
+  switch (opt) {
+    case Opts::None:
+      return true;
+    case Opts::XshSlicesSame:
+      return getTileX(problem).n()/problem.f(0).p() == tileX.n()/f.p();
+    case Opts::QMultipleOfTileQ:
+      return problem.f(0).q() % tileF.q() == 0;
+    case Opts::PMultipleOfTileP:
+      return problem.f(0).p() % tileF.p() == 0;
+    case Opts::KMultipleOfTileK:
+      return problem.k() % getTileX(problem).n() == 0;
+    case Opts::QLeTileQ:
+      return problem.f(0).q() <= f.q();
+    case Opts::TileKSame:
+      return getTileX(problem).n() == tileX.n();
+    case Opts::FactorShapeSame:
+      return f.p() == problem.f(0).p() && f.q() == problem.f(0).q();
+    
+    default:
+      return false;
+  }
+
+  return false;
 }

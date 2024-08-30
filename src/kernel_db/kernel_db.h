@@ -68,7 +68,7 @@ protected:
    */
   template<typename SubClassKernel> void loadKernels(SubClassKernel* kernels, uint32_t num);
 
-  /*********************** Memory Allocation Functions ***********************/
+  /*********************** Memory Allocation Methods ***********************/
 public:
   /**
    * procMalloc() - Allocate buffer for matrix on a given process.
@@ -113,11 +113,11 @@ protected:
     
   /***************************************************************************/
 
-  /*********************** Kernel Invocation Functions ***********************/
+  /*********************** Kernel Invocation Methods ***********************/
 public:
   /**
    * invokeKernel() - Invokes a kernel to compute GeKMM for a factor. 
-   *                  This function must be defined by each KernelDatabase.
+   *                  This method must be defined by each KernelDatabase.
    * @kernel: kernel to invoke.
    * @problem: KMMProblem to compute.
    * @fidx: Factor index in the KMMProblem.
@@ -132,7 +132,7 @@ public:
   /**
    * invokeP2PStoreKernel()- Invokes a P2P kernel to compute GeKMM for a factor 
    *                         and write output among all nodes using RDMA.
-   *                         This function must be defined by each KernelDatabase.
+   *                         This method must be defined by each KernelDatabase.
    * @kernel: kernel to invoke.
    * @problem: KMMProblem to compute.
    * @fidx: Factor index in the KMMProblem.
@@ -147,12 +147,12 @@ public:
                                              KernelMode execMode) = 0;
   /***************************************************************************/
 
-  /************************* Auto tuning Functions ***************************/
+  /************************* Auto tuning Methods ***************************/
 
 public:
   /**
-   * initTune() - Initialize auto tuning. This function is called by autotuner before starting
-   *              the auto tuning process. This function must be defined by every KernelDatabase.
+   * initTune() - Initialize auto tuning. This method is called by autotuner before starting
+   *              the auto tuning process. This method must be defined by every KernelDatabase.
    */
   virtual fastKronError initTune() = 0;
 
@@ -193,10 +193,10 @@ public:
 
   /***************************************************************************/
 
-  /*********************** Kernel Search Functions ***************************/
+  /*********************** Kernel Search Methods ***************************/
 public:
   /**
-   * kernelSeriesForProblem() - Top level function to get kernel series for a problem using FastKron's 
+   * kernelSeriesForProblem() - Top level method to get kernel series for a problem using FastKron's 
    *                            kernel search algorithm.
    * @problem: The problem to search kernel series for.
    *
@@ -216,7 +216,7 @@ private:
   bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, std::vector<KernelInfo*>& kernels);
   
   /**
-   * findAllKernels() - Find all non-fused kernels that can compute given problem.
+   * findAllKernels() - Find all kernels (fused or non-fused) that can compute the given problem.
    * @problem: The problem to find kernels for.
    * @useP2PStore: True if kernels should use P2P RDMA stores.
    * @kernels: [OUT] A vector of kernels for each optimization level.
@@ -238,7 +238,7 @@ protected:
   KernelInfo* findKernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
 
   /**
-   * findKernelAtOptLevel() - Find best kernel for a subproblem at an opt level. This function should be 
+   * findKernelAtOptLevel() - Find best kernel for a subproblem at an opt level. This method should be 
    *                          implemented by each Kernel Database.
    * @subproblem: A sub problem with n() == 1.
    * @kernelsForOptLevel: A vector of kernels at an opt level.
@@ -258,11 +258,11 @@ protected:
           filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
   /***************************************************************************/
 
-  /**************************** Helper Functions *****************************/
+  /**************************** Helper Methods *****************************/
 protected:
   /**
-   * occupancyDetails() - A pure virtual function to obtain Kernel Occupancy detail as a string. 
-   *                      This function should be implemented by every KernelDatabase.
+   * occupancyDetails() - A pure virtual method to obtain Kernel Occupancy detail as a string. 
+   *                      This method should be implemented by every KernelDatabase.
    * @kernel: The kernel to get occupancy details.
    * @problem: The problem computed by the kernel.
    *
