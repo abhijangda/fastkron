@@ -10,21 +10,25 @@
 #include "kernel_db/cpu_kernel_db.h"
 
 #ifdef ENABLE_X86
+  //Defines ALL_X86_KERNELS array
   #include "kernels/cpu/x86/kron-kernels/kernel_decl.inc"
 #endif
 
+/**
+ * @AllX86Kernels: An array of all X86 compiled kernels.
+ */
 X86Kernel AllX86Kernels[] = {
 #ifdef ENABLE_X86
   ALL_X86_KERNELS
 #endif
 };
 
-CPUKernelDatabase::CPUKernelDatabase() : KernelDatabase(),
- TileXs(), TileYs(), TileFs()
+CPUKernelDatabase::CPUKernelDatabase() : 
+  KernelDatabase(), TileXs(), TileYs(), TileFs()
  {}
 
 void CPUKernelDatabase::allocate_caches() {
-  //go through all loaded kernels and allocate cache for maximum size
+  //Go through all loaded kernels and allocate cache for maximum size
   uint32_t maxTileX = 0;
   uint32_t maxTileF = 0;
   uint32_t maxTileY = 0;
@@ -42,18 +46,32 @@ void CPUKernelDatabase::allocate_caches() {
   TileYs.alloc(getMaxThreads(), maxTileY * sizeof(double));
 }
 
+fastKronError CPUKernelDatabase::procMemset(uint32_t, Matrix& m, float val) {
+  memset<float>(m.data<float>(0), m.numel(), val);
+  return fastKronSuccess;
+}
+
+fastKronError CPUKernelDatabase::procMalloc(uint32_t, size_t size, void*& ptr) {
+  ptr = new char[size];
+  return ptr != nullptr ? fastKronSuccess : fastKronInvalidArgument; 
+}
+
+fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
+  if (ptr == NULL) return fastKronInvalidArgument;
+  delete[] (char*)ptr;
+  return fastKronSuccess;
+}
+
 template<uint FusedFacs>
 fastKronError invoke(CPUKernel& kernelInfo, KMMProblem problem,
                      const uint fidx, CPUCaches& caches,
                      DistributedParams distParams,
                      EpilogueParams epilogueParams,
                      KernelMode execMode) {
-  //Create the grid and thread block
   KernelParams<FusedFacs> params (problem, &caches, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), fidx, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
-  //Call kernel
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>&, FusedParams<FusedFacs>&,
                                      DistributedParams&, EpilogueParams&);
   KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
@@ -61,9 +79,9 @@ fastKronError invoke(CPUKernel& kernelInfo, KMMProblem problem,
 }
 
 fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, KMMProblem problem,
-                                     const uint fidx,
-                                     EpilogueParams epilogueParams,
-                                     KernelMode execMode) {
+                                              const uint fidx,
+                                              EpilogueParams epilogueParams,
+                                              KernelMode execMode) {
   DistributedParams distParams;
   CPUKernel& cpuKernel = dynamic_cast<CPUKernel&>(*kernel);
   CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
@@ -92,36 +110,19 @@ fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, KMMProblem pro
   }
 }
 
-fastKronError CPUKernelDatabase::procMalloc(uint32_t, size_t size, void*& ptr) {
-  ptr = new char[size];
-  return ptr != nullptr ? fastKronSuccess : fastKronInvalidArgument; 
-}
-
-fastKronError CPUKernelDatabase::procMemset(uint32_t, Matrix& m, float val) {
-  memset<float>(m.data<float>(0), m.numel(), val);
-  return fastKronSuccess;
-}
-
-fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
-  if (ptr == NULL) return fastKronInvalidArgument;
-  delete[] (char*)ptr;
-  return fastKronSuccess;
-}
-
 fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, KMMProblem problem, 
-                                   const uint fidx, 
-                                   DistributedParams distParams,
-                                   EpilogueParams epilogueParams,
-                                   KernelMode execMode, 
-                                   bool useP2PStore,
-                                   int warmups, int runs,
-                                   float& runtime) {
+                                            const uint fidx, 
+                                            DistributedParams distParams,
+                                            EpilogueParams epilogueParams,
+                                            KernelMode execMode, 
+                                            bool useP2PStore,
+                                            int warmups, int runs,
+                                            float& runtime) {
   runtime = std::numeric_limits<float>::max();
   //Avoid the SISD kernel when running on AVX/AVX512
   if ((*(dynamic_cast<const X86ArchDetails*>(hardware[0]))).simd != X86SIMD::SISD) {
     if (((X86Kernel*)kernel)->simd == X86SIMD::SISD) return fastKronSuccess;
   }
-  //TODO:use the same sample/run in cuda
   // if (kernel->tileX.n() < 8192 || kernel->tileF.q() < 64) return fastKronSuccess;
   fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
@@ -145,8 +146,8 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, KMMProblem probl
 
     if (status != fastKronSuccess) {
       Logger(LogLevel::Info) << "Error in CPU autotuning "     <<
-                                    fastKronGetErrorString(status) <<
-                                    std::endl;
+                                fastKronGetErrorString(status) <<
+                                std::endl;
       return status;
     }
 
@@ -154,47 +155,6 @@ fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, KMMProblem probl
   }
   
   return status;
-}
-
-KernelInfo* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) {
-  if (kernelsForOptLevel.size() > 0) {
-    //Find kernels that have either same P or same Q
-    std::vector<KernelInfo*> kernelsWithSamePOrQ;
-    std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), std::back_inserter(kernelsWithSamePOrQ),
-                 [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or kernel->f.q() == subProblem.f(0).q();});
-    std::vector<KernelInfo*> filteredKernels;
-    if (kernelsWithSamePOrQ.size() > 0) {
-      filteredKernels = kernelsWithSamePOrQ;
-    } else {
-      filteredKernels = kernelsForOptLevel;
-    }
-    X86SIMD simd = getX86CPUProperties().simd;
-    std::vector<KernelInfo*> kernelsForArch;
-    std::copy_if(filteredKernels.begin(), filteredKernels.end(), std::back_inserter(kernelsForArch),
-                 [simd, subProblem](auto& kernel){
-                   return kernel->FusedFacs > 1 || 
-                   //TODO: write conversion function kernel.asX86Kernel()
-                    (((X86Kernel*)kernel)->simd == simd);
-                 });
-    if (kernelsForArch.size() == 0)
-      kernelsForArch = filteredKernels;
-
-    //sort kernels in descending order based on the number of threads a kernel invoke
-    auto order = [subProblem, this](auto k1, auto k2) {
-      return ((CPUKernel*)k1)->numThreads(subProblem) > ((CPUKernel*)k2)->numThreads(subProblem);
-    };
-    std::sort(kernelsForArch.begin(), kernelsForArch.end(), order);
-    for (auto k : kernelsForArch) {
-      if (((CPUKernel*)k)->numThreads(subProblem) <= getMaxThreads()) {
-        return k;
-      }
-    }
-
-    //If no kernel is found then return the kernel with max reuse
-    return kernelsForArch[kernelsForArch.size() - 1];
-  }
-
-  return nullptr;
 }
 
 void cpuid(uint32_t in, uint32_t regs[4], uint32_t ecx = 0) {
@@ -322,7 +282,7 @@ X86KernelDatabase::X86KernelDatabase() {
     sockets = socketset.size();
   }
 
-  __builtin_cpu_init ();
+  __builtin_cpu_init();
 
   X86SIMD simd = SISD;
   if (__builtin_cpu_supports("fma")) {
@@ -341,8 +301,8 @@ X86KernelDatabase::X86KernelDatabase() {
                                    sockets, cores, simd);
   hardware.push_back(detail);
 
-  Logger(LogLevel::Info) << "Detected CPU " << std::endl <<
-                                (*detail) << std::endl;
+  Logger(LogLevel::Info) << "Detected CPU " << std::endl
+                         << (*detail) << std::endl;
 
   loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));
   trash1 = new char[detail->totalL3Size()];
@@ -352,4 +312,51 @@ X86KernelDatabase::X86KernelDatabase() {
   }
 
   allocate_caches();
+}
+
+KernelInfo* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
+                                                    const std::vector<KernelInfo*>& kernelsForOptLevel) {
+  if (kernelsForOptLevel.size() > 0) {
+    //Find kernels that have either same P or same Q
+    std::vector<KernelInfo*> kernelsWithSamePOrQ;
+    std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(),
+                 std::back_inserter(kernelsWithSamePOrQ),
+                 [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or 
+                                            kernel->f.q() == subProblem.f(0).q();});
+    std::vector<KernelInfo*> filteredKernels;
+    if (kernelsWithSamePOrQ.size() > 0) {
+      filteredKernels = kernelsWithSamePOrQ;
+    } else {
+      filteredKernels = kernelsForOptLevel;
+    }
+
+    X86SIMD simd = getX86CPUProperties().simd;
+    std::vector<KernelInfo*> kernelsForArch;
+    std::copy_if(filteredKernels.begin(), filteredKernels.end(), 
+                 std::back_inserter(kernelsForArch),
+                 [simd, subProblem](auto& kernel){
+                   return kernel->FusedFacs > 1 || 
+                   //TODO: write conversion function kernel.asX86Kernel()
+                    (((X86Kernel*)kernel)->simd == simd);
+                 });
+    if (kernelsForArch.size() == 0)
+      kernelsForArch = filteredKernels;
+
+    //sort kernels in descending order based on the number of threads a kernel invoke
+    auto order = [subProblem, this](auto k1, auto k2) {
+      return ((CPUKernel*)k1)->numThreads(subProblem) >
+             ((CPUKernel*)k2)->numThreads(subProblem);
+    };
+    std::sort(kernelsForArch.begin(), kernelsForArch.end(), order);
+    for (auto k : kernelsForArch) {
+      if (((CPUKernel*)k)->numThreads(subProblem) <= getMaxThreads()) {
+        return k;
+      }
+    }
+
+    //If no kernel is found then return the kernel with max reuse
+    return kernelsForArch[kernelsForArch.size() - 1];
+  }
+
+  return nullptr;
 }

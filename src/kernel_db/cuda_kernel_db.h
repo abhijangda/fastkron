@@ -87,7 +87,7 @@ protected:
    * procMalloc() - Overriding KernelDatabase::procMalloc.
    */
   virtual fastKronError procMalloc(uint32_t proc, size_t size, void*& ptr);
-  
+
   /**
    * procFree() - Overriding KernelDatabase::procFree.
    */
@@ -98,13 +98,11 @@ protected:
 
 public:
   /**
-   * initTune() - Initialize auto tuning. This method is called by autotuner before starting
-   *              the auto tuning process. Overriding KernelDatabase::initTune.
+   * initTune() - Overriding KernelDatabase::initTune.
    */
   virtual fastKronError initTune();
   /***************************************************************************/
 
-  /************************* Auto tuning Methods ***************************/
   /**
    * invokeKernel() - Overriding KernelDatabase::invokeKernel
    */
@@ -143,7 +141,8 @@ protected:
   /**
    * findKernelAtOptLevel() - Overriding KernelDatabase::findKernelAtOptLevel
    */
-  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernels);
+  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem,
+                                           const std::vector<KernelInfo*>& kernels);
   /***************************************************************************/
 
   /**************************** Helper Methods *****************************/
