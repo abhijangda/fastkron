@@ -1,89 +1,102 @@
+#include <cuda.h>
+#include <cuda_runtime.h>
+
 #include "kmmkernel.h"
 
-struct GPUKernel : public KMMKernel {
-  void* kernelFunc;
+#pragma once
 
-  uint NumThreads;
-  uint AAlignment;
-  uint KronAlignment;
+/**
+ * GPUKMMKernel - A subclass for kernels running on GPUs.
+ *                This class must be subclassed for CUDA or HIP kernels.
+ */
+struct GPUKMMKernel : public KMMKernel {
+protected:
+  /**
+   * @kernel: Pointer to the kernel.
+   */
+  void* kernel;
 
-  GPUKernel() {}
-  GPUKernel(void* invokerFunc, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
-             uint FusedFacs, bool DistributeToGPUs,
-             uint RegM, uint RegK, uint RegQ, uint OptLevel,
-             fastKronOp opX, fastKronOp opF,
-             void*(*getKernelFunc)(), uint NumThreads,
-             uint AAlignment, uint KronAlignment) :
-             KMMKernel(invokerFunc, elemType, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
-             RegM, RegK, RegQ, OptLevel, opX, opF),
-             NumThreads(NumThreads), kernelFunc(getKernelFunc()),
-             AAlignment(AAlignment), KronAlignment(KronAlignment) {}
+  /**
+   * @numThreads: Number of threads per threadblock.
+   */
+  uint numThreads;
 
-  bool isValid() {
-    return true;
-    const uint ValidThreads = ((tileX.n()/f.p())/getRegK()) * (tileF.q()/getRegQ());
-    if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
-      std::cout << "Invalid kernel config " << str() << std::endl; 
-      return false;
-    }
-    return KMMKernel::isValid();
+  /**
+   * @alignX: Alignment of pointer of X.
+   */
+  uint alignX;
+  
+  /**
+   * @alignF: Alignment of pointer of F.
+   */
+  uint alignF;
+
+public:
+  GPUKMMKernel() {}
+  GPUKMMKernel(void* kernelInvoker, FastKronType elemType,
+               Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
+               uint regM, uint regK, uint regQ, uint optLevel,
+               fastKronOp opX, fastKronOp opF,
+               void*(*getKernel)(), uint NumThreads,
+               uint alignX, uint alignF) :
+               KMMKernel(kernelInvoker, elemType, f, tileF, tileX,
+                         fusedFacs, P2PStore, regM, regK, regQ,
+                         optLevel, opX, opF),
+               numThreads(NumThreads), kernel(getKernel()),
+               alignX(alignX), alignF(alignF) {}
+
+  /**
+   * Getter for members
+   */
+  void* getKernel()     const {return kernel;}
+  uint  getNumThreads() const {return numThreads;}
+  uint  getAlignmentX() const {return alignX;}
+  uint  getAlignmentF() const {return alignF;}
+
+  /**
+   * grid() - Returns grid size of the kernel for a problem. 
+   */
+  dim3 grid(KMMProblem problem) const;
+
+  /**
+   * block() - Returns block size of the kernel for a problem.
+   */
+  dim3 block() const {
+    return dim3{getNumThreads(), 1, 1};
   }
 
-  virtual std::string str() const {
-    std::stringstream info;
-    info << backend() << "_" << arch() << "_" << NumThreads << "_" << KMMKernel::str();
-    return info.str();
-  }
-
-  dim3 grid(KMMProblem problem) {
-    Matrix tileX_ = getTileX(problem);
-    Factor tileF_ = getTileF(problem);
-    if (opX == fastKronOp_N) {
-      return dim3(DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q()),
-                  DIVUP(problem.m(), tileX_.m()),
-                  1);
-    } else {
-      //problem.k() can be very large, which can make grid.y more than the limit (65535).
-      //Distribute grid.y to y and z
-      uint32_t origGridy = DIVUP(problem.k(), tileX_.n()) * DIVUP(problem.f(0).q(), tileF_.q());
-      dim3 grid = {0,0,0};
-      if (origGridy <= 32768) {
-        grid.y = origGridy;
-        grid.z = 1;
-      } else {
-        grid.y = 32768;
-        grid.z = DIVUP(origGridy, 32768);
-      }
-      return dim3(DIVUP(problem.m(), tileX_.m()),
-                  grid.y, grid.z);
-    }
-  }
-
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
-    if (KMMKernel::canCompute(problem, hardware, p2p, exactFuse)) {
-      dim3 g = grid(problem);
-      if (g.y >= 65536 || g.z >= 65536) {
-        return false;
-      }
-      return true;
-    }
-    return false;
-  }
-
-  uint32_t numBlocks(KMMProblem problem) {
+  /**
+   * getNumBlocks() - Returns number of blocks of the kernel for a problem.
+   */
+  uint32_t getNumBlocks(KMMProblem problem) const {
     dim3 g = grid(problem);
     return g.x*g.y*g.z;
   }
 
-  dim3 block() {
-    return dim3{NumThreads, 1, 1};
-  }
-
-  size_t sharedMemSize() {
+  /**
+   * getMaxSharedMemSize() - Returns the maximum shared memory size of the kernel.
+   *                         Effectively this is the maximum total tile size
+   */
+  size_t getMaxSharedMemSize() const {
     return getMaxTotalTileSize();
   }
 
-  size_t sharedMemSize(KMMProblem problem) {
+  /**
+   * getSharedMemSize() - Returns the shared memory size for the kernel.
+   */
+  size_t getSharedMemSize(KMMProblem problem) const {
+    //TODO: Shouldn't this be MIN? because getTotalTileSize < getMaxTotalTileSize
     return MAX(getTotalTileSize(problem), getMaxTotalTileSize());
   }
+
+  /**
+   * canCompute() - Overriding the method of KMMKernel.
+   */
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw, bool p2p, 
+                          bool exactFuse = true);
+
+  /**
+   * str() - Overriding the method of KMMKernel. Adds NumThreads extra to the kernel string.
+   */
+  virtual std::string str() const;
 };

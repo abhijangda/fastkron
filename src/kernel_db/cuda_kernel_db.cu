@@ -265,7 +265,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, KMMProblem problem,
                                              epilogueParams, 
                                              kernelInfo.grid(problem),
                                              kernelInfo.block(),
-                                             kernelInfo.sharedMemSize(problem),
+                                             kernelInfo.getSharedMemSize(problem),
                                              stream);
   status = cudaGetLastError();
   CUDA_CHECK(status);
@@ -423,7 +423,7 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
  */
 static float blocksPerSM(const CUDAArchDetails gpu, CUDAKernel* kernel, dim3 grid) {
   uint32_t regOcc = gpu.regsPerSM / (kernel->block().x * kernel->numRegs());
-  uint32_t shmemOcc = gpu.sharedMemPerSM / kernel->sharedMemSize();
+  uint32_t shmemOcc = gpu.sharedMemPerSM / kernel->getMaxSharedMemSize();
   return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
 }
 
@@ -444,12 +444,12 @@ KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
     }
     //sort kernels in descending order based on the number of thread blocks a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
-      return ((CUDAKernel*)k1)->numBlocks(subProblem) > ((CUDAKernel*)k2)->numBlocks(subProblem);
+      return ((CUDAKernel*)k1)->getNumBlocks(subProblem) > ((CUDAKernel*)k2)->getNumBlocks(subProblem);
     };
     std::sort(filteredKernels.begin(), filteredKernels.end(), order);
     for (auto k : filteredKernels) {
       uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
-      if (((CUDAKernel*)k)->numBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
+      if (((CUDAKernel*)k)->getNumBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
         return k;
       }
     }
@@ -470,7 +470,7 @@ std::string CUDAKernelDatabase::occupancyDetails(KMMKernel* kernelInfo, KMMProbl
 
   ss << indent << "Grid          : {" << grid.x << ", " << grid.y << ", " << grid.z << "}" << std::endl
      << indent << "Block         : {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
-     << indent << "Shared Mem    : " << cudaKernel->sharedMemSize() << std::endl 
+     << indent << "Shared Mem    : " << cudaKernel->getSharedMemSize(problem) << std::endl 
      << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl
      << indent << "Blocks Per SM : " << blocksPerSM(getCUDADeviceProperties(), cudaKernel, cudaKernel->grid(problem)) << std::endl
      << indent << "Local Memory  : " << cudaKernel->localSize() << std::endl;

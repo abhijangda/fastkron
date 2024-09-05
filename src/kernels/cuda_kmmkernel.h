@@ -3,7 +3,9 @@
 
 #include "kernels/gpu_kmmkernel.h"
 
-struct CUDAKernel : public GPUKernel {
+#pragma once
+
+struct CUDAKernel : public GPUKMMKernel {
   SMArch sm;
   CUDAKernel() {}
   CUDAKernel(SMArch sm, void* invokerFunc, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
@@ -12,13 +14,13 @@ struct CUDAKernel : public GPUKernel {
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
-             GPUKernel(invokerFunc, elemType, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
+             GPUKMMKernel(invokerFunc, elemType, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
                       OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
                        sm(sm) {
   }
   //TODO: Make "const HardwareDetails"
   virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
-    if (GPUKernel::canCompute(problem, hardware, p2p, exactFuse)) {
+    if (GPUKMMKernel::canCompute(problem, hardware, p2p, exactFuse)) {
       return ((CUDAArchDetails*)hardware)->smArch == sm;
     }
     return false;
@@ -26,27 +28,27 @@ struct CUDAKernel : public GPUKernel {
 
   uint32_t ptxVersion() const {
     cudaFuncAttributes attr;
-    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
+    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
     return attr.ptxVersion;
   }
 
   uint32_t localSize() const {
     cudaFuncAttributes attr;
-    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
+    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
     return attr.localSizeBytes;
   }
   uint32_t numRegs()   const {
     cudaFuncAttributes attr;
-    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernelFunc));
+    CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
     return attr.numRegs;
   }
 
   cudaError_t setSharedMemAttr() {
     cudaError_t err = cudaSuccess;
-    if (sharedMemSize() >= (48 << 10)) {
-      err = cudaFuncSetAttribute(kernelFunc,
+    if (getMaxSharedMemSize() >= (48 << 10)) {
+      err = cudaFuncSetAttribute(kernel,
                                  cudaFuncAttributeMaxDynamicSharedMemorySize,
-                                 sharedMemSize());
+                                 getMaxSharedMemSize());
     }
 
     return err;

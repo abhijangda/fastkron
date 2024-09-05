@@ -233,7 +233,7 @@ class CPUKMMKernel(Kernel):
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
-class GPUKernel(Kernel):
+class GPUKMMKernel(Kernel):
   def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
                regM: int, cRegRows: int, cRegCols: int,
@@ -499,7 +499,7 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
                                     new_aalign = aalign
                                   distKernels = [0, 1] if useDistKernels else [0]
                                   for dist in distKernels:
-                                    config = GPUKernel(backend, arch, KronMatMulShape(m, tK, n, p, q), 
+                                    config = GPUKMMKernel(backend, arch, KronMatMulShape(m, tK, n, p, q), 
                                                           KronMatMulShape(m, k, n, ps, qs),
                                                           p, q, tQ, tP, tM, regM, regRows, regCols,
                                                           numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
