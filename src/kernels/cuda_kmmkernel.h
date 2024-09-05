@@ -1,7 +1,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "kernels/gpu_kernel_info.h"
+#include "kernels/gpu_kmmkernel.h"
 
 struct CUDAKernel : public GPUKernel {
   SMArch sm;

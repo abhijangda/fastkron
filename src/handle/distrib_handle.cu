@@ -6,7 +6,7 @@
 #include "handle/handle.h"
 #include "utils/utils.h"
 #include "kernels/cuda/otherkernels.cuh"
-#include "kernels/cuda_kernel_info.h"
+#include "kernels/cuda_kmmkernel.h"
 
 struct ThreadArgs {
   ThreadArgs() {}

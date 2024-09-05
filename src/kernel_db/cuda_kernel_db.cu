@@ -9,7 +9,7 @@
 #include "utils/logger.h"
 
 #include "kernel_db/cuda_kernel_db.h"
-#include "kernels/cuda_kernel_info.h"
+#include "kernels/cuda_kmmkernel.h"
 
 #ifdef ENABLE_CUDA
   //Defines ALL_CUDA_KERNELS array

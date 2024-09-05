@@ -154,6 +154,8 @@ if(ENABLE_CUDA)
       ${CUDA}/otherkernels.cuh
       ${SRC}/kernel_db/cuda_kernel_db.h
       ${SRC}/kernel_db/cuda_kernel_db.cu
+      ${SRC}/kernels/cuda_kmmkernel.h
+      ${SRC}/kernels/gpu_kmmkernel.h
       ${CUDA_KERNELS})
 else()
   set(CUDA_HEADER_FILES)

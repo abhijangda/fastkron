@@ -1,3 +1,3 @@
-#include "gpu_kernel_info.h"
+#include "gpu_kmmkernel.h"
 
 typedef GPUKernel HIPKernel;
