@@ -31,7 +31,7 @@ struct GPUKernel : public KMMKernel {
 
   virtual std::string str() const {
     std::stringstream info;
-    info << runtimeStr() << "_" << archStr() << "_" << NumThreads << "_" << KMMKernel::str();
+    info << backend() << "_" << arch() << "_" << NumThreads << "_" << KMMKernel::str();
     return info.str();
   }
 
@@ -80,10 +80,10 @@ struct GPUKernel : public KMMKernel {
   }
 
   size_t sharedMemSize() {
-    return totalTileSize();
+    return getMaxTotalTileSize();
   }
 
   size_t sharedMemSize(KMMProblem problem) {
-    return MAX(totalTileSize(problem), totalTileSize());
+    return MAX(getTotalTileSize(problem), getMaxTotalTileSize());
   }
 };

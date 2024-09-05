@@ -4,9 +4,9 @@
 #include "kernels/gpu_kernel_info.h"
 
 struct CUDAKernel : public GPUKernel {
-  SMArch arch;
+  SMArch sm;
   CUDAKernel() {}
-  CUDAKernel(SMArch arch, void* invokerFunc, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
+  CUDAKernel(SMArch sm, void* invokerFunc, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
              uint RegM, uint RegK, uint RegQ, uint OptLevel,
              fastKronOp opX, fastKronOp opF,
@@ -14,12 +14,12 @@ struct CUDAKernel : public GPUKernel {
              uint AAlignment, uint KronAlignment) :
              GPUKernel(invokerFunc, elemType, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
                       OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
-                       arch(arch) {
+                       sm(sm) {
   }
   //TODO: Make "const HardwareDetails"
   virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
     if (GPUKernel::canCompute(problem, hardware, p2p, exactFuse)) {
-      return ((CUDAArchDetails*)hardware)->smArch == arch;
+      return ((CUDAArchDetails*)hardware)->smArch == sm;
     }
     return false;
   }
@@ -52,11 +52,11 @@ struct CUDAKernel : public GPUKernel {
     return err;
   }
 
-  virtual std::string runtimeStr() const {
+  virtual std::string backend() const {
     return "cuda";
   }
 
-  virtual std::string archStr() const {
-    return smArchToStr(arch);
+  virtual std::string arch() const {
+    return smArchToStr(sm);
   }
 };

@@ -90,81 +90,88 @@ public:
             P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ),
             optLevel(optLevel), opX(opX), opF(opF) {}
 
-  bool isValid()      const {return kernelInvoker != nullptr;}
-  uint getFusedFacs() const {return fusedFacs;}
-  uint getOptLevel()  const {return optLevel;}
-  uint getRegM()      const {return regM;}
-  uint getRegK()      const {return regK;}
-  uint getRegQ()      const {return regQ;}
+  /**
+   * Getters for all template parameters
+   */
+  uint getFusedFacs()   const {return fusedFacs;}
+  uint getOptLevel()    const {return optLevel;}
+  uint getRegM()        const {return regM;}
+  uint getRegK()        const {return regK;}
+  uint getRegQ()        const {return regQ;}
   Factor getMaxFactor() const {return f;}
   Matrix getMaxTileX()  const {return tileX;}
   Matrix getMaxTileF()  const {return tileF;}
-  fastKronOp getOpX() const {return opX;}
-  fastKronOp getOpF() const {return opF;}
+  fastKronOp getOpX()   const {return opX;}
+  fastKronOp getOpF()   const {return opF;}
 
-  size_t totalTileSize() const;
+  /**
+   * Check if a kernel is valid.
+   */
+  bool isValid()        const {return kernelInvoker != nullptr;}
 
+  /**
+   * getMaxTotalTileSize - Return max tile size as sum of tileF and tileX.
+   */
+  size_t getMaxTotalTileSize() const;
+
+  /**
+   * getMaxTileY - Return max size of Y tile written by the kernel.
+   */
   Matrix getMaxTileY() const;
 
+  /**
+   * getTileF - Return tile of factor as a minimum of max factor tile and 
+   *            problem's factor.
+   */
   Factor getTileF(KMMProblem problem) const;
 
+  /**
+   * getTileX - Return tile of X as a minimum of max slices of kernel and 
+   *            slices of problem. 
+   */
   Matrix getTileX(KMMProblem problem) const;
 
-  size_t totalTileSize(KMMProblem problem) const;
+  /**
+   * getTotalTileSize - Return the sum in bytes of tile sizes of getTileF and getTileX.
+   */
+  size_t getTotalTileSize(KMMProblem problem) const;
 
-  size_t numThreads(KMMProblem problem) const;
+  /**
+   * getNumThreads - Return number of threads created by the kernel for problem.
+   */
+  size_t getNumThreads(KMMProblem problem) const;
 
-  virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true);
+  /**
+   * isOptValid - Return true if kernel and optimization is valid to compute for a problem. 
+   */
+  bool isOptValid(KMMProblem problem, KernelOptimizations::Optimization opt) const;
 
-  bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) const;
+  /**
+   * canCompute - Return true if a problem can be computed by the kernel on given hardware.
+   *              This method can be overriden by subclasses.
+   * @problem: KMM problem
+   * @hw: Underlying hardware
+   * @p2p: True if P2P stores are needed to shared output otherwise False
+   * @exactFuse: True 
+   */
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw, bool p2p, bool exactFuse = true);
 
-  virtual std::string runtimeStr() const = 0;
+  /**
+   * backend - Return backend (X86, CUDA, ARM, HIP) as string of the kernel.
+   *           This method must be implemented by subclasses.
+   */
+  virtual std::string backend() const = 0;
 
-  virtual std::string archStr() const = 0;
+  /**
+   * arch - Return underlying architecture of the kernel.
+   *        This method must be implemented by subclass.
+   */
+  virtual std::string arch() const = 0;
 
+  /**
+   * str - Return string representation of the kernel.
+   */
   virtual std::string str() const;
-};
-
-struct CPUKernel : public KMMKernel {
-  CPUKernel() {}
-  CPUKernel(void* kernelInvoker, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
-            uint fusedFacs, bool P2PStore, 
-            uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF) : 
-            KMMKernel (kernelInvoker, elemType, f, tileF, tileX, 
-                        fusedFacs, P2PStore, regM, regK, regQ, optLevel, opX, opF) {}
-};
-
-struct X86Kernel : public CPUKernel {
-  X86SIMD simd;
-  X86Kernel() {}
-  X86Kernel(X86SIMD simd, void* kernelInvoker, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
-            uint fusedFacs, bool P2PStore, 
-            uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF) :
-            CPUKernel(kernelInvoker, elemType, f, tileF, tileX, fusedFacs, P2PStore, regM, regK, regQ, optLevel, opX, opF),
-            simd(simd) {}
-  
-  virtual std::string runtimeStr() const {
-    return "X86";
-  }
-
-  virtual std::string archStr() const {
-    return x86simdToStr(simd);
-  }
-
-  virtual std::string str() const {
-    std::stringstream info;
-    info << runtimeStr() << "_" << archStr() << "_" << KMMKernel::str();
-    return info.str();
-  }
-
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
-    if (CPUKernel::canCompute(problem, hardware, p2p, exactFuse)) {
-      return simd <= ((X86ArchDetails*)hardware)->simd;
-    }
-    return false;
-  }
 };
 
 #include <vector>

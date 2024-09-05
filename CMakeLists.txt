@@ -176,6 +176,7 @@ if(ENABLE_X86)
 
   set(X86_HEADER_FILES
       ${X86_HEADER_FILES}
+      ${SRC}/kernels/cpu_kmmkernel.h
       ${SRC}/kernel_db/cpu_kernel_db.cpp
       ${SRC}/kernel_db/cpu_kernel_db.h
       ${X86_KERNELS})

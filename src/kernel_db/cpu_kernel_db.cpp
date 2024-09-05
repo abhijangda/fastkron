@@ -8,6 +8,7 @@
 
 #include "kernels/params.h"
 #include "kernel_db/cpu_kernel_db.h"
+#include "kernels/cpu_kmmkernel.h"
 
 #ifdef ENABLE_X86
   //Defines ALL_X86_KERNELS array
@@ -344,12 +345,12 @@ KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
 
     //sort kernels in descending order based on the number of threads a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
-      return ((CPUKernel*)k1)->numThreads(subProblem) >
-             ((CPUKernel*)k2)->numThreads(subProblem);
+      return ((CPUKernel*)k1)->getNumThreads(subProblem) >
+             ((CPUKernel*)k2)->getNumThreads(subProblem);
     };
     std::sort(kernelsForArch.begin(), kernelsForArch.end(), order);
     for (auto k : kernelsForArch) {
-      if (((CPUKernel*)k)->numThreads(subProblem) <= getMaxThreads()) {
+      if (((CPUKernel*)k)->getNumThreads(subProblem) <= getMaxThreads()) {
         return k;
       }
     }

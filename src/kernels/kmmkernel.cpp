@@ -1,6 +1,6 @@
 #include "kernels/kmmkernel.h"
 
-size_t KMMKernel::totalTileSize() const {
+size_t KMMKernel::getMaxTotalTileSize() const {
   Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
   //TODO: make this tileF.size() + Xsh.size()
   return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
@@ -31,7 +31,7 @@ size_t KMMKernel::totalTileSize() const {
     return Matrix(tileX.m(), slices * f_.p());
   }
 
-  size_t KMMKernel::totalTileSize(KMMProblem problem) const {
+  size_t KMMKernel::getTotalTileSize(KMMProblem problem) const {
     Matrix tileX_ = getTileX(problem);
     Factor f_ = problem.f(0);
 
@@ -42,7 +42,7 @@ size_t KMMKernel::totalTileSize() const {
     return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 
-  size_t KMMKernel::numThreads(KMMProblem problem) const {
+  size_t KMMKernel::getNumThreads(KMMProblem problem) const {
     Matrix tileX_ = getTileX(problem);
     Factor tileF_ = getTileF(problem);
 
@@ -51,7 +51,7 @@ size_t KMMKernel::totalTileSize() const {
            DIVUP(problem.m(), tileX_.m());
   }
 
-  bool KMMKernel::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) const {
+  bool KMMKernel::isOptValid(KMMProblem problem, KernelOptimizations::Optimization opt) const {
   using Opts = KernelOptimizations::Optimization;
   switch (opt) {
     case Opts::None:
@@ -92,7 +92,7 @@ bool KMMKernel::canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool 
     uint lg = 0;
     for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
       if ((KernelOptimizations::getOptimizations(optLevel) & opt) == opt) {
-        followsAllOpts = followsAllOpts && validOptFor(problem, opt);
+        followsAllOpts = followsAllOpts && isOptValid(problem, opt);
     }}
 
     return followsAllOpts;
