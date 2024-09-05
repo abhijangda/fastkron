@@ -154,7 +154,8 @@ public:
    * @p2p: True if P2P stores are needed to shared output otherwise False
    * @exactFuse: True 
    */
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw, bool p2p, bool exactFuse = true);
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw, 
+                          bool p2p, bool exactFuse = true);
 
   /**
    * backend - Return backend (X86, CUDA, ARM, HIP) as string of the kernel.

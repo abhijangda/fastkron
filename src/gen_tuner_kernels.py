@@ -138,7 +138,7 @@ class Kernel:
   def constructorArgs(self):
     return f"(void*){self.hostFuncName()}, {elem_type_to_fastkron_type(self.elemType)}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
-class CPUKernel(Kernel):
+class CPUKMMKernel(Kernel):
   def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int, rm : int, rk: int, rq: int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str):
@@ -158,7 +158,7 @@ class CPUKernel(Kernel):
     return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
-    return f"cpuKernel<{self.templateDecl()}>"
+    return f"CPUKMMKernel<{self.templateDecl()}>"
 
   def hostFuncDecl(self):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}>& params, FusedParams<{self.fused_kernels}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
@@ -190,7 +190,7 @@ class CPUKernel(Kernel):
                       "#pragma GCC pop_options"])
 
   def kernelInfo(self):
-    return f"{self.backend.upper()}Kernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"
+    return f"{self.backend.upper()}KMMKernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"
 
   def isValid(self):
     if self.arch.lower() == "sisd":
@@ -510,7 +510,7 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
                                   dist = 0
                                   aalign = x_simd_len(backend, arch, tM, tK, opx, elem_type)
                                   kronalign = f_simd_len(backend, arch, tQ, elem_type)
-                                  config = CPUKernel(backend, arch, KronMatMulShape(m, tK, n, p, q),
+                                  config = CPUKMMKernel(backend, arch, KronMatMulShape(m, tK, n, p, q),
                                                           KronMatMulShape(m, k, n, ps, qs),
                                                           p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
                                                           dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF)

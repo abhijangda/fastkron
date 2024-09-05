@@ -2,44 +2,74 @@
 
 #pragma once
 
-struct CPUKernel : public KMMKernel {
-  CPUKernel() {}
-  CPUKernel(void* kernelInvoker, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
-            uint fusedFacs, bool P2PStore, 
-            uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF) : 
-            KMMKernel (kernelInvoker, elemType, f, tileF, tileX, 
-                        fusedFacs, P2PStore, regM, regK, regQ, optLevel, opX, opF) {}
+/**
+ * CPUKMMKernel - A subclass for KMMKernels running on CPU
+ */
+struct CPUKMMKernel : public KMMKernel {
+public:
+  CPUKMMKernel() {}
+  CPUKMMKernel(void* kernelInvoker, FastKronType elemType,
+               Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
+               uint regM, uint regK, uint regQ, uint optLevel,
+               fastKronOp opX, fastKronOp opF) : 
+               KMMKernel(kernelInvoker, elemType, f, tileF, tileX,
+                         fusedFacs, P2PStore, regM, regK, regQ,
+                         optLevel, opX, opF) {}
 };
 
-struct X86Kernel : public CPUKernel {
+/**
+ * X86KMMKernel - A subclass for KMMKernels running on an X86 CPU
+ *                This class contains a member to determine the SIMD architecture of the kernel.
+ */
+struct X86KMMKernel : public CPUKMMKernel {
+  /**
+   * @simd: The SIMD architecture of the kernel either AVX256, AVX512, or SISD.
+   */
+private:
   X86SIMD simd;
-  X86Kernel() {}
-  X86Kernel(X86SIMD simd, void* kernelInvoker, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
-            uint fusedFacs, bool P2PStore, 
+
+public:
+  X86KMMKernel() {}
+  X86KMMKernel(X86SIMD simd, void* kernelInvoker, FastKronType elemType,
+            Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
             uint regM, uint regK, uint regQ, uint optLevel,
             fastKronOp opX, fastKronOp opF) :
-            CPUKernel(kernelInvoker, elemType, f, tileF, tileX, fusedFacs, P2PStore, regM, regK, regQ, optLevel, opX, opF),
+            CPUKMMKernel(kernelInvoker, elemType, f, tileF, tileX, fusedFacs,
+                         P2PStore, regM, regK, regQ, optLevel, opX, opF),
             simd(simd) {}
-  
-  virtual std::string backend() const {
-    return "X86";
+
+  X86SIMD getSIMD() {return simd;}
+
+  /**
+   * canCompute - Overrides the method of KMMKernel and checks if simd of this kernel
+   *              can run on the given hardware.
+   */
+  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw,
+                          bool p2p, bool exactFuse = true) {
+    if (CPUKMMKernel::canCompute(problem, hw, p2p, exactFuse)) {
+      //A CPU with higher SIMD width (say AVX512) always support a lower
+      //SIMD width (say AVX256)
+      return getSIMD() <= ((X86ArchDetails*)hw)->simd;
+    }
+    return false;
   }
 
-  virtual std::string arch() const {
-    return x86simdToStr(simd);
-  }
+  /**
+   * backend - Overrides the method of KMMKernel and always return X86.
+   */
+  virtual std::string backend() const {return "X86";}
 
+  /**
+   * arch - Overrides the method of KMMKernel and return SIMD architecture.
+   */
+  virtual std::string arch()    const {return x86simdToStr(simd);}
+
+  /**
+   * str - Overrides the method of KMMKernel.
+   */
   virtual std::string str() const {
     std::stringstream info;
     info << backend() << "_" << arch() << "_" << KMMKernel::str();
     return info.str();
-  }
-
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
-    if (CPUKernel::canCompute(problem, hardware, p2p, exactFuse)) {
-      return simd <= ((X86ArchDetails*)hardware)->simd;
-    }
-    return false;
   }
 };

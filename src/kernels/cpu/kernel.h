@@ -292,7 +292,7 @@ template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP,
          uint RegM, uint RegK, uint RegQ, uint OptLevel, 
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF>
-void cpuKernel(KernelParams<FusedFacs>& params,
+void CPUKMMKernel(KernelParams<FusedFacs>& params,
                FusedParams<FusedFacs>& fusedParams,
                DistributedParams& /*distParams*/,
                EpilogueParams& epilogueParams) {

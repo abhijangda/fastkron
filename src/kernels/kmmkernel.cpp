@@ -6,52 +6,52 @@ size_t KMMKernel::getMaxTotalTileSize() const {
   return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
 }
 
-  Matrix KMMKernel::getMaxTileY() const {
-    return Matrix(tileX.m(), (tileX.n()/f.p()) * tileF.q());
+Matrix KMMKernel::getMaxTileY() const {
+  return Matrix(tileX.m(), (tileX.n()/f.p()) * tileF.q());
+}
+
+Factor KMMKernel::getTileF(KMMProblem problem) const {
+  Factor f_ = problem.f(0);
+  return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
+}
+
+Matrix KMMKernel::getTileX(KMMProblem problem) const {
+  Factor f_ = problem.f(0);
+
+  uint32_t kernelTileSlices = tileX.n()/f.p();
+  uint32_t problemTileSlices = problem.x().n()/f_.p();
+
+  uint32_t slices = 0;
+  if (problemTileSlices >= kernelTileSlices) {
+    slices = kernelTileSlices;
+  } else {
+    slices = MIN(tileX.n()/f_.p(), kernelTileSlices);
+    slices = MIN(problemTileSlices, slices);
   }
+  return Matrix(tileX.m(), slices * f_.p());
+}
 
-  Factor KMMKernel::getTileF(KMMProblem problem) const {
-    Factor f_ = problem.f(0);
-    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
-  }
+size_t KMMKernel::getTotalTileSize(KMMProblem problem) const {
+  Matrix tileX_ = getTileX(problem);
+  Factor f_ = problem.f(0);
 
-  Matrix KMMKernel::getTileX(KMMProblem problem) const {
-    Factor f_ = problem.f(0);
+  //Pad Xsh to TileP
+  //Pad Fsh to TileP x TileQ
+  Matrix Xsh = Matrix(tileX_.m(), 
+                      (tileX_.n()/f_.p()) * tileF.p());
+  return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
+}
 
-    uint32_t kernelTileSlices = tileX.n()/f.p();
-    uint32_t problemTileSlices = problem.x().n()/f_.p();
+size_t KMMKernel::getNumThreads(KMMProblem problem) const {
+  Matrix tileX_ = getTileX(problem);
+  Factor tileF_ = getTileF(problem);
 
-    uint32_t slices = 0;
-    if (problemTileSlices >= kernelTileSlices) {
-      slices = kernelTileSlices;
-    } else {
-      slices = MIN(tileX.n()/f_.p(), kernelTileSlices);
-      slices = MIN(problemTileSlices, slices);
-    }
-    return Matrix(tileX.m(), slices * f_.p());
-  }
+  return DIVUP(problem.k(), tileX_.n()) * 
+          DIVUP(problem.f(0).q(), tileF_.q()) * 
+          DIVUP(problem.m(), tileX_.m());
+}
 
-  size_t KMMKernel::getTotalTileSize(KMMProblem problem) const {
-    Matrix tileX_ = getTileX(problem);
-    Factor f_ = problem.f(0);
-
-    //Pad Xsh to TileP
-    //Pad Fsh to TileP x TileQ
-    Matrix Xsh = Matrix(tileX_.m(), 
-                        (tileX_.n()/f_.p()) * tileF.p());
-    return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
-  }
-
-  size_t KMMKernel::getNumThreads(KMMProblem problem) const {
-    Matrix tileX_ = getTileX(problem);
-    Factor tileF_ = getTileF(problem);
-
-    return DIVUP(problem.k(), tileX_.n()) * 
-           DIVUP(problem.f(0).q(), tileF_.q()) * 
-           DIVUP(problem.m(), tileX_.m());
-  }
-
-  bool KMMKernel::isOptValid(KMMProblem problem, KernelOptimizations::Optimization opt) const {
+bool KMMKernel::isOptValid(KMMProblem problem, KernelOptimizations::Optimization opt) const {
   using Opts = KernelOptimizations::Optimization;
   switch (opt) {
     case Opts::None:
@@ -79,28 +79,31 @@ size_t KMMKernel::getMaxTotalTileSize() const {
 }
 
 bool KMMKernel::canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse) {
-    using Opts = KernelOptimizations::Optimization;
+  using Opts = KernelOptimizations::Optimization;
 
-    bool ret = problem.type() == elemType &&
-               problem.opFs() == opF && problem.opX() == opX && 
-               P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || (!exactFuse && problem.n() >= fusedFacs)) &&
-               tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
+  bool ret = problem.type() == elemType &&
+              problem.opFs() == opF && problem.opX() == opX && 
+              P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || 
+                                  (!exactFuse && problem.n() >= fusedFacs)) &&
+              tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
 
-    if (!ret) return false;
+  if (!ret) return false;
 
-    bool followsAllOpts = true;
-    uint lg = 0;
-    for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
-      if ((KernelOptimizations::getOptimizations(optLevel) & opt) == opt) {
-        followsAllOpts = followsAllOpts && isOptValid(problem, opt);
-    }}
+  bool followsAllOpts = true;
+  uint lg = 0;
+  for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
+    if ((KernelOptimizations::getOptimizations(optLevel) & opt) == opt) {
+      followsAllOpts = followsAllOpts && isOptValid(problem, opt);
+  }}
 
-    return followsAllOpts;
-  }
+  return followsAllOpts;
+}
 
-  std::string KMMKernel::str() const {
-    std::stringstream info;
-    info << strOfFastKronType(elemType) << "_" << f << "_" << tileF <<"_" << fusedFacs << "_" << tileX << "_" <<
-            regM << "x" << regK << "x" << regQ << "_" << opX << opF << "_" << P2PStore << "_" << optLevel;
-    return info.str();
-  }
+std::string KMMKernel::str() const {
+  std::stringstream info;
+  info << strOfFastKronType(elemType) 
+       << "_" << f << "_" << tileF <<"_" << fusedFacs
+       << "_" << tileX << "_" << regM << "x" << regK << "x" << regQ 
+       << "_" << opX << opF << "_" << P2PStore << "_" << optLevel;
+  return info.str();
+}

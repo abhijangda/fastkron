@@ -18,7 +18,7 @@
 /**
  * @AllX86Kernels: An array of all X86 compiled kernels.
  */
-X86Kernel AllX86Kernels[] = {
+X86KMMKernel AllX86Kernels[] = {
 #ifdef ENABLE_X86
   ALL_X86_KERNELS
 #endif
@@ -64,7 +64,7 @@ fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
 }
 
 template<uint FusedFacs>
-fastKronError invoke(CPUKernel& kernelInfo, KMMProblem problem,
+fastKronError invoke(CPUKMMKernel& kernelInfo, KMMProblem problem,
                      const uint fidx, CPUCaches& caches,
                      DistributedParams distParams,
                      EpilogueParams epilogueParams,
@@ -84,7 +84,7 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
                                               EpilogueParams epilogueParams,
                                               KernelMode execMode) {
   DistributedParams distParams;
-  CPUKernel& cpuKernel = dynamic_cast<CPUKernel&>(*kernel);
+  CPUKMMKernel& cpuKernel = dynamic_cast<CPUKMMKernel&>(*kernel);
   CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
   switch(problem.n()) {
     case 1:
@@ -122,7 +122,7 @@ fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem proble
   runtime = std::numeric_limits<float>::max();
   //Avoid the SISD kernel when running on AVX/AVX512
   if ((*(dynamic_cast<const X86ArchDetails*>(hardware[0]))).simd != X86SIMD::SISD) {
-    if (((X86Kernel*)kernel)->simd == X86SIMD::SISD) return fastKronSuccess;
+    if (((X86KMMKernel*)kernel)->getSIMD() == X86SIMD::SISD) return fastKronSuccess;
   }
   // if (kernel->tileX.n() < 8192 || kernel->tileF.q() < 64) return fastKronSuccess;
   fastKronError status;
@@ -305,7 +305,7 @@ X86KernelDatabase::X86KernelDatabase() {
   Logger(LogLevel::Info) << "Detected CPU " << std::endl
                          << (*detail) << std::endl;
 
-  loadKernels<X86Kernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));
+  loadKernels<X86KMMKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86KMMKernel));
   trash1 = new char[detail->totalL3Size()];
   trash2 = new char[detail->totalL3Size()];
   for (uint32_t i = 0; i < detail->totalL3Size(); i++) {
@@ -338,19 +338,19 @@ KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
                  [simd, subProblem](auto& kernel){
                    return kernel->getFusedFacs() > 1 || 
                    //TODO: write conversion function kernel.asX86Kernel()
-                    (((X86Kernel*)kernel)->simd == simd);
+                    (((X86KMMKernel*)kernel)->getSIMD() == simd);
                  });
     if (kernelsForArch.size() == 0)
       kernelsForArch = filteredKernels;
 
     //sort kernels in descending order based on the number of threads a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
-      return ((CPUKernel*)k1)->getNumThreads(subProblem) >
-             ((CPUKernel*)k2)->getNumThreads(subProblem);
+      return ((CPUKMMKernel*)k1)->getNumThreads(subProblem) >
+             ((CPUKMMKernel*)k2)->getNumThreads(subProblem);
     };
     std::sort(kernelsForArch.begin(), kernelsForArch.end(), order);
     for (auto k : kernelsForArch) {
-      if (((CPUKernel*)k)->getNumThreads(subProblem) <= getMaxThreads()) {
+      if (((CPUKMMKernel*)k)->getNumThreads(subProblem) <= getMaxThreads()) {
         return k;
       }
     }
