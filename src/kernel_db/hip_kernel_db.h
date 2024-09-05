@@ -1,7 +1,7 @@
 #include "kernel_db.h"
 
 #include "kmm/kmmalgo.h"
-#include "kernels/kernel_info.h"
+#include "kernels/kmmkernel.h"
 #include "kernels/params.h"
 #include "kernel_db/kernel_db.h"
 #include "env/env.h"
@@ -48,15 +48,15 @@ public:
     // }
   }
 
-  virtual fastKronError invokeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError invokeKernel(KMMKernel* kernelInfo, const uint kronIndex, 
                                      KMMProblem problem,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode);
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError invokeP2PStoreKernel(KMMKernel* kernelInfo, const uint kronIndex, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
                                            KernelMode execMode){return fastKronSuccess;}
-  virtual fastKronError timeKernel(KernelInfo* kernelInfo, const uint kronIndex, 
+  virtual fastKronError timeKernel(KMMKernel* kernelInfo, const uint kronIndex, 
                                  KMMProblem problem, DistributedParams distParams, 
                                  EpilogueParams epilogueParams,
                                  KernelMode execMode, 

@@ -8,8 +8,9 @@ void KernelDatabase::loadKernels(SubClassKernel* kernels, uint32_t numKernels) {
     DbKey key {info.f, info.opX, info.opF};
     auto iter = compiledKernels.find(key);
     if (iter == compiledKernels.end()) {
-      compiledKernels.emplace(std::make_pair(key, std::vector<KernelInfo*>()));
+      compiledKernels.emplace(std::make_pair(key, std::vector<KMMKernel*>()));
     }
+    std::cout << (&info) << std::endl;
     compiledKernels.at(key).push_back(&info);
   }
 

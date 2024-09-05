@@ -562,7 +562,7 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
     with open(kernel_filename, "w") as f:
       f.write(config.hostInvokeFile())
 
-  #declare KernelInfo for each config
+  #declare KMMKernel for each config
   host_decls = ''
   for config in combinedConfigs:
     host_decls += config.hostFuncDecl() + ";\n" + config.getKernelFuncDecl() + ";\n"

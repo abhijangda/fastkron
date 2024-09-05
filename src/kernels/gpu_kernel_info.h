@@ -1,6 +1,6 @@
-#include "kernel_info.h"
+#include "kmmkernel.h"
 
-struct GPUKernel : public KernelInfo {
+struct GPUKernel : public KMMKernel {
   void* kernelFunc;
 
   uint NumThreads;
@@ -14,24 +14,24 @@ struct GPUKernel : public KernelInfo {
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
-             KernelInfo(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
+             KMMKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, 
              RegM, RegK, RegQ, elemType, OptLevel, opX, opF),
              NumThreads(NumThreads), kernelFunc(getKernelFunc()),
              AAlignment(AAlignment), KronAlignment(KronAlignment) {}
 
   bool isValid() {
     return true;
-    const uint ValidThreads = ((tileX.n()/f.p())/RegK) * (tileF.q()/RegQ);
+    const uint ValidThreads = ((tileX.n()/f.p())/getRegK()) * (tileF.q()/getRegQ());
     if (NumThreads != ROUNDUP(ValidThreads, CUDA_WARP_SIZE)) {
       std::cout << "Invalid kernel config " << str() << std::endl; 
       return false;
     }
-    return KernelInfo::isValid() && kernelFunc != nullptr;
+    return KMMKernel::isValid() && kernelFunc != nullptr;
   }
 
   virtual std::string str() const {
     std::stringstream info;
-    info << runtimeStr() << "_" << archStr() << "_" << NumThreads << "_" << KernelInfo::str();
+    info << runtimeStr() << "_" << archStr() << "_" << NumThreads << "_" << KMMKernel::str();
     return info.str();
   }
 
@@ -60,7 +60,7 @@ struct GPUKernel : public KernelInfo {
   }
 
   virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
-    if (KernelInfo::canCompute(problem, hardware, p2p, exactFuse)) {
+    if (KMMKernel::canCompute(problem, hardware, p2p, exactFuse)) {
       dim3 g = grid(problem);
       if (g.y >= 65536 || g.z >= 65536) {
         return false;

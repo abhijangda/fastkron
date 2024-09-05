@@ -106,14 +106,14 @@ public:
   /**
    * invokeKernel() - Overriding KernelDatabase::invokeKernel
    */
-  virtual fastKronError invokeKernel(KernelInfo* kernel, KMMProblem problem,
+  virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode);
   /**
    * invokeP2PStoreKernel() - Overriding KernelDatabase::invokeP2PStoreKernel
    */
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernel, KMMProblem problem,
+  virtual fastKronError invokeP2PStoreKernel(KMMKernel* kernel, KMMProblem problem,
                                              const uint fidx,  
                                              DistributedParams distParams, 
                                              EpilogueParams epilogueParams,
@@ -121,7 +121,7 @@ public:
   /**
    * timeKernel() - Overriding KernelDatabase::timeKernel
    */
-  virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblem problem, 
                                    const uint fidx, 
                                    DistributedParams distParams,
                                    EpilogueParams epilogueParams,
@@ -135,14 +135,14 @@ protected:
   /**
    * filterFastestFusedKernels() - Overriding KernelDatabase::filterFastestFusedKernels
    */ 
-  virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> 
-          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
+  virtual std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
+          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
 
   /**
    * findKernelAtOptLevel() - Overriding KernelDatabase::findKernelAtOptLevel
    */
-  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem,
-                                           const std::vector<KernelInfo*>& kernels);
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblem subProblem,
+                                           const std::vector<KMMKernel*>& kernels);
   /***************************************************************************/
 
   /**************************** Helper Methods *****************************/
@@ -150,6 +150,6 @@ protected:
   /**
    * occupancyDetails() - Overriding KernelDatabase::occupancyDetails.
    */ 
-  virtual std::string occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem);
+  virtual std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblem problem);
   /***************************************************************************/
 };

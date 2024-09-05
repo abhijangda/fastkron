@@ -118,7 +118,7 @@ public:
   /**
    * invokeKernel() - Overriding KernelDatabase::invokeKernel
    */
-  virtual fastKronError invokeKernel(KernelInfo* kernel, KMMProblem problem,
+  virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode);
@@ -126,7 +126,7 @@ public:
    * invokeP2PStoreKernel() - Overriding KernelDatabase::invokeP2PStoreKernel
    * FUTURE WORK: Do  not support multi node GEKMM on CPUs
    */
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo*, KMMProblem,
+  virtual fastKronError invokeP2PStoreKernel(KMMKernel*, KMMProblem,
                                              const uint,
                                              DistributedParams, 
                                              EpilogueParams,
@@ -134,7 +134,7 @@ public:
   /**
    * timeKernel() - Overriding KernelDatabase::timeKernel
    */
-  virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblem problem, 
                                    const uint fidx, 
                                    DistributedParams distParams,
                                    EpilogueParams epilogueParams,
@@ -147,7 +147,7 @@ protected:
   /**
    * occupancyDetails() - Overriding KernelDatabase::occupancyDetails.
    */ 
-  virtual std::string occupancyDetails(KernelInfo*, KMMProblem) {return "";}
+  virtual std::string occupancyDetails(KMMKernel*, KMMProblem) {return "";}
 };
 
 /**
@@ -167,6 +167,6 @@ protected:
   /**
    * findKernelAtOptLevel() - Overriding KernelDatabase::findKernelAtOptLevel
    */
-  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem,
-                                           const std::vector<KernelInfo*>& kernels);
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblem subProblem,
+                                           const std::vector<KMMKernel*>& kernels);
 };

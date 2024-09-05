@@ -10,38 +10,96 @@
 
 #pragma once
 
-struct KernelInfo {
-  void* invokerFunc;
-  Factor f;
-  Factor tileF;
-  Matrix tileX;
-  fastKronOp opX;
-  fastKronOp opF;
-  uint RegM;
-  uint RegK;
-  uint RegQ;
-  uint FusedFacs;
+/**
+ * KMMKernel is a CPU/GPU kernel to compute KMMProblem.
+ * Each backend kernel is a subclass of KMMKernel.
+ * This class stores the template parameters of a KMMKernel, while
+ * the subclasses implements functions for invoking the kernel 
+ */
+struct KMMKernel {
+  /**
+   * @kernelInvoker: A function that invokes the kernel.
+   * The CUDA/HIP function is of type:
+   * void (*) (KernelParams<fusedFacs>, FusedParams<fusedFacs>, DistributedParams, EpilogueParams, dim3, dim3, uint32_t, cudaStream_t)
+   * The CPU function is of type:
+   * void (*) (KernelParams<fusedFacs>, FusedParams<fusedFacs>, DistributedParams, EpilogueParams)
+   */
+  void* kernelInvoker;
+
+  /***Following fields store template parameter values of a kernel***/
+  /**
+   * @elemType: Element type of computation.
+   */
   FastKronType elemType;
-  uint OptLevel;
-  bool DistributeToGPUs;
+
+  /**
+   * @f: Maximum factor size of the kernel.
+   */
+  Factor f;
+
+  /**
+   * @tileF: Values of tile size of P and Q.
+   */
+  Factor tileF;
+
+  /**
+   * @tileX: Values of tile size of M and columns of X (K).
+   */
+  Matrix tileX;
+
+  /**
+   * @fusedFacs: Number of fused factors of kernel.
+   */
+  uint fusedFacs;
+
+  /**
+   * @P2PStore: True if kernel uses P2P RDMA stores to write output.
+   */
+  bool P2PStore;
+
+  /**
+   * @regM, @regK, @regQ: Register tile values of M, K (cols of X), and Q.
+   */
+  uint regM; uint regK; uint regQ;
+
+  /**
+   * @optLevel: Optimization Level from 0 to 3 (see kernel_opt_levels.hpp).
+   */
+  uint optLevel;
+
+  /**
+   * @opX: fastKronOp of X.
+   */
+  fastKronOp opX;
+
+  /**
+   * @opF: fastKronOp of F.
+   */
+  fastKronOp opF;
   
-  KernelInfo() {}
-  KernelInfo(void* invokerFunc, Factor f, Factor tileF, Matrix tileX,
-             uint FusedFacs, bool DistributeToGPUs,
-             uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
+  uint getFusedFacs() {return fusedFacs;}
+  uint getOptLevel()  {return optLevel;}
+  uint getRegM()      {return regM;}
+  uint getRegK()      {return regK;}
+  uint getRegQ()      {return regQ;}
+
+  KMMKernel() {}
+
+  //TODO: Order of template and this constructor must be same
+  KMMKernel(void* kernelInvoker, Factor f, Factor tileF, Matrix tileX,
+             uint fusedFacs, bool P2PStore,
+             uint regM, uint regK, uint regQ, FastKronType elemType, uint optLevel,
              fastKronOp opX, fastKronOp opF) :
-             invokerFunc(invokerFunc), f(f), tileF(tileF), tileX(tileX),
-             opX(opX), opF(opF),
-             RegM(RegM), RegK(RegK), RegQ(RegQ), FusedFacs(FusedFacs), 
-             elemType(elemType), OptLevel(OptLevel),
-             DistributeToGPUs(DistributeToGPUs) {}
-  bool isValid() {return invokerFunc != nullptr;}
+             kernelInvoker(kernelInvoker), elemType(elemType), f(f), tileF(tileF), tileX(tileX),
+             fusedFacs(fusedFacs), P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ), optLevel(optLevel),
+             opX(opX), opF(opF) {}
+  bool isValid() {return kernelInvoker != nullptr;}
   virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true) {
     using Opts = KernelOptimizations::Optimization;
 
     bool ret = problem.type() == elemType &&
                problem.opFs() == opF && problem.opX() == opX && 
-               DistributeToGPUs == p2p && ((exactFuse && problem.n() == FusedFacs) || (!exactFuse && problem.n() >= FusedFacs)) &&
+               P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || (!exactFuse && problem.n() >= fusedFacs)) &&
                tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
 
     if (!ret) return false;
@@ -49,7 +107,7 @@ struct KernelInfo {
     bool followsAllOpts = true;
     uint lg = 0;
     for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
-      if ((KernelOptimizations::getOptimizations(OptLevel) & opt) == opt) {
+      if ((KernelOptimizations::getOptimizations(optLevel) & opt) == opt) {
         followsAllOpts = followsAllOpts && validOptFor(problem, opt);
     }}
 
@@ -121,30 +179,30 @@ struct KernelInfo {
 
   virtual std::string str() const {
     std::stringstream info;
-    info << strOfFastKronType(elemType) << "_" << f << "_" << tileF <<"_" << FusedFacs << "_" << tileX << "_" <<
-            RegM << "x" << RegK << "x" << RegQ << "_" << opX << opF << "_" << DistributeToGPUs << "_" << OptLevel;
+    info << strOfFastKronType(elemType) << "_" << f << "_" << tileF <<"_" << fusedFacs << "_" << tileX << "_" <<
+            regM << "x" << regK << "x" << regQ << "_" << opX << opF << "_" << P2PStore << "_" << optLevel;
     return info.str();
   }
 };
 
-struct CPUKernel : public KernelInfo {
+struct CPUKernel : public KMMKernel {
   CPUKernel() {}
-  CPUKernel(void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
-            uint FusedFacs, bool DistributeToGPUs, 
-            uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
+  CPUKernel(void* kernelInvoker, Factor f, Factor tileF, Matrix tileX, 
+            uint fusedFacs, bool P2PStore, 
+            uint regM, uint regK, uint regQ, FastKronType elemType, uint optLevel,
             fastKronOp opX, fastKronOp opF) : 
-            KernelInfo (invokerFunc, f, tileF, tileX, 
-                        FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF) {}
+            KMMKernel (kernelInvoker, f, tileF, tileX, 
+                        fusedFacs, P2PStore, regM, regK, regQ, elemType, optLevel, opX, opF) {}
 };
 
 struct X86Kernel : public CPUKernel {
   X86SIMD simd;
   X86Kernel() {}
-  X86Kernel(X86SIMD simd, void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
-            uint FusedFacs, bool DistributeToGPUs, 
-            uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
+  X86Kernel(X86SIMD simd, void* kernelInvoker, Factor f, Factor tileF, Matrix tileX, 
+            uint fusedFacs, bool P2PStore, 
+            uint regM, uint regK, uint regQ, FastKronType elemType, uint optLevel,
             fastKronOp opX, fastKronOp opF) :
-            CPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, elemType, OptLevel, opX, opF),
+            CPUKernel(kernelInvoker, f, tileF, tileX, fusedFacs, P2PStore, regM, regK, regQ, elemType, optLevel, opX, opF),
             simd(simd) {}
   
   virtual std::string runtimeStr() const {
@@ -157,7 +215,7 @@ struct X86Kernel : public CPUKernel {
 
   virtual std::string str() const {
     std::stringstream info;
-    info << runtimeStr() << "_" << archStr() << "_" << KernelInfo::str();
+    info << runtimeStr() << "_" << archStr() << "_" << KMMKernel::str();
     return info.str();
   }
 
@@ -173,14 +231,14 @@ struct X86Kernel : public CPUKernel {
 
 struct TunedKernelFromStart {
   //TODO: Cannot improve unless distributed code is refactored 
-  KernelInfo* kernel;
+  KMMKernel* kernel;
   uint start, end;
   uint K;
   float time;
   bool distShare;
 
   TunedKernelFromStart() {}
-  TunedKernelFromStart(KernelInfo* kernel_, uint start_, uint end_, uint K_, float time_):
+  TunedKernelFromStart(KMMKernel* kernel_, uint start_, uint end_, uint K_, float time_):
     kernel(kernel_), start(start_), end(end_), K(K_), time(time_), distShare(false) {}
 
   friend std::ostream& operator<<(std::ostream &out, const TunedKernelFromStart &k) {

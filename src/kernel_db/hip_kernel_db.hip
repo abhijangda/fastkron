@@ -43,7 +43,7 @@ fastKronError invoke(HIPKernel& kernelInfo, const uint kronIndex,
   return fastKronSuccess;
 }
 
-fastKronError HIPKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kronIndex, 
+fastKronError HIPKernelDatabase::invokeKernel(KMMKernel* kernel, const uint kronIndex, 
                                              KMMProblem problem, EpilogueParams epilogueParams,
                                              KernelMode execMode) {
   DistributedParams distParams;
@@ -75,7 +75,7 @@ fastKronError HIPKernelDatabase::invokeKernel(KernelInfo* kernel, const uint kro
   }
 }
 
-fastKronError HIPKernelDatabase::timeKernel(KernelInfo* kernel, const uint factorIdx, 
+fastKronError HIPKernelDatabase::timeKernel(KMMKernel* kernel, const uint factorIdx, 
                                            KMMProblem problem, DistributedParams distParams, 
                                            EpilogueParams epilogueParams,
                                            KernelMode execMode, 

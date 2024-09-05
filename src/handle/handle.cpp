@@ -130,13 +130,13 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
   //Execute GeKMM algorithm using above kernels
   err = executeGeKMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) 
-      {return kernelSeriesIter->kernel->FusedFacs;},
+      {return kernelSeriesIter->kernel->getFusedFacs();},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
       (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
         fastKronError err;
         auto kernel = *kernelSeriesIter;
 
-        KernelInfo* selectedKernel = kernel.kernel;
+        KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, epilogueParams,

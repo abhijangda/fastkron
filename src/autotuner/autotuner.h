@@ -1,7 +1,7 @@
 #include "kmm/kmmalgo.h"
 
 #include "kernel_db/kernel_db.h"
-#include "kernels/kernel_info.h"
+#include "kernels/kmmkernel.h"
 
 #include <utility>
 #include <unordered_map>
@@ -15,7 +15,7 @@ class TunedKernelsMap {
   /**
    * @ProblemToKernels: a map of KMMProblem to a pair of kernel and its run time in milliseconds.
    */
-  using ProblemToKernels = std::unordered_map<KMMProblem, std::pair<KernelInfo*, float>>;
+  using ProblemToKernels = std::unordered_map<KMMProblem, std::pair<KMMKernel*, float>>;
 
   /**
    * @kernels: the map of KMMProblem to single gpu/cpu kernels.
@@ -40,7 +40,7 @@ public:
    * @p2p: True if the problem requires P2P stores for storing output otherwise false.
    * @kernelAndTime: The pair of kernel and its runtime.
    */
-  void add(const KMMProblem& problem, bool p2p, std::pair<KernelInfo*, float> kernelAndtime) {
+  void add(const KMMProblem& problem, bool p2p, std::pair<KMMKernel*, float> kernelAndtime) {
     if (p2p) {
       p2pKernels.emplace(std::make_pair(problem, kernelAndtime));
     } else {
@@ -63,7 +63,7 @@ public:
    * @problem: The KMMProblem to find kernel for 
    * @p2p: True if the problem requires P2P stores for storing output otherwise false.
    */
-  KernelInfo* getKernel(const KMMProblem& problem, bool p2p) {
+  KMMKernel* getKernel(const KMMProblem& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem)->second.first :
                    getKernel(kernels,    problem)->second.first;    
   }

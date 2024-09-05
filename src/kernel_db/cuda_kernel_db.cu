@@ -257,10 +257,11 @@ fastKronError invoke(CUDAKernel& kernelInfo, KMMProblem problem,
                                   fidx, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
 
+  //TODO: Change this to kernelInfo.invoke
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
                                      DistributedParams, EpilogueParams, 
                                      dim3, dim3, uint32_t, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, 
+  KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, 
                                              epilogueParams, 
                                              kernelInfo.grid(problem),
                                              kernelInfo.block(),
@@ -272,7 +273,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, KMMProblem problem,
   return fastKronSuccess;
 }
 
-fastKronError CUDAKernelDatabase::invokeKernel(KernelInfo* kernel,
+fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
                                                KMMProblem problem,
                                                const uint fidx,
                                                EpilogueParams epilogueParams,
@@ -306,7 +307,7 @@ fastKronError CUDAKernelDatabase::invokeKernel(KernelInfo* kernel,
   }
 }
 
-fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo* kernel, 
+fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel, 
                                                        KMMProblem problem,
                                                        const uint fidx,  
                                                        DistributedParams distParams, 
@@ -341,7 +342,7 @@ fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KernelInfo* kernel,
   return fastKronKernelNotFound;
 }
 
-fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel,
+fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
                                              KMMProblem problem,
                                              const uint fidx, 
                                              DistributedParams distParams,
@@ -394,19 +395,19 @@ fastKronError CUDAKernelDatabase::timeKernel(KernelInfo* kernel,
   return status;
 }
 
-std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>>
+std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
   CUDAKernelDatabase::filterFastestFusedKernels(const KMMProblem& problem, 
-                                                const std::vector<KernelInfo*>& kernels) {
+                                                const std::vector<KMMKernel*>& kernels) {
   //TODO: 16 for Ampere and 8 for Volta
   uint32_t MinConsecutiveStoreElems = (getCUDADeviceProperties().smArch == SMArch::ampere) ? 16 : 8;
 
   //A fused kernel stores logP (TK) consecutive elements.
   //Remove all kernels that stores (< MinConsecutiveStoreElems).
-  std::vector<KernelInfo*> validFusedKernels;
+  std::vector<KMMKernel*> validFusedKernels;
   
   {
-    auto filter = [problem, MinConsecutiveStoreElems](KernelInfo* kernel) {
-      const int PpowerN = (int)powf(problem.f(0).p(), kernel->FusedFacs);
+    auto filter = [problem, MinConsecutiveStoreElems](KMMKernel* kernel) {
+      const int PpowerN = (int)powf(problem.f(0).p(), kernel->getFusedFacs());
       const int consecutiveStoreElems = kernel->tileX.n()/PpowerN;
       return consecutiveStoreElems >= MinConsecutiveStoreElems;
     };
@@ -426,16 +427,16 @@ static float blocksPerSM(const CUDAArchDetails gpu, CUDAKernel* kernel, dim3 gri
   return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
 }
 
-KernelInfo* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem, 
-                                                    const std::vector<KernelInfo*>& kernelsForOptLevel) {
+KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem, 
+                                                    const std::vector<KMMKernel*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
-    std::vector<KernelInfo*> kernelsWithSamePOrQ;
+    std::vector<KMMKernel*> kernelsWithSamePOrQ;
     std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), 
                  std::back_inserter(kernelsWithSamePOrQ),
                  [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or 
                                             kernel->f.q() == subProblem.f(0).q();});
-    std::vector<KernelInfo*> filteredKernels;
+    std::vector<KMMKernel*> filteredKernels;
     if (kernelsWithSamePOrQ.size() > 0) {
       filteredKernels = kernelsWithSamePOrQ;
     } else {
@@ -460,7 +461,7 @@ KernelInfo* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
   return nullptr;
 }
 
-std::string CUDAKernelDatabase::occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) {
+std::string CUDAKernelDatabase::occupancyDetails(KMMKernel* kernelInfo, KMMProblem problem) {
   CUDAKernel* cudaKernel = dynamic_cast<CUDAKernel*>(kernelInfo);
   std::stringstream ss;
   dim3 grid = cudaKernel->grid(problem);

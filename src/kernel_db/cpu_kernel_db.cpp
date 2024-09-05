@@ -71,14 +71,14 @@ fastKronError invoke(CPUKernel& kernelInfo, KMMProblem problem,
   KernelParams<FusedFacs> params (problem, &caches, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), fidx, execMode);
   FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
-
+  //TODO: change this to kernel.invoke
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>&, FusedParams<FusedFacs>&,
                                      DistributedParams&, EpilogueParams&);
-  KronMatmulKernelTy(kernelInfo.invokerFunc)(params, fusedParams, distParams, epilogueParams);
+  KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, epilogueParams);
   return fastKronSuccess;
 }
 
-fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, KMMProblem problem,
+fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                               const uint fidx,
                                               EpilogueParams epilogueParams,
                                               KernelMode execMode) {
@@ -110,7 +110,7 @@ fastKronError CPUKernelDatabase::invokeKernel(KernelInfo* kernel, KMMProblem pro
   }
 }
 
-fastKronError CPUKernelDatabase::timeKernel(KernelInfo* kernel, KMMProblem problem, 
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem problem, 
                                             const uint fidx, 
                                             DistributedParams distParams,
                                             EpilogueParams epilogueParams,
@@ -304,7 +304,7 @@ X86KernelDatabase::X86KernelDatabase() {
   Logger(LogLevel::Info) << "Detected CPU " << std::endl
                          << (*detail) << std::endl;
 
-  loadKernels<CPUKernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));
+  loadKernels<X86Kernel>(AllX86Kernels, sizeof(AllX86Kernels)/sizeof(X86Kernel));
   trash1 = new char[detail->totalL3Size()];
   trash2 = new char[detail->totalL3Size()];
   for (uint32_t i = 0; i < detail->totalL3Size(); i++) {
@@ -314,16 +314,16 @@ X86KernelDatabase::X86KernelDatabase() {
   allocate_caches();
 }
 
-KernelInfo* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
-                                                    const std::vector<KernelInfo*>& kernelsForOptLevel) {
+KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
+                                                    const std::vector<KMMKernel*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
-    std::vector<KernelInfo*> kernelsWithSamePOrQ;
+    std::vector<KMMKernel*> kernelsWithSamePOrQ;
     std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(),
                  std::back_inserter(kernelsWithSamePOrQ),
                  [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or 
                                             kernel->f.q() == subProblem.f(0).q();});
-    std::vector<KernelInfo*> filteredKernels;
+    std::vector<KMMKernel*> filteredKernels;
     if (kernelsWithSamePOrQ.size() > 0) {
       filteredKernels = kernelsWithSamePOrQ;
     } else {
@@ -331,11 +331,11 @@ KernelInfo* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
     }
 
     X86SIMD simd = getX86CPUProperties().simd;
-    std::vector<KernelInfo*> kernelsForArch;
+    std::vector<KMMKernel*> kernelsForArch;
     std::copy_if(filteredKernels.begin(), filteredKernels.end(), 
                  std::back_inserter(kernelsForArch),
                  [simd, subProblem](auto& kernel){
-                   return kernel->FusedFacs > 1 || 
+                   return kernel->getFusedFacs() > 1 || 
                    //TODO: write conversion function kernel.asX86Kernel()
                     (((X86Kernel*)kernel)->simd == simd);
                  });

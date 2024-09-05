@@ -3,7 +3,7 @@
 #include <algorithm>
 
 #include "kmm/kmmalgo.h"
-#include "kernels/kernel_info.h"
+#include "kernels/kmmkernel.h"
 #include "kernels/params.h"
 #include "utils/logger.h"
 
@@ -43,7 +43,7 @@ protected:
    * @compiledKernels: A map of DbKey, i.e., (Factor, fastKronOp for X, and fastKronOp for F) to kernels 
    *                   that can process this Factor, OpX, and OpF.
    */
-  std::unordered_map<DbKey, std::vector<KernelInfo*>, DbKeyHash> compiledKernels;
+  std::unordered_map<DbKey, std::vector<KMMKernel*>, DbKeyHash> compiledKernels;
 
   /**
    * @hardware: A vector of all underlying hardware (CPUs or GPUs) for this backend.
@@ -124,7 +124,7 @@ public:
    * @eplogueParams: Parameter for Epilogue (alpha, beta, and Y)
    * @execMode: Execution mode
    */
-  virtual fastKronError invokeKernel(KernelInfo* kernel, KMMProblem problem,
+  virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode) = 0;
@@ -140,7 +140,7 @@ public:
    * @eplogueParams: Parameter for Epilogue (alpha, beta, and Y)
    * @execMode: Execution mode
    */
-  virtual fastKronError invokeP2PStoreKernel(KernelInfo* kernel, KMMProblem problem,
+  virtual fastKronError invokeP2PStoreKernel(KMMKernel* kernel, KMMProblem problem,
                                              const uint fidx,  
                                              DistributedParams distParams, 
                                              EpilogueParams epilogueParams,
@@ -169,7 +169,7 @@ public:
    * @runs: Number of times to run kernel.
    * @runtime: [OUT] Average time of @runs after @warmups.
    */
-  virtual fastKronError timeKernel(KernelInfo* kernel, KMMProblem problem, 
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblem problem, 
                                    const uint fidx, 
                                    DistributedParams distParams,
                                    EpilogueParams epilogueParams,
@@ -187,7 +187,7 @@ public:
    *
    * Return - A pair of tuned kernel and execution time of this kernel.
    */
-  std::pair<KernelInfo*, float> findTunedKernel(KMMProblem subproblem, 
+  std::pair<KMMKernel*, float> findTunedKernel(KMMProblem subproblem, 
                                                 bool useP2PStore, uint fidx,
                                                 DistributedParams distParams);
 
@@ -213,7 +213,7 @@ private:
    *
    * Return - True if atleast one kernel is found, otherwise false.
    */
-  bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, std::vector<KernelInfo*>& kernels);
+  bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, std::vector<KMMKernel*>& kernels);
   
   /**
    * findAllKernels() - Find all kernels (fused or non-fused) that can compute the given problem.
@@ -224,7 +224,7 @@ private:
    * Return - True if atleast one kernel is found, otherwise false. 
    */
   bool findAllKernels(KMMProblem problem, bool useP2PStore,
-                      std::vector<std::vector<KernelInfo*>>& kernels);
+                      std::vector<std::vector<KMMKernel*>>& kernels);
 
 protected:
   /**
@@ -235,7 +235,7 @@ protected:
    * 
    * Return - The best kernel for the sub problem using FastKron's kernel search algorithm.
    */
-  KernelInfo* findKernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KernelInfo*>>& kernels);
+  KMMKernel* findKernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KMMKernel*>>& kernels);
 
   /**
    * findKernelAtOptLevel() - Find best kernel for a subproblem at an opt level. This method should be 
@@ -245,7 +245,7 @@ protected:
    *
    * Return - The best kernel found for the opt level.
    */
-  virtual KernelInfo* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KernelInfo*>& kernelsForOptLevel) = 0;
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
 
   /**
    * filterFastestFusedKernels() - Filter all fused kernels to find fastest fused kernels for a problem.
@@ -254,8 +254,8 @@ protected:
    * 
    * Return - A map of number of fusion -> a vector of all fused kernels at this number of fusion.
    */
-  virtual std::map<uint32_t, std::vector<KernelInfo*>, std::greater<int>> 
-          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KernelInfo*>& kernels);
+  virtual std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
+          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
   /***************************************************************************/
 
   /**************************** Helper Methods *****************************/
@@ -268,7 +268,7 @@ protected:
    *
    * Return: A string of occupancy details.
    */
-  virtual std::string occupancyDetails(KernelInfo* kernelInfo, KMMProblem problem) = 0;
+  virtual std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblem problem) = 0;
 
 public:
   /**
@@ -277,7 +277,7 @@ public:
    *
    * Return: The kernel found or nullptr if no kernel found.
    */
-  KernelInfo* getKernel(std::string repr);
+  KMMKernel* getKernel(std::string repr);
   /***************************************************************************/
 };
 

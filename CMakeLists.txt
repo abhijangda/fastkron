@@ -118,7 +118,7 @@ set(KERNELS ${SRC}/kernels)
 
 ##### FastKron ################
 set(KERNEL_HEADER_FILES 
-    ${KERNELS}/kernel_info.h
+    ${KERNELS}/kmmkernel.h
     ${KERNELS}/params.h)
 
 if(ENABLE_CUDA)
