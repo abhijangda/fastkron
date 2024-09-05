@@ -284,30 +284,3 @@ KMMKernel* KernelDatabase::getKernel(std::string repr) {
   }
   return nullptr;
 }
-
-bool KMMKernel::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) {
-  using Opts = KernelOptimizations::Optimization;
-  switch (opt) {
-    case Opts::None:
-      return true;
-    case Opts::XshSlicesSame:
-      return getTileX(problem).n()/problem.f(0).p() == tileX.n()/f.p();
-    case Opts::QMultipleOfTileQ:
-      return problem.f(0).q() % tileF.q() == 0;
-    case Opts::PMultipleOfTileP:
-      return problem.f(0).p() % tileF.p() == 0;
-    case Opts::KMultipleOfTileK:
-      return problem.k() % getTileX(problem).n() == 0;
-    case Opts::QLeTileQ:
-      return problem.f(0).q() <= f.q();
-    case Opts::TileKSame:
-      return getTileX(problem).n() == tileX.n();
-    case Opts::FactorShapeSame:
-      return f.p() == problem.f(0).p() && f.q() == problem.f(0).q();
-    
-    default:
-      return false;
-  }
-
-  return false;
-}

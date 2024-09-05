@@ -60,7 +60,7 @@ fastKronError FastKronHandle::initX86Backend() {
   if (!hasBackend(fastKronBackend_X86))
     return fastKronBackendNotAvailable;
 
-#ifdef ENABLE_X8
+#ifdef ENABLE_X86
   return fastKronSuccess;
 #else
   return fastKronBackendNotAvailable;

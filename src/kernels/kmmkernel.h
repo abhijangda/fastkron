@@ -76,133 +76,66 @@ struct KMMKernel {
    * @opF: fastKronOp of F.
    */
   fastKronOp opF;
-  
-  uint getFusedFacs() {return fusedFacs;}
-  uint getOptLevel()  {return optLevel;}
-  uint getRegM()      {return regM;}
-  uint getRegK()      {return regK;}
-  uint getRegQ()      {return regQ;}
 
   KMMKernel() {}
 
-  //TODO: Order of template and this constructor must be same
-  KMMKernel(void* kernelInvoker, Factor f, Factor tileF, Matrix tileX,
-             uint fusedFacs, bool P2PStore,
-             uint regM, uint regK, uint regQ, FastKronType elemType, uint optLevel,
-             fastKronOp opX, fastKronOp opF) :
-             kernelInvoker(kernelInvoker), elemType(elemType), f(f), tileF(tileF), tileX(tileX),
-             fusedFacs(fusedFacs), P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ), optLevel(optLevel),
-             opX(opX), opF(opF) {}
-  bool isValid() {return kernelInvoker != nullptr;}
-  virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true) {
-    using Opts = KernelOptimizations::Optimization;
+  KMMKernel(void* kernelInvoker, FastKronType elemType,
+            Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
+            uint regM, uint regK, uint regQ, uint optLevel,
+            fastKronOp opX, fastKronOp opF) :
+            kernelInvoker(kernelInvoker), elemType(elemType),
+            f(f), tileF(tileF), tileX(tileX), fusedFacs(fusedFacs),
+            P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ),
+            optLevel(optLevel), opX(opX), opF(opF) {}
 
-    bool ret = problem.type() == elemType &&
-               problem.opFs() == opF && problem.opX() == opX && 
-               P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || (!exactFuse && problem.n() >= fusedFacs)) &&
-               tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
+  bool isValid()      const {return kernelInvoker != nullptr;}
+  uint getFusedFacs() const {return fusedFacs;}
+  uint getOptLevel()  const {return optLevel;}
+  uint getRegM()      const {return regM;}
+  uint getRegK()      const {return regK;}
+  uint getRegQ()      const {return regQ;}
 
-    if (!ret) return false;
+  size_t totalTileSize() const;
 
-    bool followsAllOpts = true;
-    uint lg = 0;
-    for (Opts opt = Opts(lg); opt < Opts::NumOptimizations; opt = Opts(1 << lg), ++lg) {
-      if ((KernelOptimizations::getOptimizations(optLevel) & opt) == opt) {
-        followsAllOpts = followsAllOpts && validOptFor(problem, opt);
-    }}
+  Matrix getTileY() const;
 
-    return followsAllOpts;
-  }
+  Factor getTileF(KMMProblem problem) const;
 
-  size_t totalTileSize() {
-    Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
-    //TODO: make this tileF.size() + Xsh.size()
-    return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
-  }
+  Matrix getTileX(KMMProblem problem) const;
 
-  Matrix getTileY() {
-    return Matrix(tileX.m(), (tileX.n()/f.p()) * tileF.q());
-  }
+  size_t totalTileSize(KMMProblem problem) const;
 
-  Factor getTileF(KMMProblem problem) {
-    Factor f_ = problem.f(0);
-    return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
-  }
+  size_t numThreads(KMMProblem problem) const;
 
-  Matrix getTileX(KMMProblem problem) {
-    Factor f_ = problem.f(0);
+  virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true) const;
 
-    uint32_t kernelTileSlices = tileX.n()/f.p();
-    uint32_t problemTileSlices = problem.x().n()/f_.p();
+  bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) const;
 
-    uint32_t slices = 0;
-    if (problemTileSlices >= kernelTileSlices) {
-      slices = kernelTileSlices;
-    } else {
-      slices = MIN(tileX.n()/f_.p(), kernelTileSlices);
-      slices = MIN(problemTileSlices, slices);
-    }
-    return Matrix(tileX.m(), slices * f_.p());
-  }
+  virtual std::string runtimeStr() const = 0;
 
-  size_t totalTileSize(KMMProblem problem) {
-    Matrix tileX_ = getTileX(problem);
-    Factor f_ = problem.f(0);
+  virtual std::string archStr() const = 0;
 
-    //Pad Xsh to TileP
-    //Pad Fsh to TileP x TileQ
-    Matrix Xsh = Matrix(tileX_.m(), 
-                        (tileX_.n()/f_.p()) * tileF.p());
-    return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
-  }
-
-  size_t numThreads(KMMProblem problem) {
-    Matrix tileX_ = getTileX(problem);
-    Factor tileF_ = getTileF(problem);
-
-    return DIVUP(problem.k(), tileX_.n()) * 
-           DIVUP(problem.f(0).q(), tileF_.q()) * 
-           DIVUP(problem.m(), tileX_.m());
-  }
-
-  bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt);
-
-  virtual std::string runtimeStr() const {
-    assert (false);
-    return "";
-  }
-
-  virtual std::string archStr() const {
-    assert(false);
-    return "";
-  }
-
-  virtual std::string str() const {
-    std::stringstream info;
-    info << strOfFastKronType(elemType) << "_" << f << "_" << tileF <<"_" << fusedFacs << "_" << tileX << "_" <<
-            regM << "x" << regK << "x" << regQ << "_" << opX << opF << "_" << P2PStore << "_" << optLevel;
-    return info.str();
-  }
+  virtual std::string str() const;
 };
 
 struct CPUKernel : public KMMKernel {
   CPUKernel() {}
-  CPUKernel(void* kernelInvoker, Factor f, Factor tileF, Matrix tileX, 
+  CPUKernel(void* kernelInvoker, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
             uint fusedFacs, bool P2PStore, 
-            uint regM, uint regK, uint regQ, FastKronType elemType, uint optLevel,
+            uint regM, uint regK, uint regQ, uint optLevel,
             fastKronOp opX, fastKronOp opF) : 
-            KMMKernel (kernelInvoker, f, tileF, tileX, 
-                        fusedFacs, P2PStore, regM, regK, regQ, elemType, optLevel, opX, opF) {}
+            KMMKernel (kernelInvoker, elemType, f, tileF, tileX, 
+                        fusedFacs, P2PStore, regM, regK, regQ, optLevel, opX, opF) {}
 };
 
 struct X86Kernel : public CPUKernel {
   X86SIMD simd;
   X86Kernel() {}
-  X86Kernel(X86SIMD simd, void* kernelInvoker, Factor f, Factor tileF, Matrix tileX, 
+  X86Kernel(X86SIMD simd, void* kernelInvoker, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
             uint fusedFacs, bool P2PStore, 
-            uint regM, uint regK, uint regQ, FastKronType elemType, uint optLevel,
+            uint regM, uint regK, uint regQ, uint optLevel,
             fastKronOp opX, fastKronOp opF) :
-            CPUKernel(kernelInvoker, f, tileF, tileX, fusedFacs, P2PStore, regM, regK, regQ, elemType, optLevel, opX, opF),
+            CPUKernel(kernelInvoker, elemType, f, tileF, tileX, fusedFacs, P2PStore, regM, regK, regQ, optLevel, opX, opF),
             simd(simd) {}
   
   virtual std::string runtimeStr() const {

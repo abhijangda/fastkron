@@ -136,7 +136,7 @@ class Kernel:
     return hash(repr(self))
 
   def constructorArgs(self):
-    return f"(void*){self.hostFuncName()}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {elem_type_to_fastkron_type(self.elemType)}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"(void*){self.hostFuncName()}, {elem_type_to_fastkron_type(self.elemType)}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
 class CPUKernel(Kernel):
   def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,

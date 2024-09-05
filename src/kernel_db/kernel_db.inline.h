@@ -10,7 +10,6 @@ void KernelDatabase::loadKernels(SubClassKernel* kernels, uint32_t numKernels) {
     if (iter == compiledKernels.end()) {
       compiledKernels.emplace(std::make_pair(key, std::vector<KMMKernel*>()));
     }
-    std::cout << (&info) << std::endl;
     compiledKernels.at(key).push_back(&info);
   }
 

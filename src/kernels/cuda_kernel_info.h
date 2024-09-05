@@ -6,14 +6,14 @@
 struct CUDAKernel : public GPUKernel {
   SMArch arch;
   CUDAKernel() {}
-  CUDAKernel(SMArch arch, void* invokerFunc, Factor f, Factor tileF, Matrix tileX, 
+  CUDAKernel(SMArch arch, void* invokerFunc, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
              uint FusedFacs, bool DistributeToGPUs,
-             uint RegM, uint RegK, uint RegQ, FastKronType elemType, uint OptLevel,
+             uint RegM, uint RegK, uint RegQ, uint OptLevel,
              fastKronOp opX, fastKronOp opF,
              void*(*getKernelFunc)(), uint NumThreads,
              uint AAlignment, uint KronAlignment) :
-             GPUKernel(invokerFunc, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
-                       elemType, OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
+             GPUKernel(invokerFunc, elemType, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
+                      OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
                        arch(arch) {
   }
   //TODO: Make "const HardwareDetails"
