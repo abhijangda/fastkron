@@ -5,7 +5,7 @@ void KernelDatabase::loadKernels(SubClassKernel* kernels, uint32_t numKernels) {
   //Load kernels into compiledKernels map
   for (uint i = 0; i < numKernels; i++) {
     SubClassKernel& info = kernels[i];
-    DbKey key {info.f, info.opX, info.opF};
+    DbKey key {info.getMaxFactor(), info.getOpX(), info.getOpF()};
     auto iter = compiledKernels.find(key);
     if (iter == compiledKernels.end()) {
       compiledKernels.emplace(std::make_pair(key, std::vector<KMMKernel*>()));

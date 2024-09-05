@@ -25,6 +25,7 @@ struct KMMKernel {
    * void (*) (KernelParams<fusedFacs>, FusedParams<fusedFacs>, DistributedParams, EpilogueParams)
    */
   void* kernelInvoker;
+protected:
 
   /***Following fields store template parameter values of a kernel***/
   /**
@@ -77,6 +78,7 @@ struct KMMKernel {
    */
   fastKronOp opF;
 
+public:
   KMMKernel() {}
 
   KMMKernel(void* kernelInvoker, FastKronType elemType,
@@ -94,10 +96,15 @@ struct KMMKernel {
   uint getRegM()      const {return regM;}
   uint getRegK()      const {return regK;}
   uint getRegQ()      const {return regQ;}
+  Factor getMaxFactor() const {return f;}
+  Matrix getMaxTileX()  const {return tileX;}
+  Matrix getMaxTileF()  const {return tileF;}
+  fastKronOp getOpX() const {return opX;}
+  fastKronOp getOpF() const {return opF;}
 
   size_t totalTileSize() const;
 
-  Matrix getTileY() const;
+  Matrix getMaxTileY() const;
 
   Factor getTileF(KMMProblem problem) const;
 
@@ -107,7 +114,7 @@ struct KMMKernel {
 
   size_t numThreads(KMMProblem problem) const;
 
-  virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true) const;
+  virtual bool canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse = true);
 
   bool validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) const;
 

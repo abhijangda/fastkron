@@ -1,21 +1,21 @@
 #include "kernels/kmmkernel.h"
 
-size_t KMMKernel::totalTileSize() {
+size_t KMMKernel::totalTileSize() const {
   Matrix Xsh = Matrix(tileX.m(), (tileX.n()/f.p())*tileF.p());
   //TODO: make this tileF.size() + Xsh.size()
   return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
 }
 
-  Matrix KMMKernel::getTileY() {
+  Matrix KMMKernel::getMaxTileY() const {
     return Matrix(tileX.m(), (tileX.n()/f.p()) * tileF.q());
   }
 
-  Factor KMMKernel::getTileF(KMMProblem problem) {
+  Factor KMMKernel::getTileF(KMMProblem problem) const {
     Factor f_ = problem.f(0);
     return Factor(MIN(tileF.p(), f_.p()), MIN(tileF.q(), f_.q()));
   }
 
-  Matrix KMMKernel::getTileX(KMMProblem problem) {
+  Matrix KMMKernel::getTileX(KMMProblem problem) const {
     Factor f_ = problem.f(0);
 
     uint32_t kernelTileSlices = tileX.n()/f.p();
@@ -31,7 +31,7 @@ size_t KMMKernel::totalTileSize() {
     return Matrix(tileX.m(), slices * f_.p());
   }
 
-  size_t KMMKernel::totalTileSize(KMMProblem problem) {
+  size_t KMMKernel::totalTileSize(KMMProblem problem) const {
     Matrix tileX_ = getTileX(problem);
     Factor f_ = problem.f(0);
 
@@ -42,7 +42,7 @@ size_t KMMKernel::totalTileSize() {
     return (tileF.numel() + Xsh.numel())*sizeOfFastKronType(elemType);
   }
 
-  size_t KMMKernel::numThreads(KMMProblem problem) {
+  size_t KMMKernel::numThreads(KMMProblem problem) const {
     Matrix tileX_ = getTileX(problem);
     Factor tileF_ = getTileF(problem);
 
@@ -51,7 +51,7 @@ size_t KMMKernel::totalTileSize() {
            DIVUP(problem.m(), tileX_.m());
   }
 
-  bool KMMKernel::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) {
+  bool KMMKernel::validOptFor(KMMProblem problem, KernelOptimizations::Optimization opt) const {
   using Opts = KernelOptimizations::Optimization;
   switch (opt) {
     case Opts::None:

@@ -35,9 +35,9 @@ void CPUKernelDatabase::allocate_caches() {
 
   for (const auto & [_, kernels] : compiledKernels) {
     for (auto k : kernels) {
-      maxTileX = std::max(k->tileX.numel(), maxTileX);
-      maxTileF = std::max(k->tileF.numel(), maxTileF);
-      maxTileY = std::max(k->getTileY().numel(), maxTileY);
+      maxTileX = std::max(k->getMaxTileX().numel(), maxTileX);
+      maxTileF = std::max(k->getMaxTileX().numel(), maxTileF);
+      maxTileY = std::max(k->getMaxTileY().numel(), maxTileY);
     }
   }
 
@@ -70,7 +70,7 @@ fastKronError invoke(CPUKernel& kernelInfo, KMMProblem problem,
                      KernelMode execMode) {
   KernelParams<FusedFacs> params (problem, &caches, kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), fidx, execMode);
-  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
+  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.getMaxTileX().n());
   //TODO: change this to kernel.invoke
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>&, FusedParams<FusedFacs>&,
                                      DistributedParams&, EpilogueParams&);
@@ -321,8 +321,8 @@ KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
     std::vector<KMMKernel*> kernelsWithSamePOrQ;
     std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(),
                  std::back_inserter(kernelsWithSamePOrQ),
-                 [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or 
-                                            kernel->f.q() == subProblem.f(0).q();});
+                 [subProblem](auto& kernel){return kernel->getMaxFactor().p() == subProblem.f(0).p() or 
+                                            kernel->getMaxFactor().q() == subProblem.f(0).q();});
     std::vector<KMMKernel*> filteredKernels;
     if (kernelsWithSamePOrQ.size() > 0) {
       filteredKernels = kernelsWithSamePOrQ;

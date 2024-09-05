@@ -255,7 +255,7 @@ fastKronError invoke(CUDAKernel& kernelInfo, KMMProblem problem,
                                   kernelInfo.getTileX(problem), 
                                   kernelInfo.getTileF(problem), 
                                   fidx, execMode);
-  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.tileX.n());
+  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.getMaxTileX().n());
 
   //TODO: Change this to kernelInfo.invoke
   typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>, FusedParams<FusedFacs>, 
@@ -408,7 +408,7 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
   {
     auto filter = [problem, MinConsecutiveStoreElems](KMMKernel* kernel) {
       const int PpowerN = (int)powf(problem.f(0).p(), kernel->getFusedFacs());
-      const int consecutiveStoreElems = kernel->tileX.n()/PpowerN;
+      const int consecutiveStoreElems = kernel->getMaxTileX().n()/PpowerN;
       return consecutiveStoreElems >= MinConsecutiveStoreElems;
     };
 
@@ -434,8 +434,8 @@ KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
     std::vector<KMMKernel*> kernelsWithSamePOrQ;
     std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(), 
                  std::back_inserter(kernelsWithSamePOrQ),
-                 [subProblem](auto& kernel){return kernel->f.p() == subProblem.f(0).p() or 
-                                            kernel->f.q() == subProblem.f(0).q();});
+                 [subProblem](auto& kernel){return kernel->getMaxFactor().p() == subProblem.f(0).p() or 
+                                            kernel->getMaxFactor().q() == subProblem.f(0).q();});
     std::vector<KMMKernel*> filteredKernels;
     if (kernelsWithSamePOrQ.size() > 0) {
       filteredKernels = kernelsWithSamePOrQ;
