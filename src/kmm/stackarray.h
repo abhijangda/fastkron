@@ -4,10 +4,19 @@
 
 #pragma once
 
+/**
+ * StackArray - This class defines an array that is stored on the stack for a type and size.
+ */
 template<typename T, uint32_t MaxSize>
 class StackArray {
 public:
+  /**
+   * @array: The storage buffer of type @T with size @MaxSize.
+   */
   T array[MaxSize];
+  /**
+   * @n: Length of elements filled in the array.
+   */
   uint32_t n;
 
   StackArray() {

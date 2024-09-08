@@ -100,7 +100,7 @@ public:
   uint getRegQ()        const {return regQ;}
   Factor getMaxFactor() const {return f;}
   Matrix getMaxTileX()  const {return tileX;}
-  Matrix getMaxTileF()  const {return tileF;}
+  Factor getMaxTileF()  const {return tileF;}
   fastKronOp getOpX()   const {return opX;}
   fastKronOp getOpF()   const {return opF;}
 

@@ -196,7 +196,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       bool ncclRecvInResult = false;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
-        const uint NumFusedKerns = ((CUDAKMMKernel*)kernel.kernel)->FusedFacs;
+        const uint NumFusedKerns = ((CUDAKMMKernel*)kernel.kernel)->getFusedFacs();
         
         void* krons[NumFusedKerns];
         uint kronCols[NumFusedKerns];
@@ -242,7 +242,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
         fastKronError status;
         KMMProblem subProblem(FastKronFloat, gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
                               fastKronOp_N, (void**)krons, fastKronOp_N, (void*)innerCurrResult, prevTempN, currTempN);
-        status = handle.cudaKernels.invokeP2PStoreKernel(kernel.kernel, kernel.end, subProblem, distParams, 
+        status = handle.cudaKernels.invokeP2PStoreKernel(kernel.kernel, subProblem, kernel.end, distParams, 
                                                          EpilogueParams::create<float>(), KernelModeNormal);
         assert(status == fastKronSuccess);
         CUDA_CHECK(cudaStreamSynchronize(stream[g]));
