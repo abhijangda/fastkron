@@ -8,10 +8,16 @@ std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& problem) const {
   return h;
 }
 
+//TODO: Refactor below two functions for multi gpu kmm
+
 bool checkDistributedKronSizes(const uint32_t NumKronMats, 
-                               const uint32_t /*M*/, const uint32_t /*N*/, const uint32_t K, 
-                               const uint32_t KronMatCols[], const uint32_t KronMatRows[],
-                               const uint32_t LocalKrons, const uint32_t gpusInK) {
+                               const uint32_t /*M*/,
+                               const uint32_t /*N*/,
+                               const uint32_t K, 
+                               const uint32_t KronMatCols[],
+                               const uint32_t KronMatRows[],
+                               const uint32_t LocalKrons,
+                               const uint32_t gpusInK) {
   uint prevTempN = K;
   
   if (prevTempN % gpusInK != 0) return false;
@@ -30,7 +36,8 @@ bool checkDistributedKronSizes(const uint32_t NumKronMats,
   return true;
 }
 
-bool checkDistributedKronSizes(const KMMProblem problem, const uint LocalN,
+bool checkDistributedKronSizes(const KMMProblem problem, 
+                               const uint LocalN,
                                const uint gpusInK) {
   //Cannot do more than N local slicedmuls
   if (LocalN > problem.n()) return false;

@@ -28,6 +28,24 @@ class FastKronBase:
   def hasX86(self):
     return self.x86
 
+  def supportedSystem(self):
+    import platform
+    return platform.system() == "Linux"
+  
+  def supportedProcessor(self):
+    import platform
+    return platform.processor() == "x86_64"
+  
+  def supportedTypes(self, x, fs):
+    raise NotImplementedError()
+
+  def supportedDevice(self, x):
+    raise NotImplementedError()
+
+  def isSupported(self, x, fs):
+    return self.supportedSystem()     and self.supportedProcessor() and \
+           self.supportedTypes(x, fs) and self.supportedDevice(x)
+
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
 
@@ -86,6 +104,29 @@ class FastKronBase:
     fsshape = [self.matrixShape(f, trF) for f in fs]
 
     return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
+  
+  def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
+    self.checkShapeAndTypes(x, fs, y, None, trX, trF)
+
+    rs, _ = self.gekmmSizes(x, fs, trX=trX, trF=trF)
+    
+    if trX: x = x.t()
+    z = x
+    m,  k = x.shape
+    l = rs//m
+    
+    for i,f in enumerate(reversed(fs)):
+      if trF: f=f.t()
+      inp = z.reshape(m * (k//f.shape[0]), f.shape[0])
+      z = framework.mm(inp, f)
+      z = z.view(m, (k//f.shape[0]), f.shape[1]).transpose(1,2)
+      k = (k//f.shape[0]) * f.shape[1]
+
+    if alpha != None:
+      z = alpha * (z.reshape((m, l)))
+    if beta != None and y != None:
+      z += beta * y
+    return z
 
   def xgekmm(self, fngekmm, backend, x, fs, z, alpha, beta, y, temp1, temp2, trX = False, trF = False):
     if temp1 is None:

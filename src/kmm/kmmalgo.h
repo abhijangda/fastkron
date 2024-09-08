@@ -151,8 +151,11 @@ public:
   void setOpX(fastKronOp op) {opIn = op;}
 
   /**
-   * rsub() - Get a subproblem from an index i from end of given length.
-   *          ....
+   * rsub() - Get a subproblem from an index from end of given length.
+   *          subproblem's k and l are updated.
+   * @rstart: Index start from the end.
+   * @subn: length of the subproblem from rstart.
+   *
    */
   KMMProblemT rsub(uint32_t rstart, uint32_t subn) const {
     assert (subn <= n());
@@ -174,6 +177,13 @@ public:
                        Matrix(y().m(), subl, y().data()));
   }
 
+  /**
+   * sub() - Get a subproblem from an index from start of given length.
+   *          subproblem's k and l are updated.
+   * @start: Index start from the start.
+   * @subn: length of the subproblem from rstart.
+   *
+   */
   KMMProblemT sub(uint32_t start, uint32_t subn) const {
     uint32_t subk = x().n(), subl = y().n();
 
@@ -193,6 +203,9 @@ public:
                        Matrix(y().m(), subl, y().data()));
   }
 
+  /**
+   * swap() - Swap x and y pointers based on temporary pointers.
+   */
   void swap(void* temp1, void* temp2) {
     void* x1 = y().data();
     void* y1 = nullptr;
@@ -265,13 +278,37 @@ struct KMMProblemComparator {
   }
 };
 
+/**
+ * executeGeKMM() - Execute a function on the problem using the KMM algorithm. 
+ *                  See paper for more details on the algorithm.
+ * @problem: The problem to execute KMM algorithm.
+ * @temps: Two Temporary buffers.
+ * @swaps: Number of swaps of temporary buffers that will happen.
+ * @next: The function to get next factor to compuate.
+ * @func: The compute function for subproblem.
+ *
+ * Return - fastKronSuccess if succesfull otherwise the error.
+ */
 fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
-                         uint32_t swaps,
-                         std::function<uint (const KMMProblem)> next,
-                         std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
+                           uint32_t swaps,
+                           std::function<uint (const KMMProblem)> next,
+                           std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
+
+/**
+ * reverseExecuteGeKMM() - Execute a function on the problem using the reverse KMM algorithm
+ *                         that starts from the first factor.
+ * @problem: The problem to execute KMM algorithm.
+ * @temps: Two Temporary buffers.
+ * @swaps: Number of swaps of temporary buffers that will happen.
+ * @next: The function to get next factor to compuate.
+ * @func: The compute function for subproblem.
+ *
+ * Return - fastKronSuccess if succesfull otherwise the error.
+ */
 fastKronError reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
                                 Matrix result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
+
 bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);

@@ -1,6 +1,7 @@
 from functools import reduce
 
-try:
+# try:
+if True:
   # CUDA example in PyTorch
 
   import torch
@@ -12,8 +13,8 @@ try:
   Qs = [8] * N
 
   # KMM of X with F[0], F[1], ... F[N]
-  x = torch.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=torch.float32).cuda()
-  fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float32).cuda() for i in range(0, N)]
+  x = torch.ones((M, reduce((lambda a, b: a * b), Ps)), dtype=torch.float16).cuda()
+  fs = [torch.ones((Ps[0], Qs[0]), dtype=torch.float16).cuda() for i in range(0, N)]
 
   z = fk.gekmm(x, fs)
 
@@ -32,8 +33,8 @@ try:
 
   print(z)
 
-except:
-  pass
+# except:
+#   pass
 
 try:
   # Numpy example

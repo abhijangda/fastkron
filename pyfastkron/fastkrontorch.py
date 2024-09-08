@@ -15,6 +15,9 @@ class FastKronTorch(FastKronBase):
   def tensor_data_ptr(self, tensor):
     return tensor.data_ptr()
 
+  def supportedDevice(self, x):
+    return (x.device.type == 'cuda' and torch.version.hip == None) or (x.device.type == 'cpu')
+
   def check(self, x, fs, y, z, stream):
     devices = [x.device] + [f.device for f in fs]
     if y is not None:
@@ -27,13 +30,16 @@ class FastKronTorch(FastKronBase):
     if len(devices) != 1:
       raise RuntimeError(f'Expected all tensors to be on the same device, but found {len(devices)} devices: {[str(d) for d in devices]}')
 
-
     if x.device.type == "cuda" and stream is not None:
       if stream.device != x.device:
         raise RuntimeError(f"Expected stream to be on same device as tensors, but found {stream.device} and {x.device} are different")
 
+  def supportedTypes(self, x, fs):
+    return x.dtype in [torch.float32, torch.float64]
+
   def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
+
     if x.device.type == "cuda" and stream is None:
       stream = torch.cuda.current_stream()
 
@@ -42,8 +48,6 @@ class FastKronTorch(FastKronBase):
     fn = None
     if x.dtype == torch.float:
       fn = FastKron.sgekmm
-    elif x.dtype == torch.int:
-      fn = FastKron.igekmm
     elif x.dtype == torch.double:
       fn = FastKron.dgekmm
 
@@ -80,6 +84,9 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
       raise ValueError(f"Input fs[{i}] should be a 2D Tensor")
   if y != None and (type(y) is not torch.Tensor or y.ndim != 2):
     raise ValueError(f"Input 'y' should be a 2D Tensor")
+
+  if not __fastkrontorch.isSupported(x, fs):
+    return __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
 
   rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = torch.zeros(ts, dtype=x.dtype, device=x.device)
