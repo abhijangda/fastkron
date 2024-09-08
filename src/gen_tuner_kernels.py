@@ -5,7 +5,7 @@ import os
 import shutil
 import functools
 
-all_kernels_dir = os.path.join(os.path.dirname(__file__), "kernels/")
+all_kernels_dir = os.path.join(os.path.dirname(__file__), "kernels")
 
 MAX_SHARED_MEM = 48 * 1024
 
@@ -428,9 +428,9 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
     os.mkdir(all_kernels_dir)
 
   if backend == 'cuda' or backend == "hip":
-    kernel_dir = os.path.join(all_kernels_dir, f'{backend}/kron-kernels')
+    kernel_dir = os.path.join(all_kernels_dir, f'{backend}','kron-kernels')
   elif backend == 'x86':
-    kernel_dir = os.path.join(all_kernels_dir, 'cpu/x86/kron-kernels')
+    kernel_dir = os.path.join(all_kernels_dir, 'cpu','x86','kron-kernels')
   
   validTileKs = {}
   for (_,_,_, ps, qs) in cases:
@@ -581,7 +581,8 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
   
   kernels_cmake = f"set({backend.upper()}_KERNELS "
   for config in combinedConfigs:
-    kernels_cmake += os.path.join(kernel_dir, config.filename()) + "\n"
+    #CMake works with forward slash path
+    kernels_cmake += os.path.join(kernel_dir, config.filename()).replace('\\', '/') + "\n"
   kernels_cmake += ")\n"
 
   # for config in combinedConfigs:

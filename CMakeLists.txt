@@ -50,7 +50,10 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 set(PKG_CONFIG_FILE libFastKron.pc)
-set(WARNING_FLAGS "-Wall -Wextra -Wno-unknown-pragmas") 
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+  set(WARNING_FLAGS "-Wall -Wextra -Wno-unknown-pragmas") 
+endif()
 
 add_compile_definitions (FASTKRON_VERSION=${CMAKE_PROJECT_VERSION})
 
