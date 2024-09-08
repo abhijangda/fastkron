@@ -154,7 +154,7 @@ public:
    * @p2p: True if P2P stores are needed to shared output otherwise False
    * @exactFuse: True 
    */
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw, 
+  virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, 
                           bool p2p, bool exactFuse = true);
 
   /**

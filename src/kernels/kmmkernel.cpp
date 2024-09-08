@@ -78,7 +78,8 @@ bool KMMKernel::isOptValid(KMMProblem problem, KernelOptimizations::Optimization
   return false;
 }
 
-bool KMMKernel::canCompute(KMMProblem problem, HardwareDetails*, bool p2p, bool exactFuse) {
+bool KMMKernel::canCompute(KMMProblem problem, const HardwareDetails*,
+                           bool p2p, bool exactFuse) {
   using Opts = KernelOptimizations::Optimization;
 
   bool ret = problem.type() == elemType &&

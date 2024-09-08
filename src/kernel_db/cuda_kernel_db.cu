@@ -19,7 +19,7 @@
 /**
  * @AllCUDAKernels: An array of All CUDA kernels compiled.
 */
-CUDAKernel AllCUDAKernels[] = {
+CUDAKMMKernel AllCUDAKernels[] = {
 #ifdef ENABLE_CUDA
   ALL_CUDA_KERNELS
 #endif
@@ -29,9 +29,9 @@ CUDAKernel AllCUDAKernels[] = {
 CUDAKernelDatabase::CUDAKernelDatabase() : isDistributed_(false) {
   streams.push_back(NULL);
   //Load all CUDA kernels and check if each kernel is valid
-  loadKernels<CUDAKernel>(AllCUDAKernels, sizeof(AllCUDAKernels)/sizeof(CUDAKernel));
-  for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKernel); i++) {
-    CUDAKernel& info = AllCUDAKernels[i];
+  loadKernels<CUDAKMMKernel>(AllCUDAKernels, sizeof(AllCUDAKernels)/sizeof(CUDAKMMKernel));
+  for (uint i = 0; i < sizeof(AllCUDAKernels)/sizeof(CUDAKMMKernel); i++) {
+    CUDAKMMKernel& info = AllCUDAKernels[i];
     if (!info.isValid()) abort();
     CUDA_CHECK(info.setSharedMemAttr());
   }
@@ -243,7 +243,7 @@ fastKronError CUDAKernelDatabase::initTune() {
  * @execMode: Execution mode
  */
 template<uint FusedFacs>
-fastKronError invoke(CUDAKernel& kernelInfo, KMMProblem problem,
+fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblem problem,
                      const uint fidx, 
                      DistributedParams distParams,
                      EpilogueParams epilogueParams,
@@ -280,7 +280,7 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
                                                KernelMode execMode) {
   DistributedParams distParams;
   cudaStream_t stream = *(cudaStream_t*)streams[0];
-  CUDAKernel& cudaKernel = dynamic_cast<CUDAKernel&>(*kernel);
+  CUDAKMMKernel& cudaKernel = dynamic_cast<CUDAKMMKernel&>(*kernel);
 
   switch(problem.n()) {
     case 1:
@@ -314,7 +314,7 @@ fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel,
                                                        EpilogueParams epilogueParams,
                                                        KernelMode execMode) {
   cudaStream_t stream = *(cudaStream_t*)streams[distParams.proc()];
-  CUDAKernel& cudaKernel = dynamic_cast<CUDAKernel&>(*kernel);
+  CUDAKMMKernel& cudaKernel = dynamic_cast<CUDAKMMKernel&>(*kernel);
 
   switch (problem.n()) {
     case 1:
@@ -353,7 +353,7 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
                                              float& runtime) {
 #ifdef ENABLE_MULTI_GPU
 //TODO: Also for FULL_TUNE
-  if ((dynamic_cast<CUDAKernel*>(kernel))->localSize() > 0 || 
+  if ((dynamic_cast<CUDAKMMKernel*>(kernel))->getLocalSize() > 0 || 
       (problem.f(0).q() >= 64 && kernel->tileF.q() <= 32)) {
     //skip probably slow kernels
     runtime = std::numeric_limits<float>::max();
@@ -421,8 +421,8 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
 /**
  * blocksPerSM() - Returns blocks per SM occupied by a CUDA kernel based on occupancy
  */
-static float blocksPerSM(const CUDAArchDetails gpu, CUDAKernel* kernel, dim3 grid) {
-  uint32_t regOcc = gpu.regsPerSM / (kernel->block().x * kernel->numRegs());
+static float blocksPerSM(const CUDAArchDetails gpu, CUDAKMMKernel* kernel, dim3 grid) {
+  uint32_t regOcc = gpu.regsPerSM / (kernel->block().x * kernel->getNumRegs());
   uint32_t shmemOcc = gpu.sharedMemPerSM / kernel->getMaxSharedMemSize();
   return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
 }
@@ -444,12 +444,12 @@ KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
     }
     //sort kernels in descending order based on the number of thread blocks a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
-      return ((CUDAKernel*)k1)->getNumBlocks(subProblem) > ((CUDAKernel*)k2)->getNumBlocks(subProblem);
+      return ((CUDAKMMKernel*)k1)->getNumBlocks(subProblem) > ((CUDAKMMKernel*)k2)->getNumBlocks(subProblem);
     };
     std::sort(filteredKernels.begin(), filteredKernels.end(), order);
     for (auto k : filteredKernels) {
-      uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKernel*)k, ((CUDAKernel*)k)->grid(subProblem));
-      if (((CUDAKernel*)k)->getNumBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
+      uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKMMKernel*)k, ((CUDAKMMKernel*)k)->grid(subProblem));
+      if (((CUDAKMMKernel*)k)->getNumBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
         return k;
       }
     }
@@ -462,7 +462,7 @@ KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
 }
 
 std::string CUDAKernelDatabase::occupancyDetails(KMMKernel* kernelInfo, KMMProblem problem) {
-  CUDAKernel* cudaKernel = dynamic_cast<CUDAKernel*>(kernelInfo);
+  CUDAKMMKernel* cudaKernel = dynamic_cast<CUDAKMMKernel*>(kernelInfo);
   std::stringstream ss;
   dim3 grid = cudaKernel->grid(problem);
   dim3 block = cudaKernel->block();
@@ -471,9 +471,9 @@ std::string CUDAKernelDatabase::occupancyDetails(KMMKernel* kernelInfo, KMMProbl
   ss << indent << "Grid          : {" << grid.x << ", " << grid.y << ", " << grid.z << "}" << std::endl
      << indent << "Block         : {" << block.x << ", " << block.y << ", " << block.z << "}" << std::endl
      << indent << "Shared Mem    : " << cudaKernel->getSharedMemSize(problem) << std::endl 
-     << indent << "Reg per Thread: " << cudaKernel->numRegs() << std::endl
+     << indent << "Reg per Thread: " << cudaKernel->getNumRegs() << std::endl
      << indent << "Blocks Per SM : " << blocksPerSM(getCUDADeviceProperties(), cudaKernel, cudaKernel->grid(problem)) << std::endl
-     << indent << "Local Memory  : " << cudaKernel->localSize() << std::endl;
+     << indent << "Local Memory  : " << cudaKernel->getLocalSize() << std::endl;
 
   return ss.str();
 }

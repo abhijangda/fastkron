@@ -44,7 +44,7 @@ public:
    * canCompute - Overrides the method of KMMKernel and checks if simd of this kernel
    *              can run on the given hardware.
    */
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw,
+  virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw,
                           bool p2p, bool exactFuse = true) {
     if (CPUKMMKernel::canCompute(problem, hw, p2p, exactFuse)) {
       //A CPU with higher SIMD width (say AVX512) always support a lower

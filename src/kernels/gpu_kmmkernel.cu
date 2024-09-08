@@ -31,7 +31,7 @@ dim3 GPUKMMKernel::grid(KMMProblem problem) const {
   }
 }
 
-bool GPUKMMKernel::canCompute(KMMProblem problem, HardwareDetails* hw, bool p2p, 
+bool GPUKMMKernel::canCompute(KMMProblem problem, const HardwareDetails* hw, bool p2p, 
                               bool exactFuse) {
   if (KMMKernel::canCompute(problem, hw, p2p, exactFuse)) {
     dim3 g = grid(problem);

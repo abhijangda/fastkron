@@ -204,7 +204,9 @@ set(HEADER_FILES
     ${SRC}/handle/handle.h
     ${SRC}/handle/handle.inline.h
     ${SRC}/handle/op.h 
-    ${SRC}/kernel_db/kernel_defs.h 
+    ${SRC}/kernels/kmmkernel.h
+    ${SRC}/kernels/kernel_opt.h
+    ${SRC}/kernel_db/kernel_defs.h
     ${SRC}/kmm/kmmalgo.h
     ${SRC}/kmm/matrix.h
     ${SRC}/utils/thread_pool.h

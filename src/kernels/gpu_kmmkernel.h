@@ -92,7 +92,7 @@ public:
   /**
    * canCompute() - Overriding the method of KMMKernel.
    */
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hw, bool p2p, 
+  virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, bool p2p, 
                           bool exactFuse = true);
 
   /**

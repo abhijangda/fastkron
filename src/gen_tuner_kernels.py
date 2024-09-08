@@ -306,7 +306,7 @@ class GPUKMMKernel(Kernel):
 
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
-    return f"{self.backend.upper()}Kernel{{"+\
+    return f"{self.backend.upper()}KMMKernel{{"+\
             self.arch+","+self.constructorArgs() + ","+\
             f"get_{self.kernelname()}, {self.threads()}, " +\
             f"{self.aalign}, {self.kalign}" + "}"

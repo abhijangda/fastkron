@@ -196,7 +196,7 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
       bool ncclRecvInResult = false;
       for (auto kernel : kernelSeries) {
         //TODO: probably will need to change for fused kernels
-        const uint NumFusedKerns = ((CUDAKernel*)kernel.kernel)->FusedFacs;
+        const uint NumFusedKerns = ((CUDAKMMKernel*)kernel.kernel)->FusedFacs;
         
         void* krons[NumFusedKerns];
         uint kronCols[NumFusedKerns];

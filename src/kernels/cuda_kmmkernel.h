@@ -5,44 +5,53 @@
 
 #pragma once
 
-struct CUDAKernel : public GPUKMMKernel {
+struct CUDAKMMKernel : public GPUKMMKernel {
   SMArch sm;
-  CUDAKernel() {}
-  CUDAKernel(SMArch sm, void* invokerFunc, FastKronType elemType, Factor f, Factor tileF, Matrix tileX, 
-             uint FusedFacs, bool DistributeToGPUs,
-             uint RegM, uint RegK, uint RegQ, uint OptLevel,
-             fastKronOp opX, fastKronOp opF,
-             void*(*getKernelFunc)(), uint NumThreads,
-             uint AAlignment, uint KronAlignment) :
-             GPUKMMKernel(invokerFunc, elemType, f, tileF, tileX, FusedFacs, DistributeToGPUs, RegM, RegK, RegQ, 
-                      OptLevel, opX, opF, getKernelFunc, NumThreads, AAlignment, KronAlignment),
-                       sm(sm) {
-  }
-  //TODO: Make "const HardwareDetails"
-  virtual bool canCompute(KMMProblem problem, HardwareDetails* hardware, bool p2p, bool exactFuse = true) {
-    if (GPUKMMKernel::canCompute(problem, hardware, p2p, exactFuse)) {
-      return ((CUDAArchDetails*)hardware)->smArch == sm;
-    }
-    return false;
-  }
+  CUDAKMMKernel() {}
+  CUDAKMMKernel(SMArch sm, void* kernelInvoker, FastKronType elemType,
+               Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
+               uint regM, uint regK, uint regQ, uint optLevel,
+               fastKronOp opX, fastKronOp opF,
+               void*(*getKernel)(), uint NumThreads,
+               uint alignX, uint alignF) :
+               GPUKMMKernel(kernelInvoker, elemType, f, tileF, tileX,
+                            fusedFacs, P2PStore, regM, regK, regQ,
+                            optLevel, opX, opF, getKernel, 
+                            NumThreads, alignX, alignF),
+               sm(sm) {}
 
-  uint32_t ptxVersion() const {
+  /*** Functions to get/set information for CUDA Kernel ***/
+  /**
+   * getPTXVersion() - Return PTX Version of the kernel as XXYY.
+   */
+  uint32_t getPTXVersion() const {
     cudaFuncAttributes attr;
     CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
     return attr.ptxVersion;
   }
 
-  uint32_t localSize() const {
+  /**
+   * getLocalSize() - Return local memory size in bytes.
+   */
+  uint32_t getLocalSize() const {
     cudaFuncAttributes attr;
     CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
     return attr.localSizeBytes;
   }
-  uint32_t numRegs()   const {
+  
+  /**
+   * getNumRegs() - Return number of registers per thread.
+   */
+  uint32_t getNumRegs()   const {
     cudaFuncAttributes attr;
     CUDA_CHECK(cudaFuncGetAttributes(&attr, kernel));
     return attr.numRegs;
   }
 
+  /**
+   * setSharedMemAttr() - Set MaxDynamicSharedMemorySize attribute of the kernel 
+   *                      if shared memory is more than 48KB.
+   */
   cudaError_t setSharedMemAttr() {
     cudaError_t err = cudaSuccess;
     if (getMaxSharedMemSize() >= (48 << 10)) {
@@ -53,11 +62,29 @@ struct CUDAKernel : public GPUKMMKernel {
 
     return err;
   }
+  /*********************************************************/
 
+  /**
+   * canCompute() - Overrides method of GPUKMMKernel
+   */
+  virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw,
+                          bool p2p, bool exactFuse = true) {
+    if (GPUKMMKernel::canCompute(problem, hw, p2p, exactFuse)) {
+      return ((CUDAArchDetails*)hw)->smArch == sm;
+    }
+    return false;
+  }
+
+  /**
+   * backend() - Returns CUDA as backend.
+   */
   virtual std::string backend() const {
     return "cuda";
   }
 
+  /**
+   * arch() - Returns SM string.
+   */
   virtual std::string arch() const {
     return smArchToStr(sm);
   }
