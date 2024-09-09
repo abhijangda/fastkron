@@ -92,7 +92,7 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
     return __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
 
   rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
-  temp1 = torch.zeros(ts, dtype=x.dtype, device=x.device)
+  temp1 = x.new_empty(ts)
   if not trX:
     z = x.new_empty((x.shape[0], rs//x.shape[0]))
   else:

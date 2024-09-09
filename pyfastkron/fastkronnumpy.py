@@ -67,10 +67,10 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
     return __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
 
   rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
-  temp1 = np.zeros(ts, dtype=x.dtype)
+  temp1 = np.ndarray(ts, dtype=x.dtype)
   if not trX:
-    z = np.zeros((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
+    z = np.ndarray((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
   else:
-    z = np.zeros((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
+    z = np.ndarray((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
   __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
   return z
