@@ -105,21 +105,25 @@ class FastKronBase:
 
     return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
   
+  def trLastTwoDims(self, x, dim1, dim2):
+    raise NotImplementedError()
+  
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)
 
     rs, _ = self.gekmmSizes(x, fs, trX=trX, trF=trF)
     
-    if trX: x = x.t()
+    if trX: x = x.T
     z = x
     m,  k = x.shape
     l = rs//m
     
     for i,f in enumerate(reversed(fs)):
-      if trF: f=f.t()
+      if trF: f=f.T
       inp = z.reshape(m * (k//f.shape[0]), f.shape[0])
-      z = framework.mm(inp, f)
-      z = z.view(m, (k//f.shape[0]), f.shape[1]).transpose(1,2)
+      z = framework.matmul(inp, f)
+      z = z.reshape((m, (k//f.shape[0]), f.shape[1]))
+      z = self.trLastTwoDims(z, 2, 1)
       k = (k//f.shape[0]) * f.shape[1]
 
     if alpha != None:

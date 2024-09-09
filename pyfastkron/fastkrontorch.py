@@ -37,6 +37,9 @@ class FastKronTorch(FastKronBase):
   def supportedTypes(self, x, fs):
     return x.dtype in [torch.float32, torch.float64]
 
+  def trLastTwoDims(self, x, dim1, dim2):
+    return x.transpose(dim1, dim2)
+
   def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
 

@@ -13,14 +13,21 @@ class FastKronNumpy(FastKronBase):
   def tensor_data_ptr(self, tensor):
     return tensor.ctypes.data
 
+  def supportedDevice(self, x):
+    return True
+
+  def supportedTypes(self, x, fs):
+    return x.dtype in [np.float32, np.double]
+
+  def trLastTwoDims(self, x, dim1, dim2):
+    return x.transpose(list(range(len(x.shape) - 2)) + [dim1, dim2,])
+
   def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2,
             trX = False, trF = False):
 
     fn = None
     if x.dtype == np.float32:
       fn = FastKron.sgekmm
-    elif x.dtype == np.int32:
-      fn = FastKron.igekmm
     elif x.dtype == np.double:
       fn = FastKron.dgekmm
 
@@ -55,6 +62,9 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   for i,f in enumerate(fs):
     if type(f) is not np.ndarray or f.ndim != 2:
       raise ValueError(f"Input fs[{i}] should be a ndarray")
+
+  if not __fastkronnumpy.isSupported(x, fs):
+    return __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
 
   rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
   temp1 = np.zeros(ts, dtype=x.dtype)
