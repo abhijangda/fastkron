@@ -22,6 +22,8 @@
 }
 
 #define M_ 16
+FLOAT_TEST_TT(M_, 1, 10, 2, 1, float, false);
+FLOAT_TEST_TT(M_, 1, 10, 1, 6, float, false);
 FLOAT_TEST_TT(M_, 1, 10, 2, 2, float, false);
 FLOAT_TEST_TT(M_, 1, 8, 3, 3, float, false);
 FLOAT_TEST_TT(M_, 1, 8, 4, 4, float, false);
@@ -48,6 +50,7 @@ FLOAT_TEST_TT(M_, 1, 1, 512, 512, float, false);
 FLOAT_TEST_TT(M_, 1, 1, 739, 739, float, false);
 FLOAT_TEST_TT(M_, 1, 1, 1024, 1024, float, false);
 
+FLOAT_TEST_TT(M_, 1, 5, 6, 1, float, false);
 FLOAT_TEST_TT(M_, 1, 3, 31, 63, float, false);
 FLOAT_TEST_TT(M_, 1, 3, 63, 31, float, false);
 FLOAT_TEST_TT(M_, 1, 2, 297, 127, float, false);

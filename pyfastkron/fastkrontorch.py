@@ -1,4 +1,4 @@
-from .fastkronbase import FastKronBase
+from .fastkronbase import FastKronBase, product
 from . import FastKron
 
 try:
@@ -78,24 +78,33 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   z : 2D torch tensor
   '''
 
-  if type(x) is not torch.Tensor or x.ndim != 2:
-    raise ValueError("Input 'x' should be a 2D Tensor")
+  if type(x) is not torch.Tensor:
+    raise ValueError("Input 'x' should be a Tensor")
   if type(fs) is not list:
     raise ValueError("Input 'fs' should be a list of Tensor")
   for i,f in enumerate(fs):
-    if type(f) is not torch.Tensor or f.ndim != 2:
-      raise ValueError(f"Input fs[{i}] should be a 2D Tensor")
+    if type(f) is not torch.Tensor:
+      raise ValueError(f"Input fs[{i}] should be a Tensor")
   if y != None and (type(y) is not torch.Tensor or y.ndim != 2):
     raise ValueError(f"Input 'y' should be a 2D Tensor")
 
-  if not __fastkrontorch.isSupported(x, fs):
-    return __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
+  orig_xshape = x.shape
 
-  rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
-  temp1 = x.new_empty(ts)
-  if not trX:
-    z = x.new_empty((x.shape[0], rs//x.shape[0]))
+  x,fs = __fastkrontorch.reshapeInput(x, fs, trX, trF)
+
+  if not __fastkrontorch.isSupported(x, fs):
+    z = __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
   else:
-    z = x.new_empty((x.shape[1], rs//x.shape[1]))
-  __fastkrontorch.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
+    rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
+    temp1 = x.new_empty(ts)
+    if not trX:
+      z = x.new_empty((x.shape[0], rs//x.shape[0]))
+    else:
+      z = x.new_empty((x.shape[1], rs//x.shape[1]))
+
+    __fastkrontorch.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
+  
+  if len(orig_xshape) != 2:
+    z = z.reshape((list(orig_xshape[:-1]) + [z.shape[-1]]))
+
   return z

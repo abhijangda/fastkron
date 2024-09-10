@@ -25,7 +25,7 @@
   GENERAL_TEST_NN(16, MinN, MaxN, P, Q, float, Tune); \
   GENERAL_TEST_NN(16, MinN, MaxN, P, Q, double, Tune);
 
-
+FLOAT_DOUBLE_TEST_NN(1, 10, 1, 1, false);
 FLOAT_DOUBLE_TEST_NN(1, 10, 2, 2, false);
 FLOAT_DOUBLE_TEST_NN(1, 8, 3, 3, false);
 FLOAT_DOUBLE_TEST_NN(1, 8, 4, 4, false);
@@ -52,7 +52,8 @@ FLOAT_DOUBLE_TEST_NN(1, 2, 512, 512, false);
 FLOAT_DOUBLE_TEST_NN(1, 2, 739, 739, false);
 FLOAT_DOUBLE_TEST_NN(1, 2, 1024, 1024, false);
 
-
+FLOAT_DOUBLE_TEST_NN(1, 10, 1, 4, false);
+FLOAT_DOUBLE_TEST_NN(1, 10, 5, 1, false);
 FLOAT_DOUBLE_TEST_NN(1, 10, 2, 4, false);
 FLOAT_DOUBLE_TEST_NN(1, 4, 31, 63, false);
 FLOAT_DOUBLE_TEST_NN(1, 4, 63, 31, false);

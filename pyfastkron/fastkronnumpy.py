@@ -55,22 +55,30 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   z : 2D numpy array
   '''
 
-  if type(x) is not np.ndarray or x.ndim != 2:
+  if type(x) is not np.ndarray:
     raise ValueError("Input 'x' should be a ndarray")
   if type(fs) is not list:
     raise ValueError("Input 'fs' should be a list of np.ndarray")
   for i,f in enumerate(fs):
-    if type(f) is not np.ndarray or f.ndim != 2:
+    if type(f) is not np.ndarray:
       raise ValueError(f"Input fs[{i}] should be a ndarray")
 
-  if not __fastkronnumpy.isSupported(x, fs):
-    return __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
+  orig_xshape = x.shape
 
-  rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
-  temp1 = np.ndarray(ts, dtype=x.dtype)
-  if not trX:
-    z = np.ndarray((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
+  x,fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
+
+  if not __fastkronnumpy.isSupported(x, fs):
+    z = __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
   else:
-    z = np.ndarray((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
-  __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
+    rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
+    temp1 = np.ndarray(ts, dtype=x.dtype)
+    if not trX:
+      z = np.ndarray((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
+    else:
+      z = np.ndarray((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
+    __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
+
+  if len(orig_xshape) != 2:
+    z = z.reshape(list(orig_xshape[:-1]) + [z.shape[-1]])
+
   return z

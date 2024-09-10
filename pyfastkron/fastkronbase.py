@@ -64,6 +64,36 @@ class FastKronBase:
     else:
       return (m.shape[1], m.shape[0])
 
+  def reshapeInput(self, x, fs, trX, trF):
+    if x.ndim == 1:
+      if trX:
+        x = x.reshape([x.shape[0], 1])
+      else:
+        x = x.reshape([1, x.shape[0]])
+    elif x.ndim > 2:
+      if trX:
+        raise ValueError("Input 'x' should be a 2D Tensor with 'trX'=True")
+      else:
+        newshape = (product(x.shape[:x.ndim - 1]), x.shape[x.ndim - 1])
+        x = x.reshape(newshape)
+
+    if x.ndim > 2:
+      raise ValueError(f"Input 'x' should be a 2-D Tensor after reshaping but has shape '{x.shape}'")
+
+    for i in range(len(fs)):
+      if fs[i].ndim == 1:
+        if trF:
+          fs[i] = fs[i].reshape((1, fs[i].shape[0]))
+        else:
+          fs[i] = fs[i].reshape((fs[i].shape[0], 1))
+      elif fs[i].ndim > 2:
+        raise ValueError(f"Input 'fs[{i}]' should be a 2D Tensor")
+
+      if fs[i].ndim > 2:
+        raise ValueError(f"Input 'fs{i}' should be a 2-D Tensor after reshaping but has shape '{fs[i].shape}'")
+
+    return x, fs
+
   def checkShapeAndTypes(self, x, fs, y, z, trX, trF):
     # Only operate on 2-dims matrices
     xshape = self.matrixShape(x, trX)
