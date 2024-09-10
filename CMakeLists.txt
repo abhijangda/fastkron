@@ -106,9 +106,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # TODO set these as RELEASE flags
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64-v2 -O3 ${WARNING_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -march=x86-64-v2 -O3 ${WARNING_FLAGS}")
 
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 ${WARNING_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -march=x86-64-v2 ${WARNING_FLAGS}")
 
 set(CMAKE_HIP_FLAGS "-O3 -Rpass-analysis=kernel-resource-usage --save-temps")
 

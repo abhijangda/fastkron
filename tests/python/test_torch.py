@@ -40,6 +40,7 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, m1=1, q1=1):
   fs = [torch.randint(high=high,size=fshape, dtype=dtype).to(device) for i in range(n)]
 
   y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
+
   ref = reference(x, fs, trX, trF)
   val = torch.isclose(y, ref, rtol=1e-04).all().item()
 
@@ -48,8 +49,12 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, m1=1, q1=1):
 def device_tests(device):
   run(1024, 5, 8, 8, torch.float32, device, False, False)
   run(10, 5, 6, 6, torch.float32, device, True, False)
-  run(1024, 5, 8, 8, torch.float32, device, False, False)
   run(10, 5, 6, 6, torch.float32, device, True, False)
+
+  run(10, 3, 32, 8, torch.float32, device, False, False)
+  run(10, 3, 32, 8, torch.float32, device, True, True)
+
+  run(10, 3, 32, 1, torch.float32, device, False, False)
 
   #3-D x
   run(10, 5, 6, 6, torch.float32, device, False, False, m1=2, q1=1)

@@ -97,12 +97,14 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   else:
     rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)
+    temp2 = x.new_empty(ts) if rs != ts else None
+
     if not trX:
       z = x.new_empty((x.shape[0], rs//x.shape[0]))
     else:
       z = x.new_empty((x.shape[1], rs//x.shape[1]))
 
-    __fastkrontorch.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
+    __fastkrontorch.gekmm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
   
   if len(orig_xshape) != 2:
     z = z.reshape((list(orig_xshape[:-1]) + [z.shape[-1]]))

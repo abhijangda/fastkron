@@ -158,7 +158,7 @@ class CPUKMMKernel(Kernel):
     return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
 
   def kernelDecl(self):
-    return f"CPUKMMKernel<{self.templateDecl()}>"
+    return f"cpuKernel<{self.templateDecl()}>"
 
   def hostFuncDecl(self):
     return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}>& params, FusedParams<{self.fused_kernels}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
