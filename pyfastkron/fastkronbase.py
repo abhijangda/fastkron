@@ -1,5 +1,7 @@
 from functools import reduce
-from . import FastKron
+import platform
+if platform.system() == "Linux" and (platform.machine() == "x86_64" or platform.machine() == "AMD64"):
+  from . import FastKron
 
 def product(values):
   return reduce((lambda a, b: a * b), values)
@@ -9,18 +11,24 @@ class FastKronBase:
     return (backends & int(enumBackend)) == int(enumBackend)
 
   def __init__(self, x86, cuda):
-    self.backends = FastKron.backends()
-    self.handle = FastKron.init()
+    if self.supportedSystem() and self.supportedProcessor():
+      self.backends = FastKron.backends()
+      self.handle = FastKron.init()
 
-    self.x86 = x86 and FastKronBase.hasBackend(self.backends, FastKron.Backend.X86)
-    if self.x86:
-      FastKron.initX86(self.handle)
+      self.x86 = x86 and FastKronBase.hasBackend(self.backends, FastKron.Backend.X86)
+      if self.x86:
+        FastKron.initX86(self.handle)
 
-    self.cuda = cuda and FastKronBase.hasBackend(self.backends, FastKron.Backend.CUDA)
+      self.cuda = cuda and FastKronBase.hasBackend(self.backends, FastKron.Backend.CUDA)
+    else:
+      self.handle = None
+      self.x86 = (platform.machine() == "x86_64" or platform.machine() == "AMD64")
+      self.cuda = cuda
 
   def __del__(self):
-    FastKron.destroy(self.handle)
-    self.handle = self.backends = self.x86 = self.cuda = None
+    if self.handle is not None:
+      FastKron.destroy(self.handle)
+      self.handle = self.backends = self.x86 = self.cuda = None
 
   def hasCUDA(self):
     return self.cuda
@@ -29,12 +37,10 @@ class FastKronBase:
     return self.x86
 
   def supportedSystem(self):
-    import platform
     return platform.system() == "Linux"
   
   def supportedProcessor(self):
-    import platform
-    return platform.processor() == "x86_64"
+    return platform.processor() == "x86_64" or platform.machine() == "AMD64"
   
   def supportedTypes(self, x, fs):
     raise NotImplementedError()
@@ -132,9 +138,11 @@ class FastKronBase:
 
     xshape = self.matrixShape(x, trX)
     fsshape = [self.matrixShape(f, trF) for f in fs]
+    if self.supportedSystem() and self.supportedProcessor():
+      return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
+    else:
+      return (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
 
-    return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
-  
   def trLastTwoDims(self, x, dim1, dim2):
     raise NotImplementedError()
   

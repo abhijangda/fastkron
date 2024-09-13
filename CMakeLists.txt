@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
+project(FastKron 
+  VERSION 1.0
+  LANGUAGES CXX)
+
 if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
 
 set(CMAKE_DEBUG_POSTFIX d)
@@ -22,10 +26,6 @@ option(ENABLE_MULTI_GPU "Enable Multi GPU"         OFF)
 if (ENABLE_MULTI_GPU AND NOT ENABLE_CUDA)
   message(FATAL_ERROR "ENABLE_MULTI_GPU requires ENABLE_CUDA")
 endif()
-
-project(FastKron 
-  VERSION 1.0
-  LANGUAGES CXX)
 
 find_package(Python3 REQUIRED)
 if (ENABLE_X86)
