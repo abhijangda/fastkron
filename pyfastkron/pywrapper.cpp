@@ -11,7 +11,15 @@ namespace py = pybind11;
   }\
 }
 
-PYBIND11_MODULE(FastKron, m) {
+#if defined(ENABLE_X86) && defined(ENABLE_CUDA)
+PYBIND11_MODULE(FastKron, m)
+#elif defined(ENABLE_X86)
+PYBIND11_MODULE(FastKronX86, m)
+#elif defined(ENABLE_CUDA)
+PYBIND11_MODULE(FastKronCUDA, m)
+#endif
+
+{
   m.doc() = "Python wrapper for FastKron C++ API. For more information on each function refers to C++ API.";
 
   py::enum_<fastKronBackend>(m, "Backend")

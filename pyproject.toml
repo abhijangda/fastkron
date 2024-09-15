@@ -1,27 +1,18 @@
 [build-system]
-requires = ["scikit-build-core"]
-build-backend = "scikit_build_core.build"
+requires = ["setuptools", "prebuilt_binaries"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyfastkron"
+name="pyfastkron"
+authors=[{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
+requires-python= ">= 3.10"
 version = "1.0"
-requires-python = ">=3.10"
-build-frontend = {name = "build", args = ["--exports", "whole_archive"]}
+#license
 dependencies = [
-    "scikit-build-core",
     "numpy",
     "torch",
     "torchvision"
 ]
-
-[tool.scikit-build]
-cmake.verbose = "true"
-cmake.version = ">=3.25"
-
-[tool.scikit-build.cmake.define]
-PYMODULE="ON"
-ENABLE_X86="ON"
-ENABLE_CUDA="ON"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

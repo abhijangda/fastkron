@@ -235,10 +235,18 @@ else()
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cpp)
 endif()
 
+set(FastKron_NAME FastKron)
+
 if (PYMODULE)
   ## PyBind ##
   add_subdirectory(pybind11)
-  pybind11_add_module(FastKron
+  if (ENABLE_X86 AND ENABLE_CUDA)
+  elseif(ENABLE_X86)
+    set(FastKron_NAME FastKronX86)
+  elseif(ENABLE_CUDA)
+    set(FastKron_NAME FastKronCUDA)
+  endif()
+  pybind11_add_module(${FastKron_NAME}
     SHARED
       ${SOURCES}
       ${SRC}/../pyfastkron/pywrapper.cpp
@@ -247,9 +255,9 @@ if (PYMODULE)
       ${CUDA_HEADER_FILES}
       ${X86_HEADER_FILES}
       ${HIP_HEADER_FILES})
-  install(TARGETS FastKron DESTINATION ${SKBUILD_PROJECT_NAME})
+  install(TARGETS ${FastKron_NAME} DESTINATION ${SKBUILD_PROJECT_NAME})
 else()
-  add_library(FastKron
+  add_library(${FastKron_NAME}
     SHARED
       ${SOURCES}
       ${HEADER_FILES}
@@ -271,17 +279,17 @@ else()
     set (PUBLIC_HEADERS ${PUBLIC_HEADERS} include/fastkronMg.h)
   endif()
 
-  set_target_properties(FastKron PROPERTIES PUBLIC_HEADER PUBLIC_HEADERS)
-  install(TARGETS FastKron)
+  set_target_properties(${FastKron_NAME} PROPERTIES PUBLIC_HEADER PUBLIC_HEADERS)
+  install(TARGETS ${FastKron_NAME})
 endif()
 
-set_target_properties(FastKron PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+set_target_properties(${FastKron_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
-  target_link_libraries(FastKron PRIVATE nccl)
+  target_link_libraries(${FastKron_NAME} PRIVATE nccl)
 endif()
 
-target_include_directories(FastKron 
+target_include_directories(${FastKron_NAME} 
                            PRIVATE 
                               ${SRC}/
                            PUBLIC
