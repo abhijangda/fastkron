@@ -59,8 +59,7 @@ def device_tests(device):
   run(10, 3, 16, 8, np.float16, device, True, False, high=2)
 
 def test_cpu():
-  if fk.__fastkronnumpy.hasX86():
-    device_tests("cpu")
+  device_tests("cpu")
 
 if __name__ == "__main__":
   test_cpu()

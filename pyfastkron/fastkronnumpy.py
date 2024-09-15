@@ -1,9 +1,6 @@
-from .fastkronbase import FastKronBase
+from .fastkronbase import fastkronX86, FastKronBase
 
 import platform
-
-if platform.system() == "Linux" and platform.processor() == "x86_64":
-  from . import FastKron
 
 try:
   import numpy as np
@@ -26,16 +23,29 @@ class FastKronNumpy(FastKronBase):
   def trLastTwoDims(self, x, dim1, dim2):
     return x.transpose(list(range(len(x.shape) - 2)) + [dim1, dim2,])
 
-  def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2,
+  def device_type(self, x):
+    return "cpu"
+
+  def gekmm(self, x, fs, z, alpha, beta, y, temp1, temp2,
             trX = False, trF = False):
 
     fn = None
     if x.dtype == np.float32:
-      fn = FastKron.sgekmm
+      fn = fastkronX86.libFastKron.sgekmm
     elif x.dtype == np.double:
-      fn = FastKron.dgekmm
+      fn = fastkronX86.libFastKron.dgekmm
 
-    self.xgekmm(fn, self.backend("cpu"), x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+    if temp1 is None:
+      raise ValueError("Operand temp1 must be valid 2D Tensor")
+
+    if z is None:
+      raise ValueError("Operand z must be valid 2D Tensor")
+
+    if y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
+      if temp2 is None:
+        raise ValueError("Operand temp2 must be a valid Tensor when z == y")
+
+    super().xgekmm(fastkronX86, fn, x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
 
 __fastkronnumpy = FastKronNumpy()
 

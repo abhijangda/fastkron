@@ -1,8 +1,6 @@
-from .fastkronbase import FastKronBase, product
-import platform
+from .fastkronbase import fastkronX86, fastkronCUDA, FastKronBase, product
 
-if platform.system() == "Linux" and platform.processor() == "x86_64":
-  from . import FastKron
+import platform
 
 try:
   import torch
@@ -11,15 +9,20 @@ except:
 
 class FastKronTorch(FastKronBase):
   def __init__(self):
-    super().__init__(True, torch.cuda.is_available())
-    if self.cuda:
-      FastKron.initCUDA(self.handle, [torch.cuda.current_stream().cuda_stream])
+    cuda = False
+    try:
+      cuda = torch.cuda.is_available()
+    except:
+      pass
+
+    super().__init__(True, cuda)
 
   def tensor_data_ptr(self, tensor):
     return tensor.data_ptr()
 
   def supportedDevice(self, x):
-    return (x.device.type == 'cuda' and torch.version.hip == None) or (x.device.type == 'cpu')
+    return (x.device.type == 'cuda' and torch.version.hip == None) or \
+           (x.device.type == 'cpu')
 
   def check(self, x, fs, y, z, stream):
     devices = [x.device] + [f.device for f in fs]
@@ -43,6 +46,15 @@ class FastKronTorch(FastKronBase):
   def trLastTwoDims(self, x, dim1, dim2):
     return x.transpose(dim1, dim2)
 
+  def device_type(self, x):
+    return x.device.type 
+
+  def handle(self, x):
+    if self.device_type(x) == "cpu":
+      return fastkronX86
+    elif self.device_type(x) == "cuda":
+      return fastkronCUDA
+
   def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
 
@@ -53,11 +65,11 @@ class FastKronTorch(FastKronBase):
 
     fn = None
     if x.dtype == torch.float:
-      fn = FastKron.sgekmm
+      fn = self.handle(x).libFastKron.sgekmm
     elif x.dtype == torch.double:
-      fn = FastKron.dgekmm
+      fn = self.handle(x).libFastKron.dgekmm
 
-    self.xgekmm(fn, self.backend(x.device.type), x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+    super().xgekmm(self.handle(x), fn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
   
 __fastkrontorch = FastKronTorch()
 

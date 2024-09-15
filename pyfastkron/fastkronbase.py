@@ -1,56 +1,55 @@
 from functools import reduce
 import platform
-if platform.system() == "Linux" and (platform.machine() == "x86_64" or platform.machine() == "AMD64"):
-  from . import FastKron
+
+from .fastkronhandle import FastKronHandle
+
+if platform.system() == "Linux":
+  if platform.machine() == "x86_64" or platform.machine() == "AMD64":
+    from . import FastKronX86
+    fastkronX86 = FastKronHandle("x86", FastKronX86)
+  else:
+    fastkronX86 = None
+  
+  try:
+    import torch
+    if torch.cuda.is_available():
+      if torch.version.cuda != None:
+        from . import FastKronCUDA
+        fastkronCUDA = FastKronHandle("cuda", FastKronCUDA)
+      elif torch.version.hip:
+        fastkronCUDA = None
+  except:
+    pass
 
 def product(values):
   return reduce((lambda a, b: a * b), values)
 
 class FastKronBase:
-  def hasBackend(backends, enumBackend) :
-    return (backends & int(enumBackend)) == int(enumBackend)
-
   def __init__(self, x86, cuda):
-    if self.supportedSystem() and self.supportedProcessor():
-      self.backends = FastKron.backends()
-      self.handle = FastKron.init()
-
-      self.x86 = x86 and FastKronBase.hasBackend(self.backends, FastKron.Backend.X86)
-      if self.x86:
-        FastKron.initX86(self.handle)
-
-      self.cuda = cuda and FastKronBase.hasBackend(self.backends, FastKron.Backend.CUDA)
-    else:
-      self.handle = None
-      self.x86 = (platform.machine() == "x86_64" or platform.machine() == "AMD64")
-      self.cuda = cuda
-
-  def __del__(self):
-    if self.handle is not None:
-      FastKron.destroy(self.handle)
-      self.handle = self.backends = self.x86 = self.cuda = None
-
-  def hasCUDA(self):
-    return self.cuda
+    self.x86 = x86 and fastkronX86 != None
+    self.cuda = cuda and fastkronCUDA != None
   
   def hasX86(self):
     return self.x86
+  
+  def hasCUDA(self):
+    return self.cuda
 
   def supportedSystem(self):
     return platform.system() == "Linux"
   
   def supportedProcessor(self):
     return platform.processor() == "x86_64" or platform.machine() == "AMD64"
-  
-  def supportedTypes(self, x, fs):
-    raise NotImplementedError()
-
-  def supportedDevice(self, x):
-    raise NotImplementedError()
 
   def isSupported(self, x, fs):
     return self.supportedSystem()     and self.supportedProcessor() and \
            self.supportedTypes(x, fs) and self.supportedDevice(x)
+
+  def supportedDevice(self, x):
+    raise NotImplementedError()
+
+  def supportedTypes(self, x, fs):
+    raise NotImplementedError()
 
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
@@ -100,6 +99,24 @@ class FastKronBase:
 
     return x, fs
 
+  def gekmmSizes(self, x, fs, trX = False, trF = False):
+    self.checkShapeAndTypes(x, fs, None, None, trX, trF)
+
+    device_type = self.device_type(x)
+    xshape = self.matrixShape(x, trX)
+    fsshape = [self.matrixShape(f, trF) for f in fs]
+
+    if self.supportedSystem() and self.supportedProcessor():
+      if device_type == 'cpu':
+        if fastkronX86 != None:
+          return fastkronX86.gekmmSizes(xshape, self.ps(fsshape), self.qs(fsshape))
+        else:
+          raise ValueError(f"Device type '{device_type}' not supported")
+      elif device_type == 'cuda':
+        return fastkronCUDA.gekmmSizes(xshape, self.ps(fsshape), self.qs(fsshape))
+    else:
+      return (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
+
   def checkShapeAndTypes(self, x, fs, y, z, trX, trF):
     # Only operate on 2-dims matrices
     xshape = self.matrixShape(x, trX)
@@ -125,27 +142,23 @@ class FastKronBase:
       if yshape[0] != xshape[0] or yshape[1] != product(self.qs(fsshape)):
         raise ValueError(f"Input operand 'y' shape ('{yshape}') mismatch with '({xshape[0], product(self.qs(fsshape))})'")
       assert x.dtype == y.dtype
+  
+  def trLastTwoDims(self, x, dim1, dim2):
+    raise NotImplementedError()
 
-  def backend(self, device_type):
-    if device_type == "cpu":
-      return FastKron.Backend.X86
-    if device_type == "cuda":
-      return FastKron.Backend.CUDA
-    raise RuntimeError(f"Invalid device {device_type}")
+  def device_type(self, x):
+    raise NotImplementedError()
 
-  def gekmmSizes(self, x, fs, trX = False, trF = False):
-    self.checkShapeAndTypes(x, fs, None, None, trX, trF)
+  def xgekmm(self, handle, fn, x, fs, z, alpha, beta, y, temp1, temp2,
+            trX = False, trF = False):
+
+    self.checkShapeAndTypes(x, fs, z, y, trX, trF)
 
     xshape = self.matrixShape(x, trX)
     fsshape = [self.matrixShape(f, trF) for f in fs]
-    if self.supportedSystem() and self.supportedProcessor():
-      return FastKron.gekmmSizes(self.handle, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape))
-    else:
-      return (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
 
-  def trLastTwoDims(self, x, dim1, dim2):
-    raise NotImplementedError()
-  
+    handle.xgekmm(fn, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape), self.tensor_data_ptr(x), self.fptrs(fs), self.tensor_data_ptr(z), alpha, beta, 0 if y is None else self.tensor_data_ptr(y), self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2), trX, trF)
+
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)
 
@@ -169,26 +182,3 @@ class FastKronBase:
     if beta != None and y != None:
       z += beta * y
     return z
-
-  def xgekmm(self, fngekmm, backend, x, fs, z, alpha, beta, y, temp1, temp2, trX = False, trF = False):
-    if temp1 is None:
-      raise ValueError("Operand temp1 must be valid 2D Tensor")
-
-    if z is None:
-      raise ValueError("Operand z must be valid 2D Tensor")
-
-    if y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
-      if temp2 is None:
-        raise ValueError("Operand temp2 must be a valid Tensor when z == y")
-
-    self.checkShapeAndTypes(x, fs, z, y, trX, trF)
-
-    xshape = self.matrixShape(x, trX)
-    fsshape = [self.matrixShape(f, trF) for f in fs]
-
-    fngekmm(self.handle, backend, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape),
-            self.tensor_data_ptr(x), FastKron.Op.N if not trX else FastKron.Op.T,
-            self.fptrs(fs), FastKron.Op.N if not trF else FastKron.Op.T,
-            self.tensor_data_ptr(z),
-            alpha, beta, 0 if y is None else self.tensor_data_ptr(y), 
-            self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2))

@@ -22,14 +22,21 @@ PYBIND11_MODULE(FastKronCUDA, m)
 {
   m.doc() = "Python wrapper for FastKron C++ API. For more information on each function refers to C++ API.";
 
-  py::enum_<fastKronBackend>(m, "Backend")
+  py::enum_<fastKronBackend>(m, "Backend", py::module_local())
+  
+#if defined(ENABLE_X86) && defined(ENABLE_CUDA)
     .value("X86", fastKronBackend_X86)
     .value("ARM", fastKronBackend_ARM)
     .value("CUDA", fastKronBackend_CUDA)
     .value("HIP", fastKronBackend_HIP)
+#elif defined(ENABLE_X86)
+    .value("X86", fastKronBackend_X86)
+#elif defined(ENABLE_CUDA)
+    .value("CUDA", fastKronBackend_CUDA)
+#endif
     .export_values();
   
-  py::enum_<fastKronOp>(m, "Op")
+  py::enum_<fastKronOp>(m, "Op", py::module_local())
     .value("N", fastKronOp_N)
     .value("T", fastKronOp_T)
     .export_values();

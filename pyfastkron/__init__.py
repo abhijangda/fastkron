@@ -1,8 +1,11 @@
 import platform
+from .fastkronbase import fastkronX86, fastkronCUDA
 
-if platform.system() == "Linux" and platform.processor() == "x86_64":
-  from . import FastKron
-
-  __version__ = FastKron.version()
+if fastkronX86 != None and fastkronCUDA != None:
+  __version__ = fastkronX86.version() + "+" + fastkronCUDA.version()
+elif fastkronX86 != None:
+  __version__ = fastkronX86.version()
+elif fastkronCUDA != None:
+  __version__ = fastkronCUDA.version()
 else:
   __version__ = "1.0+shuffle"
