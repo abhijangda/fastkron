@@ -3,7 +3,9 @@
 #include <limits>
 #include <algorithm>
 
-#include <nccl.h>
+#if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU) 
+  #include <nccl.h>
+#endif
 
 #include "utils/utils.h"
 #include "utils/logger.h"

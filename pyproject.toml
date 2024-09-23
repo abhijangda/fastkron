@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name="pyfastkron"
 authors=[{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
-requires-python= ">= 3.10"
+requires-python= ">= 3.8"
 version = "1.0"
 #license
 dependencies = [

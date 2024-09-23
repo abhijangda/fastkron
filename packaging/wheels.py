@@ -6,6 +6,9 @@ import subprocess
 #[global]
 #index-url = "https://download.pytorch.org/whl/cu121"
 
+docker_create_container = "docker run -d -v $(pwd):/fastkron --name fastkron_build -it sameli/manylinux_2_28_x86_64_cuda_12.3:latest"
+docker_exec = f"docker exec -it fastkron_build"
+
 def run_command(command):
   print("Running ", command, " in directory ", os.getcwd())
   (s, o) = subprocess.getstatusoutput(command)
@@ -14,45 +17,25 @@ def run_command(command):
     assert False
   return s, o
 
-def build_wheel(backends, cuda_versions, torch_version):
-  if 'cuda' in backends:
-    for ver in cuda_versions:
-      (s, _) = run_command(f"python3 -m build --wheel")
-      if s == 0:
-        fs = os.listdir("dist/")
-        for f in fs:
-          if '.whl' in f:
-            split = f.split('-')
-            split[1] = split[1]+"+cu"+ver+"torch"+torch_version
-            shutil.move(f"dist/{f}", f"dist/{'-'.join(split)}")
-  else:
-    (s, _) = run_command(f"python3 -m build --wheel -C cmake.define.ENABLE_CUDA=OFF")
-    if s == 0:
-        fs = os.listdir("dist/")
-        for f in fs:
-          if '.whl' in f:
-            split = f.split('-')
-            split[1] = split[1]+"torch"+torch_version
-            shutil.move(f"dist/{f}", f"dist/{'-'.join(split)}")
+def build_wheel(python_version):
+  docker_fk_dir = "/fastkron/"
+  host_fk_dir = os.getcwd()
+  docker_packaging = os.path.join(docker_fk_dir, "packaging")
+  bdist_dir = "dist" 
+  (s, o) = run_command(f"{docker_exec} sh {docker_packaging}/manylinux_docker_build.sh cp{python_version} {docker_fk_dir}")
 
 if __name__ == "__main__":
   import argparse
   parser = argparse.ArgumentParser(description = "Build Python Wheels")
-  parser.add_argument('-backends', required=True, type=str, nargs="+")
-  parser.add_argument('-cuda-vers', required=False, type=str, nargs="+")
-  parser.add_argument('-torch-ver', required=True, type=str)
+  parser.add_argument('-python-version', required=True, type=str, nargs="+")
 
   args = parser.parse_args()
+  if len(args.python_version) > 0:
+    print("Create container")
 
-  if args.backends is not None:
-    for backend in args.backends:
-      assert backend in ['x86', 'cuda']
-  
-  if 'cuda' in args.backends:
-    assert args.cuda_vers is not None, "Specify CUDA Versions"
+    run_command(docker_create_container)
 
-  if args.cuda_vers is not None:
-    for ver in args.cuda_vers:
-      assert ver in ['118', '122', '124']
-  
-  build_wheel(args.backends, args.cuda_vers, args.torch_ver)
+    print(f"Building for Python versions: {args.python_version}")
+    for py in args.python_version:
+      print(f"Building for Python {py}")
+      build_wheel(py)

@@ -61,7 +61,7 @@ setup(
     name='pyfastkron',
     version='1.0',
     packages=['pyfastkron'],
-    ext_modules=[CMakeExtension('pyfastkron.FastKronX86'), CMakeExtension('pyfastkron.FastKronCUDA')],
+    ext_modules=[ CMakeExtension('pyfastkron.FastKronCUDA')], #CMakeExtension('pyfastkron.FastKronX86'),
     cmdclass={
         'build_ext': build_ext,
     }
