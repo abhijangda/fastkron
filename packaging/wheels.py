@@ -7,6 +7,8 @@ import subprocess
 #index-url = "https://download.pytorch.org/whl/cu121"
 
 docker_create_container = "docker run -d -v $(pwd):/fastkron --name fastkron_build -it sameli/manylinux_2_28_x86_64_cuda_12.3:latest"
+docker_kill_container = "docker kill fastkron_build"
+docker_rm_container = "docker rm fastkron_build"
 docker_exec = f"docker exec -it fastkron_build"
 
 def run_command(command):
@@ -39,3 +41,6 @@ if __name__ == "__main__":
     for py in args.python_version:
       print(f"Building for Python {py}")
       build_wheel(py)
+    
+    run_command(docker_kill_container)
+    run_command(docker_rm_container)

@@ -1,5 +1,6 @@
 import os
 import pathlib
+import sys
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as build_ext_orig
@@ -39,15 +40,13 @@ class build_ext(build_ext_orig):
         if 'X86' in ext.name:
           cmake_args += ['-DENABLE_CUDA=OFF', '-DENABLE_X86=ON']
         elif 'CUDA' in ext.name:
-          cmake_args += ['-DENABLE_CUDA=ON', '-DENABLE_X86=OFF', '-DCMAKE_CUDA_ARCHITECTURES=80']
+          cmake_args += ['-DENABLE_CUDA=ON', '-DENABLE_X86=OFF', '-DCMAKE_CUDA_ARCHITECTURES=80', f'-DPYTHON_EXECUTABLE={sys.executable}']
 
         # example of build args
         build_args = [
             #'--config', config,
             '-j'
         ]
-        print(46, build_temp, str(cwd))
-        print(31, str(extdir.parent.absolute()))
         os.chdir(str(build_temp))
         self.spawn(['cmake', str(cwd)] + cmake_args)
         if not self.dry_run:
@@ -61,7 +60,7 @@ setup(
     name='pyfastkron',
     version='1.0',
     packages=['pyfastkron'],
-    ext_modules=[ CMakeExtension('pyfastkron.FastKronCUDA')], #CMakeExtension('pyfastkron.FastKronX86'),
+    ext_modules=[ CMakeExtension('pyfastkron.FastKronCUDA'), CMakeExtension('pyfastkron.FastKronX86')],
     cmdclass={
         'build_ext': build_ext,
     }

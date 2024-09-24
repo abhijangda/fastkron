@@ -9,17 +9,16 @@ if platform.system() == "Linux":
     fastkronX86 = FastKronHandle("x86", FastKronX86)
   else:
     fastkronX86 = None
-  
+
+  fastkronCUDA = None
   try:
     import torch
     if torch.cuda.is_available():
       if torch.version.cuda != None:
         from . import FastKronCUDA
         fastkronCUDA = FastKronHandle("cuda", FastKronCUDA)
-      elif torch.version.hip:
-        fastkronCUDA = None
   except:
-    pass
+    fastkronCUDA = None
 
 def product(values):
   return reduce((lambda a, b: a * b), values)
