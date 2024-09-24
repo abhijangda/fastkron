@@ -1,4 +1,0 @@
-numpy  >= 1.0
---index-url https://download.pytorch.org/whl/cu121
-torch >=1.10
-torchvision >=0.1

@@ -7,7 +7,7 @@ name="pyfastkron"
 authors=[{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
 requires-python= ">= 3.8"
 version = "1.0"
-#license
+license="MIT License Copyright (c) 2024 Abhinav Jangda"
 dependencies = [
     "numpy",
     "torch",

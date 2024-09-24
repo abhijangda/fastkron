@@ -14,7 +14,7 @@ if platform.system() == "Linux":
   try:
     import torch
     if torch.cuda.is_available():
-      if torch.version.cuda != None:
+      if float(torch.version.cuda) >= 12.0:
         from . import FastKronCUDA
         fastkronCUDA = FastKronHandle("cuda", FastKronCUDA)
   except:

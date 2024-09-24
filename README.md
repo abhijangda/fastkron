@@ -32,7 +32,9 @@ FastKron performs significantly better than existing baselines.
 | SM50+ CUDA cores    |:white_check_mark: | :white_check_mark: |
 | SM80+ Tensor cores  | :x: | :x: |
 
-x86 CPUs older than x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not *yet* supported.
+x86 CPUs older than GLIBC x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not *yet* supported.
+In these cases, the Python wrapper PyFastKron will *fallback* to the shuffle algorithm in Numpy or PyTorch.
+The future plan is as follows: Windows, SM80+ Double Tensor cores, AMD GPUs, ARM CPUs.
 
 # Example
 The directory `example/` pinclude examples of using FastKron's CUDA and x86 backend using both C++ and Python.
