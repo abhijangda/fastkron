@@ -51,6 +51,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11.0")
     message (FATAL_ERROR "Require GCC/G++ 11.0 or later")
   endif()
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 endif()
 
 set(PKG_CONFIG_FILE libFastKron.pc)
