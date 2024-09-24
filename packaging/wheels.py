@@ -23,8 +23,11 @@ def build_wheel(python_version):
   docker_fk_dir = "/fastkron/"
   host_fk_dir = os.getcwd()
   docker_packaging = os.path.join(docker_fk_dir, "packaging")
-  bdist_dir = "dist" 
+  bdist_dir = "dist"
+  docker_bdist_dir = os.path.join(docker_fk_dir, bdist_dir)
+
   (s, o) = run_command(f"{docker_exec} sh {docker_packaging}/manylinux_docker_build.sh cp{python_version} {docker_fk_dir}")
+  (s, o) = run_command(f"{docker_exec} auditwheel repair {docker_bdist_dir}/*whl -w {docker_bdist_dir}/")
 
 if __name__ == "__main__":
   import argparse

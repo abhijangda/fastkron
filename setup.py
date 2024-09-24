@@ -28,14 +28,13 @@ class build_ext(build_ext_orig):
         build_temp = pathlib.Path(self.build_temp)
         build_temp.mkdir(parents=True, exist_ok=True)
         extdir = pathlib.Path(self.get_ext_fullpath(ext.name))
-        print(30, extdir.absolute())
         extdir.parent.mkdir(parents=True, exist_ok=True)
         # example of cmake args
         config = 'Debug' if self.debug else 'Release'
         cmake_args = [
             '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + str(extdir.parent.absolute()),
-            #'-DCMAKE_BUILD_TYPE=' + config,
-            '-DPYMODULE=ON'
+            '-DCMAKE_BUILD_TYPE=' + config,
+            '-DPYMODULE=ON',
         ]
         if 'X86' in ext.name:
           cmake_args += ['-DENABLE_CUDA=OFF', '-DENABLE_X86=ON']
@@ -44,7 +43,7 @@ class build_ext(build_ext_orig):
 
         # example of build args
         build_args = [
-            #'--config', config,
+            '--config', config,
             '-j'
         ]
         os.chdir(str(build_temp))
@@ -60,7 +59,7 @@ setup(
     name='pyfastkron',
     version='1.0',
     packages=['pyfastkron'],
-    ext_modules=[ CMakeExtension('pyfastkron.FastKronCUDA'), CMakeExtension('pyfastkron.FastKronX86')],
+    ext_modules=[  CMakeExtension('pyfastkron.FastKronX86')],#CMakeExtension('pyfastkron.FastKronCUDA'),
     cmdclass={
         'build_ext': build_ext,
     }
