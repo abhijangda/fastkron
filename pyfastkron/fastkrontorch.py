@@ -18,6 +18,7 @@ class FastKronTorch(FastKronBase):
     super().__init__(True, cuda)
 
   def tensor_data_ptr(self, tensor):
+    if tensor is None: return 0
     return tensor.data_ptr()
 
   def supportedDevice(self, x):

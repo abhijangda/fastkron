@@ -12,6 +12,7 @@ class FastKronNumpy(FastKronBase):
     super().__init__(True, False)
 
   def tensor_data_ptr(self, tensor):
+    if tensor is None: return 0
     return tensor.ctypes.data
 
   def supportedDevice(self, x):
@@ -89,8 +90,6 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
     print(rs)
     z = np.ndarray(shape=rs, dtype=x.dtype)
     __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
-
-  if len(orig_xshape) != 2:
-    z = z.reshape(list(orig_xshape[:-1]) + [z.shape[-1]])
+    z = z.reshape(rs)
 
   return z

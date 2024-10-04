@@ -118,25 +118,50 @@ class FastKronBase:
     return x, fs
 
   def batchedDims(self, x, fs, trX, trF):
-    xbatch = None
+    xbatch = []
     if trX:
       assert False
     else:
       xbatch = x.shape[:-2]
 
-    fbatch = None
+    prefbatch = []
     if trF:
       assert False
     else:
-      fbatch = fs[0].shape[:-2]
-    
-    return xbatch, fbatch
+      prefbatch = fs[0].shape[:-2]
+
+    if len(xbatch) < len(prefbatch):
+      xbatch = tuple([1] * (len(prefbatch) - len(xbatch))) + xbatch
+    elif len(xbatch) > len(prefbatch):
+      prefbatch = tuple([1] * (len(xbatch) - len(prefbatch))) + prefbatch
+
+    return xbatch, prefbatch
+
+  def broadcastShape(self, xbatch, prefbatch, postfbatch):
+    finalShape = ()
+    xbatch = tuple(reversed(xbatch))
+    prefbatch = tuple(reversed(prefbatch))
+    xi = 0
+    prefi = 0
+    while xi < len(xbatch) and prefi < len(prefbatch):
+      if xbatch[xi] == prefbatch[prefi]:
+        finalShape += (xbatch[xi],)
+      elif prefbatch[prefi] != 1:
+        finalShape += (prefbatch[prefi],)
+      elif xbatch[xi] != 1:
+        finalShape += (xbatch[xi],)
+      else:
+        raise ValueError(f"Expected value of dimension {len(xbatch) - xi} of x and f do not match: {xbatch[xi]} != {fbatch[fi]}")
+      xi += 1
+      prefi += 1
+      
+    return tuple(reversed(finalShape))
 
   def gekmmSizes(self, x, fs, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, None, None, trX, trF)
 
     device_type = self.device_type(x)
-    xbatch, fbatch = self.batchedDims(x, fs, trX, trF)
+    xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
     rs, ts = None, None
 
     if self.supportedSystem() and self.supportedProcessor():
@@ -150,7 +175,8 @@ class FastKronBase:
     else:
       rs, ts = (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
 
-    return xbatch + fbatch + (self.m(x, trX), rs//self.m(x, trX)), ts
+    return self.broadcastShape(xbatch, prefbatch, ()) + (self.m(x, trX), rs//self.m(x, trX)), ts
+
 
   def checkShapeAndTypes(self, x, fs, z, y, trX, trF):
     # Only operate on 2-dims matrices
@@ -167,8 +193,11 @@ class FastKronBase:
       if trF:
         assert False
       else:
-        if fs[0].shape[:-2] != f[i].shape[:-2]:
-          raise ValueError(f"Outer dims of factors do not match: {fs[0].shape[:-2]} != {f[i].shape[:-2]}")
+        if fs[0].shape[:-2] != f.shape[:-2]:
+          raise ValueError(f"Outer dims of factors do not match: {fs[0].shape[:-2]} != {f.shape[:-2]}")
+
+    xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
+    finalShape = self.broadcastShape(xbatch, prefbatch, ())
 
     if y is not None:
       if yshape[-2:] != (self.m(x, trX), self.k(x, trX)):
@@ -179,7 +208,9 @@ class FastKronBase:
     
     if z is not None:
       if z.shape[-2:] != (self.m(x, trX), product(self.qs(fs, trF))):
-        raise ValueError(f"Input operand 'z' shape ('{z.shape}') mismatch with '({self.m(x, trX), product(self.qs(fs, trF))})'")
+        raise ValueError(f"Output operand 'z' shape ('{z.shape}') mismatch with '({self.m(x, trX), product(self.qs(fs, trF))})'")
+      if z.shape[:-2] != finalShape:
+        raise ValueError(f"Output operand outer dimensions do not match with broadcasted dimensions ('{z.shape[:-2]}' != {finalShape})'")
       assert x.dtype == z.dtype
   
   def trLastTwoDims(self, x, dim1, dim2):
@@ -193,7 +224,16 @@ class FastKronBase:
 
     self.checkShapeAndTypes(x, fs, z, y, trX, trF)
 
-    handle.xgekmm(fn, self.m(x, trX), len(fs), self.ps(fs, trF), self.qs(fs, trF), self.tensor_data_ptr(x), self.fptrs(fs), self.tensor_data_ptr(z), alpha, beta, 0 if y is None else self.tensor_data_ptr(y), self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2), trX, trF)
+    xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
+
+    m = self.m(x, trX)
+    handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
+                  self.tensor_data_ptr(x), self.fptrs(fs), 
+                  self.tensor_data_ptr(z), alpha, beta, 
+                  self.tensor_data_ptr(y),
+                  self.tensor_data_ptr(temp1), 
+                  self.tensor_data_ptr(temp2), 
+                  trX, trF)
 
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)
