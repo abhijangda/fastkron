@@ -55,25 +55,25 @@ class FastKronBase:
 
   def ps(self, fs, trF):
     if trF:
-      assert False
+      return [f.shape[-1] for f in fs]
     else:
       return [f.shape[-2] for f in fs]
   
   def qs(self, fs, trF):
     if trF:
-      assert False
+      return [f.shape[-2] for f in fs]
     else:
       return [f.shape[-1] for f in fs]
 
   def m(self, x, trX):
     if trX:
-      assert False
+      return x.shape[-1]
     else:
       return x.shape[-2]
   
   def k(self, x, trX):
     if trX:
-      assert False
+      return x.shape[-2]
     else:
       return x.shape[-1]
 
@@ -89,28 +89,32 @@ class FastKronBase:
         newxshape = (1, xshape[0])
 
     elif trX:
-      assert False
+      if len(xshape) == 1:
+        newxshape = (xshape[0], 1)
 
     for fs in fshapes:
+      newfshapes += [fshapes]
       if trF == False:
-        newfshapes += [fshapes]
         if len(fs) == 1:
           newfshapes[-1] = [(fs[0], 1)]
       elif trF:
-        assert False      
+        if len(fs) == 1:
+          newfshapes[-1] = [(1, fs[0])]
 
     return newxshape, newfshapes
 
   def reshapeInput(self, x, fs, trX, trF):
     if trX:
-      assert False
+      if len(x.shape) == 1:
+        x = x.reshape((x.shape[0], 1))
     else:
       if len(x.shape) == 1:
         x = x.reshape((1,x.shape[0]))
     
     for f in fs:
       if trF:
-        assert False
+        if f.ndim == 1:
+          f = f.reshape((1, fs[0]))
       else:
         if f.ndim == 1:
           f = f.reshape((fs[0], 1))
@@ -118,17 +122,8 @@ class FastKronBase:
     return x, fs
 
   def batchedDims(self, x, fs, trX, trF):
-    xbatch = []
-    if trX:
-      assert False
-    else:
-      xbatch = x.shape[:-2]
-
-    prefbatch = []
-    if trF:
-      assert False
-    else:
-      prefbatch = fs[0].shape[:-2]
+    xbatch = x.shape[:-2]
+    prefbatch = fs[0].shape[:-2]
 
     if len(xbatch) < len(prefbatch):
       xbatch = tuple([1] * (len(prefbatch) - len(xbatch))) + xbatch
@@ -154,7 +149,7 @@ class FastKronBase:
         raise ValueError(f"Expected value of dimension {len(xbatch) - xi} of x and f do not match: {xbatch[xi]} != {fbatch[fi]}")
       xi += 1
       prefi += 1
-      
+
     return tuple(reversed(finalShape))
 
   def gekmmSizes(self, x, fs, trX = False, trF = False):
@@ -190,11 +185,8 @@ class FastKronBase:
       raise ValueError(f"Type of Kronecker factors do not match. Found {len(set([f.dtype for f in fs]))} different types")
 
     for i,f in enumerate(fs):
-      if trF:
-        assert False
-      else:
-        if fs[0].shape[:-2] != f.shape[:-2]:
-          raise ValueError(f"Outer dims of factors do not match: {fs[0].shape[:-2]} != {f.shape[:-2]}")
+      if fs[0].shape[:-2] != f.shape[:-2]:
+        raise ValueError(f"Batched dims of factors do not match: {fs[0].shape[:-2]} != {f.shape[:-2]}")
 
     xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
     finalShape = self.broadcastShape(xbatch, prefbatch, ())
@@ -210,7 +202,7 @@ class FastKronBase:
       if z.shape[-2:] != (self.m(x, trX), product(self.qs(fs, trF))):
         raise ValueError(f"Output operand 'z' shape ('{z.shape}') mismatch with '({self.m(x, trX), product(self.qs(fs, trF))})'")
       if z.shape[:-2] != finalShape:
-        raise ValueError(f"Output operand outer dimensions do not match with broadcasted dimensions ('{z.shape[:-2]}' != {finalShape})'")
+        raise ValueError(f"Output operand batched dimensions do not match with broadcasted dimensions ('{z.shape[:-2]}' != {finalShape})'")
       assert x.dtype == z.dtype
   
   def trLastTwoDims(self, x, dim1, dim2):
@@ -224,16 +216,55 @@ class FastKronBase:
 
     self.checkShapeAndTypes(x, fs, z, y, trX, trF)
 
-    xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
+    orig_xshape = x.shape
+    orig_fshape = []
+    for f in fs:
+      orig_fshape += [f.shape]
 
-    m = self.m(x, trX)
-    handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
-                  self.tensor_data_ptr(x), self.fptrs(fs), 
-                  self.tensor_data_ptr(z), alpha, beta, 
-                  self.tensor_data_ptr(y),
-                  self.tensor_data_ptr(temp1), 
-                  self.tensor_data_ptr(temp2), 
-                  trX, trF)
+    xbatch, fbatch = self.batchedDims(x, fs, trX, trF)
+    zindices = z.shape[:-2]
+    z = z.reshape((product(z.shape[:-2]),)+z.shape[-2:])
+    x = x.reshape((product(xbatch),)+x.shape[-2:])
+    for i in range(len(fs)):
+      fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
+
+    for batchLinearIdxZ in range(product(z.shape[:-2])):
+      batchLinearIdxX = 0
+      batchLinearIdxF = 0
+      tmpx = tmpf = batchLinearIdxZ
+      xDimProds = product(xbatch)
+      zDimProds = product(zindices)
+      fDimProds = product(fbatch)
+
+      for dim,size in enumerate(zindices):
+        batchLinearIdxX = batchLinearIdxX*xDimProds + (0 if xbatch[dim] == 1 else tmpx // (zDimProds//zindices[dim]))
+        batchLinearIdxF = batchLinearIdxF*fDimProds + (0 if fbatch[dim] == 1 else tmpf // (zDimProds//zindices[dim]))
+
+        tmpx = tmpx%(zDimProds//zindices[dim])
+        tmpf = tmpf%(zDimProds//zindices[dim])
+
+        xDimProds = xDimProds//xbatch[dim]
+        fDimProds = fDimProds//fbatch[dim]
+        zDimProds = zDimProds//zindices[dim]
+
+      batchLinearIdxX += tmpx
+      batchLinearIdxF += tmpf
+
+      print(batchLinearIdxZ, batchLinearIdxX, batchLinearIdxF)
+
+      m = self.m(x, trX)
+      handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
+                    self.tensor_data_ptr(x[batchLinearIdxX, :]), 
+                    self.fptrs([f[batchLinearIdxF,:] for f in fs]),
+                    self.tensor_data_ptr(z[batchLinearIdxZ, :]), alpha, beta, 
+                    self.tensor_data_ptr(y),
+                    self.tensor_data_ptr(temp1), 
+                    self.tensor_data_ptr(temp2), 
+                    trX, trF)
+    
+    x.reshape(orig_xshape)
+    for i,f in enumerate(fs):
+      f.reshape(orig_fshape[i])
 
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)
