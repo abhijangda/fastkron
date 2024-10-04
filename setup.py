@@ -39,7 +39,9 @@ class build_ext(build_ext_orig):
         if 'X86' in ext.name:
           cmake_args += ['-DENABLE_CUDA=OFF', '-DENABLE_X86=ON']
         elif 'CUDA' in ext.name:
-          cmake_args += ['-DENABLE_CUDA=ON', '-DENABLE_X86=OFF', '-DCMAKE_CUDA_ARCHITECTURES=80', f'-DPYTHON_EXECUTABLE={sys.executable}']
+          cmake_args += ['-DENABLE_CUDA=ON', '-DENABLE_X86=OFF']
+        
+        cmake_args += [f'-DPYTHON_EXECUTABLE={sys.executable}']
 
         # example of build args
         build_args = [

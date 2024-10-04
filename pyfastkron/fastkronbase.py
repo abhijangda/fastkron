@@ -53,76 +53,109 @@ class FastKronBase:
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
 
-  def ps(self, fsshape):
-    return [f[0] for f in fsshape]
+  def ps(self, fs, trF):
+    if trF:
+      assert False
+    else:
+      return [f.shape[-2] for f in fs]
   
-  def qs(self, fsshape):
-    return [f[1] for f in fsshape]
+  def qs(self, fs, trF):
+    if trF:
+      assert False
+    else:
+      return [f.shape[-1] for f in fs]
+
+  def m(self, x, trX):
+    if trX:
+      assert False
+    else:
+      return x.shape[-2]
   
+  def k(self, x, trX):
+    if trX:
+      assert False
+    else:
+      return x.shape[-1]
+
   def fptrs(self, fs):
     return [self.tensor_data_ptr(f) for f in fs]
 
-  def matrixShape(self, m, tr):
-    if tr == False:
-      return (m.shape[0], m.shape[1])
-    else:
-      return (m.shape[1], m.shape[0])
+  def xfsShape(self, xshape, fshapes, trX, trF):
+    newxshape = None
+    newfshapes = []
+
+    if trX == False:
+      if len(xshape) == 1:
+        newxshape = (1, xshape[0])
+
+    elif trX:
+      assert False
+
+    for fs in fshapes:
+      if trF == False:
+        newfshapes += [fshapes]
+        if len(fs) == 1:
+          newfshapes[-1] = [(fs[0], 1)]
+      elif trF:
+        assert False      
+
+    return newxshape, newfshapes
 
   def reshapeInput(self, x, fs, trX, trF):
-    if x.ndim == 1:
-      if trX:
-        x = x.reshape([x.shape[0], 1])
+    if trX:
+      assert False
+    else:
+      if len(x.shape) == 1:
+        x = x.reshape((1,x.shape[0]))
+    
+    for f in fs:
+      if trF:
+        assert False
       else:
-        x = x.reshape([1, x.shape[0]])
-    elif x.ndim > 2:
-      if trX:
-        raise ValueError("Input 'x' should be a 2D Tensor with 'trX'=True")
-      else:
-        newshape = (product(x.shape[:x.ndim - 1]), x.shape[x.ndim - 1])
-        x = x.reshape(newshape)
-
-    if x.ndim > 2:
-      raise ValueError(f"Input 'x' should be a 2-D Tensor after reshaping but has shape '{x.shape}'")
-
-    for i in range(len(fs)):
-      if fs[i].ndim == 1:
-        if trF:
-          fs[i] = fs[i].reshape((1, fs[i].shape[0]))
-        else:
-          fs[i] = fs[i].reshape((fs[i].shape[0], 1))
-      elif fs[i].ndim > 2:
-        raise ValueError(f"Input 'fs[{i}]' should be a 2D Tensor")
-
-      if fs[i].ndim > 2:
-        raise ValueError(f"Input 'fs{i}' should be a 2-D Tensor after reshaping but has shape '{fs[i].shape}'")
+        if f.ndim == 1:
+          f = f.reshape((fs[0], 1))
 
     return x, fs
+
+  def batchedDims(self, x, fs, trX, trF):
+    xbatch = None
+    if trX:
+      assert False
+    else:
+      xbatch = x.shape[:-2]
+
+    fbatch = None
+    if trF:
+      assert False
+    else:
+      fbatch = fs[0].shape[:-2]
+    
+    return xbatch, fbatch
 
   def gekmmSizes(self, x, fs, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, None, None, trX, trF)
 
     device_type = self.device_type(x)
-    xshape = self.matrixShape(x, trX)
-    fsshape = [self.matrixShape(f, trF) for f in fs]
+    xbatch, fbatch = self.batchedDims(x, fs, trX, trF)
+    rs, ts = None, None
 
     if self.supportedSystem() and self.supportedProcessor():
       if device_type == 'cpu':
         if fastkronX86 != None:
-          return fastkronX86.gekmmSizes(xshape, self.ps(fsshape), self.qs(fsshape))
+          rs, ts = fastkronX86.gekmmSizes((self.m(x, trX), self.k(x, trX)), self.ps(fs, trF), self.qs(fs, trF))
         else:
           raise ValueError(f"Device type '{device_type}' not supported")
       elif device_type == 'cuda':
-        return fastkronCUDA.gekmmSizes(xshape, self.ps(fsshape), self.qs(fsshape))
+        rs, ts = fastkronCUDA.gekmmSizes((self.m(x, trX), self.k(x, trX)), self.ps(fs, trF), self.qs(fs, trF))
     else:
-      return (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
+      rs, ts = (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
 
-  def checkShapeAndTypes(self, x, fs, y, z, trX, trF):
+    return xbatch + fbatch + (self.m(x, trX), rs//self.m(x, trX)), ts
+
+  def checkShapeAndTypes(self, x, fs, z, y, trX, trF):
     # Only operate on 2-dims matrices
-    xshape = self.matrixShape(x, trX)
-    fsshape = [self.matrixShape(f, trF) for f in fs]
-
-    if xshape[1] != product(self.ps(fsshape)):
-      raise ValueError(f"Input operand x has a mismatch with its dimension 1 ('{xshape[1]}') with dimension 0 of kronecker product of fs ('{product(self.ps(fsshape))}')")
+    if self.k(x, trX) != product(self.ps(fs, trF)):
+      raise ValueError(f"Input operand x has a mismatch with its dimension 1 ('{self.k(x, trX)}') with dimension 0 of kronecker product of fs ('{product(self.ps(fs, trF))}')")
     
     if x.dtype != fs[0].dtype:
       raise ValueError(f"Operand types mismatches {x.dtype} != {fs[0].dtype}")
@@ -130,17 +163,24 @@ class FastKronBase:
     if len(set([f.dtype for f in fs])) != 1:
       raise ValueError(f"Type of Kronecker factors do not match. Found {len(set([f.dtype for f in fs]))} different types")
 
-    if z is not None:
-      zshape = self.matrixShape(z, False)
-      assert xshape[0] == zshape[0]
-      assert zshape[1] == product(self.qs(fsshape))
+    for i,f in enumerate(fs):
+      if trF:
+        assert False
+      else:
+        if fs[0].shape[:-2] != f[i].shape[:-2]:
+          raise ValueError(f"Outer dims of factors do not match: {fs[0].shape[:-2]} != {f[i].shape[:-2]}")
+
+    if y is not None:
+      if yshape[-2:] != (self.m(x, trX), self.k(x, trX)):
+        raise ValueError(f"")
+      if yshape[1] != product(self.qs(fs, trF)):
+        raise ValueError(f"")
       assert x.dtype   == z.dtype
     
-    if y is not None:
-      yshape = self.matrixShape(y, False)
-      if yshape[0] != xshape[0] or yshape[1] != product(self.qs(fsshape)):
-        raise ValueError(f"Input operand 'y' shape ('{yshape}') mismatch with '({xshape[0], product(self.qs(fsshape))})'")
-      assert x.dtype == y.dtype
+    if z is not None:
+      if z.shape[-2:] != (self.m(x, trX), product(self.qs(fs, trF))):
+        raise ValueError(f"Input operand 'z' shape ('{z.shape}') mismatch with '({self.m(x, trX), product(self.qs(fs, trF))})'")
+      assert x.dtype == z.dtype
   
   def trLastTwoDims(self, x, dim1, dim2):
     raise NotImplementedError()
@@ -153,10 +193,7 @@ class FastKronBase:
 
     self.checkShapeAndTypes(x, fs, z, y, trX, trF)
 
-    xshape = self.matrixShape(x, trX)
-    fsshape = [self.matrixShape(f, trF) for f in fs]
-
-    handle.xgekmm(fn, xshape[0], len(fs), self.ps(fsshape), self.qs(fsshape), self.tensor_data_ptr(x), self.fptrs(fs), self.tensor_data_ptr(z), alpha, beta, 0 if y is None else self.tensor_data_ptr(y), self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2), trX, trF)
+    handle.xgekmm(fn, self.m(x, trX), len(fs), self.ps(fs, trF), self.qs(fs, trF), self.tensor_data_ptr(x), self.fptrs(fs), self.tensor_data_ptr(z), alpha, beta, 0 if y is None else self.tensor_data_ptr(y), self.tensor_data_ptr(temp1), 0 if temp2 is None else self.tensor_data_ptr(temp2), trX, trF)
 
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)

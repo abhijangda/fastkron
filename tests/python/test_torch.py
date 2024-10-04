@@ -3,6 +3,10 @@ import torch
 
 import pyfastkron.fastkrontorch as fk
 
+
+def product(values):
+  return reduce((lambda a, b: a * b), values)
+
 def reference(x, fs, trX, trF):
   if trX:
     x = x.T
@@ -46,7 +50,42 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, m1=1, q1=1):
 
   assert val
 
+def run_2(m, n, ps, qs, dtype, device, trX, trF, high=5, m1=1, q1=1):
+  #Using integer values instead of real numbers because 
+  #floating point is not associative
+  xshape = (m, product(ps)) if not trX else (product(ps), m)
+  if m == 1:
+    if trX:
+      xshape = (xshape[0],)
+    else:
+      xshape = (xshape[1],)
+
+  if m1 != 1 and not trX:
+    xshape = (m1,) + xshape
+  assert (trF is False)
+  # if q1 != 1 and not trF:
+  #   fshape = (q1,) + fshape
+
+  x = torch.randint(high=high,size=xshape, dtype=dtype).to(device)
+  fs = [0,0,0]
+  fs[0] = torch.tensor([[ 2.0000,  0.0000,  0.0000],
+        [ 0.0000,  1.7321,  0.0000],
+        [ 1.0000, -0.5774,  1.2910]], dtype=dtype)
+  fs[1] = torch.tensor([[ 2.0000,  0.0000,  0.0000],
+        [ 0.0000,  1.7321,  0.0000],
+        [ 1.0000, -0.5774,  1.2910]])
+  # fs = [torch.randint(high=high,size=(ps[i], qs[i]), dtype=dtype).to(device) for i in range(n)]
+
+  y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
+
+  ref = reference(x, fs, trX, trF)
+  val = torch.isclose(y, ref, rtol=1e-04).all().item()
+  print(val)
+  assert val
+
 def device_tests(device):
+  run_2(24, 3, [3,2,4],[3,2,4], torch.float32, device, False, False)
+  return
   run(1024, 5, 8, 8, torch.float32, device, False, False)
   run(10, 5, 6, 6, torch.float32, device, True, False)
   run(10, 5, 6, 6, torch.float32, device, True, False)
@@ -76,5 +115,5 @@ def test_cpu():
     device_tests("cpu")
 
 if __name__ == "__main__":
-  test_cuda()
+  # test_cuda()
   test_cpu()

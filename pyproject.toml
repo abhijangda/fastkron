@@ -5,14 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name="pyfastkron"
 authors=[{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
+maintainers = [{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
 requires-python= ">= 3.8"
 version = "1.0"
-license="MIT License Copyright (c) 2024 Abhinav Jangda"
+license = {file="LICENSE.txt"}
+readme = "README.md"
+keywords = ["kronecker product", "cuda", "gpu", "kronecker matrix multiplication"]
 dependencies = [
     "numpy",
     "torch",
     "torchvision"
 ]
+
+[project.urls]
+Homepage = "https://github.com/abhijangda/fastkron"
+Documentation = "https://github.com/abhijangda/fastkron"
+Repository = "https://github.com/abhijangda/fastkron"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

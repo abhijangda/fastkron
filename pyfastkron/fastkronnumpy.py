@@ -79,17 +79,15 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
 
   orig_xshape = x.shape
 
-  x,fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
+  x, fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
 
   if not __fastkronnumpy.isSupported(x, fs):
     z = __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
   else:
     rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
     temp1 = np.ndarray(ts, dtype=x.dtype)
-    if not trX:
-      z = np.ndarray((x.shape[0], rs//x.shape[0]), dtype=x.dtype)
-    else:
-      z = np.ndarray((x.shape[1], rs//x.shape[1]), dtype=x.dtype)
+    print(rs)
+    z = np.ndarray(shape=rs, dtype=x.dtype)
     __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
 
   if len(orig_xshape) != 2:

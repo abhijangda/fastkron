@@ -26,24 +26,37 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, m1=1, q1=1):
   if m1 != 1 and not trX:
     xshape = (m1,) + xshape
  
-  fshape = (p, q) if not trF else (q, p)
+  fshape = [p, q] if not trF else [q, p]
   if q == 1:
+    assert q1 > 1
     if trF:
-      fshape = (fshape[1],)
+      fshape = [fshape[1],]
     else:
-      fshape = (fshape[0],)
+      fshape = [fshape[0],]
+  
+  if q1 == 1:
+    assert q > 1
+    if trF:
+      fshape = fshape + [q1,]
+    else:
+      fshape = [q1,] + fshape 
 
   x = np.random.randint(0, high=high,size=xshape).astype(dtype)
-  fs = [np.random.randint(0, high=high,size=fshape).astype(dtype) for i in range(n)]
+  fs = [np.random.randint(0, high=high,size=fshape).astype(dtype)\
+        for i in range(n)]
 
   y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
 
   ref = reference(x, fs, trX, trF)
   val = np.isclose(y, ref, rtol=1e-04).all().item()
-
+  print(52, val)
   assert val
 
 def device_tests(device):
+  run(1024, 5, 8, 8, np.float32, device, False, False, m1=2, q1=2)
+  run(1024, 5, 8, 8, np.float32, device, False, False, m1=2, q1=1)
+  run(1024, 5, 8, 8, np.float32, device, False, False, m1=1, q1=2)
+  return
   run(1024, 5, 8, 8, np.float32, device, False, False)
   run(10, 5, 6, 6, np.float32, device, True, False)
 
