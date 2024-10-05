@@ -53,6 +53,19 @@ class FastKronBase:
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
 
+  
+  def p(self, f, trF):
+    if trF:
+      return f.shape[-1]
+    else:
+      return f.shape[-2]
+  
+  def q(self, f, trF):
+    if trF:
+      return f.shape[-2]
+    else:
+      return f.shape[-1]
+
   def ps(self, fs, trF):
     if trF:
       return [f.shape[-1] for f in fs]
@@ -208,7 +221,7 @@ class FastKronBase:
         raise ValueError(f"Output operand batched dimensions do not match with broadcasted dimensions ('{z.shape[:-2]}' != {finalShape})'")
       assert x.dtype == z.dtype
   
-  def trLastTwoDims(self, x, dim1, dim2):
+  def trLastTwoDims(self, x):
     raise NotImplementedError()
 
   def device_type(self, x):
@@ -286,22 +299,25 @@ class FastKronBase:
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)
 
     rs, _ = self.gekmmSizes(x, fs, trX=trX, trF=trF)
-    
-    if trX: x = x.T
+    m,  k = self.m(x, trX), self.k(x, trX)
+
+    if trX:
+      x = self.trLastTwoDims(x)
+
     z = x
-    m,  k = x.shape
-    l = rs//m
-    
+    l = rs[-1]
+
     for i,f in enumerate(reversed(fs)):
-      if trF: f=f.T
-      inp = z.reshape(m * (k//f.shape[0]), f.shape[0])
-      z = framework.matmul(inp, f)
-      z = z.reshape((m, (k//f.shape[0]), f.shape[1]))
-      z = self.trLastTwoDims(z, 2, 1)
-      k = (k//f.shape[0]) * f.shape[1]
+      if trF: f = self.trLastTwoDims(f)
+      z = z.reshape(z.shape[:-2] + (m * k//self.p(f, False), self.p(f, False)))
+      z = framework.matmul(z, f)
+      z = z.reshape(z.shape[:-2] + (m, k//self.p(f, False), self.q(f, False)))
+      z = self.trLastTwoDims(z)
+      z = z.reshape(z.shape[:-3] + (m*k//self.p(f, False), self.q(f, False)))
+      k = (k//self.p(f, False)) * self.q(f, False)
 
     if alpha != None:
-      z = alpha * (z.reshape((m, l)))
+      z = alpha * (z.reshape(z.shape[:-2] + (m, l)))
     if beta != None and y != None:
       z += beta * y
     return z

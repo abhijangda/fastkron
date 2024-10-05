@@ -21,8 +21,9 @@ class FastKronNumpy(FastKronBase):
   def supportedTypes(self, x, fs):
     return x.dtype in [np.float32, np.double]
 
-  def trLastTwoDims(self, x, dim1, dim2):
-    return x.transpose(list(range(len(x.shape) - 2)) + [dim1, dim2,])
+  def trLastTwoDims(self, x):
+    axes = list(range(len(x.shape) - 2)) + [len(x.shape) - 1, len(x.shape) - 2]
+    return x.transpose(axes)
 
   def device_type(self, x):
     return "cpu"
@@ -87,7 +88,6 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   else:
     rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
     temp1 = np.ndarray(ts, dtype=x.dtype)
-    print(rs)
     z = np.ndarray(shape=rs, dtype=x.dtype)
     __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
     z = z.reshape(rs)

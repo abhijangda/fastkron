@@ -71,21 +71,21 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=
   assert val
 
 def device_tests(device):
-  # run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[])
-  # run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
-  # run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
-  # run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
-  # run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[])
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
-  # run(16, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
-  # run(32, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
-  # run(13, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
-  # run(29, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
+  run(16, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
+  run(32, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
+  run(13, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
+  run(29, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
   
   run(128, 5, 8, 8, np.float32, device, False, False)
   run(10, 5, 6, 6, np.float32, device, True, False)
 
-  #double
+  # #double
   run(11, 10, 3, 3, np.double, device, False, True)
   run(200, 2, 32, 32, np.double, device, True, True)
 
@@ -93,6 +93,8 @@ def device_tests(device):
 
   #float16
   run(102, 4, 8, 8, np.float16, device, False, False, high=2)
+  run(102, 4, 8, 8, np.float16, device, False, False, high=2, batchDimX=[2,], batchDimFPre=[])
+  run(102, 4, 8, 8, np.float16, device, False, False, high=2, batchDimX=[2,1,], batchDimFPre=[3,])
   run(10, 3, 16, 8, np.float16, device, True, False, high=2)
 
 def test_cpu():
