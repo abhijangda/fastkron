@@ -121,14 +121,15 @@ class FastKronBase:
 
     return x, fs
 
-  def batchedDims(self, x, fs, trX, trF):
+  def batchedDims(self, x, fs, trX, trF, addPadding=True):
     xbatch = x.shape[:-2]
     prefbatch = fs[0].shape[:-2]
 
-    if len(xbatch) < len(prefbatch):
-      xbatch = tuple([1] * (len(prefbatch) - len(xbatch))) + xbatch
-    elif len(xbatch) > len(prefbatch):
-      prefbatch = tuple([1] * (len(xbatch) - len(prefbatch))) + prefbatch
+    if addPadding == True:
+      if len(xbatch) < len(prefbatch):
+        xbatch = tuple([1] * (len(prefbatch) - len(xbatch))) + xbatch
+      elif len(xbatch) > len(prefbatch):
+        prefbatch = tuple([1] * (len(xbatch) - len(prefbatch))) + prefbatch
 
     return xbatch, prefbatch
 
@@ -170,7 +171,9 @@ class FastKronBase:
     else:
       rs, ts = (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
 
-    return self.broadcastShape(xbatch, prefbatch, ()) + (self.m(x, trX), rs//self.m(x, trX)), ts
+    zbroadcastshape = self.broadcastShape(xbatch, prefbatch, ())
+    return self.broadcastShape(xbatch, prefbatch, ()) + (self.m(x, trX), rs//self.m(x, trX)), \
+          (1 if len(zbroadcastshape) == 0 else product(zbroadcastshape))*ts
 
 
   def checkShapeAndTypes(self, x, fs, z, y, trX, trF):
@@ -221,50 +224,63 @@ class FastKronBase:
     for f in fs:
       orig_fshape += [f.shape]
 
-    xbatch, fbatch = self.batchedDims(x, fs, trX, trF)
-    zindices = z.shape[:-2]
-    z = z.reshape((product(z.shape[:-2]),)+z.shape[-2:])
-    x = x.reshape((product(xbatch),)+x.shape[-2:])
-    for i in range(len(fs)):
-      fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
-
-    for batchLinearIdxZ in range(product(z.shape[:-2])):
-      batchLinearIdxX = 0
-      batchLinearIdxF = 0
-      tmpx = tmpf = batchLinearIdxZ
-      xDimProds = product(xbatch)
-      zDimProds = product(zindices)
-      fDimProds = product(fbatch)
-
-      for dim,size in enumerate(zindices):
-        batchLinearIdxX = batchLinearIdxX*xDimProds + (0 if xbatch[dim] == 1 else tmpx // (zDimProds//zindices[dim]))
-        batchLinearIdxF = batchLinearIdxF*fDimProds + (0 if fbatch[dim] == 1 else tmpf // (zDimProds//zindices[dim]))
-
-        tmpx = tmpx%(zDimProds//zindices[dim])
-        tmpf = tmpf%(zDimProds//zindices[dim])
-
-        xDimProds = xDimProds//xbatch[dim]
-        fDimProds = fDimProds//fbatch[dim]
-        zDimProds = zDimProds//zindices[dim]
-
-      batchLinearIdxX += tmpx
-      batchLinearIdxF += tmpf
-
-      print(batchLinearIdxZ, batchLinearIdxX, batchLinearIdxF)
-
+    xbatch, fbatch = self.batchedDims(x, fs, trX, trF, addPadding = False)
+    if len(fbatch) == 0 and (len(xbatch) == 0 or not trX):
       m = self.m(x, trX)
+      if len(xbatch) > 0:
+        m = m * product(xbatch)
+
       handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
-                    self.tensor_data_ptr(x[batchLinearIdxX, :]), 
-                    self.fptrs([f[batchLinearIdxF,:] for f in fs]),
-                    self.tensor_data_ptr(z[batchLinearIdxZ, :]), alpha, beta, 
+                    self.tensor_data_ptr(x), 
+                    self.fptrs(fs),
+                    self.tensor_data_ptr(z), alpha, beta, 
                     self.tensor_data_ptr(y),
                     self.tensor_data_ptr(temp1), 
                     self.tensor_data_ptr(temp2), 
                     trX, trF)
+    else:
+      xbatch, fbatch = self.batchedDims(x, fs, trX, trF, addPadding = True)
+      zindices = z.shape[:-2]
+      z = z.reshape((product(z.shape[:-2]),)+z.shape[-2:])
+      x = x.reshape((product(xbatch),)+x.shape[-2:])
+      for i in range(len(fs)):
+        fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
+
+      for batchLinearIdxZ in range(product(z.shape[:-2])):
+        batchLinearIdxX = 0
+        batchLinearIdxF = 0
+        tmpx = tmpf = batchLinearIdxZ
+        xDimProds = product(xbatch)
+        zDimProds = product(zindices)
+        fDimProds = product(fbatch)
+
+        for dim,size in enumerate(zindices):
+          batchLinearIdxX = batchLinearIdxX*xDimProds + (0 if xbatch[dim] == 1 else tmpx // (zDimProds//zindices[dim]))
+          batchLinearIdxF = batchLinearIdxF*fDimProds + (0 if fbatch[dim] == 1 else tmpf // (zDimProds//zindices[dim]))
+
+          tmpx = tmpx%(zDimProds//zindices[dim])
+          tmpf = tmpf%(zDimProds//zindices[dim])
+
+          xDimProds = xDimProds//xbatch[dim]
+          fDimProds = fDimProds//fbatch[dim]
+          zDimProds = zDimProds//zindices[dim]
+
+        batchLinearIdxX += tmpx
+        batchLinearIdxF += tmpf
+
+        m = self.m(x, trX)
+        handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
+                      self.tensor_data_ptr(x[batchLinearIdxX, :]), 
+                      self.fptrs([f[batchLinearIdxF,:] for f in fs]),
+                      self.tensor_data_ptr(z[batchLinearIdxZ, :]), alpha, beta, 
+                      self.tensor_data_ptr(y),
+                      self.tensor_data_ptr(temp1), 
+                      self.tensor_data_ptr(temp2), 
+                      trX, trF)
     
     x.reshape(orig_xshape)
-    for i,f in enumerate(fs):
-      f.reshape(orig_fshape[i])
+    for i in range(len(fs)):
+      fs[i] = fs[i].reshape(orig_fshape[i])
 
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)
