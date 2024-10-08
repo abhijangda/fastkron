@@ -46,16 +46,21 @@ fastKronError KernelDatabase::procMemset(uint32_t proc, StridedBatchMatrix& m,
                                          int batches, float val) {
   for (int b = 0; b < batches; b++) {
     auto subM = m.batch<float>(b);
-    procMemset(proc, subM, val);
+    auto e = procMemset(proc, subM, val);
+    if (e != fastKronSuccess) return e;
   }
+  return fastKronSuccess;
 }
 
 fastKronError KernelDatabase::procMemset(uint32_t proc, StridedBatchFactor& m, 
                                          int batches, float val) {
   for (int b = 0; b < batches; b++) {
     auto subM = m.batch<float>(b);
-    procMemset(proc, subM, val);
+    auto e = procMemset(proc, subM, val);
+    if (e != fastKronSuccess) return e;
   }
+
+  return fastKronSuccess;
 }
 
 fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
@@ -254,7 +259,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
 
 bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore,
                                          std::vector<KMMKernel*>& kernels) {
-  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), KernelBatchType::Normal};
   auto it = compiledKernels.find(key);
   if (it == compiledKernels.end()) return false;
   std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
@@ -273,6 +278,7 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
 
   DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), batchType};
   auto it = compiledKernels.find(key);
+
   if (it != compiledKernels.end()) {
     for (auto k : it->second) {
       if (k->canCompute(problem, hardware[0], useP2PStore) &&
