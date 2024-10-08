@@ -114,9 +114,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
     problem.ps(Ps);
     problem.qs(Qs);
 
-    err =  autotuner.tune(KMMProblem(problem.type(), problem.m(), problem.n(),
-                                     Ps, Qs, problem.opX(), problem.opFs()),
-                          backend, kernelSeries);
+    err =  autotuner.tune(problem, backend, kernelSeries);
     if (err != fastKronSuccess)
       return err;
   } 
@@ -147,6 +145,65 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
 
   return err;
 }
+
+/*fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatched problem, 
+                                                   const fastKronBackend backend, 
+                                                   void* temp1, void* temp2,
+                                                   EpilogueStridedBatchedParams epilogueParams) {
+  if (problem.y().data()  == nullptr || temp1 == nullptr ||
+      hasBackend(backend) == false) 
+      return fastKronInvalidArgument;
+
+  if (problem.y().data() == epilogueParams.z<void>() && 
+      (temp1 == nullptr || temp2 == nullptr))
+      return fastKronInvalidArgument;
+
+  fastKronError err;
+  TunedKernelsSeries kernelSeries;
+
+  void* temps[2] = {temp1, temp2};
+  auto kernelDb = getKernelDb(backend);
+
+  // if (canTune()) {
+  //   //Tune for the fastest kernel series for the problem
+  //   uint32_t Ps[problem.n()];
+  //   uint32_t Qs[problem.n()];
+  //   problem.ps(Ps);
+  //   problem.qs(Qs);
+
+  //   err =  autotuner.tune(KMMProblemStridedBatched(problem.type(), problem.m(), problem.n(),
+  //                                                  Ps, Qs, problem.opX(), problem.opFs()),
+  //                         backend, kernelSeries);
+  //   if (err != fastKronSuccess)
+  //     return err;
+  // } 
+  // else {
+  //   //Otherwise, use a low-latency algorithm to obtain an efficient kernel
+  //   kernelSeries = kernelDb->kernelSeriesForProblem(problem);
+  // }
+
+  // auto kernelSeriesIter = kernelSeries.begin();
+
+  // //Execute GeKMM algorithm using above kernels
+  // err = executeGeKMM(problem, temps, kernelSeries.size(),
+  //   [&kernelSeriesIter](const KMMProblem) 
+  //     {return kernelSeriesIter->kernel->getFusedFacs();},
+  //   [&kernelSeriesIter, epilogueParams, kernelDb, this]
+  //     (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
+  //       fastKronError err;
+  //       auto kernel = *kernelSeriesIter;
+
+  //       KMMKernel* selectedKernel = kernel.kernel;
+  //       assert(rstart == kernel.end);
+  //       err = kernelDb->invokeKernel(selectedKernel, subProblem, 
+  //                                    rstart, epilogueParams,
+  //                                    KernelModeNormal);
+  //       kernelSeriesIter++;
+  //       return err;
+  //   });
+
+  // return err;
+}*/
 
 fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, 
                                               Matrix& result,

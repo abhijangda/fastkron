@@ -167,6 +167,10 @@ class FastKronHandle {
    */
   fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend,
                        void* temp1, void* temp2, EpilogueParams epilogueParams);
+
+
+  fastKronError xgekmmStridedBatched(const KMMProblemStridedBatched problem, const fastKronBackend backend,
+                       void* temp1, void* temp2, EpilogueParams epilogueParams);
   /**
    * FastKronHandle::gekmmSizes() - Obtain GeKMM result and temporary sizes
    * @problem: The GeKMM problem as an object of KMMProblem

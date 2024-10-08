@@ -122,14 +122,20 @@ fastKronError fastKronSetStream(fastKronHandle handlePtr, fastKronBackend backen
 
 fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], uint Qs[], 
                          size_t* resultSize, size_t* tempSize) {
-  KMMProblem problem(FastKronTypeNone, M, N, Ps, Qs, fastKronOp_N, fastKronOp_N);
+  KMMProblem problem(FastKronTypeNone,
+                     Matrix(M, KMMProblem::getK(Ps, N)), fastKronOp_N,
+                     KMMProblem::Factors(N, Ps, Qs, nullptr), fastKronOp_N,
+                     Matrix(M, KMMProblem::getL(Qs, N)));
   return ((FastKronHandle*)handlePtr)->gekmmSizes(problem, resultSize, tempSize);
 }
 
 fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const float* X,
                      fastKronOp opX, const float* Fs[], fastKronOp opFs, float* Y,
                      float alpha, float beta, const float *Z, float* temp1, float* temp2) {
-  KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
+  KMMProblem problem(FastKronFloat,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
@@ -137,7 +143,10 @@ fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
 fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const int* X,
                    fastKronOp opX, const int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, const int *Z, int* temp1, int* temp2) {
-  KMMProblem problem(FastKronInt, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
+  KMMProblem problem(FastKronInt,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
@@ -145,7 +154,10 @@ fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
 fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
                    fastKronOp opX, const double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, const double *Z, double* temp1, double* temp2) {
-  KMMProblem problem(FastKronDouble, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
+  KMMProblem problem(FastKronDouble,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
   return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<double>(alpha, beta, Z));
 }
@@ -157,8 +169,9 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                                    float* Z, float alpha, float beta, uint64_t strideZ,
                                    uint32_t batchCount, const float *Y, uint64_t strideY,
                                    float* temp1, float* temp2) {
-  KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-
+  // KMMProblemStridedBatched problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
+  // auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, Y, strideY);
+  // return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }
 
 fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
