@@ -11,15 +11,17 @@
 #pragma once
 
 /**
- * KMMProblemT represents a Kronecker Matrix Matrix Multiplication problem.
+ * KMMProblemBase represents a Kronecker Matrix Matrix Multiplication problem.
  * This class takes a maximum factors (MaxFactors) as a template and contains
  * X, and Z as matrices, element type, OpX, OpF, and an array of factors.
  */
-template<uint32_t kMaxFactors>
-class KMMProblemT {
+template<typename MatrixT, typename FactorT, uint32_t kMaxFactors>
+class KMMProblemBase {
   static const uint32_t MaxFactors = kMaxFactors;
 public:
-  using Factors = FactorArray<MaxFactors>;
+  using Matrix = MatrixT;
+  using Factor = FactorT;
+  using Factors = FactorArrayBase<FactorT, MaxFactors>;
 
 private:
   /**
@@ -40,42 +42,42 @@ private:
   Factors factors;
   
 public:
-  KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs,
-              fastKronOp opFs, Matrix y) :
+  KMMProblemBase(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs,
+                 fastKronOp opFs, Matrix y) :
               eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y),
               factors(fs) {}
 
-  KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, int n,
-              const Factor* fs, fastKronOp opFs, Matrix y) :
+  KMMProblemBase(FastKronType eltype, Matrix x, fastKronOp opX, int n,
+                 const Factor* fs, fastKronOp opFs, Matrix y) :
               eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y),
               factors(fs, n) {}
 
-  KMMProblemT(FastKronType eltype, Matrix x, fastKronOp opX, 
+  KMMProblemBase(FastKronType eltype, Matrix x, fastKronOp opX, 
               std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
-              KMMProblemT(eltype, x, opX, Factors(fs), opFs, y) {}
+              KMMProblemBase(eltype, x, opX, Factors(fs), opFs, y) {}
 
-  KMMProblemT(FastKronType eltype, const uint m, const uint32_t n,
+  KMMProblemBase(FastKronType eltype, const uint m, const uint32_t n,
               const uint32_t *ps, const uint32_t *qs, void* xptr, 
               fastKronOp opX, void* const* fsptr, fastKronOp opFs, void* yptr,
               const int k, const int l) :
               eltype(eltype), in(m, k, xptr), opIn(opX), opFactors(opFs), 
               out(m, l, yptr), factors(n, ps, qs, fsptr) {}
   
-  KMMProblemT(FastKronType eltype, const uint m, const int n,
+  KMMProblemBase(FastKronType eltype, const uint m, const int n,
               const uint *ps, const uint *qs,
               void* x, fastKronOp opX, void* const* fs, fastKronOp opFs, void* y) :
-              KMMProblemT(eltype, m, n, ps, qs, x, opX, fs, opFs, y,
+              KMMProblemBase(eltype, m, n, ps, qs, x, opX, fs, opFs, y,
                           std::reduce(ps, ps+n, 1, std::multiplies<uint>()),
                           std::reduce(qs, qs+n, 1, std::multiplies<uint>())) {}
 
-  KMMProblemT(FastKronType eltype, const uint m, const int n, 
+  KMMProblemBase(FastKronType eltype, const uint m, const int n, 
               const uint *ps, const uint *qs, fastKronOp opX, fastKronOp opFs) :
-              KMMProblemT(eltype, m, n, ps, qs, nullptr, 
+              KMMProblemBase(eltype, m, n, ps, qs, nullptr, 
                           opX, nullptr, opFs, nullptr) {}
 
   //TODO: Also initialize opIn and opFactors, and eltype?
   template<uint32_t OtherMaxFactors>
-  KMMProblemT(const KMMProblemT<OtherMaxFactors>& other) : 
+  KMMProblemBase(const KMMProblemBase<Matrix, Factor, OtherMaxFactors>& other) : 
               eltype(other.type()), in(other.x()), opIn(other.opX()),
               opFactors(other.opFs()), out(other.y()), factors(other.fs(),
               other.n()) {}
@@ -157,7 +159,7 @@ public:
    * @subn: length of the subproblem from rstart.
    *
    */
-  KMMProblemT rsub(uint32_t rstart, uint32_t subn) const {
+  KMMProblemBase rsub(uint32_t rstart, uint32_t subn) const {
     assert (subn <= n());
     assert (rstart >= (subn - 1));
 
@@ -172,9 +174,9 @@ public:
     }
 
     
-    return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
-                       factors.sub(rstart - (subn - 1), subn), opFs(),
-                       Matrix(y().m(), subl, y().data()));
+    return KMMProblemBase(type(), x().sameRows(subk), opX(),
+                          factors.sub(rstart - (subn - 1), subn), opFs(),
+                          y().sameRows(subl));
   }
 
   /**
@@ -184,7 +186,7 @@ public:
    * @subn: length of the subproblem from rstart.
    *
    */
-  KMMProblemT sub(uint32_t start, uint32_t subn) const {
+  KMMProblemBase sub(uint32_t start, uint32_t subn) const {
     uint32_t subk = x().n(), subl = y().n();
 
     assert(start <= n());
@@ -198,9 +200,9 @@ public:
       subk = (subk/factors[i].p())*factors[i].q();
     }
 
-    return KMMProblemT(type(), Matrix(x().m(), subk, x().data()), opX(),
-                       factors.sub(start, subn), opFs(),
-                       Matrix(y().m(), subl, y().data()));
+    return KMMProblemBase(type(), x().sameRows(subk), opX(),
+                          factors.sub(start, subn), opFs(),
+                          y().sameRows(subl));
   }
 
   /**
@@ -215,11 +217,11 @@ public:
       y1 = temp1;
     }
 
-    in = Matrix(x().m(), x().n(), x1);
-    out = Matrix(y().m(), y().n(), y1);
+    in = x().like(x1);
+    out = y().like(y1);
   }
 
-  bool operator==(const KMMProblemT& other) const {
+  bool operator==(const KMMProblemBase& other) const {
     bool eq = x() == other.x() && opX() == other.opX()   &&
               n() == other.n() && opFs() == other.opFs() &&
               y() == other.y();
@@ -241,7 +243,7 @@ public:
     return eq;
   }
 
-  friend std::ostream& operator<<(std::ostream &out, const KMMProblemT &problem) {
+  friend std::ostream& operator<<(std::ostream &out, const KMMProblemBase &problem) {
     out << problem.x().m() << "x" << problem.k() << "*(";
     if (problem.sameFactorShapes()) 
       out << problem.factors[0] << "^" << problem.n();
@@ -257,8 +259,10 @@ public:
 };
 
 /**
- * KMMProblem - defines a default KMMProblemT with MaxFactors=64
+ * KMMProblem - defines a default KMMProblemBase with MaxFactors=64 with normal Matrix and Factor
  */
+template<uint32_t kMaxFactors>
+using KMMProblemT = KMMProblemBase<Matrix, Factor, kMaxFactors>;
 using KMMProblem = KMMProblemT<64>;
 
 template<>
@@ -278,6 +282,10 @@ struct KMMProblemComparator {
   }
 };
 
+template<uint32_t kMaxFactors>
+using KMMProblemStridedBatchT = KMMProblemBase<StridedBatchMatrix, StridedBatchFactor, kMaxFactors>;
+using KMMProblemStridedBatch = KMMProblemStridedBatchT<64>;
+
 /**
  * executeGeKMM() - Execute a function on the problem using the KMM algorithm. 
  *                  See paper for more details on the algorithm.
@@ -292,7 +300,12 @@ struct KMMProblemComparator {
 fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
-                           std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
+                           std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
+
+fastKronError executeGeKMM(const KMMProblemStridedBatch problem, void* temps[2],
+                           uint32_t swaps,
+                           std::function<uint (const KMMProblemStridedBatch)> next,
+                           std::function<fastKronError (const KMMProblemStridedBatch, int, void*[2], typename KMMProblemStridedBatch::Matrix)> func);
 
 /**
  * reverseExecuteGeKMM() - Execute a function on the problem using the reverse KMM algorithm
@@ -306,9 +319,14 @@ fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
 fastKronError reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
-                                Matrix result,
+                                typename KMMProblem::Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<fastKronError (const KMMProblem, int, void*[2], Matrix)> func);
+                                std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
+
+fastKronError reverseExecuteGeKMM(const KMMProblemStridedBatch problem, void* temps[2],
+                                typename KMMProblemStridedBatch::Matrix result,
+                                std::function<uint (const KMMProblemStridedBatch)> next,
+                                std::function<fastKronError (const KMMProblemStridedBatch, int, void*[2], typename KMMProblemStridedBatch::Matrix)> func);
 
 bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);

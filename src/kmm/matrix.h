@@ -118,6 +118,14 @@ public:
     return Matrix(rows, cols, ptr);
   }
 
+  Matrix like(void* ptr) const {
+    return Matrix(rows, cols, ptr);
+  }
+
+  Matrix sameRows(uint32_t cols) const {
+    return Matrix(m(), cols, data());
+  }
+
   /**
    * @row() - Return a row of the Matrix.
    */
@@ -228,42 +236,74 @@ struct MatrixComparator {
   }
 };
 
-template<uint32_t MaxSize>
-class FactorArray : public StackArray<Factor, MaxSize> {
-  using Base = StackArray<Factor, MaxSize>;
-  FactorArray(StackArray<Factor, MaxSize> arr) : Base(arr) {}
-
-public:
-  FactorArray(uint32_t n, const uint32_t* ps, const uint32_t* qs, void* const* ptrs) : 
-    Base(nullptr, n) {
-    // assert (n < MaxSize);
-    for (uint32_t i = 0; i < n; i++) {
-      Base::array[i] = Factor(ps[i], qs[i], ptrs ? ptrs[i] : nullptr);
-    }
-  }
-
-  FactorArray(const Factor* factors, uint32_t n) : Base(factors, n) {}
-  FactorArray(std::initializer_list<Factor> facList) : Base(facList) {}
-
-  CUDA_DEVICE_HOST
-  Factor& operator[](int index) {
-    return Base::array[index];
-  }
-
-  CUDA_DEVICE_HOST
-  const Factor& operator[](int index) const {
-    return Base::array[index];
-  }
-
-  FactorArray sub(uint32_t start, uint32_t len) const {
-    return FactorArray(Base::sub(start, len));
-  }
-};
-
 template<>
 struct std::hash<Factor> {
   std::size_t operator()(const Factor& m) const;
 };
+
+template<typename FactorBase, uint32_t MaxSize>
+class FactorArrayBase : public StackArray<FactorBase, MaxSize> {
+  using Base = StackArray<FactorBase, MaxSize>;
+  FactorArrayBase(StackArray<FactorBase, MaxSize> arr) : Base(arr) {}
+
+public:
+  FactorArrayBase(uint32_t n, const uint32_t* ps, const uint32_t* qs, void* const* ptrs) : 
+    Base(nullptr, n) {
+    // assert (n < MaxSize);
+    for (uint32_t i = 0; i < n; i++) {
+      Base::array[i] = FactorBase(ps[i], qs[i], ptrs ? ptrs[i] : nullptr);
+    }
+  }
+
+  FactorArrayBase(const FactorBase* factors, uint32_t n) : Base(factors, n) {}
+  FactorArrayBase(std::initializer_list<FactorBase> facList) : Base(facList) {}
+
+  CUDA_DEVICE_HOST
+  FactorBase& operator[](int index) {
+    return Base::array[index];
+  }
+
+  CUDA_DEVICE_HOST
+  const FactorBase& operator[](int index) const {
+    return Base::array[index];
+  }
+
+  FactorArrayBase sub(uint32_t start, uint32_t len) const {
+    return FactorArrayBase(Base::sub(start, len));
+  }
+};
+
+/******************Strided Batch Matrices*****************/
+template<typename MatrixBase>
+class StridedBatchBase : public MatrixBase {
+protected:
+  uint32_t batchStride;
+
+public:
+  StridedBatchBase() : MatrixBase() {}
+
+  StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride) :
+    batchStride(batchStride), MatrixBase(rows, cols) {}
+
+  StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride, void* data) :
+    batchStride(batchStride), MatrixBase(rows, cols, data) {}
+
+  MatrixBase batch(int batch) {
+    return MatrixBase(this->m(), this->n(), this->data(batch * batchStride));
+  }
+
+  StridedBatchBase like(void* ptr) const {
+    return StridedBatchBase(this->m(), this->n(), batchStride, ptr);
+  }
+
+  StridedBatchBase sameRows(uint32_t cols) const {
+    return StridedBatchBase(this->m(), cols, batchStride, this->data());
+  }
+
+};
+
+using StridedBatchMatrix = StridedBatchBase<Matrix>;
+using StridedBatchFactor = StridedBatchBase<Factor>;
 
 //TODO: Think about this
 template<typename T, fastKronOp Op>

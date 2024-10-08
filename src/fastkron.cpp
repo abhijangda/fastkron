@@ -150,6 +150,35 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uin
                         EpilogueParams::create<double>(alpha, beta, Z));
 }
 
+fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+                                   uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                   const float* X, fastKronOp opX, uint64_t strideX,
+                                   const float* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                   float* Z, float alpha, float beta, uint64_t strideZ,
+                                   uint32_t batchCount, const float *Y, uint64_t strideY,
+                                   float* temp1, float* temp2) {
+  KMMProblem problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
+
+}
+
+fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                     const int* X, fastKronOp opX, uint64_t strideX,
+                     const int* Fs[], fastKronOp opFs, uint64_t strideF[],
+                     int* Z, int alpha, int beta, uint64_t strideZ,
+                     uint32_t batchCount, const int *Y, uint64_t strideY, int* temp1, int* temp2) {
+  
+}
+
+fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                     const double* X, fastKronOp opX, uint64_t strideX,
+                     const double* Fs[], fastKronOp opFs, uint64_t strideF[], 
+                     double* Z, double alpha, double beta, uint64_t strideZ,
+                     uint32_t batchCount, const double *Y, uint64_t strideY, double* temp1, double* temp2) {
+
+}
+
 #ifdef ENABLE_MULTI_GPU
 fastKronError fastKronMgSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
