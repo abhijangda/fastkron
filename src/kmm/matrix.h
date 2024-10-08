@@ -224,9 +224,9 @@ public:
 
 protected:
   CUDA_DEVICE_HOST
-  uint32_t m() {return Matrix::m();}
+  uint32_t m() const {return Matrix::m();}
   CUDA_DEVICE_HOST
-  uint32_t n() {return Matrix::n();}
+  uint32_t n() const {return Matrix::n();}
 };
 
 struct MatrixComparator {
@@ -255,7 +255,7 @@ public:
     }
   }
 
-  FactorArrayBase(const FactorBase* factors, uint32_t n) : Base(factors, n) {}
+  FactorArrayBase(const FactorBase* factors, uint32_t n)     : Base(factors, n) {}
   FactorArrayBase(std::initializer_list<FactorBase> facList) : Base(facList) {}
 
   CUDA_DEVICE_HOST
@@ -280,16 +280,18 @@ protected:
   uint32_t batchStride;
 
 public:
+  using Base = MatrixBase;
   StridedBatchBase() : MatrixBase() {}
 
   StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride) :
-    batchStride(batchStride), MatrixBase(rows, cols) {}
+    MatrixBase(rows, cols), batchStride(batchStride) {}
 
   StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride, void* data) :
-    batchStride(batchStride), MatrixBase(rows, cols, data) {}
+    MatrixBase(rows, cols, data), batchStride(batchStride) {}
 
-  MatrixBase batch(int batch) {
-    return MatrixBase(this->m(), this->n(), this->data(batch * batchStride));
+  template<typename T>
+  MatrixBase batch(uint32_t batch) const {
+    return MatrixBase(this->m(), this->n(), this->template data<T>(batch * batchStride));
   }
 
   StridedBatchBase like(void* ptr) const {
@@ -299,7 +301,6 @@ public:
   StridedBatchBase sameRows(uint32_t cols) const {
     return StridedBatchBase(this->m(), cols, batchStride, this->data());
   }
-
 };
 
 using StridedBatchMatrix = StridedBatchBase<Matrix>;

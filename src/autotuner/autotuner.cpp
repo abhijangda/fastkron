@@ -21,6 +21,7 @@
  * A recursive combonitarial approach to go through every sub problem of the base problem and selects
  * a series of kernels that minimizes the total execution time of the base problem.
  */
+template<typename KMMProblem, typename TunedKernelsMap>
 static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
                                  TunedKernelsMap tunedKernelsMap) {
@@ -83,8 +84,10 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
   * @isDistributed: If the KMMProblem is computed using distributed GPUs
   * @distParams: Distributed paramaters if needed.
   */
-fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
-                            bool isDistributed, DistributedParams distParams) {
+template<typename KMMProblem, typename TunedKernelsMap>
+fastKronError Autotuner::tune(KMMProblem problem, TunedKernelsMap& tunedKernelsMap,
+                              KernelDatabase* kernelDb, bool isDistributed,
+                              DistributedParams distParams) {
   //Iterate over all subproblems of the base problem
   auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
                                  [](const KMMProblem){return 1;},
@@ -123,7 +126,8 @@ fastKronError Autotuner::tune(KMMProblem problem, KernelDatabase* kernelDb,
   * @backend: fastKronBackend containing kernels
   * @retKernelSeries: [OUT] the tuned kernel series 
   */
-fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
+fastKronError Autotuner::tune(KMMProblem problem,
+                              const fastKronBackend backend,
                               TunedKernelsSeries& retKernelSeries) {
   auto kernelDb = fastKron.getKernelDb(backend);
   //Return cached kernel series for the problem
@@ -176,7 +180,7 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
 
     KMMProblem tmpProblem(problem.type(), x, problem.opX(), 
                           problem.n(), &Fs[0][0], problem.opFs(), y);
-    tune(tmpProblem, kernelDb, false, DistributedParams());
+    tune(tmpProblem, tunedKernelsMap, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
     minTime = minExecTimeOfSeries(problem, 0, false, retKernelSeries, tunedKernelsMap);
   } else {
@@ -284,6 +288,11 @@ fastKronError Autotuner::tune(KMMProblem problem, const fastKronBackend backend,
   tunedProblemCache[kernelDb][problem] = retKernelSeries;
 
   return fastKronSuccess;
+}
+  
+fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBackend backend,
+                              TunedKernelsSeries& retKernelSeries) {
+
 }
 
 Autotuner::Autotuner(FastKronHandle& fastKron) : fastKron(fastKron) {

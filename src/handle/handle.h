@@ -169,8 +169,10 @@ class FastKronHandle {
                        void* temp1, void* temp2, EpilogueParams epilogueParams);
 
 
-  fastKronError xgekmmStridedBatched(const KMMProblemStridedBatched problem, const fastKronBackend backend,
-                       void* temp1, void* temp2, EpilogueParams epilogueParams);
+  fastKronError xgekmmStridedBatched(const KMMProblemStridedBatched problem, 
+                                     const fastKronBackend backend,
+                                     void* temp1, void* temp2,
+                                     EpilogueStridedBatchedParams epilogueParams);
   /**
    * FastKronHandle::gekmmSizes() - Obtain GeKMM result and temporary sizes
    * @problem: The GeKMM problem as an object of KMMProblem
@@ -190,6 +192,8 @@ class FastKronHandle {
    * Return - fastKronError representing the error in the operation
    */
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp);
+  fastKronError gekmmResultTemp(KMMProblemStridedBatched problem, 
+                                StridedBatchMatrix& result, StridedBatchMatrix& temp);
 
   #ifdef ENABLE_MULTI_GPU
   void getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK);

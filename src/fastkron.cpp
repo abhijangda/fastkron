@@ -169,9 +169,20 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                                    float* Z, float alpha, float beta, uint64_t strideZ,
                                    uint32_t batchCount, const float *Y, uint64_t strideY,
                                    float* temp1, float* temp2) {
-  // KMMProblemStridedBatched problem(FastKronFloat, M, N, Ps, Qs, (void*)X, opX, (void**)Fs, opFs, (void*)Y);
-  // auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, Y, strideY);
-  // return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
+  uint32_t K = KMMProblemStridedBatched::getK(Ps, N);
+  uint32_t L = KMMProblemStridedBatched::getK(Qs, N);
+  KMMProblemStridedBatched::Factor fs[N];
+  for (int i = 0; i < N; i++) {
+    fs[i] = KMMProblemStridedBatched::Factor(Ps[i], Qs[i], strideF[i], (void*)Fs[i]);
+  }
+
+  KMMProblemStridedBatched problem(FastKronFloat, 
+          KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
+          N, &fs[0], opFs,
+          KMMProblemStridedBatched::Matrix(M, L, strideY, (void*)Y), batchCount);
+
+  auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, Z, strideZ);
+  return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }
 
 fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,

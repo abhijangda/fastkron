@@ -85,21 +85,21 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
   uint64_t strideZ;
 
   EpilogueStridedBatchedParams() : EpilogueParams(), strideZ(0) {}
-  EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, const void* glD) : 
-    EpilogueParams(alpha, beta, glD), strideZ(0) {}
+  EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, const void* glD, uint32_t strideZ) : 
+    EpilogueParams(alpha, beta, glD), strideZ(strideZ) {}
 
   template<typename ElemT>
-  static EpilogueParams create() {
-    return EpilogueParams(AllTypes((ElemT)1.0f), 
+  static EpilogueStridedBatchedParams create() {
+    return EpilogueStridedBatchedParams(AllTypes((ElemT)1.0f), 
                           AllTypes((ElemT)0.0f),
                           nullptr, 0);
   }
 
   template<typename ElemT>
-  static EpilogueParams create(const ElemT alpha, const ElemT beta,
+  static EpilogueStridedBatchedParams create(const ElemT alpha, const ElemT beta,
                                const ElemT* glD, uint64_t strideZ) {
-    return EpilogueParams(AllTypes(alpha), AllTypes(beta),
-                          (const void*)glD, strideZ);
+    return EpilogueStridedBatchedParams(AllTypes(alpha), AllTypes(beta),
+                                        (const void*)glD, strideZ);
   }
 
   CUDA_DEVICE

@@ -146,7 +146,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
   return err;
 }
 
-/*fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatched problem, 
+fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatched problem, 
                                                    const fastKronBackend backend, 
                                                    void* temp1, void* temp2,
                                                    EpilogueStridedBatchedParams epilogueParams) {
@@ -164,23 +164,16 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
   void* temps[2] = {temp1, temp2};
   auto kernelDb = getKernelDb(backend);
 
-  // if (canTune()) {
-  //   //Tune for the fastest kernel series for the problem
-  //   uint32_t Ps[problem.n()];
-  //   uint32_t Qs[problem.n()];
-  //   problem.ps(Ps);
-  //   problem.qs(Qs);
-
-  //   err =  autotuner.tune(KMMProblemStridedBatched(problem.type(), problem.m(), problem.n(),
-  //                                                  Ps, Qs, problem.opX(), problem.opFs()),
-  //                         backend, kernelSeries);
-  //   if (err != fastKronSuccess)
-  //     return err;
-  // } 
-  // else {
-  //   //Otherwise, use a low-latency algorithm to obtain an efficient kernel
-  //   kernelSeries = kernelDb->kernelSeriesForProblem(problem);
-  // }
+  if (canTune()) {
+    //Tune for the fastest kernel series for the problem
+    err =  autotuner.tune(problem, backend, kernelSeries);
+    if (err != fastKronSuccess)
+      return err;
+  } 
+  else {
+    //Otherwise, use a low-latency algorithm to obtain an efficient kernel
+    // kernelSeries = kernelDb->kernelSeriesForProblem(problem);
+  }
 
   // auto kernelSeriesIter = kernelSeries.begin();
 
@@ -203,7 +196,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
   //   });
 
   // return err;
-}*/
+}
 
 fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, 
                                               Matrix& result,
@@ -244,6 +237,16 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
   result = Matrix(gpuM, resultCols);
   temp = Matrix(gpuM, tempCols);
   return e;
+}
+
+fastKronError FastKronHandle::gekmmResultTemp(KMMProblemStridedBatched problem,
+                                              StridedBatchMatrix& result, StridedBatchMatrix& temp) {
+  KMMProblem prob = problem.batchProblem(0);
+  Matrix rout, tout;
+  auto err = gekmmResultTemp(prob, rout, tout);
+  result = StridedBatchMatrix(rout.m(), rout.n(), problem.batchCount());
+  temp = StridedBatchMatrix(tout.m(), tout.n(), problem.batchCount());
+  return err;
 }
 
 fastKronError FastKronHandle::gekmmSizes(KMMProblem problem,

@@ -112,20 +112,27 @@ class Autotuner {
    * @isDistributed: If the KMMProblem is computed using distributed GPUs
    * @distParams: Distributed paramaters if needed.
    */
-  fastKronError tune(KMMProblem problem, KernelDatabase* kernelDb,
-                     bool isDistributed, DistributedParams distParams);
+  template<typename KMMProblem, typename TunedKernelsMap>
+  fastKronError tune(KMMProblem problem, TunedKernelsMap& tunedKernelsMap,
+                     KernelDatabase* kernelDb, bool isDistributed,
+                     DistributedParams distParams);
 
 public:
   TunedKernelsSeries distribTunedKernelSeries;
 
   Autotuner(FastKronHandle& fastKron);
-
+  
   /**
    * tune() - Find the best performing kernel series for a KMMProblem on a backend
    * @problem: KMMProblem
    * @backend: fastKronBackend containing kernels
    * @retKernelSeries: [OUT] the tuned kernel series 
    */
-  fastKronError tune(KMMProblem problem, const fastKronBackend backend, 
+  fastKronError tune(KMMProblem problem,
+                     const fastKronBackend backend, 
+                     TunedKernelsSeries& retKernelSeries);
+
+  fastKronError tune(KMMProblemStridedBatched problem,
+                     const fastKronBackend backend,
                      TunedKernelsSeries& retKernelSeries);
 };
