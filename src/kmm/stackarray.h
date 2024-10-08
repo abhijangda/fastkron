@@ -74,5 +74,16 @@ public:
   CUDA_DEVICE_HOST
   uint32_t len() const {return n;}
 
+  template<uint32_t SliceSize>
+  StackArray<T, SliceSize> slice(uint32_t start) const {
+    assert(len <= n);
+    T ptrs[SliceSize];
+    for (uint32_t i = 0; i < SliceSize; i++) {
+      ptrs[i] = array[i + start];
+    }
+
+    return StackArray<T, SliceSize>(ptrs, len);
+  }
+
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}
 };

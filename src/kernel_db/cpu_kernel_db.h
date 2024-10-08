@@ -122,6 +122,10 @@ public:
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode);
+  virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                     const uint fidx,
+                                     EpilogueStridedBatchedParams epilogueParams,
+                                     KernelMode execMode);
   /**
    * invokeP2PStoreKernel() - Overriding KernelDatabase::invokeP2PStoreKernel
    * FUTURE WORK: Do  not support multi node GEKMM on CPUs
@@ -131,9 +135,17 @@ public:
                                              DistributedParams, 
                                              EpilogueParams,
                                              KernelMode) {return fastKronSuccess;}
+private:
+  template<typename KMMProblem, typename EpilogueParams>
+  fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
+                                     const uint fidx,
+                                     EpilogueParams epilogueParams,
+                                     KernelMode execMode);
+public:
   /**
    * timeKernel() - Overriding KernelDatabase::timeKernel
    */
+
   virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblem problem, 
                                    const uint fidx, 
                                    DistributedParams distParams,
@@ -142,12 +154,31 @@ public:
                                    bool useP2PStore,
                                    int warmups, int runs,
                                    float& runtime);
-
+  
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
+                                   EpilogueStridedBatchedParams epilogueParams,
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime);
+private:
+  template<typename KMMProblemT, typename EpilogueParamsT>
+  fastKronError timeKernel(KMMKernel* kernel, KMMProblemT problem, 
+                           const uint fidx, 
+                           DistributedParams distParams,
+                           EpilogueParamsT epilogueParams,
+                           KernelMode execMode, 
+                           bool useP2PStore,
+                           int warmups, int runs,
+                           float& runtime);
 protected:
   /**
    * occupancyDetails() - Overriding KernelDatabase::occupancyDetails.
    */ 
   virtual std::string occupancyDetails(KMMKernel*, KMMProblem) {return "";}
+  virtual std::string occupancyDetails(KMMKernel*, KMMProblemStridedBatched) {return "";}
 };
 
 /**

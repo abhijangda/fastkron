@@ -8,6 +8,11 @@ std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& problem) const {
   return h;
 }
 
+std::size_t std::hash<KMMProblemStridedBatched>::operator()(const KMMProblemStridedBatched& problem) const {
+  std::size_t h = std::hash<KMMProblem>()(problem.batchProblem(0)) ^ problem.batchCount();
+  return h;
+}
+
 //TODO: Refactor below two functions for multi gpu kmm
 
 bool checkDistributedKronSizes(const uint32_t NumKronMats, 

@@ -10,6 +10,14 @@
 
 #pragma once
 
+namespace KernelBatchType {
+  enum Ty {
+    Normal,
+    StridedBatch,
+    Batch
+  };
+}
+
 /**
  * KMMKernel is a CPU/GPU kernel to compute KMMProblem.
  * Each backend kernel is a subclass of KMMKernel.
@@ -78,6 +86,8 @@ protected:
    */
   fastKronOp opF;
 
+  KernelBatchType::Ty kernelBatchType;
+
 public:
   KMMKernel() {}
 
@@ -124,22 +134,34 @@ public:
    *            problem's factor.
    */
   Factor getTileF(KMMProblem problem) const;
+  Factor getTileF(KMMProblemStridedBatched problem) const {
+    return getTileF(problem.batchProblem(0));
+  }
 
   /**
    * getTileX - Return tile of X as a minimum of max slices of kernel and 
    *            slices of problem. 
    */
   Matrix getTileX(KMMProblem problem) const;
+  Matrix getTileX(KMMProblemStridedBatched problem) const {
+    return getTileX(problem.batchProblem(0));
+  }
 
   /**
    * getTotalTileSize - Return the sum in bytes of tile sizes of getTileF and getTileX.
    */
   size_t getTotalTileSize(KMMProblem problem) const;
+  size_t getTotalTileSize(KMMProblemStridedBatched problem) const {
+    return getTotalTileSize(problem.batchProblem(0));
+  }
 
   /**
    * getNumThreads - Return number of threads created by the kernel for problem.
    */
   size_t getNumThreads(KMMProblem problem) const;
+  size_t getNumThreads(KMMProblemStridedBatched problem) const {
+    return getNumThreads(problem.batchProblem(0)) * problem.batchCount();
+  }
 
   /**
    * isOptValid - Return true if kernel and optimization is valid to compute for a problem. 
@@ -156,7 +178,11 @@ public:
    */
   virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, 
                           bool p2p, bool exactFuse = true);
-
+  bool canCompute(KMMProblemStridedBatched problem, const HardwareDetails* hw, 
+                  bool p2p, bool exactFuse = true) {
+    return kernelBatchType == KernelBatchType::StridedBatch &&
+           canCompute(problem.batchProblem(0), hw, p2p, exactFuse);
+  }
   /**
    * backend - Return backend (X86, CUDA, ARM, HIP) as string of the kernel.
    *           This method must be implemented by subclasses.

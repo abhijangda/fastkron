@@ -22,9 +22,10 @@ protected:
     Factor f;
     fastKronOp opX;
     fastKronOp opF;
-
+    KernelBatchType::Ty batchType;
+ 
     bool operator==(const DbKey& other) const {
-      return other.f == f && other.opX == opX && other.opF == opF;
+      return other.f == f && other.opX == opX && other.opF == opF && other.batchType == batchType;
     }
   };
 
@@ -33,9 +34,10 @@ protected:
    */
   struct DbKeyHash {
     size_t operator()(const DbKey& k) const {
-      return std::hash<Factor>  ()(k.f)   ^
-             std::hash<uint32_t>()(k.opX) ^
-             std::hash<uint32_t>()(k.opF);
+      return std::hash<Factor>  ()(k.f)        ^
+             std::hash<uint32_t>()(k.opX)      ^
+             std::hash<uint32_t>()(k.opF)      ^
+             std::hash<uint32_t>()(k.batchType);
     }
   };
   
@@ -79,6 +81,8 @@ public:
    * Return: fastKronSuccess if no error otherwise a fastKronError.
    */
   fastKronError procMalloc(uint32_t proc, FastKronType type, Matrix& m);
+  fastKronError procMalloc(uint32_t proc, FastKronType type, StridedBatchMatrix& m, int batches);
+  fastKronError procMalloc(uint32_t proc, FastKronType type, StridedBatchFactor& m, int batches);
 
   /**
    * procFree() - Frees buffer for matrix on a given process.
@@ -98,6 +102,9 @@ public:
    * Return: fastKronSuccess if no error otherwise a fastKronError.
    */
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val) = 0;
+
+  fastKronError procMemset(uint32_t proc, StridedBatchMatrix& m, int batches, float val);
+  fastKronError procMemset(uint32_t proc, StridedBatchFactor& m, int batches, float val);
 
 protected:
   /**
@@ -128,7 +135,10 @@ public:
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode) = 0;
-
+  virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                     const uint fidx,
+                                     EpilogueStridedBatchedParams epilogueParams,
+                                     KernelMode execMode) = 0;
   /**
    * invokeP2PStoreKernel()- Invokes a P2P kernel to compute GeKMM for a factor 
    *                         and write output among all nodes using RDMA.
@@ -178,6 +188,14 @@ public:
                                    int warmups, int runs,
                                    float& runtime) = 0;
 
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
+                                   EpilogueStridedBatchedParams epilogueParams,
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime) = 0;
   /**
    * tuneKernelForProblem() - Find tuned kernel for problem.
    * @problem: Find tuned kernel for computing this problem.
@@ -190,7 +208,9 @@ public:
   std::pair<KMMKernel*, float> findTunedKernel(KMMProblem subproblem, 
                                                 bool useP2PStore, uint fidx,
                                                 DistributedParams distParams);
-
+  std::pair<KMMKernel*, float> findTunedKernel(KMMProblemStridedBatched subproblem, 
+                                                bool useP2PStore, uint fidx,
+                                                DistributedParams distParams);
   /***************************************************************************/
 
   /*********************** Kernel Search Methods ***************************/
@@ -205,6 +225,19 @@ public:
   TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
 
 private:
+  /**
+   * tuneKernelForProblem() - Find tuned kernel for problem.
+   * @problem: Find tuned kernel for computing this problem.
+   * @useP2PStore: True if computing this problem requires P2P RDMA store.
+   * @fidx: Index of factor in the parent problem.
+   * @distParams: Distributed parameters.
+   *
+   * Return - A pair of tuned kernel and execution time of this kernel.
+   */
+  template<typename KMMProblemT, typename EpilogueParams>
+  std::pair<KMMKernel*, float> findTunedKernel(KMMProblemT subproblem, KernelBatchType::Ty batchType,
+                                                bool useP2PStore, uint fidx,
+                                                DistributedParams distParams);
   /**
    * findAllFusedKernels() - Find all fused kernels that can compute given problem.
    * @problem: The problem to find kernels for.
@@ -223,7 +256,8 @@ private:
    *
    * Return - True if atleast one kernel is found, otherwise false. 
    */
-  bool findAllKernels(KMMProblem problem, bool useP2PStore,
+  template<typename KMMProblem>
+  bool findAllKernels(KMMProblem problem, KernelBatchType::Ty batchType, bool useP2PStore,
                       std::vector<std::vector<KMMKernel*>>& kernels);
 
 protected:
@@ -269,6 +303,7 @@ protected:
    * Return: A string of occupancy details.
    */
   virtual std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblem problem) = 0;
+  virtual std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblemStridedBatched problem) = 0;
 
 public:
   /**

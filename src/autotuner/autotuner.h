@@ -11,11 +11,12 @@
 /**
  * TunedKernelsMap - maps a KMMProblem to tuned kernel with its execution time.
  */
+template<typename KMMProblemT>
 class TunedKernelsMap {
   /**
    * @ProblemToKernels: a map of KMMProblem to a pair of kernel and its run time in milliseconds.
    */
-  using ProblemToKernels = std::unordered_map<KMMProblem, std::pair<KMMKernel*, float>>;
+  using ProblemToKernels = std::unordered_map<KMMProblemT, std::pair<KMMKernel*, float>>;
 
   /**
    * @kernels: the map of KMMProblem to single gpu/cpu kernels.
@@ -27,7 +28,7 @@ class TunedKernelsMap {
   /**
    * getKernel - get kernel of a problem from a map.
    */
-  ProblemToKernels::const_iterator getKernel(const ProblemToKernels& map, const KMMProblem& problem) {
+  typename ProblemToKernels::const_iterator getKernel(const ProblemToKernels& map, const KMMProblemT& problem) {
     return map.find(problem);
   }
 
@@ -40,7 +41,7 @@ public:
    * @p2p: True if the problem requires P2P stores for storing output otherwise false.
    * @kernelAndTime: The pair of kernel and its runtime.
    */
-  void add(const KMMProblem& problem, bool p2p, std::pair<KMMKernel*, float> kernelAndtime) {
+  void add(const KMMProblemT& problem, bool p2p, std::pair<KMMKernel*, float> kernelAndtime) {
     if (p2p) {
       p2pKernels.emplace(std::make_pair(problem, kernelAndtime));
     } else {
@@ -53,7 +54,7 @@ public:
    * @problem: The KMMProblem to find kernel-time pair for 
    * @p2p: True if the problem requires P2P stores for storing output otherwise false.
    */
-  bool hasKernel(const KMMProblem& problem, bool p2p) {
+  bool hasKernel(const KMMProblemT& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem) != p2pKernels.end():
                    getKernel(kernels,    problem) != kernels.end();
   }
@@ -63,7 +64,7 @@ public:
    * @problem: The KMMProblem to find kernel for 
    * @p2p: True if the problem requires P2P stores for storing output otherwise false.
    */
-  KMMKernel* getKernel(const KMMProblem& problem, bool p2p) {
+  KMMKernel* getKernel(const KMMProblemT& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem)->second.first :
                    getKernel(kernels,    problem)->second.first;    
   }
@@ -73,7 +74,7 @@ public:
    * @problem: The KMMProblem to find kernel for 
    * @p2p: True if the problem requires P2P stores for storing output otherwise false.
    */
-  float getKernelTime(const KMMProblem& problem, bool p2p) {
+  float getKernelTime(const KMMProblemT& problem, bool p2p) {
     return (p2p) ? getKernel(p2pKernels, problem)->second.second :
                    getKernel(kernels,    problem)->second.second;    
   }
@@ -97,13 +98,15 @@ class Autotuner {
   /**
    * @tunedKernelsMap: A map of tuned kernels and KMMProblems
    */
-  TunedKernelsMap tunedKernelsMap;
+  TunedKernelsMap<KMMProblem> tunedKernelsMap;
+  TunedKernelsMap<KMMProblemStridedBatched> tunedKernelsMapStridedBatched;
 
   /**
    * @tunedProblemCache: A cache of already tuned full KMMProblems.
    * Maps each KMMProblem to tuned kernel series for each backend.
    */
   std::unordered_map<KernelDatabase*, std::unordered_map<KMMProblem, TunedKernelsSeries>> tunedProblemCache;
+  std::unordered_map<KernelDatabase*, std::unordered_map<KMMProblemStridedBatched, TunedKernelsSeries>> tunedProblemCacheStridedBatched;
 
   /**
    * tune() - Tune kernels for all subproblems in the KMMProblem.

@@ -36,9 +36,9 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
   //Divide the subproblem into two parts. Go through all first/second part pairs 
   //of the subproblem. Search for tuned kernel of the first part 
   //and recursively compute minimum time for the second part.
-  reverseExecuteGeKMM(subProblem, nullptr, Matrix(), 
+  reverseExecuteGeKMM(subProblem, nullptr, typename KMMProblem::Matrix(), 
                       [](const KMMProblem){return 1;},
-    [&](const KMMProblem, int rstart, void*[2], Matrix) {
+    [&](const KMMProblem, int rstart, void*[2], typename KMMProblem::Matrix) {
       const int subn = rstart + 1;
       auto firstPart = problem.sub(startF, subn);
       if (problem.opX() == fastKronOp_T && startF + subn == problem.n()) {
@@ -84,14 +84,14 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
   * @isDistributed: If the KMMProblem is computed using distributed GPUs
   * @distParams: Distributed paramaters if needed.
   */
-template<typename KMMProblem, typename TunedKernelsMap>
-fastKronError Autotuner::tune(KMMProblem problem, TunedKernelsMap& tunedKernelsMap,
+template<typename KMMProblemT, typename TunedKernelsMap>
+fastKronError Autotuner::tune(KMMProblemT problem, TunedKernelsMap& tunedKernelsMap,
                               KernelDatabase* kernelDb, bool isDistributed,
                               DistributedParams distParams) {
   //Iterate over all subproblems of the base problem
-  auto err = reverseExecuteGeKMM(problem, nullptr, Matrix(), 
-                                 [](const KMMProblem){return 1;},
-    [&](const KMMProblem, int rstart, void*[2], Matrix) {
+  auto err = reverseExecuteGeKMM(problem, nullptr, typename KMMProblemT::Matrix(), 
+                                 [](const KMMProblemT){return 1;},
+    [&](const KMMProblemT, int rstart, void*[2], typename KMMProblemT::Matrix) {
       for (uint32_t endP = rstart; endP < problem.n(); endP++) {
         //Obtain a subprob
         auto subprob = problem.sub(rstart, endP-rstart+1);
@@ -292,7 +292,66 @@ fastKronError Autotuner::tune(KMMProblem problem,
   
 fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBackend backend,
                               TunedKernelsSeries& retKernelSeries) {
+  auto kernelDb = fastKron.getKernelDb(backend);
+  //Return cached kernel series for the problem
+  if (tunedProblemCacheStridedBatched[kernelDb].count(problem) == 1) {
+    retKernelSeries = tunedProblemCacheStridedBatched[kernelDb][problem];
+    return fastKronSuccess;
+  }
 
+  uint devicesPerProc = 1;
+
+
+  if (devicesPerProc > 1) {
+    Logger(LogLevel::Debug) << "StridedBatched is not supported for multi GPU" << std::endl;
+    abort();
+  }
+
+  float minTime = 0;
+  KMMProblemStridedBatched::Matrix result, temp;
+  fastKron.gekmmResultTemp(problem, result, temp);
+
+  KMMProblemStridedBatched::Matrix temp1[devicesPerProc];
+  KMMProblemStridedBatched::Matrix temp2[devicesPerProc];
+
+  //TODO: Make this FactorArray
+  KMMProblemStridedBatched::Factor Fs[devicesPerProc][problem.n()];
+  for (uint32_t p = 0; p < devicesPerProc; p++) {
+    //For performance eval we do not need these to contain any specific value
+    fastKron.gekmmResultTemp(problem, result, temp1[p]);
+    fastKron.gekmmResultTemp(problem, result, temp2[p]);
+    kernelDb->procMalloc(p, problem.type(), temp1[p], problem.batchCount());
+    kernelDb->procMalloc(p, problem.type(), temp2[p], problem.batchCount());
+    kernelDb->procMemset(p, temp1[p], problem.batchCount(), 1.0f);
+    kernelDb->procMemset(p, temp2[p], problem.batchCount(), 1.0f);
+
+    for (uint32_t f = 0; f < problem.n(); f++) {
+      Fs[p][f] = problem.f(f);
+      kernelDb->procMalloc(p, problem.type(), Fs[p][f], problem.batchCount());
+      kernelDb->procMemset(p, Fs[p][f], problem.batchCount(), 1.0f);
+    }
+  }
+
+  kernelDb->initTune();
+
+  if (devicesPerProc <= 1) {
+    //Tuning for Single CPU / Single GPU
+    //Use temporary as input/output matrix
+    KMMProblemStridedBatched::Matrix x = problem.x().like(temp1[0].data());
+    KMMProblemStridedBatched::Matrix y = problem.y().like(temp2[0].data());
+
+    KMMProblemStridedBatched tmpProblem(problem.type(), x, problem.opX(),
+                                        problem.n(), &Fs[0][0], problem.opFs(), y,
+                                        problem.batchCount());
+    tune(tmpProblem, tunedKernelsMapStridedBatched, kernelDb, false, DistributedParams());
+    Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
+    minTime = minExecTimeOfSeries(problem, 0, false, retKernelSeries, tunedKernelsMapStridedBatched);
+  }
+
+  //Update cache
+  tunedProblemCacheStridedBatched[kernelDb][problem] = retKernelSeries;
+
+  return fastKronSuccess;
 }
 
 Autotuner::Autotuner(FastKronHandle& fastKron) : fastKron(fastKron) {

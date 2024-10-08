@@ -155,13 +155,16 @@ class CPUKMMKernel(Kernel):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
 
+  def kmmProblemType(self):
+    return f"KMMProblemT<{self.fused_kernels}>"
+
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}>& params, FusedParams<{self.fused_kernels}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
+    return f"void {self.hostFuncName()}(KernelParams<{self.kmmProblemType()}>& params, FusedParams<{self.kmmProblemType()}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
 
   def pragmaTargetArch(self):
     targetArch = ""

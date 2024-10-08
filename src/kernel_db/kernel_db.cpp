@@ -18,12 +18,54 @@ fastKronError KernelDatabase::procMalloc(uint32_t proc, FastKronType type, Matri
   return e;
 }
 
+fastKronError KernelDatabase::procMalloc(uint32_t proc, FastKronType type,
+                                         StridedBatchMatrix& m, int batches) {
+  void* ptr = nullptr;
+  fastKronError e = procMalloc(proc, m.numel() * sizeOfFastKronType(type) * batches, ptr);
+
+  if (e == fastKronSuccess) {
+    m.ptr = ptr;
+  }
+
+  return e;
+}
+
+fastKronError KernelDatabase::procMalloc(uint32_t proc, FastKronType type,
+                                         StridedBatchFactor& m, int batches) {
+  void* ptr = nullptr;
+  fastKronError e = procMalloc(proc, m.numel() * sizeOfFastKronType(type) * batches, ptr);
+
+  if (e == fastKronSuccess) {
+    m.ptr = ptr;
+  }
+
+  return e;
+}
+
+fastKronError KernelDatabase::procMemset(uint32_t proc, StridedBatchMatrix& m, 
+                                         int batches, float val) {
+  for (int b = 0; b < batches; b++) {
+    auto subM = m.batch<float>(b);
+    procMemset(proc, subM, val);
+  }
+}
+
+fastKronError KernelDatabase::procMemset(uint32_t proc, StridedBatchFactor& m, 
+                                         int batches, float val) {
+  for (int b = 0; b < batches; b++) {
+    auto subM = m.batch<float>(b);
+    procMemset(proc, subM, val);
+  }
+}
+
 fastKronError KernelDatabase::procFree(uint32_t proc, Matrix m) {
   return procFree(proc, m.data());
 }
 
-std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblem problem, bool useP2PStore, 
-                                                              uint fidx, DistributedParams distParams) {
+template<typename KMMProblemT, typename EpilogueParams>
+std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem, KernelBatchType::Ty batchType,
+                                                             bool useP2PStore, uint fidx, 
+                                                             DistributedParams distParams) {
   KMMKernel* bestKernel = nullptr;
   //A map of opt level to kernels at the opt level
   std::vector<std::vector<KMMKernel*>> allKernels;
@@ -36,7 +78,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblem problem,
   Logger(LogLevel::Debug) << "Tuning for shape "  << problem << std::endl;
 
   //Find all kernels for each opt level that can compute the problem
-  if (findAllKernels(problem, useP2PStore, allKernels)) {
+  if (findAllKernels(problem, batchType, useP2PStore, allKernels)) {
     //Only execute kernels that are at the max opt level.
     const std::vector<KMMKernel*>& kernelsForMaxOpt = [&allKernels]() {
       for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
@@ -55,7 +97,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblem problem,
       float kernelTime = std::numeric_limits<float>::max();
       fastKronError status;
       status = timeKernel(kernel, problem, fidx, distParams, 
-                          EpilogueParams::create<float>(), KernelModeTuning, 
+                          EpilogueParams::template create<float>(), KernelModeTuning, 
                           useP2PStore, warmups, runs, kernelTime);
       if (status == fastKronSuccess) {
         Logger(LogLevel::Debug) << 
@@ -75,6 +117,16 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblem problem,
   }
 
   return std::make_pair(bestKernel, minTime);
+}
+
+std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblem problem, bool useP2PStore, 
+                                                             uint fidx, DistributedParams distParams) {
+  return findTunedKernel<KMMProblem, EpilogueParams>(problem, KernelBatchType::Normal, useP2PStore, fidx, distParams);
+}
+
+std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemStridedBatched problem, bool useP2PStore, 
+                                                              uint fidx, DistributedParams distParams) {
+  return findTunedKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(problem, KernelBatchType::StridedBatch, useP2PStore, fidx, distParams);
 }
 
 TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
@@ -180,7 +232,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
         [&kernelSeries, this]
           (const KMMProblem subProblem, int rstart, void*[2], Matrix) {
             std::vector<std::vector<KMMKernel*>> kernels;
-            findAllKernels(subProblem, false, kernels);
+            findAllKernels(subProblem, KernelBatchType::Normal, false, kernels);
             auto tk = TunedKernelFromStart(this->findKernelForSubProblem(subProblem, kernels), 
                                           rstart, rstart, subProblem.k(), 0.0f);
             kernelSeries.push_back(tk);
@@ -212,13 +264,14 @@ bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore,
   return true;
 }
 
-bool KernelDatabase::findAllKernels(KMMProblem problem, bool useP2PStore, 
+template<typename KMMProblem>
+bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batchType, bool useP2PStore, 
                                     std::vector<std::vector<KMMKernel*>>& kernels) {
   for (uint32_t i = 0; i <= KernelOptimizations::MaxOptLevel(); i++) {
     kernels.push_back(std::vector<KMMKernel*>());
   }
 
-  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs()};
+  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), batchType};
   auto it = compiledKernels.find(key);
   if (it != compiledKernels.end()) {
     for (auto k : it->second) {
@@ -245,7 +298,7 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, bool useP2PStore,
 }
 
 KMMKernel* KernelDatabase::findKernelForSubProblem(KMMProblem subProblem, 
-                                                    const std::vector<std::vector<KMMKernel*>>& kernels) {
+                                                   const std::vector<std::vector<KMMKernel*>>& kernels) {
   //TODO: Only works for subproblem.n() == 1
   for (int optlevel = KernelOptimizations::MaxOptLevel();
        optlevel >= 0; optlevel--) {

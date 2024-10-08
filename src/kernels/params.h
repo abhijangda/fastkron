@@ -113,9 +113,9 @@ struct CPUCaches {
           TileXs(TileXs), TileYs(TileYs), TileFs(TileFs) {}
 };
 
-template<uint Fused>
+template<typename KMMProblemT>
 struct KernelParams {
-  KMMProblemT<Fused> problem;
+  KMMProblemT problem;
   
   Matrix tileX;
   Factor tileF;
@@ -127,7 +127,7 @@ struct KernelParams {
   KernelMode execMode;
   CPUCaches* caches;
 
-  KernelParams(KMMProblem problem_, CPUCaches* caches,
+  KernelParams(KMMProblemT problem_, CPUCaches* caches,
                Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
                problem(problem_), 
                tileX(tileX), tileF(tileF),
@@ -136,14 +136,14 @@ struct KernelParams {
                kp_idx(kp_idx), execMode(execMode), caches(caches) {}
 };
 
-template<uint Fused>
+template<typename KMMProblemT>
 struct FusedParams {
   uint XShFusedSlices;
   uint XglFusedSlices;
-  static const uint32_t NumFused = Fused;
+  static const uint32_t NumFused = KMMProblemT::MaxFactors;
 
-  FusedParams(KMMProblem problem, const uint TileSizeColsA) {
-    const Factor factorPower = std::reduce(problem.fs(), problem.fs() + Fused, Factor(1,1), [](Factor prev, Factor curr) {
+  FusedParams(KMMProblemT problem, const uint TileSizeColsA) {
+    const Factor factorPower = std::reduce(problem.fs(), problem.fs() + problem.n(), Factor(1,1), [](Factor prev, Factor curr) {
       return Factor(prev.p() * curr.p(), prev.q() * curr.q());
     });
 

@@ -17,8 +17,9 @@
  */
 template<typename MatrixT, typename FactorT, uint32_t kMaxFactors>
 class KMMProblemBase {
-  static const uint32_t MaxFactors = kMaxFactors;
 public:
+  static const uint32_t MaxFactors = kMaxFactors;
+
   using Matrix = MatrixT;
   using Factor = FactorT;
   using Factors = FactorArrayBase<FactorT, MaxFactors>;
@@ -216,6 +217,11 @@ public:
                           y().sameRows(subl));
   }
 
+  template<uint NumFactors>
+  KMMProblemBase<MatrixT, FactorT, NumFactors> factorSlice() {
+    return KMMProblemBase<MatrixT, FactorT, NumFactors>(*this);
+  }
+
   /**
    * swap() - Swap x and y pointers based on temporary pointers.
    */
@@ -324,9 +330,11 @@ public:
   KMMProblemStridedBatchedT rsub(uint32_t rstart, uint32_t subn) const {
     return KMMProblemStridedBatchedT(Base::rsub(rstart, subn), batches);
   }
+
   KMMProblemStridedBatchedT sub(uint32_t start, uint32_t subn) const {
     return KMMProblemStridedBatchedT(Base::sub(start, subn), batches);
   }
+  
   KMMProblemStridedBatchedT updateY(const Matrix y) const {
     return KMMProblemStridedBatchedT(this->type(), this->x(), this->opX(), 
                                      this->n(), this->fs(), this->opFs(),
@@ -334,7 +342,7 @@ public:
   }
 
   template<typename T>
-  KMMProblem batchProblem(uint b) {
+  KMMProblem batchProblem(uint b) const {
     typename Factor::Base baseFs[this->n()];
 
     for (uint32_t i = 0; i < this->n(); i++) {
@@ -346,7 +354,7 @@ public:
                       this->n(), baseFs, this->opFs(), this->y().template batch<T>(b));
   }
 
-  KMMProblem batchProblem(uint batch) {
+  KMMProblem batchProblem(uint batch) const {
     switch (this->type()) {
       case FastKronFloat:
         return batchProblem<float>(batch);
@@ -365,6 +373,11 @@ public:
 };
 
 using KMMProblemStridedBatched = KMMProblemStridedBatchedT<64>;
+
+template<>
+struct std::hash<KMMProblemStridedBatched> {
+  std::size_t operator()(const KMMProblemStridedBatched& k) const;
+};
 
 /**
  * executeGeKMM() - Execute a function on the problem using the KMM algorithm. 

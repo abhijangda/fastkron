@@ -63,22 +63,25 @@ fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
   return fastKronSuccess;
 }
 
-template<uint FusedFacs>
-fastKronError invoke(CPUKMMKernel& kernelInfo, KMMProblem problem,
+template<uint FusedFacs, typename KMMProblem, typename EpilogueParams>
+fastKronError invoke(CPUKMMKernel& kernelInfo, 
+                     Matrix kernelTileX, Factor kernelTileF,
+                     KMMProblem problem,
                      const uint fidx, CPUCaches& caches,
                      DistributedParams distParams,
                      EpilogueParams epilogueParams,
                      KernelMode execMode) {
-  KernelParams<FusedFacs> params (problem, &caches, kernelInfo.getTileX(problem), 
-                                  kernelInfo.getTileF(problem), fidx, execMode);
-  FusedParams<FusedFacs> fusedParams (problem, kernelInfo.getMaxTileX().n());
+  KernelParams<KMMProblem> params (problem, &caches, kernelTileX, kernelTileF, 
+                                              fidx, execMode);
+  FusedParams<KMMProblem> fusedParams (problem, kernelInfo.getMaxTileX().n());
   //TODO: change this to kernel.invoke
-  typedef void (*KronMatmulKernelTy)(KernelParams<FusedFacs>&, FusedParams<FusedFacs>&,
+  typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblem>&, FusedParams<KMMProblem>&,
                                      DistributedParams&, EpilogueParams&);
   KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, epilogueParams);
   return fastKronSuccess;
 }
 
+template<typename KMMProblem, typename EpilogueParams>
 fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                               const uint fidx,
                                               EpilogueParams epilogueParams,
@@ -86,24 +89,26 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
   DistributedParams distParams;
   CPUKMMKernel& cpuKernel = dynamic_cast<CPUKMMKernel&>(*kernel);
   CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
+  Matrix kernelTileX = kernel->getTileX(problem);
+  Factor kernelTileF = kernel->getTileF(problem);
   switch(problem.n()) {
     case 1:
-      return invoke<1>(cpuKernel, problem, fidx, caches,
+      return invoke<1>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<1>(), fidx, caches,
                        distParams, epilogueParams, execMode);
     case 2:
-      return invoke<2>(cpuKernel, problem, fidx, caches,
+      return invoke<2>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<2>(), fidx, caches,
                        distParams, epilogueParams, execMode);
     case 3:
-      return invoke<3>(cpuKernel, problem, fidx, caches,
+      return invoke<3>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<3>(), fidx, caches,
                        distParams, epilogueParams, execMode);
     case 4:
-      return invoke<4>(cpuKernel, problem, fidx, caches,
+      return invoke<4>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<4>(), fidx, caches,
                        distParams, epilogueParams, execMode);
     case 5:
-      return invoke<5>(cpuKernel, problem, fidx, caches,
+      return invoke<5>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<5>(), fidx, caches,
                        distParams, epilogueParams, execMode);
     case 6:
-      return invoke<6>(cpuKernel, problem, fidx, caches, 
+      return invoke<6>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<6>(), fidx, caches, 
                        distParams, epilogueParams, execMode);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
@@ -111,10 +116,26 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
   }
 }
 
-fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem problem, 
+fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem problem,
+                                    const uint fidx,
+                                    EpilogueParams epilogueParams,
+                                    KernelMode execMode) {
+  return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, epilogueParams, execMode);
+}
+
+fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                    const uint fidx,
+                                    EpilogueStridedBatchedParams epilogueParams,
+                                    KernelMode execMode) {
+  return invokeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(
+    kernel, problem, fidx, epilogueParams, execMode);
+}
+
+template<typename KMMProblemT, typename EpilogueParamsT>
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT problem, 
                                             const uint fidx, 
                                             DistributedParams distParams,
-                                            EpilogueParams epilogueParams,
+                                            EpilogueParamsT epilogueParams,
                                             KernelMode execMode, 
                                             bool useP2PStore,
                                             int warmups, int runs,
@@ -135,8 +156,9 @@ fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem proble
         parallelCopy(trash1, trash2, l3size);
       double startTime = getCurrTime();
       if (useP2PStore) {
-        status = invokeP2PStoreKernel(kernel, problem, fidx,
-                                      distParams, epilogueParams, execMode);
+        //FUTURE WORK
+        // status = invokeP2PStoreKernel(kernel, problem, fidx,
+        //                               distParams, epilogueParams, execMode);
       } else {
         status = invokeKernel(kernel, problem, fidx,
                               epilogueParams, execMode);
@@ -156,6 +178,31 @@ fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem proble
   }
   
   return status;
+}
+
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem problem, 
+                                            const uint fidx, 
+                                            DistributedParams distParams,
+                                            EpilogueParams epilogueParams,
+                                            KernelMode execMode, 
+                                            bool useP2PStore,
+                                            int warmups, int runs,
+                                            float& runtime) {
+  return timeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, distParams, epilogueParams, 
+                                                execMode, useP2PStore, warmups, runs, runtime);
+}
+  
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem, 
+                                            const uint fidx, 
+                                            DistributedParams distParams,
+                                            EpilogueStridedBatchedParams epilogueParams,
+                                            KernelMode execMode, 
+                                            bool useP2PStore,
+                                            int warmups, int runs,
+                                            float& runtime) {
+  return timeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(
+      kernel, problem, fidx, distParams, epilogueParams, 
+      execMode, useP2PStore, warmups, runs, runtime);
 }
 
 void cpuid(uint32_t in, uint32_t regs[4], uint32_t ecx = 0) {

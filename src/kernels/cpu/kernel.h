@@ -224,9 +224,9 @@ template<typename ElemT, typename X86VecT,
          fastKronOp OpX, fastKronOp OpF,
          uint OptLevel, uint32_t EpilogueKindVal, uint FusedFacs,
          typename OptF, typename OptTileF, typename OptTileX,
-         typename YRegisters>
-void threadWork(KernelParams<FusedFacs>& params,
-                FusedParams<FusedFacs>& fusedParams,
+         typename YRegisters, typename KernelParams, typename FusedParams>
+void threadWork(KernelParams& params,
+                FusedParams& fusedParams,
                 EpilogueParams& epilogueParams,
                 uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
   // constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
@@ -291,9 +291,10 @@ template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP,
          uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
          uint RegM, uint RegK, uint RegQ, uint OptLevel, 
          int XAlignment, int FAlignment,
-         fastKronOp OpX, fastKronOp OpF>
-void cpuKernel(KernelParams<FusedFacs>& params,
-               FusedParams<FusedFacs>& fusedParams,
+         fastKronOp OpX, fastKronOp OpF,
+         typename KernelParams, typename FusedParams>
+void cpuKernel(KernelParams& params,
+               FusedParams& fusedParams,
                DistributedParams& /*distParams*/,
                EpilogueParams& epilogueParams) {
   using OptF  = FixedShapeFactor<fastKronOp_N, ElemT, MaxP, MaxQ>;

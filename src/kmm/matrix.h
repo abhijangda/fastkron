@@ -271,6 +271,11 @@ public:
   FactorArrayBase sub(uint32_t start, uint32_t len) const {
     return FactorArrayBase(Base::sub(start, len));
   }
+
+  template<uint32_t SliceSize>
+  FactorArrayBase<FactorBase, SliceSize> slice(uint32_t start) const {
+    return FactorArrayBase<FactorArrayBase, SliceSize>(this->template slice<SliceSize>(start));
+  }
 };
 
 /******************Strided Batch Matrices*****************/
