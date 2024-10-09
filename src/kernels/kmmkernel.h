@@ -9,15 +9,6 @@
 #include "kernels/hw_details.h"
 
 #pragma once
-
-namespace KernelBatchType {
-  enum Ty {
-    Normal,
-    StridedBatch,
-    Batch
-  };
-}
-
 /**
  * KMMKernel is a CPU/GPU kernel to compute KMMProblem.
  * Each backend kernel is a subclass of KMMKernel.
@@ -94,11 +85,12 @@ public:
   KMMKernel(void* kernelInvoker, FastKronType elemType,
             Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
             uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF) :
+            fastKronOp opX, fastKronOp opF, KernelBatchType::Ty kernelBatchType) :
             kernelInvoker(kernelInvoker), elemType(elemType),
             f(f), tileF(tileF), tileX(tileX), fusedFacs(fusedFacs),
             P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ),
-            optLevel(optLevel), opX(opX), opF(opF) {}
+            optLevel(optLevel), opX(opX), opF(opF),
+            kernelBatchType(kernelBatchType) {}
 
   /**
    * Getters for all template parameters
@@ -180,7 +172,7 @@ public:
                           bool p2p, bool exactFuse = true);
   bool canCompute(KMMProblemStridedBatched problem, const HardwareDetails* hw, 
                   bool p2p, bool exactFuse = true) {
-    return kernelBatchType == KernelBatchType::StridedBatch &&
+    return kernelBatchType == KernelBatchType::StridedBatched &&
            canCompute(problem.batchProblem(0), hw, p2p, exactFuse);
   }
   /**

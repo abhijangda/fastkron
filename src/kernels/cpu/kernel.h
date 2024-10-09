@@ -220,28 +220,73 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
   }
 }
 
+template<KernelBatchType::Ty KernelBatch, typename ElemT, typename KernelParams>
+struct GetBatchedData {
+  uint getBatchCount(const KernelParams& params);
+  Matrix getXBatch(const KernelParams& params, int batch);
+  Matrix getYBatch(const KernelParams& params, int batch);
+  Factor getFBatch(const KernelParams& params, int fidx, int batch);
+};
+
+template<typename ElemT, typename KernelParams>
+struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams> {
+  uint getBatchCount(const KernelParams& params) {return 1;}
+
+  Matrix getXBatch(const KernelParams& params, int batch) {
+    return params.problem.x();
+  }
+  
+  Matrix getYBatch(const KernelParams& params, int batch) {
+    return params.problem.y();
+  }
+
+  Factor getFBatch(const KernelParams& params, int fidx, int batch) {
+    return params.problem.f(fidx);
+  }
+};
+
+template<typename ElemT, typename KernelParams>
+struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams> {
+  uint getBatchCount(const KernelParams& params) {return params.problem.batchCount();}
+
+  Matrix getXBatch(const KernelParams& params, int batch) {
+    return params.problem.x().template batch<ElemT>(batch);
+  }
+  
+  Matrix getYBatch(const KernelParams& params, int batch) {
+    return params.problem.y().template batch<ElemT>(batch);
+  }
+
+  Factor getFBatch(const KernelParams& params, int fidx, int batch) {
+    return params.problem.f(fidx).template batch<ElemT>(batch);
+  }
+};
+
 template<typename ElemT, typename X86VecT, 
          fastKronOp OpX, fastKronOp OpF,
          uint OptLevel, uint32_t EpilogueKindVal, uint FusedFacs,
          typename OptF, typename OptTileF, typename OptTileX,
+         KernelBatchType::Ty KernelBatch,
          typename YRegisters, typename KernelParams, typename FusedParams>
 void threadWork(KernelParams& params,
                 FusedParams& fusedParams,
                 EpilogueParams& epilogueParams,
-                uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
+                uint32_t batch, uint32_t tileM, uint32_t tileK, uint32_t tileQ, uint32_t TileK) {
   // constexpr bool kXshSlicesSame    = KernelOptimizations::IsXshSlicesSame   (OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
+  GetBatchedData<KernelBatch, ElemT, KernelParams> batchedData;
 
-  Matrix X = params.problem.x();
-  Matrix Y = params.problem.y();
-  Factor F = (kFactorShapeSame) ? Factor(OptF::P(), OptF::Q(), params.problem.f(0).data()) :
-                                  params.problem.f(0);
+  Matrix X = batchedData.getXBatch(params, batch);
+  Matrix Y = batchedData.getYBatch(params, batch);
+  Factor F = (kFactorShapeSame) ? Factor(OptF::P(), OptF::Q(), batchedData.getFBatch(params, 0, batch).data()) :
+                                  batchedData.getFBatch(params, 0, batch);
 
   SliceCPU<ElemT, kKMultipleOfTileK, kTileKSame, OptTileX> XTile(tileM, tileK, TileK, F.p(), X);
 
   const uint tid = omp_get_thread_num();
+
   YInterim<ElemT, OptTileX, OptTileF, OptF> YCache((ElemT*)params.caches->TileYs[tid]);
   X86VecT alphaVec;
   X86VecT betaVec;
@@ -263,7 +308,7 @@ void threadWork(KernelParams& params,
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);
 
-      F = F.sameShape(params.problem.f(fac).data());
+      F = F.sameShape(batchedData.getFBatch(params, fac, batch).data());
       //Transpose X data and store to TrXCache to reduce TLB misses
       transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache, alphaVec, epilogueParams.getAlpha<ElemT>());
       //Store F to FCache to reduce TLB misses
@@ -292,6 +337,7 @@ template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP,
          uint RegM, uint RegK, uint RegQ, uint OptLevel, 
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF,
+         KernelBatchType::Ty KernelBatch,
          typename KernelParams, typename FusedParams>
 void cpuKernel(KernelParams& params,
                FusedParams& fusedParams,
@@ -306,9 +352,9 @@ void cpuKernel(KernelParams& params,
 
   static_assert(kTileK % RegK == 0);
   static_assert(TileQ % RegQ == 0);
-  static_assert(FusedFacs == 1 || 
-                (FusedFacs > 1 && 
-                 MaxP <= TileP && MaxQ <= TileQ && MaxP == MaxQ && 
+  static_assert(FusedFacs == 1 ||
+                (FusedFacs > 1 &&
+                 MaxP <= TileP && MaxQ <= TileQ && MaxP == MaxQ &&
                  OptLevel == KernelOptimizations::MaxOptLevel()));
 
   constexpr bool kFactorShapeSame = KernelOptimizations::IsFactorShapeSame(OptLevel);
@@ -328,42 +374,46 @@ void cpuKernel(KernelParams& params,
                          epilogueParams.getBeta<ElemT>() != (ElemT)0;
   const bool notLastFactor = params.kp_idx > FusedFacs - 1;
 
+  const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams>().getBatchCount(params);
+
   if (OpX == fastKronOp_N) {
-    #pragma omp parallel for collapse(3)
+    #pragma omp parallel for collapse(4)
+    for (uint32_t batch = 0; batch < batchCount; batch++)
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
       if (notLastFactor || (!hasAlpha && !hasBeta)) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-          params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
+        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+          params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
         );
       } else if (hasAlpha && !hasBeta) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-            params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
+        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+            params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
         );
       } else if (hasBeta) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-            params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
+        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+            params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
         );
       }
     }}}
   } else if (OpX == fastKronOp_T) {
-    #pragma omp parallel for collapse(3)
+    #pragma omp parallel for collapse(4)
+    for (uint32_t batch = 0; batch < batchCount; batch++)
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
     for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
       if (notLastFactor || (!hasAlpha && !hasBeta)) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-          params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
+        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+          params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
         );
       }
       else if (hasAlpha && !hasBeta) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-            params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
+        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+            params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
         );
       } else if (hasBeta) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, YRegs> (
-            params, fusedParams, epilogueParams, tileM, tileK, tileQ, TileK
+        threadWork<ElemT, X86VecT, OpX, OpF, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+            params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
         );
       }
     }}}

@@ -461,7 +461,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   (void)kronBatch;
 #endif
 
-  if ((batchCountZ == 1 && batchCountX == 1 && batchCountF == 1) ||
+  if ((batchCountZ == batchCountX && batchCountX == batchCountF) ||
       (batchCountZ == batchCountX && batchCountF == 1) ||
       (batchCountZ == batchCountF && batchCountX == 1)) {
   } else {

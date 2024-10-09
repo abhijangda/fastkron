@@ -327,6 +327,11 @@ public:
                  int batchCount) :
                  Base(eltype, x, opX, fs, opFs, y), batches(batchCount) {}
   
+  template<uint32_t OtherMaxFactors>
+  KMMProblemStridedBatchedT(const KMMProblemStridedBatchedT<OtherMaxFactors>& other) : 
+              Base(other.type(), other.x(), other.opX(), other.n(), other.fs(), other.opFs(), other.y()),
+              batches(other.batchCount()) {}
+
   KMMProblemStridedBatchedT rsub(uint32_t rstart, uint32_t subn) const {
     return KMMProblemStridedBatchedT(Base::rsub(rstart, subn), batches);
   }
@@ -370,6 +375,11 @@ public:
   }
 
   uint batchCount() const {return batches;}
+
+  template<uint NumFactors>
+  KMMProblemStridedBatchedT<NumFactors> factorSlice() {
+    return KMMProblemStridedBatchedT<NumFactors>(*this);
+  }
 };
 
 using KMMProblemStridedBatched = KMMProblemStridedBatchedT<64>;

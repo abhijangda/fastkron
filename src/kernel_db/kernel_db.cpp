@@ -131,7 +131,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblem problem,
 
 std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemStridedBatched problem, bool useP2PStore, 
                                                               uint fidx, DistributedParams distParams) {
-  return findTunedKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(problem, KernelBatchType::StridedBatch, useP2PStore, fidx, distParams);
+  return findTunedKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(problem, KernelBatchType::StridedBatched, useP2PStore, fidx, distParams);
 }
 
 TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblem problem) {
@@ -287,7 +287,7 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
       }
     }
   }
-
+  std::cout << 290 << " " << kernels[KernelOptimizations::MaxOptLevel()].size() << std::endl; 
   if (it != compiledKernels.end() and 
       kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
       return true;

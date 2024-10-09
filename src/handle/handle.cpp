@@ -195,7 +195,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
   //       return err;
   //   });
 
-  // return err;
+  return fastKronSuccess; //err
 }
 
 fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, 

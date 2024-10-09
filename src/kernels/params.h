@@ -12,6 +12,14 @@ enum KernelMode {
   KernelModeNormal,
 };
 
+namespace KernelBatchType {
+  enum Ty {
+    Normal,
+    StridedBatched,
+    Batch
+  };
+}
+
 #pragma once
 
 union AllTypes {
