@@ -346,6 +346,20 @@ fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBa
     tune(tmpProblem, tunedKernelsMapStridedBatched, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
     minTime = minExecTimeOfSeries(problem, 0, false, retKernelSeries, tunedKernelsMapStridedBatched);
+    Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
+    for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
+      Logger(LogLevel::Info) << "  " << (*iter) << std::endl;
+#if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
+      if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
+          ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
+          iter->start == 0)) {
+        uint gpuM, gpuK;
+        fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
+        Logger(LogLevel::Info) << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
+                    "[GM, " << fastKron.cudaKernels.gpusInK_ << "] using " << fastKron.cudaKernels.distComm_ << std::endl;
+      }
+#endif
+    }
   }
 
   //Update cache

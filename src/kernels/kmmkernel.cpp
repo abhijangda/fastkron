@@ -100,11 +100,26 @@ bool KMMKernel::canCompute(KMMProblem problem, const HardwareDetails*,
   return followsAllOpts;
 }
 
+static std::ostream& operator<<(std::ostream& os, const KernelBatchType::Ty& b) {
+  switch (b) {
+    case KernelBatchType::Normal:
+      os << "cont";
+      break;
+    case KernelBatchType::StridedBatched:
+      os << "strided";
+      break;
+    case KernelBatchType::Batch:
+      os << "batched";
+      break;
+  }
+  return os;
+}
+
 std::string KMMKernel::str() const {
   std::stringstream info;
   info << strOfFastKronType(elemType) 
        << "_" << f << "_" << tileF <<"_" << fusedFacs
        << "_" << tileX << "_" << regM << "x" << regK << "x" << regQ 
-       << "_" << opX << opF << "_" << P2PStore << "_" << optLevel;
+       << "_" << opX << opF << "_" << kernelBatchType << "_" << P2PStore << "_" << optLevel;
   return info.str();
 }
