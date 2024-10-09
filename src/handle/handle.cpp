@@ -163,7 +163,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
 
   void* temps[2] = {temp1, temp2};
   auto kernelDb = getKernelDb(backend);
-  std::cout << 166 << " " << problem.x().data() << " " << problem.y().data() << std::endl;
+
   if (canTune()) {
     //Tune for the fastest kernel series for the problem
     err =  autotuner.tune(problem, backend, kernelSeries);
@@ -176,7 +176,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
   }
 
   auto kernelSeriesIter = kernelSeries.begin();
-  std::cout << 179 << " " << kernelSeries.size() << std::endl;
+
   // //Execute GeKMM algorithm using above kernels
   err = executeGeKMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblemStridedBatched) 
@@ -188,7 +188,6 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
 
         KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-        std::cout << 179 << " " << selectedKernel->str() << std::endl;
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, epilogueParams,
                                      KernelModeNormal);

@@ -160,7 +160,7 @@ template<uint OptLevel, uint32_t EpilogueKindVal,
 static CUDA_DEVICE_HOST
 void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const EpilogueParams& epilogueParams, 
            X86VecT beta,
-           uint32_t fac, uint32_t batch,
+           uint32_t fac, uint32_t /*batch*/,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
            const YElem& y, 
            const Factor& F, Matrix& Y, FCache& Fch, TileX& XTile,
@@ -214,12 +214,6 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
           X86VecT z;
           z.load(&Z[(tileM + y.m() + rm) * Y.n() + yN], slices);
           e.fmadd(beta, z);
-        }
-        if (tileM + y.m() + rm <= 1 && yN == 0) {
-          ElemT cc[8];
-          e.store(&cc[0]);
-          auto ptr = Y.data<ElemT>(tileM + y.m() + rm, yN, fastKronOp_N);
-          printf("221 b %d m %d : %p %f\n", batch, tileM + y.m() + rm, ptr, cc[0]);
         }
         e.store(Y.data<ElemT>(tileM + y.m() + rm, yN, fastKronOp_N), slices);
     }});
@@ -292,7 +286,7 @@ void threadWork(KernelParams& params,
   SliceCPU<ElemT, kKMultipleOfTileK, kTileKSame, OptTileX> XTile(tileM, tileK, TileK, F.p(), X);
 
   const uint tid = omp_get_thread_num();
-  printf("289 %d %p %p %p\n", batch, X.data(), Y.data(), F.data());
+
   YInterim<ElemT, OptTileX, OptTileF, OptF> YCache((ElemT*)params.caches->TileYs[tid]);
   X86VecT alphaVec;
   X86VecT betaVec;

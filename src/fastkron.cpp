@@ -175,12 +175,11 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
   for (int i = 0; i < N; i++) {
     fs[i] = KMMProblemStridedBatched::Factor(Ps[i], Qs[i], strideF[i], (void*)Fs[i]);
   }
-  std::cout << 178 << " " << X << " " << Y << " " << Z << std::endl;
+
   KMMProblemStridedBatched problem(FastKronFloat, 
           KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
           N, &fs[0], opFs,
           KMMProblemStridedBatched::Matrix(M, L, strideY, (void*)Y), batchCount);
-  printf("183 %d\n", problem.batchCount());
   auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, Z, strideZ);
   return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }

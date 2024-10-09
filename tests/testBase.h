@@ -295,7 +295,6 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, const
 
   if (batchCount > 1) {
     if (std::is_same<T, float>::value) {
-      printf("298 %p %p %p\n", x, y, z);
       FastKronCHECK(sgekmmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const float*)x, opx, strideX, (const float**)kpMats, opfs, strideF, (float*)y,
                       alpha, beta, strideZ, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
@@ -669,7 +668,6 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     } else
 #endif
     {
-      printf("671 %f\n", dResult[0][M * L]);
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
 
@@ -814,6 +812,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     //Add for Alpha and Beta
     operations += N + ((beta != 0) ? 2*N : beta);
     operations = 2 * ((long)M) * operations;
+    operations = batchCountZ * operations;
     double flops = operations/perCallTime;
     double gFLOPS = flops/1e9*1e3;
     printf("Time: %f ms; Operations: %ld; GFLOPS: %lf \n", perCallTime, operations, gFLOPS);
