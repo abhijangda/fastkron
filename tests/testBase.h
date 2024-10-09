@@ -295,6 +295,7 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, const
 
   if (batchCount > 1) {
     if (std::is_same<T, float>::value) {
+      printf("298 %p %p %p\n", x, y, z);
       FastKronCHECK(sgekmmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const float*)x, opx, strideX, (const float**)kpMats, opfs, strideF, (float*)y,
                       alpha, beta, strideZ, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
@@ -647,7 +648,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     } else 
 #endif
     {
-      printf("546: %p %p %p\n", dX[0], dResult[0], dTemp1[0]);
+      printf("546: %p %p %p %p\n", dX[0], dY[0], dResult[0], dTemp1[0]);
       kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideZ, strideF, dTemp1[0], dTemp2[0]);
     }
     for (int g = 0; g < gpus; g++) {
@@ -668,6 +669,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     } else
 #endif
     {
+      printf("671 %f\n", dResult[0][0]);
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
 

@@ -163,7 +163,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
 
   void* temps[2] = {temp1, temp2};
   auto kernelDb = getKernelDb(backend);
-
+  std::cout << 166 << " " << problem.x().data() << " " << problem.y().data() << std::endl;
   if (canTune()) {
     //Tune for the fastest kernel series for the problem
     err =  autotuner.tune(problem, backend, kernelSeries);
@@ -175,25 +175,26 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
     // kernelSeries = kernelDb->kernelSeriesForProblem(problem);
   }
 
-  // auto kernelSeriesIter = kernelSeries.begin();
-
+  auto kernelSeriesIter = kernelSeries.begin();
+  std::cout << 179 << " " << kernelSeries.size() << std::endl;
   // //Execute GeKMM algorithm using above kernels
-  // err = executeGeKMM(problem, temps, kernelSeries.size(),
-  //   [&kernelSeriesIter](const KMMProblem) 
-  //     {return kernelSeriesIter->kernel->getFusedFacs();},
-  //   [&kernelSeriesIter, epilogueParams, kernelDb, this]
-  //     (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
-  //       fastKronError err;
-  //       auto kernel = *kernelSeriesIter;
+  err = executeGeKMM(problem, temps, kernelSeries.size(),
+    [&kernelSeriesIter](const KMMProblemStridedBatched) 
+      {return kernelSeriesIter->kernel->getFusedFacs();},
+    [&kernelSeriesIter, epilogueParams, kernelDb, this]
+      (const KMMProblemStridedBatched subProblem, uint32_t rstart, void*[2], KMMProblemStridedBatched::Matrix) {
+        fastKronError err;
+        auto kernel = *kernelSeriesIter;
 
-  //       KMMKernel* selectedKernel = kernel.kernel;
-  //       assert(rstart == kernel.end);
-  //       err = kernelDb->invokeKernel(selectedKernel, subProblem, 
-  //                                    rstart, epilogueParams,
-  //                                    KernelModeNormal);
-  //       kernelSeriesIter++;
-  //       return err;
-  //   });
+        KMMKernel* selectedKernel = kernel.kernel;
+        assert(rstart == kernel.end);
+        std::cout << 179 << " " << selectedKernel->str() << std::endl;
+        err = kernelDb->invokeKernel(selectedKernel, subProblem, 
+                                     rstart, epilogueParams,
+                                     KernelModeNormal);
+        kernelSeriesIter++;
+        return err;
+    });
 
   return fastKronSuccess; //err
 }

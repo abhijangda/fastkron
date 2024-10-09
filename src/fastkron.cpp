@@ -166,8 +166,8 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                                    uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                                    const float* X, fastKronOp opX, uint64_t strideX,
                                    const float* Fs[], fastKronOp opFs, uint64_t strideF[],
-                                   float* Z, float alpha, float beta, uint64_t strideZ,
-                                   uint32_t batchCount, const float *Y, uint64_t strideY,
+                                   float* Y, float alpha, float beta, uint64_t strideY,
+                                   uint32_t batchCount, const float *Z, uint64_t strideZ,
                                    float* temp1, float* temp2) {
   uint32_t K = KMMProblemStridedBatched::getK(Ps, N);
   uint32_t L = KMMProblemStridedBatched::getK(Qs, N);
@@ -175,7 +175,7 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
   for (int i = 0; i < N; i++) {
     fs[i] = KMMProblemStridedBatched::Factor(Ps[i], Qs[i], strideF[i], (void*)Fs[i]);
   }
-
+  std::cout << 178 << " " << X << " " << Y << " " << Z << std::endl;
   KMMProblemStridedBatched problem(FastKronFloat, 
           KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
           N, &fs[0], opFs,
