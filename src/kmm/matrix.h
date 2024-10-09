@@ -282,29 +282,31 @@ public:
 template<typename MatrixBase>
 class StridedBatchBase : public MatrixBase {
 protected:
-  uint32_t batchStride;
+  uint32_t batchStride_;
 
 public:
   using Base = MatrixBase;
   StridedBatchBase() : MatrixBase() {}
 
   StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride) :
-    MatrixBase(rows, cols), batchStride(batchStride) {}
+    MatrixBase(rows, cols), batchStride_(batchStride) {}
 
   StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride, void* data) :
-    MatrixBase(rows, cols, data), batchStride(batchStride) {}
+    MatrixBase(rows, cols, data), batchStride_(batchStride) {}
+
+  uint32_t batchStride() const {return batchStride_;}
 
   template<typename T>
   MatrixBase batch(uint32_t batch) const {
-    return MatrixBase(this->m(), this->n(), this->template data<T>(batch * batchStride));
+    return MatrixBase(this->m(), this->n(), this->template data<T>(batch * batchStride_));
   }
 
   StridedBatchBase like(void* ptr) const {
-    return StridedBatchBase(this->m(), this->n(), batchStride, ptr);
+    return StridedBatchBase(this->m(), this->n(), batchStride_, ptr);
   }
 
   StridedBatchBase sameRows(uint32_t cols) const {
-    return StridedBatchBase(this->m(), cols, batchStride, this->data());
+    return StridedBatchBase(this->m(), cols, batchStride_, this->data());
   }
 };
 

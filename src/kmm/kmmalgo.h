@@ -380,6 +380,12 @@ public:
   KMMProblemStridedBatchedT<NumFactors> factorSlice() {
     return KMMProblemStridedBatchedT<NumFactors>(*this);
   }
+
+  void swap(void* temp1, void* temp2) {
+    Base::swap(temp1, temp2);
+    this->in = KMMProblemStridedBatchedT::Matrix(this->x().m(), this->x().n(), 
+                                                 this->y().batchStride(), this->x().data());
+  }
 };
 
 using KMMProblemStridedBatched = KMMProblemStridedBatchedT<64>;

@@ -180,7 +180,7 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
           KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
           N, &fs[0], opFs,
           KMMProblemStridedBatched::Matrix(M, L, strideY, (void*)Y), batchCount);
-
+  printf("183 %d\n", problem.batchCount());
   auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, Z, strideZ);
   return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }

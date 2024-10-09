@@ -501,7 +501,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     }
   }
 
-  const uint64_t strideZ = batchCountZ > 1 ? L : 0;
+  const uint64_t strideZ = batchCountZ > 1 ? M*L : 0;
   uint64_t strideF[NUM_KP_MATS];
   
   //Allocate host data
@@ -520,7 +520,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   if (verbose) printf("setting values on host\n");
   if (checkResults)
     setValues(NUM_KP_MATS, hKpMats, hX, hY, M, N, K, KP_MAT_N, KP_MAT_K, 
-              batchCountX, batchCountZ, batchCountF, randMod, randMod);
+              batchCountX, batchCountZ, batchCountF, one, randMod);
   if (verbose) printf("values set\n");
   printf("Supported backends %d\n", fastKronGetBackends());
   printf("FastKron %s\n", fastKronVersion());
@@ -560,8 +560,8 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   size_t tempSize = 0;
   FastKronCHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
                            &resultSize, &tempSize));
-  resultSize = batchCountZ * resultSize * sizeof(T);
-  tempSize = batchCountZ * tempSize * sizeof(T);
+  resultSize = resultSize * sizeof(T);
+  tempSize = tempSize * sizeof(T);
   T* dX[gpus];
   T* dY[gpus];
   T* dResult[gpus];
@@ -612,18 +612,18 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
-    FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], tempSize));
-    if (resultSize < tempSize) FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], tempSize));
-    FastKronCHECK(backendMalloc(backend, (void**)&dResult[g], resultSize));
-    FastKronCHECK(backendMemset(backend, (void*)dResult[g], 0, resultSize));
+    FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], batchCountZ*tempSize));
+    if (resultSize < tempSize) FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], batchCountZ*tempSize));
+    FastKronCHECK(backendMalloc(backend, (void**)&dResult[g], batchCountZ*resultSize));
+    FastKronCHECK(backendMemset(backend, (void*)dResult[g], 0, batchCountZ*resultSize));
   }
   printf("520 sizeX %lu\n", sizeX);
   if (checkResults) {
     if (useDistributed) {
       //Already done by allocDistributedX
     } else {
-      FastKronCHECK(backendMemcpyHostToDevice(backend, dX[0], hX, sizeX));
-      FastKronCHECK(backendMemcpyHostToDevice(backend, dY[0], hY, resultSize));
+      FastKronCHECK(backendMemcpyHostToDevice(backend, dX[0], hX, batchCountX*sizeX));
+      FastKronCHECK(backendMemcpyHostToDevice(backend, dY[0], hY, batchCountZ*resultSize));
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
@@ -633,7 +633,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     {
       //CPU implementation of algorithm
       for (uint i = 0; i < NUM_KP_MATS; i++) {
-        hKpMatmulResult[i] = new T[tempSize * gpus];
+        hKpMatmulResult[i] = new T[batchCountZ*tempSize * gpus];
       }
 
       slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, batchCountZ, opx, opfs, alpha, beta);
@@ -661,7 +661,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
       }
     }
     if (verbose) printf("checking results\n");
-    size_t sizeResult = ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
+    size_t sizeResult = batchCountZ * ((uint64_t)M) * ((uint64_t)N) * sizeof(T);
     T* dResultToHost = (T*)malloc(sizeResult);
 #ifdef ENABLE_MULTI_GPU
     if (useDistributed) {
@@ -669,7 +669,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
     } else
 #endif
     {
-      printf("671 %f\n", dResult[0][0]);
+      printf("671 %f\n", dResult[0][M * L]);
       FastKronCHECK(backendMemcpyDeviceToHost(backend, dResultToHost, dResult[0], sizeResult));
     }
 
