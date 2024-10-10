@@ -145,6 +145,14 @@ class Kernel:
     elif self.kernelBatchType == "batched":
       return f"KMMProblemBatchedT<{self.fused_kernels}>"
 
+  def epilogueParamsType(self):
+    if self.kernelBatchType == "cont":
+      return f"EpilogueParams"
+    elif self.kernelBatchType == "strided":
+      return f"EpilogueStridedBatchedParams"
+    elif self.kernelBatchType == "batched":
+      return f"EpilogueBatchedParams"
+
   def kernelBatchTypeStr(self):
     if self.kernelBatchType == "cont": return "KernelBatchType::Normal"
     if self.kernelBatchType == "strided": return "KernelBatchType::StridedBatched"
@@ -172,13 +180,13 @@ class CPUKMMKernel(Kernel):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>"
+    return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.kmmProblemType()}>& params, FusedParams<{self.kmmProblemType()}>& fusedParams, DistributedParams& distParams, EpilogueParams& epilogueParams)"
+    return f"void {self.hostFuncName()}(KernelParams<{self.kmmProblemType()}>& params, FusedParams<{self.kmmProblemType()}>& fusedParams, DistributedParams& distParams, {self.epilogueParamsType()}& epilogueParams)"
 
   def pragmaTargetArch(self):
     targetArch = ""

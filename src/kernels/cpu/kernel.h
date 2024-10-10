@@ -155,18 +155,17 @@ void mma(uint32_t /*tileP*/, const YElem& y,
 
 template<uint OptLevel, uint32_t EpilogueKindVal,
          typename ElemT, typename X86VecT,
-         typename KernelParams, typename FusedParams,
+         typename KernelParams, typename FusedParams, typename EpilogueParams,
          typename TileX, typename FCache, typename YInterim, typename YRegisters>
 static CUDA_DEVICE_HOST
-void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const EpilogueParams& epilogueParams, 
+void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const EpilogueParams& /*epilogueParams*/, 
            X86VecT beta,
            uint32_t fac, uint32_t /*batch*/,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
            const YElem& y, 
-           const Factor& F, Matrix& Y, FCache& Fch, TileX& XTile,
+           const Factor& F, Matrix& Y, Matrix& Z, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
-  const ElemT* Z = epilogueParams.getD<ElemT>();
 
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
@@ -212,7 +211,7 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
 
         if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
           X86VecT z;
-          z.load(&Z[(tileM + y.m() + rm) * Y.n() + yN], slices);
+          z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, fastKronOp_N), slices);
           e.fmadd(beta, z);
         }
         e.store(Y.data<ElemT>(tileM + y.m() + rm, yN, fastKronOp_N), slices);
@@ -220,33 +219,39 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
   }
 }
 
-template<KernelBatchType::Ty KernelBatch, typename ElemT, typename KernelParams>
+template<KernelBatchType::Ty KernelBatch, typename ElemT, 
+         typename KernelParams, typename EpilogueParams>
 struct GetBatchedData {
   uint getBatchCount(const KernelParams& params);
   Matrix getXBatch(const KernelParams& params, int batch);
   Matrix getYBatch(const KernelParams& params, int batch);
   Factor getFBatch(const KernelParams& params, int fidx, int batch);
+  Matrix getZBatch(const EpilogueParams& params, const Matrix& Y, int batch);
 };
 
-template<typename ElemT, typename KernelParams>
-struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams> {
-  uint getBatchCount(const KernelParams& params) {return 1;}
+template<typename ElemT, typename KernelParams, typename EpilogueParams>
+struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams, EpilogueParams> {
+  uint getBatchCount(const KernelParams& /*params*/) {return 1;}
 
-  Matrix getXBatch(const KernelParams& params, int batch) {
+  Matrix getXBatch(const KernelParams& params, int /*batch*/) {
     return params.problem.x();
   }
   
-  Matrix getYBatch(const KernelParams& params, int batch) {
+  Matrix getYBatch(const KernelParams& params, int /*batch*/) {
     return params.problem.y();
   }
 
-  Factor getFBatch(const KernelParams& params, int fidx, int batch) {
+  Factor getFBatch(const KernelParams& params, int fidx, int /*batch*/) {
     return params.problem.f(fidx);
+  }
+
+  Matrix getZBatch(const EpilogueParams& params, const Matrix& Y, int /*batch*/) {
+    return Matrix(Y.m(), Y.n(), (void*)params.template z<ElemT>());
   }
 };
 
-template<typename ElemT, typename KernelParams>
-struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams> {
+template<typename ElemT, typename KernelParams, typename EpilogueParams>
+struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams, EpilogueParams> {
   uint getBatchCount(const KernelParams& params) {return params.problem.batchCount();}
 
   Matrix getXBatch(const KernelParams& params, int batch) {
@@ -260,6 +265,10 @@ struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams> {
   Factor getFBatch(const KernelParams& params, int fidx, int batch) {
     return params.problem.f(fidx).template batch<ElemT>(batch);
   }
+
+  Matrix getZBatch(const EpilogueParams& params, const Matrix& /*Y*/, int batch) {
+    return params.getZ().template batch<ElemT>(batch);
+  }
 };
 
 template<typename ElemT, typename X86VecT, 
@@ -267,7 +276,7 @@ template<typename ElemT, typename X86VecT,
          uint OptLevel, uint32_t EpilogueKindVal, uint FusedFacs,
          typename OptF, typename OptTileF, typename OptTileX,
          KernelBatchType::Ty KernelBatch,
-         typename YRegisters, typename KernelParams, typename FusedParams>
+         typename YRegisters, typename KernelParams, typename FusedParams, typename EpilogueParams>
 void threadWork(KernelParams& params,
                 FusedParams& fusedParams,
                 EpilogueParams& epilogueParams,
@@ -276,12 +285,13 @@ void threadWork(KernelParams& params,
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
-  GetBatchedData<KernelBatch, ElemT, KernelParams> batchedData;
+  GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams> batchedData;
 
   Matrix X = batchedData.getXBatch(params, batch);
   Matrix Y = batchedData.getYBatch(params, batch);
   Factor F = (kFactorShapeSame) ? Factor(OptF::P(), OptF::Q(), batchedData.getFBatch(params, 0, batch).data()) :
                                   batchedData.getFBatch(params, 0, batch);
+  Matrix Z = batchedData.getZBatch(epilogueParams, Y, batch);
 
   SliceCPU<ElemT, kKMultipleOfTileK, kTileKSame, OptTileX> XTile(tileM, tileK, TileK, F.p(), X);
 
@@ -292,12 +302,12 @@ void threadWork(KernelParams& params,
   X86VecT betaVec;
 
   if ((EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
-    ElemT alpha = epilogueParams.getAlpha<ElemT>();
+    ElemT alpha = epilogueParams.template getAlpha<ElemT>();
     alphaVec.broadcast(&alpha);
   }
 
   if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
-    ElemT beta = epilogueParams.getBeta<ElemT>();
+    ElemT beta = epilogueParams.template getBeta<ElemT>();
     betaVec.broadcast(&beta);
   }
 
@@ -310,7 +320,7 @@ void threadWork(KernelParams& params,
 
       F = F.sameShape(batchedData.getFBatch(params, fac, batch).data());
       //Transpose X data and store to TrXCache to reduce TLB misses
-      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache, alphaVec, epilogueParams.getAlpha<ElemT>());
+      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
       //Store F to FCache to reduce TLB misses
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 
@@ -326,7 +336,7 @@ void threadWork(KernelParams& params,
           mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
           store<OptLevel, EpilogueKindVal, ElemT, X86VecT>(params, fusedParams, epilogueParams, betaVec,
           fac, batch, tileM, tileK, tileP, tileQ,
-                                          y, F, Y, FCache, XTile, YCache, YReg);
+                                          y, F, Y, Z, FCache, XTile, YCache, YReg);
       }}}
     }
   }
@@ -338,7 +348,7 @@ template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP,
          int XAlignment, int FAlignment,
          fastKronOp OpX, fastKronOp OpF,
          KernelBatchType::Ty KernelBatch,
-         typename KernelParams, typename FusedParams>
+         typename KernelParams, typename FusedParams, typename EpilogueParams>
 void cpuKernel(KernelParams& params,
                FusedParams& fusedParams,
                DistributedParams& /*distParams*/,
@@ -369,12 +379,12 @@ void cpuKernel(KernelParams& params,
   // const uint XshSlices = getXshSlices<OptLevel, kTileK, MaxP>(params);
   // const uint XSlices   = getXSlices  <OptLevel, MaxQ>(Y, params);
   const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
-  const bool hasAlpha  = epilogueParams.getAlpha<ElemT>() != (ElemT)1.0f;
-  const bool hasBeta   = epilogueParams.getD<ElemT>() != nullptr && 
-                         epilogueParams.getBeta<ElemT>() != (ElemT)0;
+  const bool hasAlpha  = epilogueParams.template getAlpha<ElemT>() != (ElemT)1.0f;
+  const bool hasBeta   = epilogueParams.template getD<ElemT>() != nullptr && 
+                         epilogueParams.template getBeta<ElemT>() != (ElemT)0;
   const bool notLastFactor = params.kp_idx > FusedFacs - 1;
 
-  const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams>().getBatchCount(params);
+  const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams>().getBatchCount(params);
 
   if (OpX == fastKronOp_N) {
     #pragma omp parallel for collapse(4)

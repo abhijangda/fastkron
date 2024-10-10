@@ -48,6 +48,7 @@ union AllTypes {
 struct EpilogueParams {
   AllTypes alpha;
   AllTypes beta;
+  //TODO: EpilogueParams should contain Matrix object
   const void * __restrict__ glD;
   
   EpilogueParams(): alpha(1.0f), beta(0.0f), glD(nullptr) {}
@@ -90,28 +91,26 @@ struct EpilogueParams {
 };
 
 struct EpilogueStridedBatchedParams : public EpilogueParams {
-  uint64_t strideZ;
+  StridedBatchMatrix Z;
 
-  EpilogueStridedBatchedParams() : EpilogueParams(), strideZ(0) {}
-  EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, const void* glD, uint32_t strideZ) : 
-    EpilogueParams(alpha, beta, glD), strideZ(strideZ) {}
+  EpilogueStridedBatchedParams() : EpilogueParams(), Z() {}
+  EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, StridedBatchMatrix Z) : 
+    EpilogueParams(alpha, beta, Z.data()), Z(Z) {}
 
   template<typename ElemT>
   static EpilogueStridedBatchedParams create() {
     return EpilogueStridedBatchedParams(AllTypes((ElemT)1.0f), 
-                          AllTypes((ElemT)0.0f),
-                          nullptr, 0);
+                          AllTypes((ElemT)0.0f), StridedBatchMatrix());
   }
 
   template<typename ElemT>
   static EpilogueStridedBatchedParams create(const ElemT alpha, const ElemT beta,
-                               const ElemT* glD, uint64_t strideZ) {
-    return EpilogueStridedBatchedParams(AllTypes(alpha), AllTypes(beta),
-                                        (const void*)glD, strideZ);
+                                             StridedBatchMatrix Z) {
+    return EpilogueStridedBatchedParams(AllTypes(alpha), AllTypes(beta), Z);
   }
 
   CUDA_DEVICE
-  uint64_t getStrideZ() {return strideZ;}
+  StridedBatchMatrix getZ() const {return Z;}
 };
 
 struct CPUCaches {

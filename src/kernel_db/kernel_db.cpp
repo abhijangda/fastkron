@@ -287,7 +287,7 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
       }
     }
   }
-  std::cout << 290 << " " << kernels[KernelOptimizations::MaxOptLevel()].size() << std::endl; 
+
   if (it != compiledKernels.end() and 
       kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
       return true;

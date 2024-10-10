@@ -2,7 +2,7 @@
 #include "testBase.h"
 
 #define GENERAL_TEST_NN(M, MinFacs, MaxFacs, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY) \
-  TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##Tune##_##NN) { \
+  TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##Tune##_##BatchZ##x##BatchX##x##BatchF##x##BatchY##_##NN) { \
   bool result = true;\
   for (uint Facs = MinFacs; Facs <= MaxFacs; Facs++) {\
     uint KP_MAT_N[Facs];\
@@ -15,7 +15,7 @@
         KP_MAT_K[i] = P;\
         KP_MAT_N[i] = Q;\
     }\
-    result = result and run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_N, fastKronOp_N, BatchZ,BatchX,BatchF,(Type)2.0f, (Type)0.0f, 1, 0, false, 1, 1, 1, 1, true, true, Tune, getTestBackend(), false);\
+    result = result and run<Type>(M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_N, fastKronOp_N, BatchZ,BatchX,BatchF,BatchY,(Type)2.0f, (Type)3.0f, 1, 0, false, 1, 1, 1, 1, true, true, Tune, getTestBackend(), false);\
     if (!result) abort();\
   }\
   EXPECT_TRUE(result);\
@@ -65,7 +65,6 @@ CONTIGUOUS_TEST_NN(1, 3, 297, 127, false);
 CONTIGUOUS_TEST_NN(1, 3, 127, 297, false);
 CONTIGUOUS_TEST_NN(1, 2, 936, 505, false);
 
-// CONTIGUOUS_TEST_NN(1, 3, 128, 128, int);
 CONTIGUOUS_TEST_NN(1, 3, 128, 128, true);
 CONTIGUOUS_TEST_NN(3, 4, 32, 32, true);
 CONTIGUOUS_TEST_NN(6, 8, 4, 4, true);

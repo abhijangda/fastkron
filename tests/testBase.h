@@ -92,7 +92,7 @@ static void setMatrix(T* mat, uint M, uint N, int (*fnvalue)(int i, int j)) {
 }
 
 template<typename T>
-void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, T* y, uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], int batchCountX, int batchCountZ, int batchCountF, int (*xval)(int i, int j), int (*fval)(int i, int j))
+void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, T* y, uint M, uint N, uint K, uint KP_MAT_N[], uint KP_MAT_K[], int batchCountX, int batchCountF, int batchCountY, int (*xval)(int i, int j), int (*fval)(int i, int j))
 {
   for (uint i = 0; i < NUM_KP_MATS; i++) {
     for (int b = 0; b < batchCountF; b++) {
@@ -104,7 +104,7 @@ void setValues(uint NUM_KP_MATS, T* kpMats[], T *x, T* y, uint M, uint N, uint K
   for (int b = 0; b < batchCountX; b++)
     setMatrix(&x[b * M * K], M, K, xval);
 
-  for (int b = 0; b < batchCountZ; b++)
+  for (int b = 0; b < batchCountY; b++)
     setMatrix(&y[b*M*N], M, N, xval);
 }
 
@@ -231,7 +231,7 @@ void baselineKPThenMatmul(uint NUM_KP_MATS, int* result, int* x, int* kpout[], i
 template<typename T>
 void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[], T* y,
                   uint M, uint /*N*/, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
-                  uint64_t strideX, uint64_t strideZ, uint64_t strideF[], int batchCount,
+                  uint64_t strideX, uint64_t strideZ, uint64_t strideF[], uint64_t strideY, int batchCount,
                   fastKronOp opx, fastKronOp opfs, T alpha, T beta) {
   for (int b = 0; b < batchCount; b++) {
   uint secFacRowMulSize = 1;
@@ -277,7 +277,7 @@ void slicedMatmul(uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[], T* y
         if (kp < NUM_KP_MATS - 1)
           kpMatmulResult[kp][b*strideZ + i*resultCols + j] = r;
         else {
-          kpMatmulResult[kp][b*strideZ + i*resultCols + j] = alpha * r + beta*y[b*strideZ + i*resultCols + j];
+          kpMatmulResult[kp][b*strideZ + i*resultCols + j] = alpha * r + beta*y[b*strideY + i*resultCols + j];
         }
       }
     }
@@ -291,13 +291,17 @@ template<typename T>
 static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* z, T* y, T alpha, T beta,
                      uint M, uint/*N*/, uint/*K*/, uint KP_MAT_N[], uint KP_MAT_K[], 
                      uint32_t batchCount, uint64_t strideX, uint64_t strideZ, uint64_t strideF[],
-                     T* temp1, T* temp2) {
+                     uint64_t strideY, T* temp1, T* temp2) {
 
   if (batchCount > 1) {
     if (std::is_same<T, float>::value) {
       FastKronCHECK(sgekmmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const float*)x, opx, strideX, (const float**)kpMats, opfs, strideF, (float*)y,
-                      alpha, beta, strideZ, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
+                      strideY, alpha, beta, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
+    } else if (std::is_same<T, double>::value) {
+      FastKronCHECK(dgekmmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                      (const double*)x, opx, strideX, (const double**)kpMats, opfs, strideF, (double*)y,
+                      strideY, alpha, beta, batchCount, (const double*)z, strideZ, (double*)temp1, (double*)temp2));
     }
 
     return;
@@ -442,6 +446,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
                        uint* KP_MAT_N, uint* KP_MAT_K,
                       fastKronOp opx, fastKronOp opfs,
                       uint32_t batchCountZ, uint32_t batchCountX, uint32_t batchCountF,
+                      uint32_t batchCountY,
                       T alpha, T beta,
                       uint numIters, uint warmup, 
                       bool useUVA, int gpuInRows, int gpuInCols, int gpus,
@@ -461,9 +466,10 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   (void)kronBatch;
 #endif
 
-  if ((batchCountZ == batchCountX && batchCountX == batchCountF) ||
+  if (((batchCountZ == batchCountX && batchCountX == batchCountF) ||
       (batchCountZ == batchCountX && batchCountF == 1) ||
-      (batchCountZ == batchCountF && batchCountX == 1)) {
+      (batchCountZ == batchCountF && batchCountX == 1)) &&
+      (batchCountY == batchCountZ || batchCountY == 1)) {
   } else {
     printf("Wrong values for batchCountZ %d batchCountX %d  batchCountF %d\n",
            batchCountZ, batchCountX, batchCountF);
@@ -501,6 +507,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   }
 
   const uint64_t strideZ = batchCountZ > 1 ? M*L : 0;
+  const uint64_t strideY = batchCountY > 1 ? M*L : 0;
   uint64_t strideF[NUM_KP_MATS];
   
   //Allocate host data
@@ -519,7 +526,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
   if (verbose) printf("setting values on host\n");
   if (checkResults)
     setValues(NUM_KP_MATS, hKpMats, hX, hY, M, N, K, KP_MAT_N, KP_MAT_K, 
-              batchCountX, batchCountZ, batchCountF, one, randMod);
+              batchCountX, batchCountF, batchCountY, randMod, randMod);
   if (verbose) printf("values set\n");
   printf("Supported backends %d\n", fastKronGetBackends());
   printf("FastKron %s\n", fastKronVersion());
@@ -577,7 +584,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
 #endif
   {
     FastKronCHECK(backendMalloc(backend, (void**)&dX[0], batchCountX*sizeX));
-    FastKronCHECK(backendMalloc(backend, (void**)&dY[0], batchCountZ*resultSize));
+    FastKronCHECK(backendMalloc(backend, (void**)&dY[0], batchCountY*resultSize));
   }
 
   if (verbose) printf("allocated\n");
@@ -622,7 +629,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
       //Already done by allocDistributedX
     } else {
       FastKronCHECK(backendMemcpyHostToDevice(backend, dX[0], hX, batchCountX*sizeX));
-      FastKronCHECK(backendMemcpyHostToDevice(backend, dY[0], hY, batchCountZ*resultSize));
+      FastKronCHECK(backendMemcpyHostToDevice(backend, dY[0], hY, batchCountY*resultSize));
     }
   }
   if (verbose) printf("checkResults %d\n", checkResults);
@@ -635,7 +642,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
         hKpMatmulResult[i] = new T[batchCountZ*tempSize * gpus];
       }
 
-      slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, batchCountZ, opx, opfs, alpha, beta);
+      slicedMatmul(NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, strideY, batchCountZ, opx, opfs, alpha, beta);
       hResult = hKpMatmulResult[NUM_KP_MATS-1];
     }
     printf("540\n");
@@ -648,7 +655,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
 #endif
     {
       printf("546: %p %p %p %p\n", dX[0], dY[0], dResult[0], dTemp1[0]);
-      kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideZ, strideF, dTemp1[0], dTemp2[0]);
+      kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
     }
     for (int g = 0; g < gpus; g++) {
       if (backend == fastKronBackend_CUDA) { 
@@ -711,7 +718,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
       } else {
-        kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideZ, strideF, dTemp1[0], dTemp2[0]);
+        kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
       }
     }
     if (backend == fastKronBackend_CUDA) {
@@ -761,7 +768,7 @@ static inline bool run(const uint M, const uint N, const uint K, const uint NUM_
           kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
         } else {
-          kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideZ, strideF, dTemp1[0], dTemp2[0]);
+          kronGEMM<T>(handle, backend, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
         }
         if (backend == fastKronBackend_X86) {
           double endtime = getCurrTime();

@@ -166,7 +166,7 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                                    uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                                    const float* X, fastKronOp opX, uint64_t strideX,
                                    const float* Fs[], fastKronOp opFs, uint64_t strideF[],
-                                   float* Y, float alpha, float beta, uint64_t strideY,
+                                   float* Y, uint64_t strideY, float alpha, float beta,
                                    uint32_t batchCount, const float *Z, uint64_t strideZ,
                                    float* temp1, float* temp2) {
   uint32_t K = KMMProblemStridedBatched::getK(Ps, N);
@@ -180,7 +180,7 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
           KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
           N, &fs[0], opFs,
           KMMProblemStridedBatched::Matrix(M, L, strideY, (void*)Y), batchCount);
-  auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, Z, strideZ);
+  auto epilogueParams = EpilogueStridedBatchedParams::create<float>(alpha, beta, StridedBatchMatrix(M, L, strideZ, (void*)Z));
   return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }
 
@@ -188,18 +188,42 @@ fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const int* X, fastKronOp opX, uint64_t strideX,
                      const int* Fs[], fastKronOp opFs, uint64_t strideF[],
-                     int* Z, int alpha, int beta, uint64_t strideZ,
-                     uint32_t batchCount, const int *Y, uint64_t strideY, int* temp1, int* temp2) {
-  
+                     int* Y, uint64_t strideY, int alpha, int beta,
+                     uint32_t batchCount, const int *Z, uint64_t strideZ, int* temp1, int* temp2) {
+  uint32_t K = KMMProblemStridedBatched::getK(Ps, N);
+  uint32_t L = KMMProblemStridedBatched::getK(Qs, N);
+  KMMProblemStridedBatched::Factor fs[N];
+  for (int i = 0; i < N; i++) {
+    fs[i] = KMMProblemStridedBatched::Factor(Ps[i], Qs[i], strideF[i], (void*)Fs[i]);
+  }
+
+  KMMProblemStridedBatched problem(FastKronInt, 
+          KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
+          N, &fs[0], opFs,
+          KMMProblemStridedBatched::Matrix(M, L, strideY, (void*)Y), batchCount);
+  auto epilogueParams = EpilogueStridedBatchedParams::create<int>(alpha, beta, StridedBatchMatrix(M, L, strideZ, (void*)Z));
+  return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }
 
 fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const double* X, fastKronOp opX, uint64_t strideX,
                      const double* Fs[], fastKronOp opFs, uint64_t strideF[], 
-                     double* Z, double alpha, double beta, uint64_t strideZ,
-                     uint32_t batchCount, const double *Y, uint64_t strideY, double* temp1, double* temp2) {
+                     double* Y, uint64_t strideY, double alpha, double beta,
+                     uint32_t batchCount, const double *Z, uint64_t strideZ, double* temp1, double* temp2) {
+  uint32_t K = KMMProblemStridedBatched::getK(Ps, N);
+  uint32_t L = KMMProblemStridedBatched::getK(Qs, N);
+  KMMProblemStridedBatched::Factor fs[N];
+  for (int i = 0; i < N; i++) {
+    fs[i] = KMMProblemStridedBatched::Factor(Ps[i], Qs[i], strideF[i], (void*)Fs[i]);
+  }
 
+  KMMProblemStridedBatched problem(FastKronDouble, 
+          KMMProblemStridedBatched::Matrix(M, K, strideX, (void*)X), opX,
+          N, &fs[0], opFs,
+          KMMProblemStridedBatched::Matrix(M, L, strideY, (void*)Y), batchCount);
+  auto epilogueParams = EpilogueStridedBatchedParams::create<double>(alpha, beta, StridedBatchMatrix(M, L, strideZ, (void*)Z));
+  return ((FastKronHandle*)handle)->xgekmmStridedBatched(problem, backend, temp1, temp2, epilogueParams);
 }
 
 #ifdef ENABLE_MULTI_GPU
