@@ -106,7 +106,8 @@ __global__ void cudaKernel(KernelParams params,
   const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
   // const uint ShTileK   = XshSlices*TileP;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : (blockIdx.z * 32768 + blockIdx.y);
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
+                                                            blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
   const uint tid  = threadIdx.x;
 
@@ -225,10 +226,6 @@ __global__ void cudaKernel(KernelParams params,
           for (int i = 0; i < StLen; i++) {
             yReg.set(rm, tk+i, tq, 
                      epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm, tk + i, tq)));
-
-              // epilogue(epilogueParams.template getAlpha<ElemT>(), epilogueParams.template getBeta<ElemT>(),
-              //          (const ElemT*)batchedData.getZBatch(epilogueParams, Y, batch).data(), 
-              //          cIdx + i, yReg.at(rm, tk + i, tq)));
           }
         }
       }
