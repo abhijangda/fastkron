@@ -92,8 +92,8 @@ public:
   /**
    * canCompute() - Overriding the method of KMMKernel.
    */
-  virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, bool p2p, 
-                          bool exactFuse = true);
+  virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, bool p2p,
+                          KernelBatchType::Ty probBatchType, bool exactFuse = true);
 
   /**
    * str() - Overriding the method of KMMKernel. Adds NumThreads extra to the kernel string.

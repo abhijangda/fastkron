@@ -46,8 +46,8 @@ public:
    *              can run on the given hardware.
    */
   virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw,
-                          bool p2p, bool exactFuse = true) {
-    if (CPUKMMKernel::canCompute(problem, hw, p2p, exactFuse)) {
+                          bool p2p, KernelBatchType::Ty probBatchType, bool exactFuse = true) {
+    if (CPUKMMKernel::canCompute(problem, hw, p2p, probBatchType, exactFuse)) {
       //A CPU with higher SIMD width (say AVX512) always support a lower
       //SIMD width (say AVX256)
       return getSIMD() <= ((X86ArchDetails*)hw)->simd;

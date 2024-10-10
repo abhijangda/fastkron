@@ -68,8 +68,8 @@ struct CUDAKMMKernel : public GPUKMMKernel {
    * canCompute() - Overrides method of GPUKMMKernel
    */
   virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw,
-                          bool p2p, bool exactFuse = true) {
-    if (GPUKMMKernel::canCompute(problem, hw, p2p, exactFuse)) {
+                          bool p2p, KernelBatchType::Ty probBatchType, bool exactFuse = true) {
+    if (GPUKMMKernel::canCompute(problem, hw, p2p, probBatchType, exactFuse)) {
       return ((CUDAArchDetails*)hw)->smArch == sm;
     }
     return false;

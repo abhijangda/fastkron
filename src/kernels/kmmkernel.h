@@ -169,11 +169,17 @@ public:
    * @exactFuse: True 
    */
   virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, 
-                          bool p2p, bool exactFuse = true);
+                          bool p2p, KernelBatchType::Ty probBatchType,
+                          bool exactFuse = true);
+  bool canCompute(KMMProblem problem, const HardwareDetails* hw, 
+                  bool p2p, bool exactFuse = true) {
+    return canCompute(problem, hw, p2p, KernelBatchType::Normal,
+                      exactFuse);
+  }
   bool canCompute(KMMProblemStridedBatched problem, const HardwareDetails* hw, 
                   bool p2p, bool exactFuse = true) {
-    return kernelBatchType == KernelBatchType::StridedBatched &&
-           canCompute(problem.batchProblem(0), hw, p2p, exactFuse);
+    return canCompute(problem.batchProblem(0), hw, p2p, KernelBatchType::StridedBatched, 
+           exactFuse);
   }
   /**
    * backend - Return backend (X86, CUDA, ARM, HIP) as string of the kernel.

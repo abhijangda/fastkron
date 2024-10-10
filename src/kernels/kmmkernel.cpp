@@ -79,14 +79,16 @@ bool KMMKernel::isOptValid(KMMProblem problem, KernelOptimizations::Optimization
 }
 
 bool KMMKernel::canCompute(KMMProblem problem, const HardwareDetails*,
-                           bool p2p, bool exactFuse) {
+                           bool p2p, KernelBatchType::Ty probBatchType, 
+                           bool exactFuse) {
   using Opts = KernelOptimizations::Optimization;
 
   bool ret = problem.type() == elemType &&
               problem.opFs() == opF && problem.opX() == opX && 
               P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || 
                                   (!exactFuse && problem.n() >= fusedFacs)) &&
-              tileX.n()/problem.f(0).p() > 0; //Kernel's TileX is greater than P
+              tileX.n()/problem.f(0).p() > 0 && //Kernel's TileX is greater than P
+              kernelBatchType == probBatchType;
 
   if (!ret) return false;
 
