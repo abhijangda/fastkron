@@ -106,9 +106,20 @@ public:
   /**
    * invokeKernel() - Overriding KernelDatabase::invokeKernel
    */
+private:
+  template<typename KMMProblem, typename EpilogueParams>
+  fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
+                             const uint fidx,
+                             EpilogueParams epilogueParams,
+                             KernelMode execMode);
+public:
   virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                      const uint fidx,
                                      EpilogueParams epilogueParams,
+                                     KernelMode execMode);
+  virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                     const uint fidx,
+                                     EpilogueStridedBatchedParams epilogueParams,
                                      KernelMode execMode);
   /**
    * invokeP2PStoreKernel() - Overriding KernelDatabase::invokeP2PStoreKernel
@@ -118,6 +129,12 @@ public:
                                              DistributedParams distParams, 
                                              EpilogueParams epilogueParams,
                                              KernelMode execMode);
+  virtual fastKronError invokeP2PStoreKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                             const uint fidx,  
+                                             DistributedParams distParams, 
+                                             EpilogueStridedBatchedParams epilogueParams,
+                                             KernelMode execMode)
+                                             {/*P2P not supported for stridedbatched*/}
   /**
    * timeKernel() - Overriding KernelDatabase::timeKernel
    */
@@ -129,6 +146,24 @@ public:
                                    bool useP2PStore,
                                    int warmups, int runs,
                                    float& runtime);
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem, 
+                                   const uint fidx, 
+                                   DistributedParams distParams,
+                                   EpilogueStridedBatchedParams epilogueParams,
+                                   KernelMode execMode, 
+                                   bool useP2PStore,
+                                   int warmups, int runs,
+                                   float& runtime);
+private:
+  template<typename KMMProblemT, typename EpilogueParamsT>
+  fastKronError timeKernel(KMMKernel* kernel, KMMProblemT problem, 
+                           const uint fidx, 
+                           DistributedParams distParams,
+                           EpilogueParamsT epilogueParams,
+                           KernelMode execMode, 
+                           bool useP2PStore,
+                           int warmups, int runs,
+                           float& runtime);
 
   /*********************** Kernel Search Methods ***************************/
 protected:
@@ -149,7 +184,11 @@ protected:
 protected:
   /**
    * occupancyDetails() - Overriding KernelDatabase::occupancyDetails.
-   */ 
+   */
+  template<typename KMMProblemT>
+  std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblemT problem);
+
   virtual std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblem problem);
+  virtual std::string occupancyDetails(KMMKernel* kernelInfo, KMMProblemStridedBatched problem);
   /***************************************************************************/
 };

@@ -109,7 +109,7 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
     return EpilogueStridedBatchedParams(AllTypes(alpha), AllTypes(beta), Z);
   }
 
-  CUDA_DEVICE
+  CUDA_DEVICE_HOST
   StridedBatchMatrix getZ() const {return Z;}
 };
 

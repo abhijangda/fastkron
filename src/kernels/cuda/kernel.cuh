@@ -6,6 +6,7 @@
 #include "config.h"
 
 #include "kernels/params.h"
+#include "kernels/get_batched_data.h"
 
 #include "kernels/cuda/utils.cuh"
 #include "kernels/cuda/global-store.cuh"
@@ -32,10 +33,11 @@ template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
          uint RegM, uint RegK, uint RegQ,
          uint OptLevel,
          int XAlignment, int FAlignment,
-         fastKronOp OpX, fastKronOp OpF>
+         fastKronOp OpX, fastKronOp OpF, KernelBatchType::Ty KernelBatch,
+         typename KernelParams, typename FusedParams, typename EpilogueParams>
 __launch_bounds__(NumThreads)
-__global__ void cudaKernel(KernelParams<FusedFacs> params,
-                           FusedParams<FusedFacs> fusedParams,
+__global__ void cudaKernel(KernelParams params,
+                           FusedParams fusedParams,
                            DistributedParams distParams,
                            EpilogueParams epilogueParams) {
 #ifdef __CUDA_ARCH__
@@ -83,8 +85,12 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                 typename std::conditional<FAlignment == 2, Vec2T,
                                           Vec4T>::type>::type>::type;
 
-  const Matrix X = params.problem.x();
-  const Matrix Y = params.problem.y();
+  GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams> batchedData;
+
+  const uint32_t batch = blockIdx.z;
+
+  const Matrix X = batchedData.getXBatch(params, batch);
+  const Matrix Y = batchedData.getYBatch(params, batch);
 
   static_assert(!(kQLeTileQ && kQMultipleOfTileQ),
                 "Both QLeTileQ and QMultipleOfTileQ cannot be true at same time");
@@ -143,7 +149,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
                 (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
-      const Factor F(P, Q, params.problem.f(fac).data());
+      const Factor F(P, Q, batchedData.getFBatch(params, fac, batch).data());
 
       //Load F to shared memory
       directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, OpF, decltype(Fsh)>
@@ -186,7 +192,7 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
 
       const uint glM = rm + yElem.m() + tileM;
       uint glK;
-      ElemT* outputArray;
+      ElemT* yPtr;
       uint32_t cIdx;
 
       //Total elements produced from TileK are (TileK/P) * Q
@@ -210,18 +216,22 @@ __global__ void cudaKernel(KernelParams<FusedFacs> params,
       }}
 
       if (DistributeToGPUs) {
-        outputArray = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
+        yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
         cIdx = glM * Y.n() + glK;
-        outputArray = (ElemT*)params.problem.y().data() + cIdx;
+        yPtr = (ElemT*)Y.data() + cIdx;
         if (params.kp_idx == FusedFacs - 1) {
           #pragma unroll
           for (int i = 0; i < StLen; i++) {
-            yReg.set(rm, tk+i, tq,
-              epilogue(epilogueParams, cIdx + i, yReg.at(rm, tk + i, tq)));
+            yReg.set(rm, tk+i, tq, 
+                     epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm, tk + i, tq)));
+
+              // epilogue(epilogueParams.template getAlpha<ElemT>(), epilogueParams.template getBeta<ElemT>(),
+              //          (const ElemT*)batchedData.getZBatch(epilogueParams, Y, batch).data(), 
+              //          cIdx + i, yReg.at(rm, tk + i, tq)));
           }
         }
       }
-      stVecYReg(outputArray, yReg, StLen, rm, tk, tq);
+      stVecYReg(yPtr, yReg, StLen, rm, tk, tq);
   }}}}
 }

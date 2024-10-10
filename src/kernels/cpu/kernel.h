@@ -4,6 +4,7 @@
 
 #include "kernels/cpu/vector-types.h"
 #include "kernels/cpu/tensor.h"
+#include "kernels/get_batched_data.h"
 
 #pragma once
 
@@ -218,58 +219,6 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
     }});
   }
 }
-
-template<KernelBatchType::Ty KernelBatch, typename ElemT, 
-         typename KernelParams, typename EpilogueParams>
-struct GetBatchedData {
-  uint getBatchCount(const KernelParams& params);
-  Matrix getXBatch(const KernelParams& params, int batch);
-  Matrix getYBatch(const KernelParams& params, int batch);
-  Factor getFBatch(const KernelParams& params, int fidx, int batch);
-  Matrix getZBatch(const EpilogueParams& params, const Matrix& Y, int batch);
-};
-
-template<typename ElemT, typename KernelParams, typename EpilogueParams>
-struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams, EpilogueParams> {
-  uint getBatchCount(const KernelParams& /*params*/) {return 1;}
-
-  Matrix getXBatch(const KernelParams& params, int /*batch*/) {
-    return params.problem.x();
-  }
-  
-  Matrix getYBatch(const KernelParams& params, int /*batch*/) {
-    return params.problem.y();
-  }
-
-  Factor getFBatch(const KernelParams& params, int fidx, int /*batch*/) {
-    return params.problem.f(fidx);
-  }
-
-  Matrix getZBatch(const EpilogueParams& params, const Matrix& Y, int /*batch*/) {
-    return Matrix(Y.m(), Y.n(), (void*)params.template z<ElemT>());
-  }
-};
-
-template<typename ElemT, typename KernelParams, typename EpilogueParams>
-struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams, EpilogueParams> {
-  uint getBatchCount(const KernelParams& params) {return params.problem.batchCount();}
-
-  Matrix getXBatch(const KernelParams& params, int batch) {
-    return params.problem.x().template batch<ElemT>(batch);
-  }
-  
-  Matrix getYBatch(const KernelParams& params, int batch) {
-    return params.problem.y().template batch<ElemT>(batch);
-  }
-
-  Factor getFBatch(const KernelParams& params, int fidx, int batch) {
-    return params.problem.f(fidx).template batch<ElemT>(batch);
-  }
-
-  Matrix getZBatch(const EpilogueParams& params, const Matrix& /*Y*/, int batch) {
-    return params.getZ().template batch<ElemT>(batch);
-  }
-};
 
 template<typename ElemT, typename X86VecT, 
          fastKronOp OpX, fastKronOp OpF,

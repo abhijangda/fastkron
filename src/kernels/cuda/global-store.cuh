@@ -38,13 +38,14 @@ uint32_t fusedYColumn(const FusedParams& params, const Matrix& Y, const XShared&
   return glSlice + sliceElem + elem;
 }
 
-template<typename ElemT>
+template<typename ElemT, typename EpilogueParams, typename GetBatchedData>
 CUDA_DEVICE
-ElemT epilogue(const EpilogueParams& params, uint32_t idx, ElemT yVal) {
-  ElemT d = (params.getBeta<ElemT>() != 0 && params.getD<ElemT>() != nullptr) ? 
-             params.getBeta<ElemT>() * params.getD<ElemT>()[idx] :
+ElemT epilogue(const EpilogueParams& params, GetBatchedData& batchedData, const Matrix& Y, uint32_t batch, uint32_t idx, ElemT yVal) {
+  //Always reading struct members within the && condition is better than reading all before the condition.
+  ElemT d = (params.template getBeta<ElemT>() != 0 && batchedData.getZBatch(params, Y, batch).data() != nullptr) ? 
+             params.template getBeta<ElemT>() * batchedData.getZBatch(params, Y, batch).template data<ElemT>(0)[idx] :
              0;
-  return params.getAlpha<ElemT>() * yVal + d;
+  return params.template getAlpha<ElemT>() * yVal + d;
 }
 
 

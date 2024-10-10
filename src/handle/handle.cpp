@@ -229,7 +229,7 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
     getDistributedSizes(problem.m(), tempCols,   gpuM, tempCols);
     getDistributedSizes(problem.m(), resultCols, gpuM, resultCols);
   } else
-#endif 
+#endif
   {
     gpuM = problem.m();
   }

@@ -61,14 +61,14 @@ public:
     return array[index];
   }
 
-  StackArray<T, MaxSize> sub(uint32_t start, uint32_t len) const {
-    assert(len <= n);
-    T ptrs[len];
-    for (uint32_t i = 0; i < len; i++) {
+  StackArray<T, MaxSize> sub(uint32_t start, uint32_t length) const {
+    assert(length <= n);
+    T ptrs[length];
+    for (uint32_t i = 0; i < length; i++) {
       ptrs[i] = array[i + start];
     }
 
-    return StackArray<T, MaxSize>(ptrs, len);
+    return StackArray<T, MaxSize>(ptrs, length);
   }
 
   CUDA_DEVICE_HOST
@@ -76,13 +76,13 @@ public:
 
   template<uint32_t SliceSize>
   StackArray<T, SliceSize> slice(uint32_t start) const {
-    assert(len <= n);
+    assert(SliceSize <= n);
     T ptrs[SliceSize];
     for (uint32_t i = 0; i < SliceSize; i++) {
       ptrs[i] = array[i + start];
     }
 
-    return StackArray<T, SliceSize>(ptrs, len);
+    return StackArray<T, SliceSize>(ptrs, SliceSize);
   }
 
   StackArray(const StackArray& x) : StackArray (&x.array[0], x.len()) {}

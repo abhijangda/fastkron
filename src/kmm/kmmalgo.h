@@ -368,6 +368,7 @@ public:
       case FastKronInt:
         return batchProblem<int>(batch);
       default:
+        std::cout << "Not Implemented for Type " << this->type() << std::endl;
         assert (false);
     }
 
@@ -385,6 +386,17 @@ public:
     Base::swap(temp1, temp2);
     this->in = KMMProblemStridedBatchedT::Matrix(this->x().m(), this->x().n(), 
                                                  this->y().batchStride(), this->x().data());
+  }
+
+  CUDA_DEVICE_HOST
+  size_t flop() const {
+    return Base::flop() * batchCount();
+  }
+
+  friend std::ostream& operator<<(std::ostream &out, const KMMProblemStridedBatchedT &problem) {
+    out << (const Base&)(problem);
+    out << "_" << "stridedBatched" << "_" << problem.batchCount();
+    return out;
   }
 };
 

@@ -36,7 +36,7 @@ public:
   GPUKMMKernel(void* kernelInvoker, FastKronType elemType,
                Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
                uint regM, uint regK, uint regQ, uint optLevel,
-               fastKronOp opX, fastKronOp opF, KernelBatchType kernelBatchType,
+               fastKronOp opX, fastKronOp opF, KernelBatchType::Ty kernelBatchType,
                void*(*getKernel)(), uint NumThreads,
                uint alignX, uint alignF) :
                KMMKernel(kernelInvoker, elemType, f, tileF, tileX,
@@ -56,7 +56,14 @@ public:
   /**
    * grid() - Returns grid size of the kernel for a problem. 
    */
-  dim3 grid(KMMProblem problem) const;
+  template<typename KMMProblem>
+  dim3 grid(const KMMProblem& problem, int batchCount) const;
+
+  template<uint32_t MaxFactors>
+  dim3 grid(const KMMProblemT<MaxFactors>& problem) const;
+
+  template<uint32_t MaxFactors>
+  dim3 grid(const KMMProblemStridedBatchedT<MaxFactors>& problem) const;
 
   /**
    * block() - Returns block size of the kernel for a problem.
@@ -88,6 +95,9 @@ public:
     //TODO: Shouldn't this be MIN? because getTotalTileSize < getMaxTotalTileSize
     return MAX(getTotalTileSize(problem), getMaxTotalTileSize());
   }
+  size_t getSharedMemSize(KMMProblemStridedBatched problem) const {
+    return getSharedMemSize(problem.batchProblem(0));
+  }
 
   /**
    * canCompute() - Overriding the method of KMMKernel.
@@ -100,3 +110,39 @@ public:
    */
   virtual std::string str() const;
 };
+
+template<typename KMMProblem>
+dim3 GPUKMMKernel::grid(const KMMProblem& problem, int batchCount) const {
+  Matrix tileX = getTileX(problem);
+  Factor tileF = getTileF(problem);
+  if (opX == fastKronOp_N) {
+    return dim3(DIVUP(problem.k(), tileX.n()) * DIVUP(problem.f(0).q(), tileF.q()),
+                DIVUP(problem.m(), tileX.m()),
+                batchCount);
+  } else {
+    //problem.k() can be very large, which can make grid.y more than the limit (65535).
+    //Distribute grid.y to y and z.
+    uint32_t origGridy = DIVUP(problem.k(), tileX.n()) *
+                         DIVUP(problem.f(0).q(), tileF.q());
+    dim3 grid = {0,0,0};
+    if (origGridy <= 32768) {
+      grid.y = origGridy;
+      grid.z = batchCount;
+    } else {
+      abort();
+      grid.y = 32768;
+      grid.z = DIVUP(origGridy, 32768);
+    }
+    return dim3(DIVUP(problem.m(), tileX.m()), grid.y, grid.z);
+  }
+}
+
+template<uint32_t MaxFactors>
+dim3 GPUKMMKernel::grid(const KMMProblemT<MaxFactors>& problem) const {
+  return grid(problem, 1);
+}
+
+template<uint32_t MaxFactors>
+dim3 GPUKMMKernel::grid(const KMMProblemStridedBatchedT<MaxFactors>& problem) const {
+  return grid(problem.batchProblem(0), problem.batchCount());
+}

@@ -263,10 +263,10 @@ class GPUKMMKernel(Kernel):
                tileQ : int, tileP : int, tileM: int,
                regM: int, cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, aalign: int, kalign: int,
-               allPowersOf2: int, opX : str, opF : str):
+               allPowersOf2: int, opX : str, opF : str, kernelBatchType : str):
     aalign = min(4, aalign)
     kalign = min(4, kalign)
-    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, regM, cRegRows, cRegCols, allPowersOf2, opX, opF)
+    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, regM, cRegRows, cRegCols, allPowersOf2, opX, opF, kernelBatchType)
     self.num_threads = (tileM//regM) * ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.tileQ = tileQ
     self.tileP = tileP
@@ -290,7 +290,7 @@ class GPUKMMKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
+    return f"{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
 
   # def kernelname(self):
   #   return f"{super().kernelname()}"
@@ -299,11 +299,11 @@ class GPUKMMKernel(Kernel):
     return f"{self.kernelname()}.{'cu' if self.backend == 'cuda' else 'hip'}"
 
   def hostFuncDecl(self):
-    return f"void {self.hostFuncName()}(KernelParams<{self.fused_kernels}> params, FusedParams<{self.fused_kernels}> fusedParams, DistributedParams distParams, EpilogueParams epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, {self.backend}Stream_t stream)"
+    return f"void {self.hostFuncName()}(KernelParams<{self.kmmProblemType()}>& params, FusedParams<{self.kmmProblemType()}>& fusedParams, DistributedParams& distParams, {self.epilogueParamsType()}& epilogueParams, dim3 grid, dim3 block, uint32_t sharedSize, {self.backend}Stream_t stream)"
 
   def templateDecl(self):
     #TODO: repr and this should be same
-    return f"{self.optimizedCUDAArch()}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}"
+    return f"{self.optimizedCUDAArch()}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"

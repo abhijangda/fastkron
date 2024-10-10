@@ -171,11 +171,13 @@ public:
   virtual bool canCompute(KMMProblem problem, const HardwareDetails* hw, 
                           bool p2p, KernelBatchType::Ty probBatchType,
                           bool exactFuse = true);
+
   bool canCompute(KMMProblem problem, const HardwareDetails* hw, 
                   bool p2p, bool exactFuse = true) {
     return canCompute(problem, hw, p2p, KernelBatchType::Normal,
                       exactFuse);
   }
+
   bool canCompute(KMMProblemStridedBatched problem, const HardwareDetails* hw, 
                   bool p2p, bool exactFuse = true) {
     return canCompute(problem.batchProblem(0), hw, p2p, KernelBatchType::StridedBatched, 
