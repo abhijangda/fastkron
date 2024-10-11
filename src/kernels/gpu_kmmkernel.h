@@ -129,7 +129,7 @@ dim3 GPUKMMKernel::grid(const KMMProblem& problem, int batchCount) const {
       grid.y = origGridy;
       grid.z = batchCount;
     } else {
-      abort();
+      //TODO: What if stridedbatched is used for large  grid y?
       grid.y = 32768;
       grid.z = DIVUP(origGridy, 32768);
     }
