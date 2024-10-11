@@ -2,7 +2,7 @@
 #include "testBase.h"
 
 #define GENERAL_TEST_TT(M, MinFacs, MaxFacs, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY) \
-  TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##Tune##_##BatchZ##x##BatchX##x##BatchF##x##BatchY##TT) { \
+  TEST(EXPAND(TEST_BACKEND,Fusion), Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##Tune##_##BatchZ##x##BatchX##x##BatchF##x##BatchY##_##TT) { \
   bool result = true;\
   for (uint Facs = MinFacs; Facs <= MaxFacs; Facs++) {\
     uint KP_MAT_N[Facs];\
@@ -70,4 +70,6 @@ CONTIGUOUS_TEST_TT(M_, 6, 8, 4, 4, float, true);
 
 STRIDED_BATCHED_TEST_TT(M_, 1, 3, 128, 128, float, true, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_TT(M_, 3, 4, 32,  32,  float, true, 2, 1, 2, 2);
+STRIDED_BATCHED_TEST_TT(M_, 1, 3, 64,  64,  float, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_TT(M_, 1, 5, 12,  12,  float, true, 2, 2, 1, 1);
+STRIDED_BATCHED_TEST_TT(M_, 3, 4, 5,   5,   float, false, 2, 1, 2, 2);

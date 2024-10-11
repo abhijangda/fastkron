@@ -172,7 +172,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
   } 
   else {
     //Otherwise, use a low-latency algorithm to obtain an efficient kernel
-    // kernelSeries = kernelDb->kernelSeriesForProblem(problem);
+    kernelSeries = kernelDb->kernelSeriesForProblem(problem);
   }
 
   auto kernelSeriesIter = kernelSeries.begin();

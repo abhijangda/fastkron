@@ -79,6 +79,10 @@ public:
     dim3 g = grid(problem);
     return g.x*g.y*g.z;
   }
+  uint32_t getNumBlocks(KMMProblemStridedBatched problem) const {
+    dim3 g = grid(problem);
+    return g.x*g.y*g.z;
+  }
 
   /**
    * getMaxSharedMemSize() - Returns the maximum shared memory size of the kernel.

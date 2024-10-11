@@ -177,7 +177,21 @@ protected:
    * findKernelAtOptLevel() - Overriding KernelDatabase::findKernelAtOptLevel
    */
   virtual KMMKernel* findKernelAtOptLevel(KMMProblem subProblem,
-                                           const std::vector<KMMKernel*>& kernels);
+                                          const std::vector<KMMKernel*>& kernels) {
+    return findKernelAtOptLevel<KMMProblem>(subProblem, kernels);
+  }
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblemStridedBatched subProblem, 
+                                          const std::vector<KMMKernel*>& kernels) {
+    return findKernelAtOptLevel<KMMProblemStridedBatched>(subProblem, kernels);
+  }
+
+private:
+  /**
+   * template<typename KMMProblemT> findKernelAtOptLevel - Implementation of findKernelAtOptLevel
+   */
+  template<typename KMMProblemT>
+  KMMKernel* findKernelAtOptLevel(KMMProblemT subProblem,
+                                  const std::vector<KMMKernel*>& kernels);
   /***************************************************************************/
 
   /**************************** Helper Methods *****************************/

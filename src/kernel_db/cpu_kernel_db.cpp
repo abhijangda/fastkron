@@ -362,7 +362,8 @@ X86KernelDatabase::X86KernelDatabase() {
   allocate_caches();
 }
 
-KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
+template<typename KMMProblemT>
+KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem,
                                                     const std::vector<KMMKernel*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q

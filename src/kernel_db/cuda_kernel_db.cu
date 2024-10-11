@@ -471,7 +471,8 @@ static float blocksPerSM(const CUDAArchDetails gpu, CUDAKMMKernel* kernel, dim3 
   return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
 }
 
-KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem, 
+template<typename KMMProblemT>
+KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem, 
                                                     const std::vector<KMMKernel*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
@@ -488,7 +489,8 @@ KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblem subProblem,
     }
     //sort kernels in descending order based on the number of thread blocks a kernel invoke
     auto order = [subProblem, this](auto k1, auto k2) {
-      return ((CUDAKMMKernel*)k1)->getNumBlocks(subProblem) > ((CUDAKMMKernel*)k2)->getNumBlocks(subProblem);
+      return ((CUDAKMMKernel*)k1)->getNumBlocks(subProblem) > 
+             ((CUDAKMMKernel*)k2)->getNumBlocks(subProblem);
     };
     std::sort(filteredKernels.begin(), filteredKernels.end(), order);
     for (auto k : filteredKernels) {

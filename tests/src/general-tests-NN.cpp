@@ -70,5 +70,7 @@ CONTIGUOUS_TEST_NN(3, 4, 32, 32, true);
 CONTIGUOUS_TEST_NN(6, 8, 4, 4, true);
 
 STRIDED_BATCHED_TEST_NN(1, 3, 128, 128, true, 2, 2, 2, 2);
+STRIDED_BATCHED_TEST_NN(1, 3, 64, 64, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_NN(3, 4, 32,  32,  true, 2, 1, 2, 2);
 STRIDED_BATCHED_TEST_NN(1, 5, 12,  12,  true, 2, 2, 1, 1);
+STRIDED_BATCHED_TEST_NN(3, 4, 5,  5,  false, 2, 1, 2, 2);

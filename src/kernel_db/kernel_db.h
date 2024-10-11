@@ -56,6 +56,7 @@ protected:
    * @problemToKernelCache: A map of KMMProblem to already tuned kernels for this backend.
    */
   std::unordered_map<KMMProblem, TunedKernelsSeries> problemToKernelCache;
+  std::unordered_map<KMMProblemStridedBatched, TunedKernelsSeries> stridedBatchedProblemToKernelCache;
 
 public:
   KernelDatabase();
@@ -223,8 +224,12 @@ public:
    * Return - An object of TunedKernelSeries.
    */
   TunedKernelsSeries kernelSeriesForProblem(KMMProblem problem);
+  TunedKernelsSeries kernelSeriesForProblem(KMMProblemStridedBatched problem);
 
 private:
+  template<typename KMMProblemT, typename KernelCache>
+  TunedKernelsSeries kernelSeriesForProblem(KMMProblemT problem, KernelCache problemToKernelCache);
+
   /**
    * tuneKernelForProblem() - Find tuned kernel for problem.
    * @problem: Find tuned kernel for computing this problem.
@@ -246,7 +251,10 @@ private:
    *
    * Return - True if atleast one kernel is found, otherwise false.
    */
-  bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, std::vector<KMMKernel*>& kernels);
+  bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, 
+                           std::vector<KMMKernel*>& kernels,
+                           KernelBatchType::Ty batchType = KernelBatchType::Normal);
+  bool findAllFusedKernels(KMMProblemStridedBatched problem, bool useP2PStore, std::vector<KMMKernel*>& kernels);
   
   /**
    * findAllKernels() - Find all kernels (fused or non-fused) that can compute the given problem.
@@ -269,7 +277,8 @@ protected:
    * 
    * Return - The best kernel for the sub problem using FastKron's kernel search algorithm.
    */
-  KMMKernel* findKernelForSubProblem(KMMProblem subProblem, const std::vector<std::vector<KMMKernel*>>& kernels);
+  template<typename KMMProblemT>
+  KMMKernel* findKernelForSubProblem(KMMProblemT subProblem, const std::vector<std::vector<KMMKernel*>>& kernels);
 
   /**
    * findKernelAtOptLevel() - Find best kernel for a subproblem at an opt level. This method should be 
@@ -280,16 +289,21 @@ protected:
    * Return - The best kernel found for the opt level.
    */
   virtual KMMKernel* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblemStridedBatched subProblem, const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
 
   /**
-   * filterFastestFusedKernels() - Filter all fused kernels to find fastest fused kernels for a problem.
+   * getMapNumFusedProbsToKernels() - Filter all fused kernels to find fastest fused kernels for a problem.
    * @problem: The problem to find kernels for.
    * @kernels: The set of kernels to filter from.
    * 
-   * Return - A map of number of fusion -> a vector of all fused kernels at this number of fusion.
+   * Return - A map of number of fused problems -> a vector of all fused kernels for the number.
    */
   virtual std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
           filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
+  std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
+          filterFastestFusedKernels(const KMMProblemStridedBatched& problem, const std::vector<KMMKernel*>& kernels) {
+    return filterFastestFusedKernels(problem.batchProblem(0), kernels);
+  }
   /***************************************************************************/
 
   /**************************** Helper Methods *****************************/
