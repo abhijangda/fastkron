@@ -288,6 +288,9 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
                      double* Z, double alpha, double beta,
                      const double *Y, double* temp1, double* temp2);
 
+/**
+ * TODO
+ */
 fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const float* X, fastKronOp opX, uint64_t strideX,
@@ -301,7 +304,8 @@ fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                      const int* X, fastKronOp opX, uint64_t strideX,
                      const int* Fs[], fastKronOp opFs, uint64_t strideF[],
                      int* Z, uint64_t strideZ, int alpha, int beta,
-                     uint32_t batchCount, const int *Y, int* temp1, int* temp2);
+                     uint32_t batchCount, const int *Y, uint64_t strideY, 
+                     int* temp1, int* temp2);
 
 fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],

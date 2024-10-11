@@ -37,6 +37,12 @@ class FastKronNumpy(FastKronBase):
     elif x.dtype == np.double:
       fn = fastkronX86.libFastKron.dgekmm
 
+    stridedBatchedFn = None
+    if x.dtype == np.float32:
+      stridedBatchedFn = fastkronX86.libFastKron.sgekmmStridedBatched
+    elif x.dtype == np.double:
+      stridedBatchedFn = fastkronX86.libFastKron.dgekmmStridedBatched
+
     if temp1 is None:
       raise ValueError("Operand temp1 must be valid 2D Tensor")
 
@@ -47,7 +53,7 @@ class FastKronNumpy(FastKronBase):
       if temp2 is None:
         raise ValueError("Operand temp2 must be a valid Tensor when z == y")
 
-    super().xgekmm(fastkronX86, fn, x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
+    super().xgekmm(fastkronX86, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
 
 __fastkronnumpy = FastKronNumpy()
 

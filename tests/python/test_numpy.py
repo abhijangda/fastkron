@@ -62,7 +62,7 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=
   x = np.random.randint(0, high=high,size=xshape).astype(dtype)
   fs = [np.random.randint(0, high=high,size=fshape).astype(dtype)\
         for i in range(n)]
-
+  #TODO: test when beta > 0 and y != None
   y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
 
   ref = reference(x, fs, trX, trF)
@@ -75,6 +75,7 @@ def device_tests(device):
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
   run(16, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])

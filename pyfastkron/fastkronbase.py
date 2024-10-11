@@ -227,8 +227,8 @@ class FastKronBase:
   def device_type(self, x):
     raise NotImplementedError()
 
-  def xgekmm(self, handle, fn, x, fs, z, alpha, beta, y, temp1, temp2,
-            trX = False, trF = False):
+  def xgekmm(self, handle, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2,
+             trX = False, trF = False):
 
     self.checkShapeAndTypes(x, fs, z, y, trX, trF)
 
@@ -259,41 +259,73 @@ class FastKronBase:
       for i in range(len(fs)):
         fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
 
-      for batchLinearIdxZ in range(product(z.shape[:-2])):
-        batchLinearIdxX = 0
-        batchLinearIdxF = 0
+      #TODO: Compress batched dimensions into the three cases of the below 
+      #loop for better performance
+
+      #Compute each batch of Z using stridedbatched 
+      batchLinearIdxZ = 0
+      MaxLinearIdxZ = product(z.shape[:-2])
+      while batchLinearIdxZ < MaxLinearIdxZ:
+        #Go through each linear index of batch dimensions of Z
+        xidx = fidx = zidx = yidx = None
+        strideX = strideF = strideZ = strideY = 0
+        strideZ = product(z.shape[-2:])
+        zidx = yidx = batchLinearIdxZ
+        
+        xidx = 0
+        fidx = 0
         tmpx = tmpf = batchLinearIdxZ
-        xDimProds = product(xbatch)
-        zDimProds = product(zindices)
-        fDimProds = product(fbatch)
+        xDimProds = 1
+        zDimProds = 1
+        fDimProds = 1
 
-        for dim,size in enumerate(zindices):
-          batchLinearIdxX = batchLinearIdxX*xDimProds + (0 if xbatch[dim] == 1 else tmpx // (zDimProds//zindices[dim]))
-          batchLinearIdxF = batchLinearIdxF*fDimProds + (0 if fbatch[dim] == 1 else tmpf // (zDimProds//zindices[dim]))
+        #Find linear index of x and fs for z
+        for zdim, xdim, fdim in zip(reversed(zindices), reversed(xbatch), reversed(fbatch)):
+          xidx += (tmpx % xdim) * xDimProds
+          xDimProds = xDimProds * xdim
+          tmpx = tmpx // zdim
 
-          tmpx = tmpx%(zDimProds//zindices[dim])
-          tmpf = tmpf%(zDimProds//zindices[dim])
+          fidx += (tmpf % fdim) * fDimProds
+          fDimProds = fDimProds * fdim
+          tmpf = tmpf // zdim
 
-          xDimProds = xDimProds//xbatch[dim]
-          fDimProds = fDimProds//fbatch[dim]
-          zDimProds = zDimProds//zindices[dim]
+        batchCount = zindices[-1]
 
-        batchLinearIdxX += tmpx
-        batchLinearIdxF += tmpf
+        dim = -1
+        if xbatch[dim] > 1 and fbatch[dim] == 1:
+          #Batched X with same Fs
+          strideX = product(x.shape[-2:])
+          strideF = [0 for f in fs]
+          strideY = 0 #TODO:
+        elif xbatch[dim] == fbatch[dim]:
+          #Each X with corresponding Fs
+          strideX = product(x.shape[-2:])
+          strideF = [product(f.shape[-2:]) for f in fs]
+          strideY = 0 #TODO:
+        elif xbatch[dim] == 1 and fbatch[dim] > 1:
+          #Same X with batched Fs
+          strideX = 0
+          strideF = [product(f.shape[-2:]) for f in fs]
+          strideY = 0
 
+        #Apply StridedBatched on the last dimension
         m = self.m(x, trX)
-        handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
-                      self.tensor_data_ptr(x[batchLinearIdxX, :]), 
-                      self.fptrs([f[batchLinearIdxF,:] for f in fs]),
-                      self.tensor_data_ptr(z[batchLinearIdxZ, :]), alpha, beta, 
-                      self.tensor_data_ptr(y),
-                      self.tensor_data_ptr(temp1), 
-                      self.tensor_data_ptr(temp2), 
-                      trX, trF)
+        handle.xgekmmStridedBatched(stridedBatchedFn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
+                                    self.tensor_data_ptr(x[xidx, :]), strideX,
+                                    self.fptrs([f[fidx,:] for f in fs]), strideF,
+                                    batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ, alpha, beta, 
+                                    self.tensor_data_ptr(y), strideY,
+                                    self.tensor_data_ptr(temp1), 
+                                    self.tensor_data_ptr(temp2), 
+                                    trX, trF)
+        
+        batchLinearIdxZ += zindices[dim]
+
+      x.reshape(orig_xshape)
+      for i in range(len(fs)):
+        fs[i] = fs[i].reshape(orig_fshape[i])
     
-    x.reshape(orig_xshape)
-    for i in range(len(fs)):
-      fs[i] = fs[i].reshape(orig_fshape[i])
+
 
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
     self.checkShapeAndTypes(x, fs, y, None, trX, trF)

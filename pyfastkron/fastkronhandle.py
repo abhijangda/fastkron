@@ -45,3 +45,11 @@ class FastKronHandle:
             z,
             alpha, beta, y, 
             temp1, temp2)
+  #TODO: Change argument order according to cublas API see comment in pywapper.cpp
+  def xgekmmStridedBatched(self, fn, m, n, ps, qs, x, strideX, fs, strideFs, batchCount, z, strideZ, alpha, beta, y, strideY, temp1, temp2, trX = False, trF = False):
+    fn(self.handle, self.backend, m, n, ps, qs,
+            x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T, strideX,
+            fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T, strideFs,
+            z, strideZ,
+            alpha, beta, batchCount, y, strideY,
+            temp1, temp2)
