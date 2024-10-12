@@ -134,35 +134,31 @@ class FastKronBase:
 
     return x, fs
 
-  def batchedDims(self, x, fs, trX, trF, addPadding=True):
-    xbatch = x.shape[:-2]
-    prefbatch = fs[0].shape[:-2]
+  def batchedDims(self, x1, x2, addPadding=True):
+    x1batch = x1.shape[:-2]
+    x2batch = x2.shape[:-2]
 
     if addPadding == True:
-      if len(xbatch) < len(prefbatch):
-        xbatch = tuple([1] * (len(prefbatch) - len(xbatch))) + xbatch
-      elif len(xbatch) > len(prefbatch):
-        prefbatch = tuple([1] * (len(xbatch) - len(prefbatch))) + prefbatch
+      if len(x1batch) < len(x2batch):
+        x1batch = tuple([1] * (len(x2batch) - len(x1batch))) + x1batch
+      elif len(x1batch) > len(x2batch):
+        x2batch = tuple([1] * (len(x1batch) - len(x2batch))) + x2batch
 
-    return xbatch, prefbatch
+    return x1batch, x2batch
 
-  def broadcastShape(self, xbatch, prefbatch, postfbatch):
+  def broadcastShape(self, shape1, shape2):
+    #This function requires both shapes to be of same length
     finalShape = ()
-    xbatch = tuple(reversed(xbatch))
-    prefbatch = tuple(reversed(prefbatch))
-    xi = 0
-    prefi = 0
-    while xi < len(xbatch) and prefi < len(prefbatch):
-      if xbatch[xi] == prefbatch[prefi]:
-        finalShape += (xbatch[xi],)
-      elif prefbatch[prefi] != 1:
-        finalShape += (prefbatch[prefi],)
-      elif xbatch[xi] != 1:
-        finalShape += (xbatch[xi],)
+
+    for s1, s2 in zip(reversed(shape1), reversed(shape2)):
+      if s1 == s2:
+        finalShape += (s1,)
+      elif s1 != 1:
+        finalShape += (s1,)
+      elif s2 != 1:
+        finalShape += (s2,)
       else:
-        raise ValueError(f"Expected value of dimension {len(xbatch) - xi} of x and f do not match: {xbatch[xi]} != {fbatch[fi]}")
-      xi += 1
-      prefi += 1
+        raise ValueError(f"Shape {shape1} of x and {shape2} of f are not broadcastable")
 
     return tuple(reversed(finalShape))
 
@@ -170,7 +166,7 @@ class FastKronBase:
     self.checkShapeAndTypes(x, fs, None, None, trX, trF)
 
     device_type = self.device_type(x)
-    xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
+    xbatch, fbatch = self.batchedDims(x, fs[0], addPadding=True)
     rs, ts = None, None
 
     if self.supportedSystem() and self.supportedProcessor():
@@ -184,8 +180,8 @@ class FastKronBase:
     else:
       rs, ts = (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
 
-    zbroadcastshape = self.broadcastShape(xbatch, prefbatch, ())
-    return self.broadcastShape(xbatch, prefbatch, ()) + (self.m(x, trX), rs//self.m(x, trX)), \
+    zbroadcastshape = self.broadcastShape(xbatch, fbatch)
+    return self.broadcastShape(xbatch, fbatch) + (self.m(x, trX), rs//self.m(x, trX)), \
           (1 if len(zbroadcastshape) == 0 else product(zbroadcastshape))*ts
 
 
@@ -204,23 +200,21 @@ class FastKronBase:
       if fs[0].shape[:-2] != f.shape[:-2]:
         raise ValueError(f"Batched dims of factors do not match: {fs[0].shape[:-2]} != {f.shape[:-2]}")
 
-    xbatch, prefbatch = self.batchedDims(x, fs, trX, trF)
-    finalShape = self.broadcastShape(xbatch, prefbatch, ())
+    xbatch, fbatch = self.batchedDims(x, fs[0])
+    finalShape = self.broadcastShape(xbatch, fbatch)
 
-    if y is not None:
-      if yshape[-2:] != (self.m(x, trX), self.k(x, trX)):
-        raise ValueError(f"")
-      if yshape[1] != product(self.qs(fs, trF)):
-        raise ValueError(f"")
-      assert x.dtype   == z.dtype
-    
     if z is not None:
       if z.shape[-2:] != (self.m(x, trX), product(self.qs(fs, trF))):
         raise ValueError(f"Output operand 'z' shape ('{z.shape}') mismatch with '({self.m(x, trX), product(self.qs(fs, trF))})'")
       if z.shape[:-2] != finalShape:
         raise ValueError(f"Output operand batched dimensions do not match with broadcasted dimensions ('{z.shape[:-2]}' != {finalShape})'")
       assert x.dtype == z.dtype
-  
+
+    if y is not None and z is not None:
+      if self.broadcastShape(*self.batchedDims(y, z)) != z.shape[:-2]:
+        raise ValueError(f"Input operand 'y' shape {y.shape} cannot be broadcasted to output 'z' shape {z.shape}")
+      assert y.dtype   == z.dtype
+      
   def trLastTwoDims(self, x):
     raise NotImplementedError()
 
@@ -236,9 +230,16 @@ class FastKronBase:
     orig_fshape = []
     for f in fs:
       orig_fshape += [f.shape]
+    orig_yshape = y.shape if y is not None else None
 
-    xbatch, fbatch = self.batchedDims(x, fs, trX, trF, addPadding = False)
-    if len(fbatch) == 0 and (len(xbatch) == 0 or not trX):
+    xbatch, fbatch = self.batchedDims(x, fs[0], addPadding = False)
+    zbatch = z.shape[:-2]
+    if y is not None:
+      ybatch, _ = self.batchedDims(y, z, addPadding=True)
+    else:
+      ybatch = zbatch
+
+    if len(fbatch) == 0 and (len(xbatch) == 0 or not trX) and ybatch == zbatch:
       m = self.m(x, trX)
       if len(xbatch) > 0:
         m = m * product(xbatch)
@@ -252,12 +253,19 @@ class FastKronBase:
                     self.tensor_data_ptr(temp2), 
                     trX, trF)
     else:
-      xbatch, fbatch = self.batchedDims(x, fs, trX, trF, addPadding = True)
-      zindices = z.shape[:-2]
+      xbatch, fbatch = self.batchedDims(x, fs[0], addPadding = True)
+      if y is not None:
+        ybatch, _ = self.batchedDims(y, z, addPadding=True)
+      else:
+        ybatch = zbatch
+
       z = z.reshape((product(z.shape[:-2]),)+z.shape[-2:])
       x = x.reshape((product(xbatch),)+x.shape[-2:])
       for i in range(len(fs)):
         fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
+
+      if y is not None:
+        y = y.reshape((product(ybatch),) + y.shape[-2:])
 
       #TODO: Compress batched dimensions into the three cases of the below 
       #loop for better performance
@@ -274,13 +282,14 @@ class FastKronBase:
         
         xidx = 0
         fidx = 0
-        tmpx = tmpf = batchLinearIdxZ
+        yidx = 0
+        tmpx = tmpf = tmpy = batchLinearIdxZ
         xDimProds = 1
-        zDimProds = 1
         fDimProds = 1
+        yDimProds = 1
 
         #Find linear index of x and fs for z
-        for zdim, xdim, fdim in zip(reversed(zindices), reversed(xbatch), reversed(fbatch)):
+        for zdim, xdim, fdim, ydim in zip(reversed(zbatch), reversed(xbatch), reversed(fbatch), reversed(ybatch)):
           xidx += (tmpx % xdim) * xDimProds
           xDimProds = xDimProds * xdim
           tmpx = tmpx // zdim
@@ -289,46 +298,55 @@ class FastKronBase:
           fDimProds = fDimProds * fdim
           tmpf = tmpf // zdim
 
-        batchCount = zindices[-1]
+          yidx += (tmpy % ydim) * yDimProds
+          yDimProds = yDimProds * ydim
+          tmpy = tmpy // zdim
+
+        batchCount = zbatch[-1]
 
         dim = -1
         if xbatch[dim] > 1 and fbatch[dim] == 1:
           #Batched X with same Fs
           strideX = product(x.shape[-2:])
           strideF = [0 for f in fs]
-          strideY = 0 #TODO:
         elif xbatch[dim] == fbatch[dim]:
           #Each X with corresponding Fs
           strideX = product(x.shape[-2:])
           strideF = [product(f.shape[-2:]) for f in fs]
-          strideY = 0 #TODO:
         elif xbatch[dim] == 1 and fbatch[dim] > 1:
           #Same X with batched Fs
           strideX = 0
           strideF = [product(f.shape[-2:]) for f in fs]
+        
+        if zbatch[dim] == ybatch[dim]:
+          strideY = strideZ
+        elif zbatch[dim] > 1 and ybatch[dim] == 1:
           strideY = 0
-
-        #Apply StridedBatched on the last dimension
+        else:
+          raise ValueError(f"Output 'z' {z.shape} cannot be broadcastable to 'y' {y.shape}")
+        
         m = self.m(x, trX)
+        #Apply StridedBatched on the last dimension
         handle.xgekmmStridedBatched(stridedBatchedFn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
                                     self.tensor_data_ptr(x[xidx, :]), strideX,
                                     self.fptrs([f[fidx,:] for f in fs]), strideF,
                                     batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ, alpha, beta, 
-                                    self.tensor_data_ptr(y), strideY,
+                                    self.tensor_data_ptr(y[yidx, :]), strideY,
                                     self.tensor_data_ptr(temp1), 
                                     self.tensor_data_ptr(temp2), 
                                     trX, trF)
         
-        batchLinearIdxZ += zindices[dim]
+        batchLinearIdxZ += zbatch[dim]
 
       x.reshape(orig_xshape)
       for i in range(len(fs)):
         fs[i] = fs[i].reshape(orig_fshape[i])
-    
+      if y is not None:
+        y = y.reshape(orig_yshape)
 
 
   def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
-    self.checkShapeAndTypes(x, fs, y, None, trX, trF)
+    self.checkShapeAndTypes(x, fs, None, y, trX, trF)
 
     rs, _ = self.gekmmSizes(x, fs, trX=trX, trF=trF)
     m,  k = self.m(x, trX), self.k(x, trX)
@@ -350,6 +368,6 @@ class FastKronBase:
 
     if alpha != None:
       z = alpha * (z.reshape(z.shape[:-2] + (m, l)))
-    if beta != None and y != None:
+    if beta != None and y is not None:
       z += beta * y
     return z

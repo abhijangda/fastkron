@@ -38,7 +38,7 @@ def reference(x, fs, trX, trF):
 
   return np.matmul(x, outputKron)
 
-def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=[]):
+def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=[], batchDimZ=[]):
   #Using integer values instead of real numbers because 
   #floating point is not associative
   xshape = [m, p**n] if not trX else [p**n, m]
@@ -59,32 +59,40 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=
   
   fshape = batchDimFPre + fshape
 
+  zshape = batchDimZ + [m,q**n]
+  
   x = np.random.randint(0, high=high,size=xshape).astype(dtype)
   fs = [np.random.randint(0, high=high,size=fshape).astype(dtype)\
         for i in range(n)]
-  #TODO: test when beta > 0 and y != None
-  y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
+  z = np.random.randint(0,high=high, size=zshape).astype(dtype)
 
-  ref = reference(x, fs, trX, trF)
+  alpha = 1.0
+  beta = 2.0
+
+  y = fk.gekmm(x, fs, alpha, beta, z, trX=trX, trF=trF)
+
+  ref = alpha * reference(x, fs, trX, trF) + beta * z
   val = np.isclose(y, ref, rtol=1e-04).all().item()
   print(52)
   assert val
 
 def device_tests(device):
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[])
+  run(128, 5, 8, 8, np.float32, device, False, False)
+  run(10, 5, 6, 6, np.float32, device, True, False)
+
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
+  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,], batchDimZ=[3,1])
+
   run(16, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
   run(32, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
   run(13, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
   run(29, 5, 8, 8, np.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
-  
-  run(128, 5, 8, 8, np.float32, device, False, False)
-  run(10, 5, 6, 6, np.float32, device, True, False)
 
   # #double
   run(11, 10, 3, 3, np.double, device, False, True)
