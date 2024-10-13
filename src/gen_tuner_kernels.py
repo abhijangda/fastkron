@@ -363,6 +363,7 @@ def parseMatrix(rep):
   return int(s[0]), int(s[1])
 
 def parseRegTile(rep):
+  if rep == "*": return "*"
   s = rep.split('x')
   return int(s[0]), int(s[1]), int(s[2])
 
@@ -416,7 +417,7 @@ class KernelTemplate:
       return False
     if not (self.tileX[0] == kernel.tileM and self.tileX[1] == kernel.shape.k):
       return False
-    if not (self.regtile == (kernel.rm, kernel.rk, kernel.rq)):
+    if self.regtile != "*" and not (self.regtile == (kernel.rm, kernel.rk, kernel.rq)):
       return False
     return True
 

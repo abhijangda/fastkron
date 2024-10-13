@@ -214,7 +214,7 @@ class FastKronBase:
       if self.broadcastShape(*self.batchedDims(y, z)) != z.shape[:-2]:
         raise ValueError(f"Input operand 'y' shape {y.shape} cannot be broadcasted to output 'z' shape {z.shape}")
       assert y.dtype   == z.dtype
-      
+
   def trLastTwoDims(self, x):
     raise NotImplementedError()
 
