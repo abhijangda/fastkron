@@ -14,7 +14,7 @@
  * Each backend has a subclass of KernelDatabase.
  */
 class KernelDatabase {
-protected:
+public:
   /**
    * DbKey is key for to map (Factor, fastKronOp for X, and fastKronOp for F) to kernel.
    */

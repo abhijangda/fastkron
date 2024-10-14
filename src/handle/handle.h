@@ -167,7 +167,8 @@ class FastKronHandle {
    */
   fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend,
                        void* temp1, void* temp2, EpilogueParams epilogueParams);
-
+  fastKronError xgemkm(const KMMProblem problem, const fastKronBackend backend,
+                       void* temp1, void* temp2, EpilogueParams epilogueParams);
 
   fastKronError xgekmmStridedBatched(const KMMProblemStridedBatched problem, 
                                      const fastKronBackend backend,

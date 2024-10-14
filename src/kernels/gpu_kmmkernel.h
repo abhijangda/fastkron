@@ -119,7 +119,14 @@ template<typename KMMProblem>
 dim3 GPUKMMKernel::grid(const KMMProblem& problem, int batchCount) const {
   Matrix tileX = getTileX(problem);
   Factor tileF = getTileF(problem);
-  if (opX == fastKronOp_N) {
+  bool isNOrT = true; //true for N and false for T
+  if (problem.mmtype() == FastKronMMType::MKM) {
+    isNOrT = (problem.opX() == fastKronOp_N);
+  } else {
+    isNOrT = (problem.opX() == fastKronOp_T);
+  }
+
+  if (isNOrT) {
     return dim3(DIVUP(problem.k(), tileX.n()) * DIVUP(problem.f(0).q(), tileF.q()),
                 DIVUP(problem.m(), tileX.m()),
                 batchCount);

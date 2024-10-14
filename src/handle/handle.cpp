@@ -89,6 +89,28 @@ fastKronError FastKronHandle::setStream(fastKronBackend backend,
   return fastKronSuccess;
 }
 
+fastKronError FastKronHandle::xgemkm(const KMMProblem problem, const fastKronBackend backend,
+                                     void* temp1, void* temp2, EpilogueParams epilogueParams) {
+  
+  if (problem.y().data()  == nullptr || temp1 == nullptr ||
+      hasBackend(backend) == false) 
+      return fastKronInvalidArgument;
+
+  if (problem.y().data() == epilogueParams.z<void>() && 
+      (temp1 == nullptr || temp2 == nullptr))
+      return fastKronInvalidArgument;
+
+  fastKronError err = fastKronSuccess;
+  TunedKernelsSeries kernelSeries;
+
+  void* temps[2] = {temp1, temp2};
+  auto kernelDb = getKernelDb(backend);
+  auto kk = *kernelDb->compiledKernels.begin();
+  std::cout << "109 " << kk.second[0]->str() << std::endl;
+  kernelDb->invokeKernel(kk.second[0], problem, 0, epilogueParams, KernelModeNormal);
+  return err;
+}
+
 fastKronError FastKronHandle::xgekmm(const KMMProblem problem, 
                                      const fastKronBackend backend, 
                                      void* temp1, void* temp2,

@@ -288,6 +288,13 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
                      double* Z, double alpha, double beta,
                      const double *Y, double* temp1, double* temp2);
 
+fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend, 
+                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                     const float* Fs[], fastKronOp opFs,
+                     const float* X, fastKronOp opX,
+                     float* Z, float alpha, float beta,
+                     const float *Y, float* temp1, float* temp2);
+
 /**
  * TODO
  */

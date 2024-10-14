@@ -26,6 +26,12 @@ CUDA_DEVICE uint32_t getTileQ(uint bid_x, uint QByTileQ) {
   return bid_x%QByTileQ;
 }
 
+template<fastKronOp Op>
+CUDA_DEVICE constexpr fastKronOp swapFastKronOp() {
+  if (Op == fastKronOp_N) return fastKronOp_T;
+  if (Op == fastKronOp_T) return fastKronOp_N;
+}
+
 template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
@@ -33,7 +39,7 @@ template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
          uint RegM, uint RegK, uint RegQ,
          uint OptLevel,
          int XAlignment, int FAlignment,
-         fastKronOp OpX, fastKronOp OpF, KernelBatchType::Ty KernelBatch,
+         fastKronOp kOpX, fastKronOp kOpF, FastKronMMType kmmType, KernelBatchType::Ty KernelBatch,
          typename KernelParams, typename FusedParams, typename EpilogueParams>
 __launch_bounds__(NumThreads)
 __global__ void cudaKernel(KernelParams params,
@@ -105,6 +111,10 @@ __global__ void cudaKernel(KernelParams params,
   const uint QByTileQ  = getQByTileQ <kQLeTileQ, TileQ>(Q);
   const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
   // const uint ShTileK   = XshSlices*TileP;
+
+  const fastKronOp OpX = (kmmType == FastKronMMType::MKM) ? kOpX : swapFastKronOp<kOpX>();
+  const fastKronOp OpF = (kmmType == FastKronMMType::MKM) ? kOpF : swapFastKronOp<kOpF>();
+  const fastKronOp OpY = (kmmType == FastKronMMType::MKM) ? fastKronOp_N : fastKronOp_T;
 
   const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
                                                             blockIdx.y);
@@ -219,8 +229,7 @@ __global__ void cudaKernel(KernelParams params,
       if (DistributeToGPUs) {
         yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
-        cIdx = glM * Y.n() + glK;
-        yPtr = (ElemT*)Y.data() + cIdx;
+        yPtr = Y.data<ElemT>(glM, glK, OpY);
         if (params.kp_idx == FusedFacs - 1) {
           #pragma unroll
           for (int i = 0; i < StLen; i++) {
@@ -229,6 +238,7 @@ __global__ void cudaKernel(KernelParams params,
           }
         }
       }
+
       stVecYReg(yPtr, yReg, StLen, rm, tk, tq);
   }}}}
 }

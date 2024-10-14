@@ -52,6 +52,7 @@ int main(int argc, char* argv[]) {
   fastKronOp opf = fastKronOp_N;
   fastKronOp opx = fastKronOp_N;
   char* type = NULL;
+  FastKronMMType kmmtype;
   bool checkResults = false;
   int runs = 0;
   int warmup = 0;
@@ -99,7 +100,8 @@ int main(int argc, char* argv[]) {
   opt.setOption("warmup", 'w');
   opt.setOption("alpha", 'a');
   opt.setOption("beta", 'b');
-  
+  opt.setOption("gemmtype");
+
   opt.setFlag("check", 'c');
   opt.setFlag("uva", 'u');
   opt.setOption("gpuLocalKrons");
@@ -197,6 +199,20 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if (opt.getValue("gemmtype") != NULL) {
+    if (strcmp(opt.getValue("gemmtype"), "kmm") == 0) {
+      kmmtype = FastKronMMType::KMM;
+    } else if (strcmp(opt.getValue("gemmtype"), "mkm") == 0) {
+      kmmtype = FastKronMMType::MKM;
+    } else {
+      printf("Invalid value for KronMatmulType '%s'\n", opt.getValue("gemmtype"));
+      return -1;
+    }
+  } else {
+    printf("gemmtype should be provided");
+    return -1;
+  }
+
   if (opt.getValue("batchZ") != NULL) {
     batchZ = atoi(opt.getValue("batchZ"));
   }
@@ -280,11 +296,11 @@ int main(int argc, char* argv[]) {
 
   bool status = false;
   if (strcmp(type, "float") == 0)
-    status = run<float>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, batchZ, batchX, batchF, batchY, atof(alpha), atof(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
+    status = run<float>(kmmtype, rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, batchZ, batchX, batchF, batchY, atof(alpha), atof(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else if (strcmp(type, "int") == 0)
-    status = run<int>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, batchZ, batchX, batchF, batchY, atoi(alpha), atoi(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
+    status = run<int>(kmmtype, rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, batchZ, batchX, batchF, batchY, atoi(alpha), atoi(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else if (strcmp(type, "double") == 0)
-    status = run<double>(rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, batchZ, batchX, batchF, batchY, (double)atof(alpha), (double)atof(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
+    status = run<double>(kmmtype, rows, N, K, facs, KP_MAT_N, KP_MAT_K, opx, opf, batchZ, batchX, batchF, batchY, (double)atof(alpha), (double)atof(beta), runs, warmup, useUVA, gpuInRows, gpuInCols, gpus, gpuLocalKrons, checkResults, useFusion, tune, backend, false);
   else
     printf("type not supported %s\n", type);
 

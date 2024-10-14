@@ -178,7 +178,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
     Matrix x(problem.x().m(), problem.x().n(), temp1[0].data());
     Matrix y(problem.y().m(), problem.y().n(), temp2[0].data());
 
-    KMMProblem tmpProblem(problem.type(), x, problem.opX(), 
+    KMMProblem tmpProblem(FastKronMMType::MKM, problem.type(), x, problem.opX(), 
                           problem.n(), &Fs[0][0], problem.opFs(), y);
     tune(tmpProblem, tunedKernelsMap, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
@@ -340,7 +340,7 @@ fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBa
     KMMProblemStridedBatched::Matrix x = problem.x().like(temp1[0].data());
     KMMProblemStridedBatched::Matrix y = problem.y().like(temp2[0].data());
 
-    KMMProblemStridedBatched tmpProblem(problem.type(), x, problem.opX(),
+    KMMProblemStridedBatched tmpProblem(FastKronMMType::MKM, problem.type(), x, problem.opX(),
                                         problem.n(), &Fs[0][0], problem.opFs(), y,
                                         problem.batchCount());
     tune(tmpProblem, tunedKernelsMapStridedBatched, kernelDb, false, DistributedParams());

@@ -97,9 +97,10 @@ class KronMatMulShape:
 WARP_SIZE=32
 
 class Kernel:
-  def __init__(self, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int, 
+  def __init__(self, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int, 
                FusedKernel : int, dist: int, elemType : str, opt_level : int, rm : int, rk : int, rq : int, allPowersOf2: int, opX : str, opF : str,
                kernelBatchType: str):
+    self.kmmtype = kmmtype
     self.shape = shape
     self.kron_rows = kron_rows
     self.kron_cols = kron_cols
@@ -162,6 +163,10 @@ class Kernel:
   def constructorArgs(self):
     return f"(void*){self.hostFuncName()}, {elem_type_to_fastkron_type(self.elemType)}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}"
 
+  def mmType(self):
+    if self.kmmtype == "kmm": return "FastKronMMType::KMM"
+    if self.kmmtype == "mkm": return "FastKronMMType::MKM"
+
 class CPUKMMKernel(Kernel):
   def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int, rm : int, rk: int, rq: int,
@@ -180,7 +185,7 @@ class CPUKMMKernel(Kernel):
     return f"{self.kernelname()}.cpp"
   
   def templateDecl(self):
-    return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
+    return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.mmType()}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
 
   def kernelDecl(self):
     return f"cpuKernel<{self.templateDecl()}>"
@@ -259,14 +264,14 @@ class CPUKMMKernel(Kernel):
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
 class GPUKMMKernel(Kernel):
-  def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
+  def __init__(self, backend : str, arch : str, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
                regM: int, cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, aalign: int, kalign: int,
                allPowersOf2: int, opX : str, opF : str, kernelBatchType : str):
     aalign = min(4, aalign)
     kalign = min(4, kalign)
-    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, regM, cRegRows, cRegCols, allPowersOf2, opX, opF, kernelBatchType)
+    super().__init__(kmmtype, shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, regM, cRegRows, cRegCols, allPowersOf2, opX, opF, kernelBatchType)
     self.num_threads = (tileM//regM) * ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
     self.tileQ = tileQ
     self.tileP = tileP
@@ -303,7 +308,7 @@ class GPUKMMKernel(Kernel):
 
   def templateDecl(self):
     #TODO: repr and this should be same
-    return f"{self.optimizedCUDAArch()}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
+    return f"{self.optimizedCUDAArch()}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.mmType()}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
@@ -425,10 +430,10 @@ def x_mem_vector_len(m, cols, op, elem_type):
   if op == "T":
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+    return 1 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def f_mem_vector_len(cols, elem_type):
-  return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+  return 1 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def simd_lengths(backend: str, arch : str, elem_type: str):
   assert backend == "x86"
@@ -449,7 +454,7 @@ def f_simd_len(backend : str, arch : str, cols, elem_type):
   lengths = simd_lengths(backend, arch, elem_type)
   return max([a for a in lengths if cols % a == 0])
 
-def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs, opt_levels, batch_types):
+def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs, opt_levels, batch_types):
   if not os.path.exists(all_kernels_dir):
     os.mkdir(all_kernels_dir)
 
@@ -474,76 +479,77 @@ def generate_kernel_decls(cases, opXs, opFs, types, useFusion, useDistKernels, n
   empty_dir(kernel_dir)
   configs = {}
   for batch_type in batch_types:
-    for arch in archs:
-      for opX in opXs:
-        for opF in opFs:
-          for elem_type in types:
-            for (m, k, n, ps, qs) in cases:
-              if arch == 'sisd' and (ps[0] != 128 or qs[0] != 128):
-                continue
+    for kmmtype in kronmatmulTypes:
+      for arch in archs:
+        for opX in opXs:
+          for opF in opFs:
+            for elem_type in types:
+              for (m, k, n, ps, qs) in cases:
+                if arch == 'sisd' and (ps[0] != 128 or qs[0] != 128):
+                  continue
 
-              allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
-              for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
-                MinTile = 16 #16 if backend == 'x86' and elem_type == "double" else 32
-                TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
-                TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
-                k_factors = factors(currK)
-                if str((ps[0], qs[0])) in validTileKs and len(validTileKs[str((ps[0], qs[0]))]) > 0:
-                  TileKs = list(validTileKs[str((ps[0], qs[0]))])
-                else:
-                  TileKs = [f for f in k_factors if f % p == 0]
-                TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
+                for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
+                  MinTile = 16 #16 if backend == 'x86' and elem_type == "double" else 32
+                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+                  TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
+                  k_factors = factors(currK)
+                  if str((ps[0], qs[0])) in validTileKs and len(validTileKs[str((ps[0], qs[0]))]) > 0:
+                    TileKs = list(validTileKs[str((ps[0], qs[0]))])
+                  else:
+                    TileKs = [f for f in k_factors if f % p == 0]
+                  TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
 
-                for tM in TileMs:
-                  for tQ in TileQs:
-                    for tK in TileKs:
-                      if tK < p:
-                        continue
-                      if arch == 'sisd' and tK != 16384:
-                        continue
-                      CRows = factors(tK//p)
-                      CCols = factors(tQ)
-                      RegMs = factors(tM)
-                      for regRows in CRows:
-                        for regCols in CCols:
-                          for regM in RegMs:
-                            for tP in TilePs:
-                              fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
-                              for numFusedKerns in fusedCases:
-                                shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
-                                if shape not in configs:
-                                  configs[shape] = []
-                                __configs = []
-                                for opt_level in (range(0, 4) if opt_levels == None or opt_levels == [] else opt_levels):
-                                  if backend in ['cuda', 'hip']:
-                                    aalign = x_mem_vector_len(tM, tK, opx, elem_type)
-                                    kronalign = f_mem_vector_len(tQ, elem_type)
-                                    if opt_level <= 1 or aalign == 1:
-                                      new_aalign = aalign
-                                    elif opt_level == 2:
-                                      new_aalign = min(aalign, kronalign)
-                                    else:
-                                      new_aalign = aalign
-                                    distKernels = [0, 1] if useDistKernels else [0]
-                                    for dist in distKernels:
-                                      config = GPUKMMKernel(backend, arch, KronMatMulShape(m, tK, n, p, q), 
-                                                            KronMatMulShape(m, k, n, ps, qs),
-                                                            p, q, tQ, tP, tM, regM, regRows, regCols,
-                                                            numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
-                                                            opx, opF, batch_type) 
+                  for tM in TileMs:
+                    for tQ in TileQs:
+                      for tK in TileKs:
+                        if tK < p:
+                          continue
+                        if arch == 'sisd' and tK != 16384:
+                          continue
+                        CRows = factors(tK//p)
+                        CCols = factors(tQ)
+                        RegMs = factors(tM)
+                        for regRows in CRows:
+                          for regCols in CCols:
+                            for regM in RegMs:
+                              for tP in TilePs:
+                                fusedCases = range(1, int(math.log(tK, p))+1) if allSameShapes and useFusion else [1]
+                                for numFusedKerns in fusedCases:
+                                  shape = KronMatMulShape(m, tK, numFusedKerns, p, q)
+                                  if shape not in configs:
+                                    configs[shape] = []
+                                  __configs = []
+                                  for opt_level in (range(0, 4) if opt_levels == None or opt_levels == [] else opt_levels):
+                                    if backend in ['cuda', 'hip']:
+                                      aalign = x_mem_vector_len(tM, tK, opx, elem_type)
+                                      kronalign = f_mem_vector_len(tQ, elem_type)
+                                      if opt_level <= 1 or aalign == 1:
+                                        new_aalign = aalign
+                                      elif opt_level == 2:
+                                        new_aalign = min(aalign, kronalign)
+                                      else:
+                                        new_aalign = aalign
+                                      distKernels = [0, 1] if useDistKernels else [0]
+                                      for dist in distKernels:
+                                        config = GPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q), 
+                                                              KronMatMulShape(m, k, n, ps, qs),
+                                                              p, q, tQ, tP, tM, regM, regRows, regCols,
+                                                              numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
+                                                              opx, opF, batch_type) 
+                                        if config.isValid():
+                                          __configs += [config]
+                                    elif backend == 'x86':
+                                      dist = 0
+                                      aalign = x_simd_len(backend, arch, tM, tK, opx, elem_type)
+                                      kronalign = f_simd_len(backend, arch, tQ, elem_type)
+                                      config = CPUKMMKernel(backend, arch, KronMatMulShape(m, tK, n, p, q),
+                                                              KronMatMulShape(m, k, n, ps, qs),
+                                                              p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
+                                                              dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF, batch_type)
                                       if config.isValid():
                                         __configs += [config]
-                                  elif backend == 'x86':
-                                    dist = 0
-                                    aalign = x_simd_len(backend, arch, tM, tK, opx, elem_type)
-                                    kronalign = f_simd_len(backend, arch, tQ, elem_type)
-                                    config = CPUKMMKernel(backend, arch, KronMatMulShape(m, tK, n, p, q),
-                                                            KronMatMulShape(m, k, n, ps, qs),
-                                                            p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
-                                                            dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF, batch_type)
-                                    if config.isValid():
-                                      __configs += [config]
-                                configs[shape] += __configs
+                                  configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
   
@@ -690,7 +696,9 @@ if __name__ == "__main__":
                                              help = "(Optional) Space separated optimization levels from 0 to 3 to generate")
   parser.add_argument('-batch-type'        , required=False, type=str, nargs="+", default=["cont"],
                                              help = "(Optional) Space separated kernel batch type (cont (short for contiguous), strided, batched). Default is cont")
-  
+  parser.add_argument('-kronmatmul-type'   , required=True,  type=str, nargs="+",
+                                             help = "Space separated Kron Matmul Type: kmm, mkm")
+
   args = parser.parse_args()
   parsed_cases = []
 
@@ -750,6 +758,6 @@ if __name__ == "__main__":
       if line.strip() != "":
         match_configs += [line]
   
-  generate_kernel_decls(parsed_cases, args.opX, args.opF, args.types, not args.no_fuse, 
+  generate_kernel_decls(parsed_cases, args.kronmatmul_type, args.opX, args.opF, args.types, not args.no_fuse, 
                         args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs,
                         args.opt_levels, args.batch_type)

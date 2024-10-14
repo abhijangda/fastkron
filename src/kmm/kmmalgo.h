@@ -10,6 +10,11 @@
 
 #pragma once
 
+enum FastKronMMType {
+  KMM,
+  MKM
+};
+
 /**
  * KMMProblemBase represents a Kronecker Matrix Matrix Multiplication problem.
  * This class takes a maximum factors (MaxFactors) as a template and contains
@@ -33,6 +38,7 @@ protected:
    * @out: Output matrix, i.e. Z
    * @factors: Array of all kronecker factors.
    */
+  FastKronMMType kronType;
   FastKronType eltype;
   Matrix in;
   fastKronOp opIn;
@@ -43,19 +49,21 @@ protected:
   Factors factors;
   
 public:
-  KMMProblemBase(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs,
-                 fastKronOp opFs, Matrix y) :
-              eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y),
+  KMMProblemBase(FastKronMMType kronType, FastKronType eltype,
+                 Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
+              kronType(kronType), eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y),
               factors(fs) {}
 
-  KMMProblemBase(FastKronType eltype, Matrix x, fastKronOp opX, int n,
-                 const Factor* fs, fastKronOp opFs, Matrix y) :
-              eltype(eltype), in(x), opIn(opX), opFactors(opFs), out(y),
-              factors(fs, n) {}
+  KMMProblemBase(FastKronMMType kronType, FastKronType eltype,
+                 Matrix x, fastKronOp opX, 
+                 int n, const Factor* fs, fastKronOp opFs, Matrix y) :
+              kronType(kronType), eltype(eltype), in(x), opIn(opX), 
+              opFactors(opFs), out(y), factors(fs, n) {}
 
-  KMMProblemBase(FastKronType eltype, Matrix x, fastKronOp opX, 
-              std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
-              KMMProblemBase(eltype, x, opX, Factors(fs), opFs, y) {}
+  KMMProblemBase(FastKronMMType kronType, FastKronType eltype, 
+                 Matrix x, fastKronOp opX, 
+                 std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y) :
+              KMMProblemBase(kronType, eltype, x, opX, Factors(fs), opFs, y) {}
 
   // KMMProblemBase(FastKronType eltype, const uint m, const uint32_t n,
   //             const uint32_t *ps, const uint32_t *qs, void* xptr, 
@@ -78,7 +86,7 @@ public:
 
   template<uint32_t OtherMaxFactors>
   KMMProblemBase(const KMMProblemBase<Matrix, Factor, OtherMaxFactors>& other) : 
-              eltype(other.type()), in(other.x()), opIn(other.opX()),
+              kronType(other.mmtype()), eltype(other.type()), in(other.x()), opIn(other.opX()),
               opFactors(other.opFs()), out(other.y()), factors(other.fs(),
               other.n()) {}
 
@@ -107,7 +115,9 @@ public:
   fastKronOp opX()       const {return opIn;}
   CUDA_DEVICE_HOST
   FastKronType type()    const {return eltype;}
-  
+  CUDA_DEVICE_HOST
+  FastKronMMType mmtype()  const {return kronType;}
+
   /**
    * Get values for several problem notations.
    * K is cols of X
@@ -125,7 +135,7 @@ public:
   uint32_t n() const {return factors.len();}
 
   KMMProblemBase updateY(const Matrix y) const {
-    return KMMProblemBase(type(), x(), opX(), n(), fs(), opFs(), y);
+    return KMMProblemBase(mmtype(), type(), x(), opX(), n(), fs(), opFs(), y);
   }
   
   /**
@@ -186,7 +196,7 @@ public:
     }
 
     
-    return KMMProblemBase(type(), x().sameRows(subk), opX(),
+    return KMMProblemBase(mmtype(), type(), x().sameRows(subk), opX(),
                           factors.sub(rstart - (subn - 1), subn), opFs(),
                           y().sameRows(subl));
   }
@@ -212,7 +222,7 @@ public:
       subk = (subk/factors[i].p())*factors[i].q();
     }
 
-    return KMMProblemBase(type(), x().sameRows(subk), opX(),
+    return KMMProblemBase(mmtype(), type(), x().sameRows(subk), opX(),
                           factors.sub(start, subn), opFs(),
                           y().sameRows(subl));
   }
@@ -314,22 +324,29 @@ protected:
   KMMProblemStridedBatchedT(Base base, int batchCount) : Base(base), batches(batchCount) {}
 
 public:
-  KMMProblemStridedBatchedT(FastKronType eltype, Matrix x, fastKronOp opX, Factors fs,
-                 fastKronOp opFs, Matrix y, int batchCount) :
-              Base(eltype, x, opX, fs, opFs, y), batches(batchCount) {}
+  KMMProblemStridedBatchedT(FastKronMMType kronType, FastKronType eltype, 
+                            Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs,
+                            Matrix y, int batchCount) :
+                            Base(eltype, x, opX, fs, opFs, y),
+                            batches(batchCount) {}
 
-  KMMProblemStridedBatchedT(FastKronType eltype, Matrix x, fastKronOp opX, int n,
-                 const Factor* fs, fastKronOp opFs, Matrix y, int batchCount) :
-              Base(eltype, x, opX, n, fs, opFs, y), batches(batchCount) {}
+  KMMProblemStridedBatchedT(FastKronMMType kronType, FastKronType eltype,
+                            Matrix x, fastKronOp opX, 
+                            int n, const Factor* fs, fastKronOp opFs, Matrix y,
+                            int batchCount) :
+                            Base(kronType, eltype, x, opX, n, fs, opFs, y),
+                            batches(batchCount) {}
 
-  KMMProblemStridedBatchedT(FastKronType eltype, Matrix x, fastKronOp opX, 
-                 std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y,
-                 int batchCount) :
-                 Base(eltype, x, opX, fs, opFs, y), batches(batchCount) {}
+  KMMProblemStridedBatchedT(FastKronMMType kronType, FastKronType eltype,
+                            Matrix x, fastKronOp opX, 
+                            std::initializer_list<Factor> fs, fastKronOp opFs, Matrix y,
+                            int batchCount) :
+                            Base(kronType, eltype, x, opX, fs, opFs, y), batches(batchCount) {}
   
   template<uint32_t OtherMaxFactors>
   KMMProblemStridedBatchedT(const KMMProblemStridedBatchedT<OtherMaxFactors>& other) : 
-              Base(other.type(), other.x(), other.opX(), other.n(), other.fs(), other.opFs(), other.y()),
+              Base(other.mmtype(), other.type(), other.x(), other.opX(), 
+                   other.n(), other.fs(), other.opFs(), other.y()),
               batches(other.batchCount()) {}
 
   KMMProblemStridedBatchedT rsub(uint32_t rstart, uint32_t subn) const {
@@ -341,7 +358,7 @@ public:
   }
   
   KMMProblemStridedBatchedT updateY(const Matrix y) const {
-    return KMMProblemStridedBatchedT(this->type(), this->x(), this->opX(), 
+    return KMMProblemStridedBatchedT(this->mmtype(), this->type(), this->x(), this->opX(), 
                                      this->n(), this->fs(), this->opFs(),
                                      y, batches);
   }
@@ -355,7 +372,7 @@ public:
       baseFs[i] = fi;
     }
 
-    return KMMProblem(this->type(), this->x().template batch<T>(b), this->opX(),
+    return KMMProblem(this->mmtype(), this->type(), this->x().template batch<T>(b), this->opX(),
                       this->n(), baseFs, this->opFs(), this->y().template batch<T>(b));
   }
 
