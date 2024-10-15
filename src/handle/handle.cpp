@@ -101,13 +101,28 @@ fastKronError FastKronHandle::xgemkm(const KMMProblem problem, const fastKronBac
       return fastKronInvalidArgument;
 
   fastKronError err = fastKronSuccess;
-  TunedKernelsSeries kernelSeries;
+  // TunedKernelsSeries kernelSeries;
 
   void* temps[2] = {temp1, temp2};
   auto kernelDb = getKernelDb(backend);
   auto kk = *kernelDb->compiledKernels.begin();
   std::cout << "109 " << kk.second[0]->str() << std::endl;
-  kernelDb->invokeKernel(kk.second[0], problem, 0, epilogueParams, KernelModeNormal);
+
+  err = executeGeKMM(problem, temps, problem.n(),
+    [](const KMMProblem) 
+      {return 1;},
+    [kk, epilogueParams, kernelDb, this]
+      (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
+        fastKronError err;
+        // auto kernel = *kernelSeriesIter;
+
+        // KMMKernel* selectedKernel = kernel.;
+        // assert(rstart == kernel.end);
+        err = kernelDb->invokeKernel(kk.second[0], subProblem, 0, epilogueParams, KernelModeNormal);
+        // kernelSeriesIter++;
+        return err;
+    });
+
   return err;
 }
 
@@ -148,7 +163,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem,
   auto kernelSeriesIter = kernelSeries.begin();
 
   //Execute GeKMM algorithm using above kernels
-  err = executeGeKMM(problem, temps, kernelSeries.size(),
+  err = executeGeMKM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) 
       {return kernelSeriesIter->kernel->getFusedFacs();},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
@@ -200,7 +215,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
   auto kernelSeriesIter = kernelSeries.begin();
 
   // //Execute GeKMM algorithm using above kernels
-  err = executeGeKMM(problem, temps, kernelSeries.size(),
+  err = executeGeMKM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblemStridedBatched) 
       {return kernelSeriesIter->kernel->getFusedFacs();},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]

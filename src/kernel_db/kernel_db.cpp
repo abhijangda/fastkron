@@ -221,7 +221,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
 
         auto fusedIter = numFusedToKernels.begin();
 
-        executeGeKMM(problem, nullptr, problem.n(),
+        executeGeMKM(problem, nullptr, problem.n(),
           [&fusedIter](const KMMProblemT) {return fusedIter->first;},
           [&fusedIter, &kernelSeries, &numFusedToKernels, this]
             (const KMMProblemT subProblem, int rstart, void*[2], typename KMMProblemT::Matrix) {
@@ -241,7 +241,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
 
     //No Fused kernel case found
     {
-      executeGeKMM(problem, nullptr, problem.n(),
+      executeGeMKM(problem, nullptr, problem.n(),
         [](const KMMProblemT) {return 1;},
         [&kernelSeries, this]
           (const KMMProblemT subProblem, int rstart, void*[2], typename KMMProblemT::Matrix) {

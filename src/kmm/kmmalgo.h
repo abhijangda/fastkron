@@ -440,7 +440,18 @@ fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
                            std::function<uint (const KMMProblem)> next,
                            std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
 
-fastKronError executeGeKMM(const KMMProblemStridedBatched problem, void* temps[2],
+// fastKronError executeGeKMM(const KMMProblemStridedBatched problem, void* temps[2],
+//                            uint32_t swaps,
+//                            std::function<uint (const KMMProblemStridedBatched)> next,
+//                            std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
+
+//TODO:
+fastKronError executeGeMKM(const KMMProblem problem, void* temps[2],
+                           uint32_t swaps,
+                           std::function<uint (const KMMProblem)> next,
+                           std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
+
+fastKronError executeGeMKM(const KMMProblemStridedBatched problem, void* temps[2],
                            uint32_t swaps,
                            std::function<uint (const KMMProblemStridedBatched)> next,
                            std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
