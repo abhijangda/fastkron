@@ -436,7 +436,7 @@ def x_mem_vector_len(m, cols, op, elem_type):
     return 4 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def f_mem_vector_len(cols, elem_type):
-  return 1 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+  return 4 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def simd_lengths(backend: str, arch : str, elem_type: str):
   assert backend == "x86"
