@@ -10,6 +10,9 @@ public:
   AbstractFixedShapeTensor2D() {}
 
   CUDA_DEVICE_HOST
+  fastKronOp layout() const {return Layout;}
+
+  CUDA_DEVICE_HOST
   static uint32_t numel() {return M*N;}
 
   CUDA_DEVICE_HOST
@@ -282,9 +285,6 @@ public:
   ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
 
   CUDA_DEVICE_HOST
-  fastKronOp layout() const {return Layout;}
-
-  CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t RegK, 
              uint32_t numElems, T* elems) {
     #pragma unroll
@@ -299,7 +299,7 @@ public:
         // CUDA_DEVICE_ASSERT(row * n() + col < numel());
         
       } else {
-        col = slice*p() + elem;
+        col = shCol;
         row = (row + shift) % kM;
       }
       Base::set(data, row, col, elems[i]);

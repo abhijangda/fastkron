@@ -79,7 +79,9 @@ void directFgToFsh(const uint NumThreads, const uint tid,
     __syncthreads();
   }
 
-  if (opF == fastKronOp_T || !(F.p() == Fsh.p() && F.q() == Fsh.q())) {
+  bool loadFullFactor = F.p() == Fsh.p() && F.q() == Fsh.q();
+
+  if (Fsh.layout() == fastKronOp_N && (opF == fastKronOp_T || !loadFullFactor)) {
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
     const uint Vecs     = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
@@ -110,6 +112,26 @@ void directFgToFsh(const uint NumThreads, const uint tid,
 
         //This condition avoids generating this loop giving better performance
         if (Vecs == NumThreads/ThGroups) break;
+      }
+    }
+  } else if (Fsh.layout() == fastKronOp_T && !loadFullFactor) {
+    const uint Vecs = Fsh.p()/VecTLen;
+    const uint ThGroups = MAX(1, NumThreads/Vecs);
+
+    for (uint swid = tid/Vecs; swid < Fsh.q(); swid += ThGroups) {
+      for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
+        ElemT regs[VecTLen] = {0};
+        if (opF == fastKronOp_T) {
+          const uint col = elem*VecTLen;
+          const uint row = tileQ*Fsh.q() + swid;
+
+          // if ((kQMultipleOfTileQ || col < F.q()) &&
+          //     (kPMultipleOfTileP || tileP + row < F.p()))
+            ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
+          
+          Fsh.store(row, elem * VecTLen, VecTLen, regs);
+          if (Vecs == NumThreads/ThGroups) break;
+        }
       }
     }
   } else {

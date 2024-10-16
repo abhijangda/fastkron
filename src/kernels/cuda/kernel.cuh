@@ -141,7 +141,7 @@ __global__ void cudaKernel(KernelParams params,
   const fastKronOp OpF = (kmmType == FastKronMMType::MKM) ? kOpF : swapFastKronOp<kOpF>();
   const fastKronOp OpY = (kmmType == FastKronMMType::MKM) ? fastKronOp_N : fastKronOp_T;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : (//(KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
                                                             blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
   const uint tid  = threadIdx.x;
@@ -155,7 +155,7 @@ __global__ void cudaKernel(KernelParams params,
 
   const uint tileM = bid_y * TileM;
   //TODO: is this condition optimized for OptLevel == 3?
-  if (tileM >= X.m() || tileK * TileK >= X.n()) return;
+  // if (tileM >= X.m() || tileK * TileK >= X.n()) return;
   
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
@@ -168,7 +168,7 @@ __global__ void cudaKernel(KernelParams params,
   //If X or F are Op_T then transpose then in shared memory
   using XShared = ShiftShared<OpY, ElemT, kXshSlicesSame, 
                               TileM, kTileK/MaxP, TileP>;
-  using FShared = DirectShared<fastKronOp_N, ElemT, TileP, TileQ>;
+  using FShared = DirectShared<OpY, ElemT, TileP, TileQ>;
   XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
@@ -211,14 +211,15 @@ __global__ void cudaKernel(KernelParams params,
       __syncthreads();
   }}
 
-  #pragma unroll
-  for (uint rm = 0; rm < yReg.m(); rm++) {
-  if (rm + yElem.m() < XTile.m()) {
     constexpr uint32_t StLen = storeVectorLen<kKMultipleOfTileK, FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
+      #pragma unroll
+  for (uint rm = 0; rm < RegM; rm++) {
+  if (true || (rm + yElem.m() < XTile.m())) {
+
       if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
           (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
 

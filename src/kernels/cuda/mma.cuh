@@ -1,11 +1,13 @@
 template<typename XReg, typename FReg, typename YReg>
 CUDA_DEVICE
-void slicedMMA(uint32_t m, XReg& Xr, FReg& Fr, YReg& Yr) {
-  //Matrix Multiply Accumulate  
-  #pragma unroll
-  for (uint i = 0; i < Yr.k(); i++)
+void slicedMMA(XReg& Xr, FReg& Fr, YReg& Yr) {
+  //Matrix Multiply Accumulate
   #pragma unroll
   for (uint j = 0; j < Yr.q(); j++)
+  #pragma unroll
+  for (uint m = 0; m < Yr.m(); m++)
+  #pragma unroll
+  for (uint i = 0; i < Yr.k(); i++)
   #pragma unroll
   for (uint p = 0; p < Xr.p(); p++) {
     Yr.add(m, i, j, Xr.at(m, i, p) * Fr.at(p, j));
@@ -51,15 +53,23 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
     }}}
   }
   
-  #pragma unroll
-  for (uint rq = 0; rq < Yr.q(); rq++) {
-    uint shFcol = yElem.q() + rq;
+  if (Fsh.layout() == fastKronOp_N) {
     #pragma unroll
-    for (uint p = 0; p < Xr.p(); p++) {
-      Fr.set(p, rq, Fsh.at(p, shFcol));
-  }}
+    for (uint rq = 0; rq < Yr.q(); rq++) {
+      uint shFcol = yElem.q() + rq;
+      #pragma unroll
+      for (uint p = 0; p < Xr.p(); p++) {
+        Fr.set(p, rq, Fsh.at(p, shFcol));
+    }}
+  } else if (Fsh.layout() == fastKronOp_T) {
+    #pragma unroll
+    for (uint rq = 0; rq < Yr.q(); rq++) {
+      uint shFcol = yElem.q() + rq;
+      #pragma unroll
+      for (uint p = 0; p < Xr.p(); p++) {
+        Fr.set(p, rq, (&Fsh.at(0,0))[shFcol * 32 + p]);
+    }}
+  }
 
-  #pragma unroll
-  for (uint rm = 0; rm < Yr.m(); rm++)
-    slicedMMA(rm, Xr, Fr, Yr);
+  slicedMMA(Xr, Fr, Yr);
 }
