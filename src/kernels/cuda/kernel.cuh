@@ -158,7 +158,7 @@ __global__ void cudaKernel(KernelParams params,
   // if (tileM >= X.m() || tileK * TileK >= X.n()) return;
   
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
-                          (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
+                          TileM, //TODO: (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
                           (kKMultipleOfTileK)? TileK : MIN(X.n()-tileK * TileK, TileK),
                           P, TileP,
                           X);
@@ -217,13 +217,11 @@ __global__ void cudaKernel(KernelParams params,
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk++) {
       #pragma unroll
-  for (uint rm = 0; rm < RegM; rm += StLen) {
-  if (true || (rm + yElem.m() < XTile.m())) {
+  
 
       if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
           (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
 
-      const uint glM = rm + yElem.m() + tileM;
       uint glK;
       ElemT* yPtr;
       uint32_t cIdx;
@@ -248,6 +246,9 @@ __global__ void cudaKernel(KernelParams params,
           glK += tileQ * XSlices * TileQ;
       }}
 
+    for (uint rm = 0; rm < RegM; rm += StLen) {
+      const uint glM = rm + yElem.m() + tileM;
+  if (true || (rm + yElem.m() < XTile.m())) {
       if (DistributeToGPUs) {
         yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
