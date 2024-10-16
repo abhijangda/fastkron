@@ -62,12 +62,14 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
         Fr.set(p, rq, Fsh.at(p, shFcol));
     }}
   } else if (Fsh.layout() == fastKronOp_T) {
+    uint32_t qe = yElem.q();
     #pragma unroll
     for (uint rq = 0; rq < Yr.q(); rq++) {
-      uint shFcol = yElem.q() + rq;
+      uint32_t shFcol = qe + rq;
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
-        Fr.set(p, rq, (&Fsh.at(0,0))[shFcol * 32 + p]);
+        uint32_t shift = p;
+        Fr.set(p, rq, (&Fsh.at(0,0))[(shift+shFcol)%Fsh.q() + p*Fsh.q()]);
     }}
   }
 
