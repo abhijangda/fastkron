@@ -211,13 +211,13 @@ __global__ void cudaKernel(KernelParams params,
       __syncthreads();
   }}
 
-    constexpr uint32_t StLen = storeVectorLen<kKMultipleOfTileK, FusedFacs, XAlignment, RegK>();
+    constexpr uint32_t StLen = 4;//storeVectorLen<kKMultipleOfTileK, FusedFacs, XAlignment, RegK>();
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
-    for (uint tk = 0; tk < RegK; tk += StLen) {
+    for (uint tk = 0; tk < RegK; tk++) {
       #pragma unroll
-  for (uint rm = 0; rm < RegM; rm++) {
+  for (uint rm = 0; rm < RegM; rm += StLen) {
   if (true || (rm + yElem.m() < XTile.m())) {
 
       if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
@@ -260,7 +260,6 @@ __global__ void cudaKernel(KernelParams params,
           }
         }
       }
-
       stVecYReg(yPtr, yReg, StLen, rm, tk, tq);
   }}}}
 }
