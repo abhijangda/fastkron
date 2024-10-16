@@ -131,7 +131,10 @@ void directFgToFsh(const uint NumThreads, const uint tid,
           uint32_t shift = elem; //TODO: RegQ is 16
           //TODO: Consider this an array of TileP * TileQ. Do not worry about this being a fastKronOp_T layout.
           //Maybe we will not need this when FVecT = 4 because then number of bank conflicts decreases significantly.
-          (&Fsh.at(0,0))[elem * Fsh.q() + (shift + row)%Fsh.q()] = regs[0];//store(row, elemFsh.p(), VecTLen, regs);
+          if (false) //Shift
+            (&Fsh.at(0,0))[elem * Fsh.q() + (shift + row)%Fsh.q()] = regs[0];//store(row, elemFsh.p(), VecTLen, regs);
+          if (true) //Padding
+            (&Fsh.at(0,0))[elem* (Fsh.q() + 1) + row] = regs[0];
           if (Vecs == NumThreads/ThGroups) break;
         }
       }

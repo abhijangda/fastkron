@@ -97,7 +97,8 @@ public:
    */
   size_t getSharedMemSize(KMMProblem problem) const {
     //TODO: Shouldn't this be MIN? because getTotalTileSize < getMaxTotalTileSize
-    return MAX(getTotalTileSize(problem), getMaxTotalTileSize());
+    //TODO: Padding for Factor when OpY = fastKronOp_T with size 32, 128 for float
+    return MAX(getTotalTileSize(problem), getMaxTotalTileSize()) + 32 * 4;
   }
   size_t getSharedMemSize(KMMProblemStridedBatched problem) const {
     return getSharedMemSize(problem.batchProblem(0));
