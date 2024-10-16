@@ -282,6 +282,9 @@ public:
   ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
 
   CUDA_DEVICE_HOST
+  fastKronOp layout() const {return Layout;}
+
+  CUDA_DEVICE_HOST
   void store(uint32_t row, uint32_t startCol, uint32_t RegK, 
              uint32_t numElems, T* elems) {
     #pragma unroll
@@ -290,9 +293,15 @@ public:
       uint32_t elem  = shCol%p();
       uint32_t slice = shCol/p();
       uint32_t shift = slice/RegK;
-
-      uint32_t col = slice*p() + (shift + elem)%p();
-      // CUDA_DEVICE_ASSERT(row * n() + col < numel());
+      uint32_t col = 0;
+      if (Layout == fastKronOp_N) {
+        col = slice*p() + (shift + elem)%p();
+        // CUDA_DEVICE_ASSERT(row * n() + col < numel());
+        
+      } else {
+        col = slice*p() + elem;
+        row = (row + shift) % kM;
+      }
       Base::set(data, row, col, elems[i]);
     }
   }

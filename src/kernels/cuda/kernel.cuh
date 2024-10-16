@@ -32,6 +32,31 @@ CUDA_DEVICE constexpr fastKronOp swapFastKronOp() {
   if (Op == fastKronOp_T) return fastKronOp_N;
 }
 
+CUDA_DEVICE
+YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, uint32_t QThreads,
+                const uint32_t MaxP,
+                const uint32_t TileM, const uint32_t kTileK, const uint32_t TileQ,
+                  const uint32_t RegM,  const uint32_t RegK,   const uint32_t RegQ) {
+  if (OpY == fastKronOp_N) {
+    const uint MThreads  = (TileM == 1) ? NumThreads : (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
+    const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
+    const uint yK   = ((tid % MThreads) % QThreads) * RegK;
+    const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
+  
+    return YElem(yM, yQ, yK);
+  } else if (OpY == fastKronOp_T) {
+    QThreads = QThreads * (TileM/RegM);
+    const uint KThreads  = TileM/RegM;
+    const uint yQ   = (tid / QThreads) * RegQ;
+    const uint yM   = ((tid % QThreads) % KThreads) * RegM;
+    const uint yK   = ((tid % QThreads) / KThreads) * RegK;
+    
+    // if (threadIdx.x < 32 && blockIdx.x == 0 && blockIdx.y == 0) 
+    //   printf("133 tid %d; y %d %d %d\n", threadIdx.x, yQ, yK, yM);
+    return YElem(yM,yQ,yK);
+  }
+}
+
 template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
@@ -125,12 +150,8 @@ __global__ void cudaKernel(KernelParams params,
   const uint tileQ = getTileQ(bid_x, QByTileQ);
   const uint tileK = getTileK(bid_x, QByTileQ);
 
-  const uint MThreads  = (TileM == 1) ? NumThreads : (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
-  const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
-  const uint yK   = ((tid % MThreads) % QThreads) * RegK;
-  const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
-
-  const YElem yElem(yM, yQ, yK);
+  
+  const YElem yElem = getYElem(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
 
   const uint tileM = bid_y * TileM;
   //TODO: is this condition optimized for OptLevel == 3?
@@ -145,7 +166,7 @@ __global__ void cudaKernel(KernelParams params,
   extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
   
   //If X or F are Op_T then transpose then in shared memory
-  using XShared = ShiftShared<fastKronOp_N, ElemT, kXshSlicesSame, 
+  using XShared = ShiftShared<OpY, ElemT, kXshSlicesSame, 
                               TileM, kTileK/MaxP, TileP>;
   using FShared = DirectShared<fastKronOp_N, ElemT, TileP, TileQ>;
   XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);

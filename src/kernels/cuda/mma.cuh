@@ -17,21 +17,39 @@ template<typename XShared, typename FShared,
 CUDA_DEVICE
 void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem) {
   //Load shared memory Xsh to registers Xr 
-  #pragma unroll
-  for (uint rm = 0; rm < Yr.m(); rm++) {
-  // if (rm < m) {
+  if (Xsh.layout() == fastKronOp_N) {
+    #pragma unroll
+    for (uint rm = 0; rm < Yr.m(); rm++) {
+    // if (rm < m) {
+      #pragma unroll
+      for (uint rk = 0; rk < Xr.k(); rk++) {
+        uint shXk = yElem.k() + rk;
+        uint shift = (yElem.k() / Yr.k());
+
+        #pragma unroll
+        for (uint p = 0; p < Xr.p(); p++) {
+          //TODO: bring shift calculation in Xsh.at
+          //TODO: use the actual not float
+          float temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
+          Xr.set(rm, rk, p, temp);
+        // }
+    }}}
+  } else {
     #pragma unroll
     for (uint rk = 0; rk < Xr.k(); rk++) {
       uint shXk = yElem.k() + rk;
       uint shift = (yElem.k() / Yr.k());
 
       #pragma unroll
-      for (uint p = 0; p < Xr.p(); p++) {
-        //TODO: bring shift calculation in Xsh.at
-        float temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
-        Xr.set(rm, rk, p, temp);
-      // }
-  }}}
+      for (uint p = 0; p < Xr.p(); p++) {  
+        #pragma unroll
+        for (uint rm = 0; rm < Yr.m(); rm++) {
+          //TODO: bring shift calculation in Xsh.at
+          float temp = Xsh.at((yElem.m() + rm + shift)%Xsh.m(), shXk * Xr.p() + p);
+          Xr.set(rm, rk, p, temp);
+        // }
+    }}}
+  }
   
   #pragma unroll
   for (uint rq = 0; rq < Yr.q(); rq++) {

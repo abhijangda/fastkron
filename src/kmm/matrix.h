@@ -351,10 +351,10 @@ public:
       if (P <= TileP) {
         idx = col;
       } else {
-        idx += (col/TileP)*P + tileP + col%TileP;
+        idx = (col/TileP)*P + tileP + col%TileP;
       }
 
-      idx = idx * parent.m() + row;
+      idx = row + idx * parent.m();
       return &ptr[idx];
     }
   }

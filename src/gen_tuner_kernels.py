@@ -341,6 +341,9 @@ class GPUKMMKernel(Kernel):
             f"get_{self.kernelname()}, {self.threads()}, " +\
             f"{self.aalign}, {self.kalign}" + "}"
 
+  def isInteresting(self):
+    return (self.shape.k == 128 and self.threads() == 128 and self.tileP == 32 and self.tileQ == 128 and self.rm*self.rk *self.rq == 128)
+
   def isValid(self):
     return self.wsz > 0 and \
            self.shape.k % self.shape.p == 0 and \
@@ -350,7 +353,7 @@ class GPUKMMKernel(Kernel):
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
-           self.tileM * self.rk * self.rq <= 64# and self.opt_level == 3
+           self.rm * self.rk * self.rq <= 128# and self.opt_level == 3
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
@@ -498,7 +501,7 @@ def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, 
                     TileKs = list(validTileKs[str((ps[0], qs[0]))])
                   else:
                     TileKs = [f for f in k_factors if f % p == 0]
-                  TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                  TileMs = [32,64, 128]#[1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
 
                   for tM in TileMs:
                     for tQ in TileQs:
@@ -536,7 +539,9 @@ def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, 
                                                               KronMatMulShape(m, k, n, ps, qs),
                                                               p, q, tQ, tP, tM, regM, regRows, regCols,
                                                               numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
-                                                              opx, opF, batch_type) 
+                                                              opx, opF, batch_type)
+                                        if config.isInteresting():
+                                          print(544, config)
                                         if config.isValid():
                                           __configs += [config]
                                     elif backend == 'x86':
@@ -576,6 +581,8 @@ def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, 
           factorHash = str((config.shape.p, config.shape.q))
           if factorHash in kernelTemplates:
             for template in kernelTemplates[factorHash]:
+              
+                          
               if template.is_template_of_kernel(config):
                 __configs += [config]
                 break
