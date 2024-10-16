@@ -285,22 +285,28 @@ public:
   ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
 
   CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t startCol, uint32_t RegK, 
+  void store(uint32_t startRow, uint32_t startCol, uint32_t RegK, 
              uint32_t numElems, T* elems) {
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
-      uint32_t shCol = startCol + i;
-      uint32_t elem  = shCol%p();
-      uint32_t slice = shCol/p();
-      uint32_t shift = slice/RegK;
       uint32_t col = 0;
+      uint32_t row = 0;
       if (Layout == fastKronOp_N) {
+        uint32_t shCol = startCol + i;
+        uint32_t elem  = shCol%p();
+        uint32_t slice = shCol/p();
+        uint32_t shift = slice/RegK;
         col = slice*p() + (shift + elem)%p();
         // CUDA_DEVICE_ASSERT(row * n() + col < numel());
         
       } else {
+        uint32_t shCol = startCol;
+        uint32_t elem  = shCol%p();
+        uint32_t slice = shCol/p();
+        uint32_t shift = 0;//slice/RegK;
         col = shCol;
-        row = (row + shift) % kM;
+        //TODO: When shift is 0 use vector store
+        row = (startRow + i + shift) % kM;
       }
       Base::set(data, row, col, elems[i]);
     }

@@ -433,7 +433,7 @@ def x_mem_vector_len(m, cols, op, elem_type):
   if op == "T":
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return 1 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+    return 4 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def f_mem_vector_len(cols, elem_type):
   return 1 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
