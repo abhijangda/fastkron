@@ -306,7 +306,7 @@ public:
         uint32_t shift = 0;//slice/RegK;
         col = shCol;
         //TODO: When shift is 0 use vector store
-        row = (startRow + i + shift) % kM;
+        row = (startRow + i + shift);// % kM; //TODO: Commenting out kM removes any shared mem store bank conflicts
       }
       Base::set(data, row, col, elems[i]);
     }

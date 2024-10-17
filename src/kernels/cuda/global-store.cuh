@@ -77,8 +77,8 @@ void stVecYReg(float* addr, YReg& Yr, int numValues, int row, int i, int j) {
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" ::
                     "l"(addr), 
-                    "f"(Yr.at(row, i  , j)), "f"(Yr.at(row, i+1, j)), 
-                    "f"(Yr.at(row, i+2, j)), "f"(Yr.at(row, i+3, j)));
+                    "f"(Yr.at(row, i  , j)), "f"(Yr.at(row+1, i, j)), 
+                    "f"(Yr.at(row+2, i, j)), "f"(Yr.at(row+3, i, j)));
     #elif defined(__HIPCC__)
       *addr = Yr.at(row, i+0, j);
       *(addr + 1) = Yr.at(row, i+1, j);

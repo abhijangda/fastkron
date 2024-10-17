@@ -33,10 +33,10 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
     }}
   } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?
-    const uint Vecs     = XTile.m()/VecTLen;//16
-    const uint ThGroups = MAX(1, NumThreads/Vecs);//8
+    const uint Vecs     = XTile.m()/VecTLen;
+    const uint ThGroups = MAX(1, NumThreads/Vecs);
 
-    for (uint swid = tid/Vecs; swid < Xsh.n(); swid += ThGroups) {//32
+    for (uint swid = tid/Vecs; swid < Xsh.n(); swid += ThGroups) {
     for (uint elem = tid%Vecs; elem < Vecs;    elem += NumThreads/ThGroups) {
       ElemT regs[VecTLen] = {0};
 
@@ -134,8 +134,9 @@ void directFgToFsh(const uint NumThreads, const uint tid,
           // if (false) //Shift
           //   (&Fsh.at(0,0))[elem * Fsh.q() + (shift + row)%Fsh.q()] = regs[0];//store(row, elemFsh.p(), VecTLen, regs);
           if (true) {//Padding
+            #pragma unroll
             for (int ii = 0; ii < VecTLen; ii++) {
-              (&Fsh.at(0,0))[(elem*VecTLen+ii)*(Fsh.q() + 1) + row] = regs[ii];
+              (&Fsh.at(0,0))[(col+ii)*(Fsh.q()+1) + swid] = regs[ii];
             }
           }
           if (Vecs == NumThreads/ThGroups) break;
