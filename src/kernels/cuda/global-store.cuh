@@ -149,11 +149,11 @@ void stVecYReg(int* addr, YReg& Yr, int row, int i, int j) {
 
 template<fastKronOp OpY, uint32_t StLen, typename YReg>
 CUDA_DEVICE
-void stVecYReg(double* addr, YReg& Yr, int numValues, int row, int i, int j) {
+void stVecYReg(double* addr, YReg& Yr, int row, int i, int j) {
   double yreg[StLen];
   getYVector<OpY, StLen, double>(yreg, Yr, row, i, j);
 
-  switch (numValues) {
+  switch (StLen) {
     case 1:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.f64 [%0], {%1};" ::

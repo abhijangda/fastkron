@@ -89,7 +89,7 @@ fastKronError FastKronHandle::setStream(fastKronBackend backend,
   return fastKronSuccess;
 }
 
-fastKronError FastKronHandle::xgemkm(const KMMProblem problem, const fastKronBackend backend,
+fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBackend backend,
                                      void* temp1, void* temp2, EpilogueParams epilogueParams) {
   
   if (problem.y().data()  == nullptr || temp1 == nullptr ||
@@ -126,7 +126,7 @@ fastKronError FastKronHandle::xgemkm(const KMMProblem problem, const fastKronBac
   return err;
 }
 
-fastKronError FastKronHandle::xgekmm(const KMMProblem problem, 
+fastKronError FastKronHandle::xgemkm(const KMMProblem problem, 
                                      const fastKronBackend backend, 
                                      void* temp1, void* temp2,
                                      EpilogueParams epilogueParams) {

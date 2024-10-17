@@ -353,7 +353,7 @@ class GPUKMMKernel(Kernel):
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
-           self.rm * self.rk * self.rq <= 128# and self.opt_level == 3
+           self.rm * self.rk * self.rq <= 64# and self.opt_level == 3
   
 def all_sliced_mults(m, k, n, opX, ps, qs):
   sliced_mults = []
@@ -457,7 +457,7 @@ def f_simd_len(backend : str, arch : str, cols, elem_type):
   lengths = simd_lengths(backend, arch, elem_type)
   return max([a for a in lengths if cols % a == 0])
 
-def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs, opt_levels, batch_types):
+def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistKernels, numKernels, onlySpecificConfigs, backend, archs, opt_levels, batch_types):
   if not os.path.exists(all_kernels_dir):
     os.mkdir(all_kernels_dir)
 
@@ -482,7 +482,7 @@ def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, 
   empty_dir(kernel_dir)
   configs = {}
   for batch_type in batch_types:
-    for kmmtype in kronmatmulTypes:
+    for kmmtype in mmTypes:
       for arch in archs:
         for opX in opXs:
           for opF in opFs:
@@ -501,7 +501,11 @@ def generate_kernel_decls(cases, kronmatmulTypes, opXs, opFs, types, useFusion, 
                     TileKs = list(validTileKs[str((ps[0], qs[0]))])
                   else:
                     TileKs = [f for f in k_factors if f % p == 0]
-                  TileMs = [32,64, 128]#[1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                  TileMs = []
+                  if kmmtype == 'mkm':
+                    TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                  elif kmmtype == "kmm":
+                    TileMs = [32,64, 128]
 
                   for tM in TileMs:
                     for tQ in TileQs:
@@ -703,8 +707,8 @@ if __name__ == "__main__":
                                              help = "(Optional) Space separated optimization levels from 0 to 3 to generate")
   parser.add_argument('-batch-type'        , required=False, type=str, nargs="+", default=["cont"],
                                              help = "(Optional) Space separated kernel batch type (cont (short for contiguous), strided, batched). Default is cont")
-  parser.add_argument('-kronmatmul-type'   , required=True,  type=str, nargs="+",
-                                             help = "Space separated Kron Matmul Type: kmm, mkm")
+  parser.add_argument('-mm-type'   , required=True,  type=str, nargs="+",
+                                      help = "Space separated Kron Matmul Type: kmm, mkm")
 
   args = parser.parse_args()
   parsed_cases = []
@@ -765,6 +769,6 @@ if __name__ == "__main__":
       if line.strip() != "":
         match_configs += [line]
   
-  generate_kernel_decls(parsed_cases, args.kronmatmul_type, args.opX, args.opF, args.types, not args.no_fuse, 
+  generate_kernel_decls(parsed_cases, args.mm_type, args.opX, args.opF, args.types, not args.no_fuse, 
                         args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs,
                         args.opt_levels, args.batch_type)

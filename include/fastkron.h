@@ -267,28 +267,28 @@ fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t
  * Return: Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error
    or the error occurred.
  */
-fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
+fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const float* X, fastKronOp opX,
                      const float* Fs[], fastKronOp opFs,
                      float* Z, float alpha, float beta,
                      const float *Y, float* temp1, float* temp2);
 
-fastKronError igekmm(fastKronHandle handle, fastKronBackend backend,
+fastKronError igemkm(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const int* X, fastKronOp opX,
                      const int* Fs[], fastKronOp opFs, 
                      int* Z, int alpha, int beta,
                      const int *Y, int* temp1, int* temp2);
 
-fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
+fastKronError dgemkm(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const double* X, fastKronOp opX,
                      const double* Fs[], fastKronOp opFs,
                      double* Z, double alpha, double beta,
                      const double *Y, double* temp1, double* temp2);
 
-fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend, 
+fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
                      const float* Fs[], fastKronOp opFs,
                      const float* X, fastKronOp opX,

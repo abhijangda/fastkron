@@ -130,40 +130,40 @@ fastKronError gekmmSizes(fastKronHandle handlePtr, uint M, uint N, uint Ps[], ui
   return ((FastKronHandle*)handlePtr)->gekmmSizes(problem, resultSize, tempSize);
 }
 
-fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const float* X,
+fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const float* X,
                      fastKronOp opX, const float* Fs[], fastKronOp opFs, float* Y,
                      float alpha, float beta, const float *Z, float* temp1, float* temp2) {
   KMMProblem problem(FastKronMMType::MKM, FastKronFloat,
                      Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
                      KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
                      Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
-  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2,
+  return ((FastKronHandle*)handle)->xgemkm(problem, backend, (void*)temp1, (void*)temp2,
                         EpilogueParams::create<float>(alpha, beta, Z));
 }
 
-fastKronError igekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const int* X,
+fastKronError igemkm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const int* X,
                    fastKronOp opX, const int* Fs[], fastKronOp opFs, int* Y,
                    int alpha, int beta, const int *Z, int* temp1, int* temp2) {
   KMMProblem problem(FastKronMMType::MKM, FastKronInt,
                      Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
                      KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
                      Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
-  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
+  return ((FastKronHandle*)handle)->xgemkm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<int>(alpha, beta, Z));
 }
 
-fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
+fastKronError dgemkm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
                    fastKronOp opX, const double* Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, const double *Z, double* temp1, double* temp2) {
   KMMProblem problem(FastKronMMType::MKM, FastKronDouble,
                      Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
                      KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
                      Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
-  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
+  return ((FastKronHandle*)handle)->xgemkm(problem, backend, (void*)temp1, (void*)temp2, 
                         EpilogueParams::create<double>(alpha, beta, Z));
 }
 
-fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend, 
+fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
                      const float* Fs[], fastKronOp opFs,
                      const float* X, fastKronOp opX,
@@ -173,7 +173,7 @@ fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend,
                      Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
                      KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
                      Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
-  return ((FastKronHandle*)handle)->xgemkm(problem, backend, (void*)temp1, (void*)temp2, 
+  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
                                            EpilogueParams::create<float>(alpha, beta, Z));
 }
 

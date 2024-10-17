@@ -363,15 +363,15 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
   if (kronmatmulType == FastKronMMType::MKM) {
     if (std::is_same<T, float>::value) {
       //TODO: Change KMM to MKM
-      FastKronCHECK(sgekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+      FastKronCHECK(sgemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const float*)x, opx, (const float**)kpMats, opfs, (float*)y,
                       alpha, beta, (const float*)z, (float*)temp1, (float*)temp2));
     } else if (std::is_same<T, int>::value) {
-      FastKronCHECK(igekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+      FastKronCHECK(igemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const int*)x, opx, (const int**)kpMats, opfs, (int*)y,
                       alpha, beta, (const int*)z, (int*)temp1, (int*)temp2));
     } else if (std::is_same<T, double>::value) {
-      FastKronCHECK(dgekmm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+      FastKronCHECK(dgemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const double*)x, opx, (const double**)kpMats, opfs, (double*)y,
                       alpha, beta, (const double*)z, (double*)temp1, (double*)temp2));
     } else {
@@ -380,8 +380,7 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
     }
   } else if (kronmatmulType == FastKronMMType::KMM) {
     if (std::is_same<T, float>::value) {
-      //TODO: Change MKM to KMM
-      FastKronCHECK(sgemkm(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
+      FastKronCHECK(sgekmm(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
                       (const float**)kpMats, opfs, (const float*)x, opx, (float*)y,
                       alpha, beta, (const float*)z, (float*)temp1, (float*)temp2));
     }
