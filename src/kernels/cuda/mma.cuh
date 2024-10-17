@@ -32,7 +32,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
         for (uint p = 0; p < Xr.p(); p++) {
           //TODO: bring shift calculation in Xsh.at
           //TODO: use the actual type not float
-          float temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
+          auto temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
           Xr.set(rm, rk, p, temp);
         // }
     }}}

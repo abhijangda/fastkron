@@ -250,7 +250,7 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
   uint32_t tempCols = 0;
   uint32_t resultCols = 0;
 
-  auto e = executeGeKMM(problem, nullptr, 0,
+  auto e = executeGeMKM(problem, nullptr, 0,
     [](const KMMProblem) {return 1;},
     [&tempCols, &resultCols]
     (const KMMProblem kmm, uint32_t, void*[2], Matrix) {

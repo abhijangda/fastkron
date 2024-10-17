@@ -467,12 +467,12 @@ fastKronError executeGeMKM(const KMMProblemStridedBatched problem, void* temps[2
  *
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
-fastKronError reverseExecuteGeKMM(const KMMProblem problem, void* temps[2],
+fastKronError reverseExecuteGeMKM(const KMMProblem problem, void* temps[2],
                                 typename KMMProblem::Matrix result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
 
-fastKronError reverseExecuteGeKMM(const KMMProblemStridedBatched problem, void* temps[2],
+fastKronError reverseExecuteGeMKM(const KMMProblemStridedBatched problem, void* temps[2],
                                 typename KMMProblemStridedBatched::Matrix result,
                                 std::function<uint (const KMMProblemStridedBatched)> next,
                                 std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);

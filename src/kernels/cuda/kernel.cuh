@@ -142,7 +142,7 @@ __global__ void cudaKernel(KernelParams params,
   const fastKronOp OpF = (kmmType == FastKronMMType::MKM) ? kOpF : swapFastKronOp<kOpF>();
   const fastKronOp OpY = (kmmType == FastKronMMType::MKM) ? fastKronOp_N : fastKronOp_T;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : (//(KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((kmmType == FastKronMMType::KMM and KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
                                                             blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
   const uint tid  = threadIdx.x;
@@ -213,7 +213,7 @@ __global__ void cudaKernel(KernelParams params,
   }}
 
   constexpr uint32_t StLen = storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
-                                              FusedFacs, XAlignment, RegM, RegK>();
+                                            FusedFacs, XAlignment, RegM, RegK>();
   if (OpY == fastKronOp_N) {
     #pragma unroll
     for (uint rm = 0; rm < RegM; rm++) {
@@ -254,6 +254,7 @@ __global__ void cudaKernel(KernelParams params,
       if (DistributeToGPUs) {
         yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
+        cIdx = glM * Y.n() + glK;
         yPtr = Y.data<ElemT>(glM, glK, OpY);
         if (params.kp_idx == FusedFacs - 1) {
           #pragma unroll
@@ -305,12 +306,13 @@ __global__ void cudaKernel(KernelParams params,
       if (DistributeToGPUs) {
         yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
+        cIdx = glM * Y.n() + glK;
         yPtr = Y.data<ElemT>(glM, glK, OpY);
         if (params.kp_idx == FusedFacs - 1) {
           #pragma unroll
           for (int i = 0; i < StLen; i++) {
-            yReg.set(rm, tk+i, tq, 
-                     epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm, tk + i, tq)));
+            yReg.set(rm+i, tk, tq, 
+                     epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm + i, tk, tq)));
           }
         }
       }

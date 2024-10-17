@@ -36,7 +36,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
   //Divide the subproblem into two parts. Go through all first/second part pairs 
   //of the subproblem. Search for tuned kernel of the first part 
   //and recursively compute minimum time for the second part.
-  reverseExecuteGeKMM(subProblem, nullptr, typename KMMProblem::Matrix(), 
+  reverseExecuteGeMKM(subProblem, nullptr, typename KMMProblem::Matrix(), 
                       [](const KMMProblem){return 1;},
     [&](const KMMProblem, int rstart, void*[2], typename KMMProblem::Matrix) {
       const int subn = rstart + 1;
@@ -89,7 +89,7 @@ fastKronError Autotuner::tune(KMMProblemT problem, TunedKernelsMap& tunedKernels
                               KernelDatabase* kernelDb, bool isDistributed,
                               DistributedParams distParams) {
   //Iterate over all subproblems of the base problem
-  auto err = reverseExecuteGeKMM(problem, nullptr, typename KMMProblemT::Matrix(), 
+  auto err = reverseExecuteGeMKM(problem, nullptr, typename KMMProblemT::Matrix(), 
                                  [](const KMMProblemT){return 1;},
     [&](const KMMProblemT, int rstart, void*[2], typename KMMProblemT::Matrix) {
       for (uint32_t endP = rstart; endP < problem.n(); endP++) {
