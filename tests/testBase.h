@@ -304,8 +304,8 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
     colsTillNow *= KP_MAT_K[kp];
 
     #pragma omp parallel for collapse(2)
-    for (uint i = 0; i < M; i++) {
-      for (uint j = 0; j < resultCols; j++) {
+    for (uint j = 0; j < resultCols; j++) {
+      for (uint i = 0; i < M; i++) {
         T r = 0;
 
         for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
