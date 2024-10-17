@@ -161,7 +161,7 @@ class Kernel:
     raise Exception(f"Invalid batch type '{self.kernelBatchType}'")
 
   def constructorArgs(self):
-    return f"(void*){self.hostFuncName()}, {elem_type_to_fastkron_type(self.elemType)}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.kernelBatchTypeStr()}"
+    return f"(void*){self.hostFuncName()}, {elem_type_to_fastkron_type(self.elemType)}, Factor({self.shape.p}, {self.shape.q}), Factor({self.tileP}, {self.tileQ}), Matrix({self.tileM}, {self.shape.k}), {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.mmType()}, {self.kernelBatchTypeStr()}"
 
   def mmType(self):
     if self.kmmtype == "kmm": return "FastKronMMType::KMM"
@@ -433,10 +433,10 @@ def x_mem_vector_len(m, cols, op, elem_type):
   if op == "T":
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return 4 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+    return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def f_mem_vector_len(cols, elem_type):
-  return 4 #max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+  return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
 def simd_lengths(backend: str, arch : str, elem_type: str):
   assert backend == "x86"

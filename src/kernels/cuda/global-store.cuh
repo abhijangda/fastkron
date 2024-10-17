@@ -48,107 +48,129 @@ ElemT epilogue(const EpilogueParams& params, GetBatchedData& batchedData, const 
   return params.template getAlpha<ElemT>() * yVal + d;
 }
 
+template<fastKronOp OpY, uint32_t StLen, typename T, typename YReg>
+CUDA_DEVICE
+void getYVector(T* yreg, YReg& Yr, int row, int i, int j) {
+  for (int e = 0; e < StLen; e++) {
+    if (OpY == fastKronOp_N) {
+      yreg[e] = Yr.at(row, i+e, j);
+    } else if (OpY == fastKronOp_T) {
+      yreg[e] = Yr.at(row+e, i, j);
+    }
+  }
+}
 
 //Store PTX instructions for each vector type
-template<typename YReg>
+template<fastKronOp OpY, uint32_t StLen, typename YReg>
 CUDA_DEVICE
-void stVecYReg(float* addr, YReg& Yr, int numValues, int row, int i, int j) {
-  switch (numValues) {
+void stVecYReg(float* addr, YReg& Yr, int row, int i, int j) {
+  float yreg[StLen];
+  getYVector<OpY, StLen, float>(yreg, Yr, row, i, j);
+
+  switch (StLen) {
     case 1:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.f32 [%0], {%1};" ::
                     "l"(addr), 
-                    "f"(Yr.at(row, i, j)));
+                    "f"(yreg[0]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i, j);
+      *addr = yreg[0];
     #endif
       break;
     case 2:
+    {
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v2.f32 [%0], {%1, %2};" ::
                     "l"(addr),
-                    "f"(Yr.at(row, i+0, j)), "f"(Yr.at(row, i+1, j)));
+                    "f"(yreg[0]), "f"(yreg[1]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i+0, j);
-      *(addr + 1) = Yr.at(row, i+1, j);
+      *addr = yreg[0];
+      *(addr + 1) = yreg[1];
     #endif
       break;
+    }
     case 4:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v4.f32 [%0], {%1, %2, %3, %4};" ::
                     "l"(addr), 
-                    "f"(Yr.at(row, i  , j)), "f"(Yr.at(row+1, i, j)), 
-                    "f"(Yr.at(row+2, i, j)), "f"(Yr.at(row+3, i, j)));
+                    "f"(yreg[0]), "f"(yreg[1]), 
+                    "f"(yreg[2]), "f"(yreg[3]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i+0, j);
-      *(addr + 1) = Yr.at(row, i+1, j);
-      *(addr + 2) = Yr.at(row, i+2, j);
-      *(addr + 3) = Yr.at(row, i+3, j);
+      *addr = yreg[0];
+      *(addr + 1) = yreg[1];
+      *(addr + 2) = yreg[2];
+      *(addr + 3) = yreg[3];
     #endif
       break;
   }
 }
 
-template<typename YReg>
+template<fastKronOp OpY, uint32_t StLen, typename YReg>
 CUDA_DEVICE
-void stVecYReg(int* addr, YReg& Yr, int numValues, int row, int i, int j) {
-  switch (numValues) {
+void stVecYReg(int* addr, YReg& Yr, int row, int i, int j) {
+  int yreg[StLen];
+  getYVector<OpY, StLen, int>(yreg, Yr, row, i, j);
+
+  switch (StLen) {
     case 1:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.s32 [%0], {%1};" ::
                     "l"(addr), 
-                    "r"(Yr.at(row, i, j)));
+                    "r"(yreg[0]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i, j);
+      *addr = yreg[0];
     #endif
       break;
     case 2:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v2.s32 [%0], {%1, %2};" ::
                     "l"(addr),
-                    "r"(Yr.at(row, i+0, j)), "r"(Yr.at(row, i+1, j)));
+                    "r"(yreg[0]), "r"(yreg[1]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i+0, j);
-      *(addr + 1) = Yr.at(row, i+1, j);
+      *addr = yreg[0];
+      *(addr + 1) = yreg[1];
     #endif
       break;
     case 4:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v4.s32 [%0], {%1, %2, %3, %4};" ::
                     "l"(addr), 
-                    "r"(Yr.at(row, i  , j)), "r"(Yr.at(row, i+1, j)), 
-                    "r"(Yr.at(row, i+2, j)), "r"(Yr.at(row, i+3, j)));
+                    "r"(yreg[0]), "r"(yreg[1]), 
+                    "r"(yreg[2]), "r"(yreg[3]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i+0, j);
-      *(addr + 1) = Yr.at(row, i+1, j);
-      *(addr + 2) = Yr.at(row, i+2, j);
-      *(addr + 3) = Yr.at(row, i+3, j);
+      *addr = yreg[0];
+      *(addr + 1) = yreg[1];
+      *(addr + 2) = yreg[2];
+      *(addr + 3) = yreg[3];
     #endif
       break;
   }
 }
 
-template<typename YReg>
+template<fastKronOp OpY, uint32_t StLen, typename YReg>
 CUDA_DEVICE
 void stVecYReg(double* addr, YReg& Yr, int numValues, int row, int i, int j) {
+  double yreg[StLen];
+  getYVector<OpY, StLen, double>(yreg, Yr, row, i, j);
+
   switch (numValues) {
     case 1:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.f64 [%0], {%1};" ::
                     "l"(addr), 
-                    "d"(Yr.at(row, i, j)));
+                    "d"(yreg[0]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i, j);
+      *addr = yreg[0];
     #endif
       break;
     case 2:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v2.f64 [%0], {%1, %2};" ::
                     "l"(addr),
-                    "d"(Yr.at(row, i+0, j)), "d"(Yr.at(row, i+1, j)));
+                    "d"(yreg[0]), "d"(yreg[1]));
     #elif defined(__HIPCC__)
-      *addr = Yr.at(row, i+0, j);
-      *(addr + 1) = Yr.at(row, i+1, j);
+      *addr = yreg[0];
+      *(addr + 1) = yreg[1];
     #endif
       break;
     case 4:
@@ -167,12 +189,22 @@ void stVecYReg(double* addr, YReg& Yr, int numValues, int row, int i, int j) {
   }
 }
 
-template<uint32_t kKMultipleOfTileK, uint32_t FusedMuls, uint32_t XAlign, uint32_t RegK>
+template<fastKronOp OpY, uint32_t kMMultipleOfTileM, uint32_t kKMultipleOfTileK, 
+         uint32_t FusedMuls, uint32_t XAlign, uint32_t RegM, uint32_t RegK>
 CUDA_DEVICE
 constexpr uint32_t storeVectorLen() {
-  constexpr uint len = (kKMultipleOfTileK and FusedMuls == 1) ? 
-                      MIN(XAlign, MIN(RegK, 4) & (8 - 1)) :
-                      1;
-  static_assert (len == 4 || len == 2 || len == 1);
-  return len;
+  if (OpY == fastKronOp_N) {
+    constexpr uint len = (kKMultipleOfTileK and FusedMuls == 1) ? 
+                        MIN(XAlign, MIN(RegK, 4) & (8 - 1)) :
+                        1;
+    static_assert (len == 4 || len == 2 || len == 1);
+    return len;
+  } else if (OpY == fastKronOp_T) {
+    constexpr uint len = (kMMultipleOfTileM and FusedMuls == 1) ?
+                         MIN(XAlign, MIN(RegM, 4) & (8 - 1)) : 1;
+    static_assert (len == 4 || len == 2 || len == 1);
+    return len;
+  }
+
+  return 1;
 }

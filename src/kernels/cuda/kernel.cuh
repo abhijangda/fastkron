@@ -100,6 +100,7 @@ __global__ void cudaKernel(KernelParams params,
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+  constexpr bool kMMultipleOfTileM = kmmType == FastKronMMType::KMM;
   constexpr bool kQLeTileQ         = KernelOptimizations::IsQLeTileQ        (OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
@@ -158,7 +159,7 @@ __global__ void cudaKernel(KernelParams params,
   // if (tileM >= X.m() || tileK * TileK >= X.n()) return;
   
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
-                          TileM, //TODO: (TileM == 1) ? 1 : MIN(TileM, X.m() - tileM), 
+                          (kMMultipleOfTileM || TileM == 1) ? TileM : MIN(TileM, X.m() - tileM), 
                           (kKMultipleOfTileK)? TileK : MIN(X.n()-tileK * TileK, TileK),
                           P, TileP,
                           X);
@@ -211,14 +212,17 @@ __global__ void cudaKernel(KernelParams params,
       __syncthreads();
   }}
 
-    constexpr uint32_t StLen = 4;//storeVectorLen<kKMultipleOfTileK, FusedFacs, XAlignment, RegK>();
+  constexpr uint32_t StLen = storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
+                                              FusedFacs, XAlignment, RegM, RegK>();
+  if (OpY == fastKronOp_N) {
+    #pragma unroll
+    for (uint rm = 0; rm < RegM; rm++) {
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
-    for (uint tk = 0; tk < RegK; tk++) {
-      #pragma unroll
-  
-
+    for (uint tk = 0; tk < RegK; tk += StLen) {
+      const uint glM = rm + yElem.m() + tileM;
+      if (kMMultipleOfTileM || (rm + yElem.m() < XTile.m())) {
       if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
           (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
 
@@ -246,9 +250,7 @@ __global__ void cudaKernel(KernelParams params,
           glK += tileQ * XSlices * TileQ;
       }}
 
-    for (uint rm = 0; rm < RegM; rm += StLen) {
-      const uint glM = rm + yElem.m() + tileM;
-  if (true || (rm + yElem.m() < XTile.m())) {
+    
       if (DistributeToGPUs) {
         yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
@@ -261,6 +263,58 @@ __global__ void cudaKernel(KernelParams params,
           }
         }
       }
-      stVecYReg(yPtr, yReg, StLen, rm, tk, tq);
-  }}}}
+      stVecYReg<OpY, StLen>(yPtr, yReg, rm, tk, tq);
+    }}}}
+  } else if (OpY == fastKronOp_T) {
+    #pragma unroll
+    for (uint tq = 0; tq < RegQ; tq++) {
+    #pragma unroll
+    for (uint tk = 0; tk < RegK; tk++) {
+    #pragma unroll
+    for (uint rm = 0; rm < RegM; rm+=StLen) {
+      const uint glM = rm + yElem.m() + tileM;
+      if (kMMultipleOfTileM || (rm + yElem.m() < XTile.m())) {
+      if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
+          (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
+
+      uint glK;
+      ElemT* yPtr;
+      uint32_t cIdx;
+
+      //Total elements produced from TileK are (TileK/P) * Q
+      //No. of elems produced by slice-multiply of TileK with
+      //the same col of F are: TileK/P, i.e, XshSlices.
+      //These elems are stored consecutively.
+      if (FusedFacs > 1) {
+        //Compute element location inside the tile
+        const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
+                              XshSlices +       // Index of first element produced by this F's col
+                              yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
+        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
+      } else {
+        //Scale element location from within tile to global
+        glK = (yElem.q()   + tq)  * //The index of elems by one column in TileK
+               XSlices            + //Scale the index to global column
+               tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
+               yElem.k()    + tk;   //The element index within consecutive elems
+        if (TileQ < Q) {
+          glK += tileQ * XSlices * TileQ;
+      }}
+
+    
+      if (DistributeToGPUs) {
+        yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
+      } else {
+        yPtr = Y.data<ElemT>(glM, glK, OpY);
+        if (params.kp_idx == FusedFacs - 1) {
+          #pragma unroll
+          for (int i = 0; i < StLen; i++) {
+            yReg.set(rm, tk+i, tq, 
+                     epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm, tk + i, tq)));
+          }
+        }
+      }
+      stVecYReg<OpY, StLen>(yPtr, yReg, rm, tk, tq);
+    }}}}
+  }
 }

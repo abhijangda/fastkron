@@ -78,6 +78,7 @@ protected:
   fastKronOp opF;
 
   KernelBatchType::Ty kernelBatchType;
+  FastKronMMType mmType;
 
 public:
   KMMKernel() {}
@@ -85,11 +86,11 @@ public:
   KMMKernel(void* kernelInvoker, FastKronType elemType,
             Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
             uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF, KernelBatchType::Ty kernelBatchType) :
+            fastKronOp opX, fastKronOp opF, FastKronMMType mmType, KernelBatchType::Ty kernelBatchType) :
             kernelInvoker(kernelInvoker), elemType(elemType),
             f(f), tileF(tileF), tileX(tileX), fusedFacs(fusedFacs),
             P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ),
-            optLevel(optLevel), opX(opX), opF(opF),
+            optLevel(optLevel), opX(opX), opF(opF), mmType(mmType),
             kernelBatchType(kernelBatchType) {}
 
   /**

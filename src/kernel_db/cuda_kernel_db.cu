@@ -264,8 +264,6 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
   typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
                                      DistributedParams&, EpilogueParams&, 
                                      dim3, dim3, uint32_t, cudaStream_t);
-  dim3 g = kernelInfo.grid(problem);
-  printf("267 %d %d %d\n", g.x, g.y, g.z);
   KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, 
                                                epilogueParams, 
                                                kernelInfo.grid(problem),
