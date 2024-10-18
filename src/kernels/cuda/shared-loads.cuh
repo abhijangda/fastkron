@@ -114,9 +114,9 @@ void directFgToFsh(const uint NumThreads, const uint tid,
         if (Vecs == NumThreads/ThGroups) break;
       }
     }
-  } else if (Fsh.layout() == fastKronOp_T && !loadFullFactor) {
+  } else if (Fsh.layout() == fastKronOp_T) {
     const uint Vecs = Fsh.p()/VecTLen;
-    const uint ThGroups = MAX(1, NumThreads/Vecs); //128/8 = 16
+    const uint ThGroups = MAX(1, NumThreads/Vecs);
 
     for (uint swid = tid/Vecs; swid < Fsh.q(); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
@@ -156,14 +156,27 @@ void directFgToFsh(const uint NumThreads, const uint tid,
 template<typename FShared, typename XShared, typename YReg>
 CUDA_DEVICE
 void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr, const YElem& yElem) {
-  for (int tm = 0; tm < Yr.m(); tm++) {
-    if (tm < m) {
+  if (Xsh.layout() == fastKronOp_N) {
+    for (int tm = 0; tm < Yr.m(); tm++) {
+      if (tm < m) {
+        #pragma unroll
+        for (uint tk = 0; tk < Yr.k(); tk++) {
+        for (uint tq = 0; tq < Yr.q(); tq++) {
+          const uint32_t MaxXSlices = Xsh.n()/F.p();
+          uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
+          
+          Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
+    }}}}
+  } else if (Xsh.layout() == fastKronOp_T) {
       #pragma unroll
       for (uint tk = 0; tk < Yr.k(); tk++) {
       for (uint tq = 0; tq < Yr.q(); tq++) {
+      #pragma unroll
+      for (int tm = 0; tm < Yr.m(); tm++) {
         const uint32_t MaxXSlices = Xsh.n()/F.p();
         uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
         
-        Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
-  }}}}
+        Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
+    }}}
+  }
 }

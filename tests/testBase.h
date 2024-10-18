@@ -588,7 +588,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   if (verbose) printf("setting values on host\n");
   if (checkResults)
     setValues(NUM_KP_MATS, hKpMats, hX, hY, M, N, K, KP_MAT_N, KP_MAT_K, 
-              batchCountX, batchCountF, batchCountY, randMod, randMod);
+              batchCountX, batchCountF, batchCountY, one, one);
   if (verbose) printf("values set\n");
   printf("Supported backends %d\n", fastKronGetBackends());
   printf("FastKron %s\n", fastKronVersion());

@@ -106,11 +106,11 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   void* temps[2] = {temp1, temp2};
   auto kernelDb = getKernelDb(backend);
   auto kk = *kernelDb->compiledKernels.begin();
-  std::cout << "109 " << kk.second[0]->str() << std::endl;
+  std::cout << "109 " << kk.second[0]->str() << "  " << kk.second[0]->getFusedFacs() << std::endl;
 
   err = executeGeKMM(problem, temps, problem.n(),
-    [](const KMMProblem) 
-      {return 1;},
+    [kk](const KMMProblem) 
+      {return kk.second[0]->getFusedFacs();},
     [kk, epilogueParams, kernelDb, this]
       (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
         fastKronError err;
@@ -118,7 +118,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
 
         // KMMKernel* selectedKernel = kernel.;
         // assert(rstart == kernel.end);
-        err = kernelDb->invokeKernel(kk.second[0], subProblem, 0, epilogueParams, KernelModeNormal);
+        err = kernelDb->invokeKernel(kk.second[0], subProblem, rstart, epilogueParams, KernelModeNormal);
         // kernelSeriesIter++;
         return err;
     });

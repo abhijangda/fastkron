@@ -52,7 +52,7 @@ bool checkDistributedKronSizes(const KMMProblem problem,
   
   bool correct = true;
 
-  executeGeKMM(problem, nullptr, 0,
+  executeGeMKM(problem, nullptr, 0,
     [](const KMMProblem /*kmm*/) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, int /*rstart*/, void* /*t1*/, Matrix /*result*/) {
       correct = correct && (kmm.l() % gpusInK == 0);
@@ -93,15 +93,15 @@ fastKronError executeGeKMM(KMMProblemType problem, void* tmps[2], uint32_t swaps
   fastKronError err;
   for (int i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
-    nextF = std::min(nextF, problem.n() - 1);
     fastKronOp opX = problem.opX();
     //First iteration write output with op N
     if ((uint32_t)i > 0) {
       opX = fastKronOp_N;
     }
+    std::cout << "102 " << i << " " << nextF << std::endl;
     if (i + nextF > (problem.n() - 1))
       problem = problem.updateY(result);
-    auto subProblem = problem.rsub(i, nextF);
+    auto subProblem = problem.sub(i, nextF);
     subProblem.setOpX(opX);
     err = func(subProblem, i, tmps, result);
     if (err != fastKronSuccess) break;

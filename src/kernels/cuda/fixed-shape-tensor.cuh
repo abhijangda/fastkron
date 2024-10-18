@@ -296,6 +296,7 @@ public:
         uint32_t elem  = shCol%p();
         uint32_t slice = shCol/p();
         uint32_t shift = slice/RegK;
+        //TODO: Do we need shift when TileK/RegK < 32? I do not think
         col = slice*p() + (shift + elem)%p();
         // CUDA_DEVICE_ASSERT(row * n() + col < numel());
         row = startRow;

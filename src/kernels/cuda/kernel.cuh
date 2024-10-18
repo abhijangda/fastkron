@@ -200,7 +200,7 @@ __global__ void cudaKernel(KernelParams params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(params.kp_idx, XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -308,13 +308,13 @@ __global__ void cudaKernel(KernelParams params,
       } else {
         cIdx = glM * Y.n() + glK;
         yPtr = Y.data<ElemT>(glM, glK, OpY);
-        if (params.kp_idx == FusedFacs - 1) {
-          #pragma unroll
-          for (int i = 0; i < StLen; i++) {
-            yReg.set(rm+i, tk, tq, 
-                     epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm + i, tk, tq)));
-          }
-        }
+        // if (params.kp_idx == FusedFacs - 1) {
+        //   #pragma unroll
+        //   for (int i = 0; i < StLen; i++) {
+        //     yReg.set(rm+i, tk, tq, 
+        //              epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm + i, tk, tq)));
+        //   }
+        // }
       }
       stVecYReg<OpY, StLen>(yPtr, yReg, rm, tk, tq);
     }}}}
