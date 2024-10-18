@@ -298,7 +298,7 @@ public:
         uint32_t shift = slice/RegK;
         col = slice*p() + (shift + elem)%p();
         // CUDA_DEVICE_ASSERT(row * n() + col < numel());
-        
+        row = startRow;
       } else {
         uint32_t shCol = startCol;
         uint32_t elem  = shCol%p();
