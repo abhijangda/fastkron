@@ -259,8 +259,8 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
                                   fidx, execMode);
 
   FusedParams<KMMProblemT> fusedParams (problem, kernelInfo.getMaxTileX().n());
-  dim3 g = kernelInfo.grid(problem);
-  std::cout <<fidx << "  " << g.x << " " << g.y << " " << g.z << std::endl;
+  // dim3 g = kernelInfo.grid(problem);
+  // std::cout <<fidx << "  " << g.x << " " << g.y << " " << g.z << std::endl;
   //TODO: Change this to kernelInfo.invoke
   typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
                                      DistributedParams&, EpilogueParams&, 

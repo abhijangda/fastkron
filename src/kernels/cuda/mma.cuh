@@ -72,7 +72,6 @@ void mainMMA(uint32_t kp_idx, uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, 
         if (false) //Shift
           Fr.set(p, rq, (&Fsh.at(0,0))[(shift+shFcol)%Fsh.q() + p*Fsh.q()]);
         if (true) {//Padding
-          auto fv = (&Fsh.at(0,0))[shFcol + p*(Fsh.q() + 1)];
           Fr.set(p, rq, (&Fsh.at(0,0))[shFcol + p*(Fsh.q() + 1)]);
         }
     }}

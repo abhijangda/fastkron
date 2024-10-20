@@ -109,7 +109,7 @@ fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBac
   std::cout << "109 " << kk.second[0]->str() << "  " << kk.second[0]->getFusedFacs() << std::endl;
 
   err = executeGeKMM(problem, temps, problem.n(),
-    [kk](const KMMProblem) 
+    [kk](const KMMProblem)
       {return kk.second[0]->getFusedFacs();},
     [kk, epilogueParams, kernelDb, this]
       (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
@@ -163,7 +163,7 @@ fastKronError FastKronHandle::xgemkm(const KMMProblem problem,
   auto kernelSeriesIter = kernelSeries.begin();
 
   //Execute GeKMM algorithm using above kernels
-  err = executeGeMKM(problem, temps, kernelSeries.size(),
+  err = executeGeMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) 
       {return kernelSeriesIter->kernel->getFusedFacs();},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
@@ -215,7 +215,7 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
   auto kernelSeriesIter = kernelSeries.begin();
 
   // //Execute GeKMM algorithm using above kernels
-  err = executeGeMKM(problem, temps, kernelSeries.size(),
+  err = executeGeMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblemStridedBatched) 
       {return kernelSeriesIter->kernel->getFusedFacs();},
     [&kernelSeriesIter, epilogueParams, kernelDb, this]
@@ -250,7 +250,7 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
   uint32_t tempCols = 0;
   uint32_t resultCols = 0;
 
-  auto e = executeGeMKM(problem, nullptr, 0,
+  auto e = executeGeMM(problem, nullptr, 0,
     [](const KMMProblem) {return 1;},
     [&tempCols, &resultCols]
     (const KMMProblem kmm, uint32_t, void*[2], Matrix) {

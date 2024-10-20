@@ -31,19 +31,26 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
   TunedKernelFromStart minPrologueKernel;
 
   //Obtain the subproblem starting at startF
-  auto subProblem = problem.sub(startF, problem.n() - startF);
+  auto subProblem = (problem.mmtype() == FastKronMMType::MKM) ? 
+                      problem.sub(startF, problem.n() - startF) :
+                      problem.rsub(startF, problem.n() - (problem.n() - 1 - startF));
 
   //Divide the subproblem into two parts. Go through all first/second part pairs 
   //of the subproblem. Search for tuned kernel of the first part 
   //and recursively compute minimum time for the second part.
-  reverseExecuteGeMKM(subProblem, nullptr, typename KMMProblem::Matrix(), 
+  reverseExecuteGeMM(subProblem, nullptr, typename KMMProblem::Matrix(), 
                       [](const KMMProblem){return 1;},
     [&](const KMMProblem, int rstart, void*[2], typename KMMProblem::Matrix) {
-      const int subn = rstart + 1;
-      auto firstPart = problem.sub(startF, subn);
+      const int subn = (problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
+                       subProblem.n() - rstart;
+
+      auto firstPart = (problem.mmtype() == FastKronMMType::MKM) ?
+                        problem.sub(startF, subn) :
+                        problem.rsub(startF, subn);
       if (problem.opX() == fastKronOp_T && startF + subn == problem.n()) {
         //If opX is T and the firstPart has reached end of the problem
         //then consider only TT or TN kernels
+        if (problem.mmtype() == FastKronMMType::KMM) abort();
         firstPart.setOpX(fastKronOp_T);
       } else {
         firstPart.setOpX(fastKronOp_N);
@@ -55,14 +62,16 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
         //the second part.
         TunedKernelsSeries epilogueKernels;
         float kernelTime = tunedKernelsMap.getKernelTime(firstPart, isP2P);
-        float epilogueTime = minExecTimeOfSeries(problem, startF + rstart + 1,
+        float epilogueTime = minExecTimeOfSeries(problem, 
+                                                 ((problem.mmtype() == FastKronMMType::MKM) ? 
+                                                 startF + subn : startF - subn),
                                                  isDistributed,
                                                  epilogueKernels, tunedKernelsMap);
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
           minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(firstPart, isP2P),
-                                                   startF, startF + rstart,
+                                                   startF, ((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1),
                                                    firstPart.k(), kernelTime);
         }
       }
@@ -89,7 +98,7 @@ fastKronError Autotuner::tune(KMMProblemT problem, TunedKernelsMap& tunedKernels
                               KernelDatabase* kernelDb, bool isDistributed,
                               DistributedParams distParams) {
   //Iterate over all subproblems of the base problem
-  auto err = reverseExecuteGeMKM(problem, nullptr, typename KMMProblemT::Matrix(), 
+  auto err = reverseExecuteGeMM(problem, nullptr, typename KMMProblemT::Matrix(), 
                                  [](const KMMProblemT){return 1;},
     [&](const KMMProblemT, int rstart, void*[2], typename KMMProblemT::Matrix) {
       for (uint32_t endP = rstart; endP < problem.n(); endP++) {
@@ -178,11 +187,11 @@ fastKronError Autotuner::tune(KMMProblem problem,
     Matrix x(problem.x().m(), problem.x().n(), temp1[0].data());
     Matrix y(problem.y().m(), problem.y().n(), temp2[0].data());
 
-    KMMProblem tmpProblem(FastKronMMType::MKM, problem.type(), x, problem.opX(), 
+    KMMProblem tmpProblem(problem.mmtype(), problem.type(), x, problem.opX(), 
                           problem.n(), &Fs[0][0], problem.opFs(), y);
     tune(tmpProblem, tunedKernelsMap, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
-    minTime = minExecTimeOfSeries(problem, 0, false, retKernelSeries, tunedKernelsMap);
+    minTime = minExecTimeOfSeries(problem, (problem.mmtype() == FastKronMMType::MKM) ? 0 : problem.n() - 1, false, retKernelSeries, tunedKernelsMap);
   } else {
 #if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
     //Tuning for Multi GPU

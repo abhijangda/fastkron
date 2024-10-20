@@ -147,7 +147,7 @@ template<> inline bool eqVal(double x, double y) {
 
 template<typename T>
 static inline bool check(T* ref, T* computed, uint batchCount, uint M, uint N) {
-  for (int b = 0; b < batchCount; b++) {
+  for (uint b = 0; b < batchCount; b++) {
     for (uint i = 0; i < M; i++) {
       for (uint j = 0; j < N; j++) {
         if (!eqVal(ref[b * M*N+i*N + j], computed[b*M*N + i* N + j])) {

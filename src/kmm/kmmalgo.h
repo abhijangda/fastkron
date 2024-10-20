@@ -186,13 +186,24 @@ public:
     assert (rstart >= (subn - 1));
 
     uint32_t subk = x().n(), subl = y().n();
-    if (rstart >= subn) {
-      for (uint32_t i = 0; i <= rstart - subn; i++) {
+    if (mmtype() == FastKronMMType::MKM) {
+      if (rstart >= subn) {
+        for (uint32_t i = 0; i <= rstart - subn; i++) {
+          subl = (subl/factors[i].q())*factors[i].p();
+        }
+      }
+      for (uint32_t i = n() - 1; i > rstart; i--) {
+        subk = (subk/factors[i].p())*factors[i].q();
+      }
+    } else {
+      if (rstart >= subn) {
+        for (uint32_t i = 0; i <= rstart - subn; i++) {
+          subk = (subk/factors[i].p())*factors[i].q();
+        }
+      }
+      for (uint32_t i = n() - 1; i > rstart; i--) {
         subl = (subl/factors[i].q())*factors[i].p();
       }
-    }
-    for (uint32_t i = n() - 1; i > rstart; i--) {
-      subk = (subk/factors[i].p())*factors[i].q();
     }
 
     
@@ -215,11 +226,20 @@ public:
     assert(subn <= n());
     assert(start + (subn - 1) <= n());
     
-    for (uint32_t i = 0; i < start; i++) {
-      subl = (subl/factors[i].q())*factors[i].p();
-    }
-    for (uint32_t i = n() - 1; i >= start + subn; i--) {
-      subk = (subk/factors[i].p())*factors[i].q();
+    if (mmtype() == FastKronMMType::MKM) {
+      for (uint32_t i = 0; i < start; i++) {
+        subl = (subl/factors[i].q())*factors[i].p();
+      }
+      for (uint32_t i = n() - 1; i >= start + subn; i--) {
+        subk = (subk/factors[i].p())*factors[i].q();
+      }
+    } else if (mmtype() == FastKronMMType::KMM) {
+      for (uint32_t i = n() - 1; i >= start + subn; i--) {
+        subl = (subl/factors[i].q())*factors[i].p();
+      }
+      for (uint32_t i = 0; i < start; i++) {
+        subk = (subk/factors[i].p())*factors[i].q();
+      }
     }
 
     return KMMProblemBase(mmtype(), type(), x().sameRows(subk), opX(),
@@ -271,15 +291,27 @@ public:
   }
 
   friend std::ostream& operator<<(std::ostream &out, const KMMProblemBase &problem) {
-    out << problem.x().m() << "x" << problem.k() << "*(";
-    if (problem.sameFactorShapes()) 
-      out << problem.factors[0] << "^" << problem.n();
-    else
-      for (uint32_t i = 0; i < problem.n(); i++) {
-        out << problem.factors[i];
-        if (i < problem.n() - 1) out << "(x)";
-      }
-    out << ")";
+    if (problem.mmtype() == FastKronMMType::MKM) {
+      out << problem.x().m() << "x" << problem.k() << "*(";
+      if (problem.sameFactorShapes()) 
+        out << problem.factors[0] << "^" << problem.n();
+      else
+        for (uint32_t i = 0; i < problem.n(); i++) {
+          out << problem.factors[i];
+          if (i < problem.n() - 1) out << "(x)";
+        }
+      out << ")";
+    } else if (problem.mmtype() == FastKronMMType::KMM) {
+      out << "(";
+      if (problem.sameFactorShapes()) 
+        out << problem.factors[0] << "^" << problem.n();
+      else
+        for (uint32_t i = 0; i < problem.n(); i++) {
+          out << problem.factors[i];
+          if (i < problem.n() - 1) out << "(x)";
+        }
+      out << ")*" << problem.k() << "x" << problem.x().m();
+    } 
     out << "_" << problem.opX() << problem.opFs() << "_" << strOfFastKronType(problem.type());
     return out;
   }
@@ -446,12 +478,12 @@ fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
 //                            std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
 
 //TODO:
-fastKronError executeGeMKM(const KMMProblem problem, void* temps[2],
+fastKronError executeGeMM(const KMMProblem problem, void* temps[2],
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
                            std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
 
-fastKronError executeGeMKM(const KMMProblemStridedBatched problem, void* temps[2],
+fastKronError executeGeMM(const KMMProblemStridedBatched problem, void* temps[2],
                            uint32_t swaps,
                            std::function<uint (const KMMProblemStridedBatched)> next,
                            std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
@@ -467,12 +499,12 @@ fastKronError executeGeMKM(const KMMProblemStridedBatched problem, void* temps[2
  *
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
-fastKronError reverseExecuteGeMKM(const KMMProblem problem, void* temps[2],
+fastKronError reverseExecuteGeMM(const KMMProblem problem, void* temps[2],
                                 typename KMMProblem::Matrix result,
                                 std::function<uint (const KMMProblem)> next,
                                 std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
 
-fastKronError reverseExecuteGeMKM(const KMMProblemStridedBatched problem, void* temps[2],
+fastKronError reverseExecuteGeMM(const KMMProblemStridedBatched problem, void* temps[2],
                                 typename KMMProblemStridedBatched::Matrix result,
                                 std::function<uint (const KMMProblemStridedBatched)> next,
                                 std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);

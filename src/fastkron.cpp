@@ -173,7 +173,7 @@ fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend,
                      Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
                      KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
                      Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
-  return ((FastKronHandle*)handle)->xgekmm(problem, backend, (void*)temp1, (void*)temp2, 
+  return ((FastKronHandle*)handle)->xgemkm(problem, backend, (void*)temp1, (void*)temp2, 
                                            EpilogueParams::create<float>(alpha, beta, Z));
 }
 
