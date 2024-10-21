@@ -140,8 +140,23 @@ void directFgToFsh(const uint NumThreads, const uint tid,
               (&Fsh.at(0,0))[(col+ii)*(Fsh.q()+1) + swid] = regs[ii];
             }
           }
-          if (Vecs == NumThreads/ThGroups) break;
+        } else if (opF == fastKronOp_N) {
+          const uint col = tileQ*Fsh.q() + elem*VecTLen;
+          const uint row = swid;
+
+          if ((kQMultipleOfTileQ || col < F.q()) &&
+              (kPMultipleOfTileP || tileP + row < F.p()))
+            ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
+          
+          if (true) {//Padding
+            #pragma unroll
+            for (int ii = 0; ii < VecTLen; ii++) {
+              (&Fsh.at(0,0))[(row)*(Fsh.q()+1) + elem*VecTLen+ii] = regs[ii];
+            }
+          }
         }
+
+        if (Vecs == NumThreads/ThGroups) break;
       }
     }
   } else {

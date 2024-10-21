@@ -313,7 +313,7 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
 
           T v2 = 0;
           if (opfs == fastKronOp_T) {
-            v2 = kpMats[kp][b*strideF[kp] + slice*kpSecondN + kp_k];
+            v2 = kpMats[kp][b*strideF[kp] + slice + kp_k*kpSecondN];
           } else {
             v2 = kpMats[kp][b*strideF[kp] + kp_k + slice*kpSecondK];
           }
