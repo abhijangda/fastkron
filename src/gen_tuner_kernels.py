@@ -429,14 +429,17 @@ class KernelTemplate:
       return False
     return True
 
-def x_mem_vector_len(m, cols, op, elem_type):
-  if op == "T":
+def x_mem_vector_len(m, cols, op, mmtype, elem_type):
+  if (op == "T" and mmtype == "mkm") or (op == "T" and mmtype == "kmm"):
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
     return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
 
-def f_mem_vector_len(cols, elem_type):
-  return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+def f_mem_vector_len(rows, cols, op, mmtype, elem_type):
+  if (mmtype == "mkm" and op == "N") or (mmtype == "kmm" and op == "T"):
+    return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+  elif (mmtype == "kmm" and op == "N") or (mmtype == "mkm" and op == "T"):
+    return max([a for a in memory_vector_lengths(elem_type) if rows % a == 0])
 
 def simd_lengths(backend: str, arch : str, elem_type: str):
   assert backend == "x86"
@@ -505,7 +508,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if kmmtype == 'mkm':
                     TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                   elif kmmtype == "kmm":
-                    TileMs = [32,64,128] #[4,8,16,32,64, 128]
+                    TileMs = [4,32,64] if opx == "N" else [1,2] #[4,8,16,32,64, 128]
 
                   for tM in TileMs:
                     for tQ in TileQs:
@@ -529,8 +532,8 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                   __configs = []
                                   for opt_level in (range(0, 4) if opt_levels == None or opt_levels == [] else opt_levels):
                                     if backend in ['cuda', 'hip']:
-                                      aalign = x_mem_vector_len(tM, tK, opx, elem_type)
-                                      kronalign = f_mem_vector_len(tQ, elem_type)
+                                      aalign = x_mem_vector_len(tM, tK, opx, kmmtype, elem_type)
+                                      kronalign = f_mem_vector_len(tP, tQ, opF, kmmtype, elem_type)
                                       if opt_level <= 1 or aalign == 1:
                                         new_aalign = aalign
                                       elif opt_level == 2:
@@ -544,8 +547,6 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                                               p, q, tQ, tP, tM, regM, regRows, regCols,
                                                               numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
                                                               opx, opF, batch_type)
-                                        if config.isInteresting():
-                                          print(544, config)
                                         if config.isValid():
                                           __configs += [config]
                                     elif backend == 'x86':

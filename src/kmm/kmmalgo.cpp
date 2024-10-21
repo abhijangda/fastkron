@@ -175,7 +175,6 @@ fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
       if ((uint32_t)i > 0) {
         opX = fastKronOp_N;
       }
-      std::cout << "178 " << i << " " << nextF << std::endl;
       if (i + nextF > (problem.n() - 1))
         problem = problem.updateY(result);
       auto subProblem = problem.sub(i, nextF);

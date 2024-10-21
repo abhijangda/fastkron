@@ -312,16 +312,16 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
           uint slice = (j / secFacRowMulSize) % kpSecondN;
 
           T v2 = 0;
-          if (opfs == fastKronOp_T) { printf("321 todo\n"); abort();
-            // v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + slice*KP_MAT_K[NUM_KP_MATS - 1 - kp] + kp_k];
+          if (opfs == fastKronOp_T) {
+            v2 = kpMats[kp][b*strideF[kp] + slice*kpSecondN + kp_k];
           } else {
             v2 = kpMats[kp][b*strideF[kp] + kp_k + slice*kpSecondK];
           }
 
           T v1;
           uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
-          if (opx == fastKronOp_T && kp == 0) {printf("321 todo\n"); abort();
-            v1 = prevKPMatmul[b * stridePrevKPMatmul + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M + i];}
+          if (opx == fastKronOp_T && kp == 0)
+            v1 = prevKPMatmul[b * stridePrevKPMatmul + i* prevKPMatmulCols + ((j*kpSecondK)%prevKPMatmulCols + kp_k)];
           else
             v1 = prevKPMatmul[b * stridePrevKPMatmul + i + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M];
           r += v1 * v2;
@@ -588,7 +588,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   if (verbose) printf("setting values on host\n");
   if (checkResults)
     setValues(NUM_KP_MATS, hKpMats, hX, hY, M, N, K, KP_MAT_N, KP_MAT_K, 
-              batchCountX, batchCountF, batchCountY, one, one);
+              batchCountX, batchCountF, batchCountY, randMod, randMod);
   if (verbose) printf("values set\n");
   printf("Supported backends %d\n", fastKronGetBackends());
   printf("FastKron %s\n", fastKronVersion());

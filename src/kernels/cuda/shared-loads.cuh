@@ -117,7 +117,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
   } else if (Fsh.layout() == fastKronOp_T) {
     const uint Vecs = Fsh.p()/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
-
+  
     for (uint swid = tid/Vecs; swid < Fsh.q(); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
         ElemT regs[VecTLen] = {0};
@@ -125,9 +125,10 @@ void directFgToFsh(const uint NumThreads, const uint tid,
           const uint col = elem*VecTLen;
           const uint row = tileQ*Fsh.q() + swid;
 
-          // if ((kQMultipleOfTileQ || col < F.q()) &&
-          //     (kPMultipleOfTileP || tileP + row < F.p()))
+          // if ((kQMultipleOfTileQ || row < F.q()) &&
+          //     (kPMultipleOfTileP || tileP + col < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
+
           uint32_t shift = elem; //TODO: RegQ is 16
           //TODO: Consider this an array of TileP * TileQ. Do not worry about this being a fastKronOp_T layout.
           //Maybe we will not need this when FVecT = 4 because then number of bank conflicts decreases significantly.

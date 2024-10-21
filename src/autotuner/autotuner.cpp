@@ -111,6 +111,7 @@ fastKronError Autotuner::tune(KMMProblemT problem, TunedKernelsMap& tunedKernels
         }
         //P2P is needed when the output of subproblem is distributed
         bool p2p = isDistributed && rstart == 0;
+        std::cout << 114 << " " << subprob << std::endl;
         if (tunedKernelsMap.hasKernel(subprob, p2p) || 
             (!this->fastKron.getUseFusion() and subprob.n() > 1)) {
           //Avoid tuning if subprob is already tuned or

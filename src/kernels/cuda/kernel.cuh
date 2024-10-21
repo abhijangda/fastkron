@@ -142,25 +142,26 @@ __global__ void cudaKernel(KernelParams params,
   const fastKronOp OpF = (kmmType == FastKronMMType::MKM) ? kOpF : swapFastKronOp<kOpF>();
   const fastKronOp OpY = (kmmType == FastKronMMType::MKM) ? fastKronOp_N : fastKronOp_T;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((kmmType == FastKronMMType::KMM and KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((kmmType == FastKronMMType::MKM and KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
                                                             blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
-  const uint tid  = threadIdx.x;
+  const uint tid   = threadIdx.x;
 
   //TODO: Make this Coord2D
   const uint tileQ = getTileQ(bid_x, QByTileQ);
   const uint tileK = getTileK(bid_x, QByTileQ);
 
-  
   const YElem yElem = getYElem(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
-
+  // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0) {
+  //   printf("%d %d %d %d\n", XshSlices, XSlices, TileK, QByTileQ);
+  // }
   const uint tileM = bid_y * TileM;
   //TODO: is this condition optimized for OptLevel == 3?
-  // if (tileM >= X.m() || tileK * TileK >= X.n()) return;
+  if (tileM >= X.m() || tileK * TileK >= X.n()) return;
   
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (kMMultipleOfTileM || TileM == 1) ? TileM : MIN(TileM, X.m() - tileM), 
-                          (kKMultipleOfTileK)? TileK : MIN(X.n()-tileK * TileK, TileK),
+                          (kKMultipleOfTileK) ? TileK : MIN(X.n()-tileK * TileK, TileK),
                           P, TileP,
                           X);
 
@@ -178,14 +179,13 @@ __global__ void cudaKernel(KernelParams params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<kXshSlicesSame, kPMultipleOfTileP, TileP, ElemT, XVecT, OpX, decltype(Xsh)>
+    shiftXgToXsh<kXshSlicesSame, kPMultipleOfTileP, TileP, ElemT, XVecT, OpX>
                 (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, batchedData.getFBatch(params, fac, batch).data());
-
       //Load F to shared memory
-      directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, OpF, decltype(Fsh)>
+      directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, OpF>
                     (NumThreads, tid, tileP, tileQ, F, Fsh);
 
       __syncthreads();
@@ -200,7 +200,7 @@ __global__ void cudaKernel(KernelParams params,
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
-        mainMMA(params.kp_idx, XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -212,8 +212,8 @@ __global__ void cudaKernel(KernelParams params,
       __syncthreads();
   }}
 
-  constexpr uint32_t StLen = storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
-                                            FusedFacs, XAlignment, RegM, RegK>();
+  constexpr uint32_t StLen = 1; //storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
+                                  //          FusedFacs, XAlignment, RegM, RegK>();
   if (OpY == fastKronOp_N) {
     #pragma unroll
     for (uint rm = 0; rm < RegM; rm++) {
