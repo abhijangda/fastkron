@@ -355,11 +355,14 @@ class GPUKMMKernel(Kernel):
            self.rq <= 32 and \
            self.rm * self.rk * self.rq <= 64# and self.opt_level == 3
   
-def all_sliced_mults(m, k, n, opX, ps, qs):
+def all_sliced_mults(mmtype, m, k, n, opX, ps, qs):
   sliced_mults = []
   prevTmpK = k
   for i in range(n):
-    f = n - i - 1
+    if mmtype == "mkm":
+      f = n - i - 1
+    elif mmtype == "kmm":
+      f = i
     sliced_mult = (m, prevTmpK, opX if i == 0 else "N", ps[f], qs[f])
     prevTmpK = (prevTmpK//ps[f])*qs[f]
     sliced_mults += [sliced_mult]
@@ -433,7 +436,10 @@ def x_mem_vector_len(m, cols, op, mmtype, elem_type):
   if (op == "T" and mmtype == "mkm") or (op == "T" and mmtype == "kmm"):
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
-    return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+    if mmtype == "mkm":
+      return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+    elif mmtype == "kmm":
+      return max([a for a in memory_vector_lengths(elem_type) if m % a == 0])
 
 def f_mem_vector_len(rows, cols, op, mmtype, elem_type):
   if (mmtype == "mkm" and op == "N") or (mmtype == "kmm" and op == "T"):
@@ -495,7 +501,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   continue
 
                 allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
-                for (_, currK, opx, p, q) in all_sliced_mults(m, k, n, opX, ps, qs):
+                for (_, currK, opx, p, q) in all_sliced_mults(kmmtype, m, k, n, opX, ps, qs):
                   MinTile = 16 #16 if backend == 'x86' and elem_type == "double" else 32
                   TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
                   TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
@@ -508,7 +514,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if kmmtype == 'mkm':
                     TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                   elif kmmtype == "kmm":
-                    TileMs = [4,32,64] if opx == "N" else [1,2] #[4,8,16,32,64, 128]
+                    TileMs = [2,4,32,64] if opx == "N" else [1,2] #[4,8,16,32,64, 128]
 
                   for tM in TileMs:
                     for tQ in TileQs:

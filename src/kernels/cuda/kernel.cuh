@@ -212,8 +212,9 @@ __global__ void cudaKernel(KernelParams params,
       __syncthreads();
   }}
 
-  constexpr uint32_t StLen = 1; //storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
-                                  //          FusedFacs, XAlignment, RegM, RegK>();
+  constexpr uint32_t StLen = storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
+                                              FusedFacs, XAlignment, RegM, RegK>();
+
   if (OpY == fastKronOp_N) {
     #pragma unroll
     for (uint rm = 0; rm < RegM; rm++) {

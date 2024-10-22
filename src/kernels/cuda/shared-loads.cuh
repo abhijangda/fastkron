@@ -16,6 +16,7 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
 
       if (kPMultipleOfTileP && kXshSlicesSame) {
         ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+        //When MMType is KMM then VecTLen is 1
         Xsh.store(row, k, RegK, VecTLen, regs);
       } else {
         //TODO: Valid only when VecTLen == 1
@@ -44,6 +45,7 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
       const uint k = swid;
       if (kPMultipleOfTileP && kXshSlicesSame) {
         ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+        //When MMType is MKM then VecTLen is 1
         Xsh.store(row, k, RegK, VecTLen, regs);
       } else {
         uint32_t slice = k/Xsh.p();
@@ -149,6 +151,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
             ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
           
           if (true) {//Padding
+            //TODO: Do we need padding here?
             #pragma unroll
             for (int ii = 0; ii < VecTLen; ii++) {
               (&Fsh.at(0,0))[(row)*(Fsh.q()+1) + elem*VecTLen+ii] = regs[ii];

@@ -47,10 +47,14 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
       auto firstPart = (problem.mmtype() == FastKronMMType::MKM) ?
                         problem.sub(startF, subn) :
                         problem.rsub(startF, subn);
-      if (problem.opX() == fastKronOp_T && startF + subn == problem.n()) {
+
+      bool mulWithFirstFactor = (problem.mmtype() == FastKronMMType::MKM) ?
+                                 startF + subn == problem.n() : 
+                                 startF + 1 == subn;
+
+      if (problem.opX() == fastKronOp_T && mulWithFirstFactor) {
         //If opX is T and the firstPart has reached end of the problem
         //then consider only TT or TN kernels
-        if (problem.mmtype() == FastKronMMType::KMM) abort();
         firstPart.setOpX(fastKronOp_T);
       } else {
         firstPart.setOpX(fastKronOp_N);
@@ -105,13 +109,13 @@ fastKronError Autotuner::tune(KMMProblemT problem, TunedKernelsMap& tunedKernels
         //Obtain a subprob
         auto subprob = problem.sub(rstart, endP-rstart+1);
         //Only the first executed subprob has OpX as T otherwise
-        //all subprob requires OpX as N
-        if (rstart + subprob.n() < problem.n()) {
+        //all subprob use OpX as N
+        if ((problem.mmtype() == FastKronMMType::MKM && rstart + subprob.n() < problem.n()) ||
+            (problem.mmtype() == FastKronMMType::KMM && rstart > 0)) {
           subprob.setOpX(fastKronOp_N);
         }
         //P2P is needed when the output of subproblem is distributed
         bool p2p = isDistributed && rstart == 0;
-        std::cout << 114 << " " << subprob << std::endl;
         if (tunedKernelsMap.hasKernel(subprob, p2p) || 
             (!this->fastKron.getUseFusion() and subprob.n() > 1)) {
           //Avoid tuning if subprob is already tuned or
