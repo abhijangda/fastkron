@@ -179,7 +179,7 @@ __global__ void cudaKernel(KernelParams params,
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
     //Load X to shared memory
-    shiftXgToXsh<kXshSlicesSame, kPMultipleOfTileP, TileP, ElemT, XVecT, OpX>
+    shiftXgToXsh<kMMultipleOfTileM, kXshSlicesSame, kPMultipleOfTileP, TileP, ElemT, XVecT, OpX>
                 (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
     for (int fac = FusedFacs - 1; fac >= 0; fac--) {
@@ -195,7 +195,7 @@ __global__ void cudaKernel(KernelParams params,
       if (kFactorShapeSame ||
           ((kKMultipleOfTileK || yElem.k() < MIN(XshSlices, XSlices - tileK * XshSlices)) &&
            (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) &&
-           (kKMultipleOfTileK || yElem.m() < TileM))
+           (kMMultipleOfTileM || yElem.m() < XTile.m()))
           ) {
         /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
