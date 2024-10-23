@@ -514,8 +514,9 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if kmmtype == 'mkm':
                     TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                   elif kmmtype == "kmm":
-                    TileMs = [2,4,16,32] if opx == "N" else [1,2] #[4,8,16,32,64, 128]
-                    #For double TileMs should be half of these
+                    TileMs = [2,4,16,32] if opx == "N" else [1,2]
+                    if opx == "N" and elem_type == "double":
+                      TileMs = [t/2 for t in TileMs]
 
                   for tM in TileMs:
                     for tQ in TileQs:
