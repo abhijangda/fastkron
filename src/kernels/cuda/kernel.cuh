@@ -100,7 +100,7 @@ __global__ void cudaKernel(KernelParams params,
   constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
   constexpr bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
-  constexpr bool kMMultipleOfTileM = kmmType == FastKronMMType::KMM;
+  constexpr bool kMMultipleOfTileM = KernelOptimizations::IsMMultipleOfTileM(OptLevel) || TileM ==1;
   constexpr bool kQLeTileQ         = KernelOptimizations::IsQLeTileQ        (OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
 
@@ -309,13 +309,13 @@ __global__ void cudaKernel(KernelParams params,
       } else {
         cIdx = glM * Y.n() + glK;
         yPtr = Y.data<ElemT>(glM, glK, OpY);
-        // if (params.kp_idx == FusedFacs - 1) {
-        //   #pragma unroll
-        //   for (int i = 0; i < StLen; i++) {
-        //     yReg.set(rm+i, tk, tq, 
-        //              epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm + i, tk, tq)));
-        //   }
-        // }
+        if (kmmType == FastKronMMType::MKM && params.kp_idx == FusedFacs - 1) {
+          #pragma unroll
+          for (int i = 0; i < StLen; i++) {
+            yReg.set(rm+i, tk, tq, 
+                     epilogue(epilogueParams, batchedData, Y, batch, cIdx + i, yReg.at(rm + i, tk, tq)));
+          }
+        }
       }
       stVecYReg<OpY, StLen>(yPtr, yReg, rm, tk, tq);
     }}}}

@@ -64,6 +64,8 @@ bool KMMKernel::isOptValid(KMMProblem problem, KernelOptimizations::Optimization
       return problem.f(0).p() % tileF.p() == 0;
     case Opts::KMultipleOfTileK:
       return problem.k() % getTileX(problem).n() == 0;
+    case Opts::MMultipleOfTileM:
+      return problem.m() % getTileX(problem).m() == 0;
     case Opts::QLeTileQ:
       return problem.f(0).q() <= f.q();
     case Opts::TileKSame:

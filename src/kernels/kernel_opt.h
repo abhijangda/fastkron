@@ -21,14 +21,15 @@ struct KernelOptimizations {
     PMultipleOfTileP = 1 << 2,
     //The problem's X.cols is a multiple of kernel's TileX.n()
     KMultipleOfTileK = 1 << 3,
+    MMultipleOfTileM = 1 << 4,
     //The problem Q is less than kernel's TileF.q()
-    QLeTileQ         = 1 << 4,
+    QLeTileQ         = 1 << 5,
     //Kernel is invoked with same TileK as the template TileK
-    TileKSame        = 1 << 5,
+    TileKSame        = 1 << 6,
     //Problem's factor has same shape as kernel's MaxF
-    FactorShapeSame  = 1 << 6,
+    FactorShapeSame  = 1 << 7,
     //Number of Optimizations
-    NumOptimizations = 1 << 7
+    NumOptimizations = 1 << 8
   };
 
   /**
@@ -75,7 +76,8 @@ struct KernelOptimizations {
   static constexpr uint OptLevel3() {
     return OptLevel2()                   |
            Optimization::FactorShapeSame |
-           Optimization::TileKSame
+           Optimization::TileKSame       |
+           Optimization::MMultipleOfTileM
            ;
   }
 
@@ -131,6 +133,11 @@ struct KernelOptimizations {
   CUDA_DEVICE_HOST
   static constexpr bool IsKMultipleOfTileK(uint optLevel) {
     return isEnabled(optLevel, Optimization::KMultipleOfTileK);
+  }
+
+  CUDA_DEVICE_HOST
+  static constexpr bool IsMMultipleOfTileM(uint optLevel) {
+    return isEnabled(optLevel, Optimization::MMultipleOfTileM);
   }
 
   CUDA_DEVICE_HOST
