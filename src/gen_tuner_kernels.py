@@ -295,7 +295,7 @@ class GPUKMMKernel(Kernel):
     return self.num_threads
   
   def __repr__(self):
-    return f"{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
+    return f"{self.kmmtype}_{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
 
   # def kernelname(self):
   #   return f"{super().kernelname()}"
@@ -349,7 +349,7 @@ class GPUKMMKernel(Kernel):
            self.shape.k % self.shape.p == 0 and \
            self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
-           self.rk in [1, 2, 4] and \
+           self.rk in [1, 2, 4] and self.rm in [1,2,4] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
@@ -384,6 +384,7 @@ class KernelTemplate:
   
   def parse(self, template):
     parts = iter(template.split('_'))
+    self.mmtype = next(parts)
     self.backend = next(parts)
     self.arch = next(parts)
     self.arch = self.arch.split('|')
@@ -486,7 +487,6 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
       kernelTemplates[str(template.f)] = []
     kernelTemplates[str(template.f)] += [template]
     validTileKs[str(template.f)].add(template.tileX[1])
-  print(validTileKs)
   
   empty_dir(kernel_dir)
   configs = {}
@@ -502,7 +502,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
 
                 allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
                 for (_, currK, opx, p, q) in all_sliced_mults(kmmtype, m, k, n, opX, ps, qs):
-                  MinTile = 16 #16 if backend == 'x86' and elem_type == "double" else 32
+                  MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
                   TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
                   TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
                   k_factors = factors(currK)
@@ -514,7 +514,8 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if kmmtype == 'mkm':
                     TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                   elif kmmtype == "kmm":
-                    TileMs = [2,4,32,64] if opx == "N" else [1,2] #[4,8,16,32,64, 128]
+                    TileMs = [2,4,16,32] if opx == "N" else [1,2] #[4,8,16,32,64, 128]
+                    #For double TileMs should be half of these
 
                   for tM in TileMs:
                     for tQ in TileQs:
@@ -540,12 +541,17 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                     if backend in ['cuda', 'hip']:
                                       aalign = x_mem_vector_len(tM, tK, opx, kmmtype, elem_type)
                                       kronalign = f_mem_vector_len(tP, tQ, opF, kmmtype, elem_type)
-                                      if opt_level <= 1 or aalign == 1:
-                                        new_aalign = aalign
-                                      elif opt_level == 2:
-                                        new_aalign = min(aalign, kronalign)
-                                      else:
-                                        new_aalign = aalign
+                                      if kmmtype == "mkm":
+                                        if opt_level <= 1 or aalign == 1:
+                                          new_aalign = aalign
+                                        elif opt_level == 2:
+                                          new_aalign = min(aalign, kronalign)
+                                        else:
+                                          new_aalign = aalign
+                                      elif kmmtype == "kmm":
+                                        if opt_level <= 2: new_aalign = 1
+                                        else: new_aalign = aalign
+
                                       distKernels = [0, 1] if useDistKernels else [0]
                                       for dist in distKernels:
                                         config = GPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q), 
