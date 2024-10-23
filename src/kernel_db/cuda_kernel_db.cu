@@ -273,9 +273,10 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
                                                kernelInfo.getSharedMemSize(problem),
                                                stream);
   status = cudaGetLastError();
-  CUDA_CHECK(status);
+  if (status != cudaSuccess) 
+    Logger(LogLevel::Debug) << "Error invoking CUDA kernel " << cudaGetErrorString(status) << std::endl;
 
-  return fastKronSuccess;
+  return (status == cudaSuccess) ? fastKronSuccess : fastKronInvalidArgument;
 }
 
 template<typename KMMProblem, typename EpilogueParams>
@@ -373,15 +374,16 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
                                              bool useP2PStore,
                                              int warmups, int runs,
                                              float& runtime) {
-#ifdef ENABLE_MULTI_GPU
+ #if defined(ENABLE_MULTI_GPU) || defined(FULL_TUNE) 
 //TODO: Also for FULL_TUNE
-  if ((dynamic_cast<CUDAKMMKernel*>(kernel))->getLocalSize() > 0 || 
-      (problem.f(0).q() >= 64 && kernel->getMaxTileF().q() <= 32)) {
+  if ((dynamic_cast<CUDAKMMKernel*>(kernel))->getLocalSize() > 0 
+  || (problem.f(0).q() >= 64)) //&& kernel->getMaxTileX().m() < 32))
+  {
     //skip probably slow kernels
     runtime = std::numeric_limits<float>::max();
     return fastKronSuccess;
   }
-#endif
+ #endif
 
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -407,12 +409,14 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
     Logger(LogLevel::Info) << "Error in CUDA autotuning: "   <<
                               fastKronGetErrorString(status) <<
                               std::endl;
-    return status;
+    runtime = std::numeric_limits<float>::max();
+    status = fastKronSuccess;
+  } else {
+    CUDA_CHECK(cudaEventElapsedTime(&runtime, startEvent, endEvent));
+    runtime = runtime/runs;
+    CUDA_CHECK(cudaEventDestroy(startEvent));
+    CUDA_CHECK(cudaEventDestroy(endEvent));
   }
-  CUDA_CHECK(cudaEventElapsedTime(&runtime, startEvent, endEvent));
-  runtime = runtime/runs;
-  CUDA_CHECK(cudaEventDestroy(startEvent));
-  CUDA_CHECK(cudaEventDestroy(endEvent));
   return status;
 }
 
