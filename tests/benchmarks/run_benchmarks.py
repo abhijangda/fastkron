@@ -92,11 +92,12 @@ class GPyTorchEval:
     return (flops/1e9,)
   
 class FastKronEval:
-  def __init__(self, backend, mode, elemtype, multi_gpu=False):
+  def __init__(self, backend, mode, elemtype, mmtype, multi_gpu=False):
     self.backend = backend
     self.tuningmode = mode
     self.built = False
     self.elemtype = elemtype
+    self.mmtype = mmtype
     self.multi_gpu = multi_gpu
   
   def setup_cmake(self):
@@ -133,7 +134,7 @@ class FastKronEval:
     run_command(f"cd build && make benchmark_{self.backend} -j")
 
   def run_fastkron(self, shape, GM, GK, LocalKrons, opX, opF):
-    kron = f"cd build && {'TUNE=0' if self.tuningmode=='NoTune' else ''} ./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w {50 if self.tuningmode=='NoTune' else 20} -t {self.elemtype} --tune --opx {opX} --opf {opF} -a 1 -b 0"
+    kron = f"cd build && ./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w {50 if self.tuningmode=='NoTune' else 20} -t {self.elemtype} {'' if self.tuningmode=='NoTune' else '--tune'} --opx {opX} --opf {opF} -a 1 -b 0 --gemmtype {self.mmtype}"
     if GM * GK != 1:
       kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
     kron += " --backend " + self.backend
@@ -163,8 +164,8 @@ class FastKronEval:
         self.built = True
     return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
-def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
-  print(f"------- Single {device.upper()} {elemtype.upper()} {mode} {opX}{opF} -------")
+def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset):
+  print(f"------- Single {device.upper()} {mmtype.upper()} {elemtype.upper()} {mode} {opX}{opF} -------")
   device = device.lower()
   cases = []
   if dataset == "large":
@@ -200,12 +201,12 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
     for p in [2,4,8,16,32,64,128]:
       for q in [2,4,8,16,32,64,128]:
         for n in range(1,13 if device == "x86" else 20):
-          for m in [1,4,16,64,256] + ([] if device == "x86" else [1024]):
+          for m in [2,4,16,64,256]: # + ([] if device == "x86" else [1024]):
             if m*(p**n) > MAX_SIZE//factor or m*(q**n) > MAX_SIZE//factor: # or p**n < 64 or q**n < 64:
               continue
             cases += [Shape(m, n, p, q)]
 
-  fkeval = FastKronEval(device, mode, elemtype)
+  fkeval = FastKronEval(device, mode, elemtype, mmtype)
   fkeval.setup_cmake()
   for shape in cases:
     try:
@@ -218,14 +219,14 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, dataset):
       gp = (1, 1)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
 
-def run_nn(device, mode, elemtype, dataset):
-  benchmark_single_gpu(device, "N", "N", mode, elemtype, dataset)
+def run_nn(device, mode, elemtype, mmtype, dataset):
+  benchmark_single_gpu(device, "N", "N", mode, elemtype, mmtype, dataset)
 
 def run_nt(device, mode):
-  benchmark_single_gpu(device, "N", "T", mode, elemtype, dataset)
+  benchmark_single_gpu(device, "N", "T", mode, elemtype, mmtype, dataset)
 
 def run_tt(device, mode, elemtype, dataset):
-  benchmark_single_gpu(device, "T", "T", mode, elemtype, dataset)
+  benchmark_single_gpu(device, "T", "T", mode, elemtype, mmtype, dataset)
 
 def multi_gpu(scaling):
   cases = []
@@ -257,6 +258,8 @@ if __name__ == "__main__":
   parser.add_argument('-types'       , required=True, type=str, nargs="+")
   parser.add_argument("-tune-modes"  , required=True, type=str, nargs="+")
   parser.add_argument("-dataset"     , required=True, type=str)
+  parser.add_argument("-mmtype"      , required=True, type=str)
+
   args = parser.parse_args()
   
   assert args.dataset in ["large", "full"]
@@ -268,8 +271,8 @@ if __name__ == "__main__":
         assert elemtype in ["float", "int", "double"]
         assert mode in TuningModes
 
-        run_nn(backend, mode, elemtype, args.dataset)
-        run_tt(backend, mode, elemtype, args.dataset)
+        run_nn(backend, mode, elemtype, args.mmtype, args.dataset)
+        # run_tt(backend, mode, elemtype, args.dataset)
 
         if backend == "cuda" and mode == "FullTune" and args.dataset == "large":
           multi_gpu("weak")
