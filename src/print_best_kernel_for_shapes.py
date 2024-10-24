@@ -60,7 +60,7 @@ if __name__ == "__main__":
   assert args.opX in ["N", "T"]
   assert args.opF in ["N", "T"]
   assert args.mmtype in ["kmm", "mkm"]
-  elemType = "float"
+  elemType = "double"
 
   # run_command(f'python ./gen_tuner_kernels.py -backend {args.backend} -archs {args.arch} -same-factors 3 128,128 -same-factors 3 64,64 -same-factors 4 32,32 -same-factors 5 16,16 -same-factors 6 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N -opF N -mm-type {args.mmtype} -types {elemType} -opt-levels 3')
   # run_command(f'cd ../build/ && make benchmark_{args.backend} -j')

@@ -383,6 +383,10 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
       FastKronCHECK(sgekmm(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
                       (const float**)kpMats, opfs, (const float*)x, opx, (float*)y,
                       alpha, beta, (const float*)z, (float*)temp1, (float*)temp2));
+    } else if (std::is_same<T, double>::value) {
+      FastKronCHECK(dgekmm(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
+                      (const double**)kpMats, opfs, (const double*)x, opx, (double*)y,
+                      alpha, beta, (const double*)z, (double*)temp1, (double*)temp2));
     }
   }
 

@@ -503,7 +503,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                 allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
                 for (_, currK, opx, p, q) in all_sliced_mults(kmmtype, m, k, n, opX, ps, qs):
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+                  TilePs = [min(p, MinTile),32]# + [i for i in factors(p) if i > MinTile]
                   TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
                   k_factors = factors(currK)
                   if str((ps[0], qs[0])) in validTileKs and len(validTileKs[str((ps[0], qs[0]))]) > 0:
@@ -514,9 +514,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if kmmtype == 'mkm':
                     TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                   elif kmmtype == "kmm":
-                    TileMs = [2,4,16,32] if opx == "N" else [1,2]
-                    if opx == "N" and elem_type == "double":
-                      TileMs = [t/2 for t in TileMs]
+                    TileMs = ([2,4,16] + ([32] if p >= 32 else []))if opx == "N" else [1,2]
 
                   for tM in TileMs:
                     for tQ in TileQs:
