@@ -383,7 +383,7 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
     runtime = std::numeric_limits<float>::max();
     return fastKronSuccess;
   }
-//  #endif
+//  #endif 
 
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));

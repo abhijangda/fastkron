@@ -434,12 +434,13 @@ class KernelTemplate:
     return True
 
 def x_mem_vector_len(m, cols, op, mmtype, elem_type):
-  if (op == "T" and mmtype == "mkm") or (op == "T" and mmtype == "kmm"):
+  if (op == "T" and mmtype == "mkm"):
     return 1 #max([a for a in [1, 2, 4] if m % a == 0])
   else:
     if mmtype == "mkm":
       return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
     elif mmtype == "kmm":
+      if op == "T": return 1 #return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
       return max([a for a in memory_vector_lengths(elem_type) if m % a == 0])
 
 def f_mem_vector_len(rows, cols, op, mmtype, elem_type):
@@ -514,7 +515,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if kmmtype == 'mkm':
                     TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                   elif kmmtype == "kmm":
-                    TileMs = ([2,4,16] + ([32] if p >= 32 else []))if opx == "N" else [1,2]
+                    TileMs = ([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
 
                   for tM in TileMs:
                     for tQ in TileQs:

@@ -85,35 +85,41 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem
   //Find all kernels for each opt level that can compute the problem
   if (findAllKernels(problem, batchType, useP2PStore, allKernels)) {
     //Only execute kernels that are at the max opt level.
-    const std::vector<KMMKernel*>& kernelsForMaxOpt = [&allKernels]() {
-      for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
-        if (iter->size() > 0) return *iter;
-      }
-      return allKernels[0];
-    }();
-
+    bool OnlyMaxOptKernels = true;
     uint32_t kernelIdx = 0;
+    uint32_t totalKernels = 0;
+    for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
+      totalKernels += iter->size();
+      if (OnlyMaxOptKernels && iter->size() > 0) break;
+    }
+
     //Go through each kernel at the max opt level
-    for (auto kernel : kernelsForMaxOpt) {
-      kernelIdx += 1;
-      if (!kernel->canCompute(problem, hardware[0], useP2PStore)) continue;
-      Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << kernelsForMaxOpt.size()
-                              << ": " << kernel->str() << std::endl;
-      float kernelTime = std::numeric_limits<float>::max();
-      fastKronError status;
-      status = timeKernel(kernel, problem, fidx, distParams, 
-                          EpilogueParams::template create<float>(), KernelModeTuning, 
-                          useP2PStore, warmups, runs, kernelTime);
-      if (status == fastKronSuccess) {
-        Logger(LogLevel::Debug) << 
-                    "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
-                    "  GFLOPs: " << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
-                    occupancyDetails(kernel, problem) << std::endl;
-        if (kernelTime < minTime) {
-          bestKernel = kernel;
-          minTime = kernelTime;
+    for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
+      for (auto kernel : *iter) {
+        kernelIdx += 1;
+        if (!kernel->canCompute(problem, hardware[0], useP2PStore)) continue;
+        Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << totalKernels
+                                << ": " << kernel->str() << std::endl;
+        float kernelTime = std::numeric_limits<float>::max();
+        fastKronError status;
+        status = timeKernel(kernel, problem, fidx, distParams, 
+                            EpilogueParams::template create<float>(), KernelModeTuning, 
+                            useP2PStore, warmups, runs, kernelTime);
+        if (status == fastKronSuccess) {
+          Logger(LogLevel::Debug) << 
+                      "  Time(ms): " << std::fixed << std::setprecision(4) << kernelTime << std::endl <<
+                      "  GFLOPs: " << (((double)problem.flop())/(kernelTime/1e3))/1e9 << std::endl <<
+                      occupancyDetails(kernel, problem) << std::endl;
+          if (kernelTime < minTime) {
+            bestKernel = kernel;
+            minTime = kernelTime;
+          }
         }
-  }}}
+      }
+
+      if (OnlyMaxOptKernels && iter->size() > 0) break;
+    }
+  }
 
   if (minTime < std::numeric_limits<float>::max()) {
     Logger(LogLevel::Debug) << std::fixed << std::setprecision(4) <<
@@ -291,21 +297,24 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
     kernels.push_back(std::vector<KMMKernel*>());
   }
 
-  DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), batchType};
-  auto it = compiledKernels.find(key);
+  bool AllOptKernels = false;
+  if (!AllOptKernels) {
+    DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), batchType};
+    auto it = compiledKernels.find(key);
 
-  if (it != compiledKernels.end()) {
-    for (auto k : it->second) {
-      if (k->canCompute(problem, hardware[0], useP2PStore) &&
-          k->getOptLevel() == KernelOptimizations::MaxOptLevel()) {
-        kernels[k->getOptLevel()].push_back(k);
+    if (it != compiledKernels.end()) {
+      for (auto k : it->second) {
+        if (k->canCompute(problem, hardware[0], useP2PStore) &&
+            k->getOptLevel() == KernelOptimizations::MaxOptLevel()) {
+          kernels[k->getOptLevel()].push_back(k);
+        }
       }
     }
-  }
 
-  if (it != compiledKernels.end() and 
-      kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
-      return true;
+    if (it != compiledKernels.end() and 
+        kernels[KernelOptimizations::MaxOptLevel()].size() > 0)
+        return true;
+  }
 
   for (auto it : compiledKernels) {
     for (auto kernel : it.second) {
