@@ -142,7 +142,7 @@ __global__ void cudaKernel(KernelParams params,
   const fastKronOp OpF = (kmmType == FastKronMMType::MKM) ? kOpF : swapFastKronOp<kOpF>();
   const fastKronOp OpY = (kmmType == FastKronMMType::MKM) ? fastKronOp_N : fastKronOp_T;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((kmmType == FastKronMMType::MKM and KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
+  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
                                                             blockIdx.y);
   const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
   const uint tid   = threadIdx.x;
