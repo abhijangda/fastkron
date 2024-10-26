@@ -26,19 +26,20 @@
   GENERAL_TEST_NN(MMType, M1, MinN, MaxN, P, Q, double, Tune, 1, 1, 1, 1); \
 
 #define CONTIGUOUS_TEST_MMTYPE_NN(MinN, MaxN, P, Q, Tune) \
+  CONTIGUOUS_TEST_NN(MKM, 16, MinN, MaxN, P, Q, Tune); \
   CONTIGUOUS_TEST_NN(KMM, 1, MinN, MaxN, P, Q, true); \
   CONTIGUOUS_TEST_NN(KMM, 3, MinN, MaxN, P, Q, true); \
   CONTIGUOUS_TEST_NN(KMM, 16, MinN, MaxN, P, Q, true); \
   CONTIGUOUS_TEST_NN(KMM, 17, MinN, MaxN, P, Q, true); \
-  CONTIGUOUS_TEST_NN(MKM, 16, MinN, MaxN, P, Q, Tune); \
 
 
 
 #define STRIDED_BATCHED_TEST_NN(MMType, MinN, MaxN, P, Q, Tune, BatchZ, BatchX, BatchF, BatchY) \
   GENERAL_TEST_NN(MMType, 16, MinN, MaxN, P, Q, float, Tune, BatchZ, BatchX, BatchF, BatchY); \
-  GENERAL_TEST_NN(MMType, 16, MinN, MaxN, P, Q, double, Tune, BatchZ, BatchX, BatchF, BatchY);
+  GENERAL_TEST_NN(MMType, 16, MinN, MaxN, P, Q, double, Tune, BatchZ, BatchX, BatchF, BatchY); \
+  GENERAL_TEST_NN(KMM, 1, MinN, MaxN, P, Q, float, true, BatchZ, BatchX, BatchF, BatchY);
 
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 1, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 1, false);
 CONTIGUOUS_TEST_MMTYPE_NN(5, 10, 2, 2, false);
 CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 3, 3, false);
 CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 4, 4, false);
