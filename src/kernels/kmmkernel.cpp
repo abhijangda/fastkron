@@ -22,12 +22,14 @@ Matrix KMMKernel::getTileX(KMMProblem problem) const {
   uint32_t problemTileSlices = problem.x().n()/f_.p();
 
   uint32_t slices = 0;
+
   if (problemTileSlices >= kernelTileSlices) {
     slices = kernelTileSlices;
   } else {
-    slices = MIN(tileX.n()/f_.p(), kernelTileSlices);
+    slices = MAX(1, MIN(tileX.n()/f_.p(), kernelTileSlices));
     slices = MIN(problemTileSlices, slices);
   }
+
   return Matrix(tileX.m(), slices * f_.p());
 }
 

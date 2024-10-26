@@ -257,6 +257,7 @@ __global__ void cudaKernel(KernelParams params,
       if (DistributeToGPUs) {
         yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
       } else {
+        cIdx = glM * Y.n() + glK;
         yPtr = Y.data<ElemT>(glM, glK, OpY);
         if (params.kp_idx == FusedFacs - 1) {
           #pragma unroll
