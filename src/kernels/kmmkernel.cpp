@@ -89,7 +89,7 @@ bool KMMKernel::canCompute(KMMProblem problem, const HardwareDetails*,
               problem.opFs() == opF && problem.opX() == opX && 
               P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || 
                                   (!exactFuse && problem.n() >= fusedFacs)) &&
-              tileX.n()/problem.f(0).p() > 0 && //Kernel's TileX is greater than P
+              //tileX.n()/MaxF.p() > problem.f(0).p() && //Kernel's TileX is greater than P
               kernelBatchType == probBatchType;
 
   if (!ret) return false;

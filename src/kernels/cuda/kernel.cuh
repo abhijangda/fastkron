@@ -50,9 +50,7 @@ YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, ui
     const uint yQ   = (tid / QThreads) * RegQ;
     const uint yM   = ((tid % QThreads) % KThreads) * RegM;
     const uint yK   = ((tid % QThreads) / KThreads) * RegK;
-    
-    // if (threadIdx.x < 32 && blockIdx.x == 0 && blockIdx.y == 0) 
-    //   printf("133 tid %d; y %d %d %d\n", threadIdx.x, yQ, yK, yM);
+
     return YElem(yM,yQ,yK);
   }
 }
