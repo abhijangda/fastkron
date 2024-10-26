@@ -714,7 +714,7 @@ if __name__ == "__main__":
                                              help = "(Optional) Generate fused multi-gpu kernels")
   parser.add_argument('-match-configs'     , required=False, type=str, nargs="+",  action='append',
                                              help = "(Optional) Only generate kernels that matches a template. See class KernelTemplate.")
-  parser.add_argument('-match-configs-file', required=False, type=str,
+  parser.add_argument('-match-configs-files', required=False, type=str, nargs="+",
                                              help = "(Optional) Only generate kernels that matches strings in the file")
   parser.add_argument('-opt-levels'        , required=False, type=int, nargs="+",
                                              help = "(Optional) Space separated optimization levels from 0 to 3 to generate")
@@ -769,18 +769,21 @@ if __name__ == "__main__":
   if args.match_configs != None:
     assert type(args.match_configs) == list and len(args.match_configs) == 1
 
-  assert (args.match_configs == None and args.match_configs_file == None) or \
-         (args.match_configs != None and args.match_configs_file == None) or \
-         (args.match_configs == None and args.match_configs_file != None)
+  assert (args.match_configs == None and args.match_configs_files == None) or \
+         (args.match_configs != None and args.match_configs_files == None) or \
+         (args.match_configs == None and args.match_configs_files != None)
 
   match_configs = args.match_configs[0] if args.match_configs != None else []
 
-  if args.match_configs_file != None and match_configs == []:
-    contents = slurp(args.match_configs_file)
-    contents = contents.split('\n')
-    for line in contents:
-      if line.strip() != "":
-        match_configs += [line]
+  if args.match_configs_files != None and match_configs == []:
+    contents = ""
+    print(args.match_configs_files)
+    for f in args.match_configs_files:
+      contents = slurp(f)
+      contents = contents.split('\n')
+      for line in contents:
+        if line.strip() != "":
+          match_configs += [line]
   
   generate_kernel_decls(parsed_cases, args.mm_type, args.opX, args.opF, args.types, not args.no_fuse, 
                         args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs,
