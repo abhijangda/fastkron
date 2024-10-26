@@ -412,6 +412,8 @@ class KernelTemplate:
     self.regtile = parseRegTile(next(parts))
 
   def is_template_of_kernel(self, kernel):
+    if not (self.mmtype == '*' or self.mmtype == kernel.kmmtype):
+      return False
     if not (self.backend == "*" or self.backend == kernel.backend):
       return False
     if not (self.arch[0] == "*" or kernel.arch in self.arch):
@@ -503,37 +505,62 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile),32]# + [i for i in factors(p) if i > MinTile]
+                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
-                  if ps[0] == 128:
-                    print(508, ps[0],qs[0],TileKs,batch_type,kmmtype, arch, opX, opF, elem_type, currK, opx)
-                  if len(TileKs) == 0:
-                    k_factors = factors(currK)
-                    TileKs = [f for f in k_factors if f % p == 0]
-                  TileQs = set([t.tileF[1] for t in templates if t.tileF[1] != "*"])
-                  if len(TileQs) == 0:
-                    TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
 
-                  TileMs = set([t.tileX[0] for t in templates if t.tileX[0] != "*"])
+                  TileMs = {}
+                  for t in templates:
+                    if t.tileX[0] not in TileMs:
+                      TileMs[t.tileX[0]] = []
+                    TileMs[t.tileX[0]] += [t]
                   if len(TileMs) == 0:
                     if kmmtype == 'mkm':
                       TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                     elif kmmtype == "kmm":
                       TileMs = ([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
+                    TileMs = {t: [] for t in TileMs}
 
-                  CRows = []#[t.regtile[1] for t in templates if t.regtile[1] != "*"]
-                  CCols = []#[t.regtile[2] for t in templates if t.regtile[2] != "*"]
-                  RegMs = []#[t.regtile[0] for t in templates if t.regtile[0] != "*"]
                   for tM in TileMs:
+                    templates = TileMs[tM]
+                    TileQs = {}
+                    if templates != []:
+                      for t in templates:
+                        if t.tileF[1] == "*":
+                          for f in factors(q):
+                            TileQs[f] = []
+                        else:
+                          if t.tileF[1] not in TileQs:
+                            TileQs[t.tileF[1]] = []
+                          TileQs[t.tileF[1]] += [t] 
+
+                    if len(TileQs) == 0:
+                      TileQs = {f : [] for f in factors(q)}
+
                     for tQ in TileQs:
+                      templates = TileQs[tQ]
+                      TileKs = {}
+                      if templates != []:
+                        for t in templates:
+                          if t.tileX[1] == "*":
+                            for f in factors(currK):
+                              if f %p == 0:
+                                TileKs[f] = []
+                          else:
+                            if t.tileX[1] not in TileKs:
+                              TileKs[t.tileX[1]] = []
+                            TileKs[t.tileX[1]] += [t] 
+
+                      if len(TileKs) == 0:
+                        TileKs = [f for f in factors(currK) if f % p == 0]
+
                       for tK in TileKs:
                         if tK < p:
                           continue
                         if arch == 'sisd' and tK != 16384:
                           continue
-                        if CRows == []: CRows = factors(tK//p)
-                        if CCols == []: CCols = factors(tQ)
-                        if RegMs == []: RegMs = factors(tM)
+                        CRows = factors(tK//p)
+                        CCols = factors(tQ)
+                        RegMs = factors(tM)
                         for regRows in CRows:
                           for regCols in CCols:
                             for regM in RegMs:
