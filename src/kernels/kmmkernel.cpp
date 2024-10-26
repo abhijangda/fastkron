@@ -85,7 +85,7 @@ bool KMMKernel::canCompute(KMMProblem problem, const HardwareDetails*,
                            bool exactFuse) {
   using Opts = KernelOptimizations::Optimization;
 
-  bool ret = problem.type() == elemType &&
+  bool ret = problem.mmtype() == mmType && problem.type() == elemType &&
               problem.opFs() == opF && problem.opX() == opX && 
               P2PStore == p2p && ((exactFuse && problem.n() == fusedFacs) || 
                                   (!exactFuse && problem.n() >= fusedFacs)) &&
@@ -121,7 +121,8 @@ static std::ostream& operator<<(std::ostream& os, const KernelBatchType::Ty& b) 
 
 std::string KMMKernel::str() const {
   std::stringstream info;
-  info << strOfFastKronType(elemType) 
+  info << strOfFastKronMMType(mmType)
+       << "_" << strOfFastKronType(elemType) 
        << "_" << f << "_" << tileF <<"_" << fusedFacs
        << "_" << tileX << "_" << regM << "x" << regK << "x" << regQ 
        << "_" << opX << opF << "_" << kernelBatchType << "_" << P2PStore << "_" << optLevel;

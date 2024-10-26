@@ -102,7 +102,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem
                                 << ": " << kernel->str() << std::endl;
         float kernelTime = std::numeric_limits<float>::max();
         fastKronError status;
-        status = timeKernel(kernel, problem, fidx, distParams, 
+        status = timeKernel(kernel, problem, fidx, distParams,
                             EpilogueParams::template create<float>(), KernelModeTuning, 
                             useP2PStore, warmups, runs, kernelTime);
         if (status == fastKronSuccess) {

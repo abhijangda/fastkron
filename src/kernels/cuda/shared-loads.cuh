@@ -132,7 +132,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
           //     (kPMultipleOfTileP || tileP + col < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
 
-          uint32_t shift = elem; //TODO: RegQ is 16
+          // uint32_t shift = elem; //TODO: RegQ is 16
           //TODO: Consider this an array of TileP * TileQ. Do not worry about this being a fastKronOp_T layout.
           //Maybe we will not need this when FVecT = 4 because then number of bank conflicts decreases significantly.
           // if (false) //Shift

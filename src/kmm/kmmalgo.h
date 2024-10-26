@@ -15,6 +15,8 @@ enum FastKronMMType {
   MKM
 };
 
+std::string strOfFastKronMMType(FastKronMMType mmtype);
+
 /**
  * KMMProblemBase represents a Kronecker Matrix Matrix Multiplication problem.
  * This class takes a maximum factors (MaxFactors) as a template and contains

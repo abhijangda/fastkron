@@ -46,15 +46,16 @@ union AllTypes {
 };
 
 struct EpilogueParams {
+  bool isLastFactor;
   AllTypes alpha;
   AllTypes beta;
   //TODO: EpilogueParams should contain Matrix object
   const void * __restrict__ glD;
   
-  EpilogueParams(): alpha(1.0f), beta(0.0f), glD(nullptr) {}
+  EpilogueParams(): alpha(1.0f), beta(0.0f), glD(nullptr), isLastFactor(false) {}
 
   EpilogueParams(AllTypes alpha, AllTypes beta, const void* glD) :
-    alpha(alpha), beta(beta), glD(glD) {}
+    alpha(alpha), beta(beta), glD(glD), isLastFactor(false) {}
 
   template<typename ElemT>
   static EpilogueParams create() {

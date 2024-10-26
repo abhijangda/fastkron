@@ -42,8 +42,10 @@ template<typename ElemT, typename EpilogueParams, typename GetBatchedData>
 CUDA_DEVICE
 ElemT epilogue(const EpilogueParams& params, GetBatchedData& batchedData, const Matrix& Y, uint32_t batch, uint32_t idx, ElemT yVal) {
   //Always reading struct members within the && condition is better than reading all before the condition.
-  ElemT d = (params.template getBeta<ElemT>() != 0 && batchedData.getZBatch(params, Y, batch).data() != nullptr) ? 
-             params.template getBeta<ElemT>() * batchedData.getZBatch(params, Y, batch).template data<ElemT>(0)[idx] :
+  ElemT d = (params.template getBeta<ElemT>() != 0 &&
+             batchedData.getZBatch(params, Y, batch).data() != nullptr) ? 
+             params.template getBeta<ElemT>()*
+             batchedData.getZBatch(params, Y, batch).template data<ElemT>(0)[idx] :
              0;
   return params.template getAlpha<ElemT>() * yVal + d;
 }
@@ -134,7 +136,7 @@ void stVecYReg(int* addr, YReg& Yr, int row, int i, int j) {
     case 4:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.v4.s32 [%0], {%1, %2, %3, %4};" ::
-                    "l"(addr), 
+                    "l"(addr),
                     "r"(yreg[0]), "r"(yreg[1]), 
                     "r"(yreg[2]), "r"(yreg[3]));
     #elif defined(__HIPCC__)
@@ -157,7 +159,7 @@ void stVecYReg(double* addr, YReg& Yr, int row, int i, int j) {
     case 1:
     #if defined(__NVCC__) || defined(__CUDACC__)
       asm volatile ("st.global.f64 [%0], {%1};" ::
-                    "l"(addr), 
+                    "l"(addr),
                     "d"(yreg[0]));
     #elif defined(__HIPCC__)
       *addr = yreg[0];
