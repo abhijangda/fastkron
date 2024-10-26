@@ -477,17 +477,12 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
   elif backend == 'x86':
     kernel_dir = os.path.join(all_kernels_dir, 'cpu','x86','kron-kernels')
   
-  validTileKs = {}
-  for (_,_,_, ps, qs) in cases:
-    validTileKs[str((ps[0], qs[0]))] = set()
-
   kernelTemplates = {}
   for config in onlySpecificConfigs:
     template = KernelTemplate(config)
     if str(template.f) not in kernelTemplates:
       kernelTemplates[str(template.f)] = []
     kernelTemplates[str(template.f)] += [template]
-    validTileKs[str(template.f)].add(template.tileX[1])
   
   empty_dir(kernel_dir)
   configs = {}
@@ -503,20 +498,32 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
 
                 allSameShapes = len(set(ps + qs)) == 1# and isPowerOfTwo(ps[0])
                 for (_, currK, opx, p, q) in all_sliced_mults(kmmtype, m, k, n, opX, ps, qs):
+                  templates = []
+                  if str((ps[0], qs[0])) in kernelTemplates and len(kernelTemplates[str((ps[0], qs[0]))]) > 0:
+                    templates = kernelTemplates[str((ps[0], qs[0]))]
+
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
                   TilePs = [min(p, MinTile),32]# + [i for i in factors(p) if i > MinTile]
-                  TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
-                  k_factors = factors(currK)
-                  if str((ps[0], qs[0])) in validTileKs and len(validTileKs[str((ps[0], qs[0]))]) > 0:
-                    TileKs = list(validTileKs[str((ps[0], qs[0]))])
-                  else:
+                  TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
+                  if ps[0] == 128:
+                    print(508, ps[0],qs[0],TileKs,batch_type,kmmtype, arch, opX, opF, elem_type, currK, opx)
+                  if len(TileKs) == 0:
+                    k_factors = factors(currK)
                     TileKs = [f for f in k_factors if f % p == 0]
-                  TileMs = []
-                  if kmmtype == 'mkm':
-                    TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
-                  elif kmmtype == "kmm":
-                    TileMs = ([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
+                  TileQs = set([t.tileF[1] for t in templates if t.tileF[1] != "*"])
+                  if len(TileQs) == 0:
+                    TileQs = factors(q) #[2**i for i in range(1, max(2, int(math.log2(q)))+1)]
 
+                  TileMs = set([t.tileX[0] for t in templates if t.tileX[0] != "*"])
+                  if len(TileMs) == 0:
+                    if kmmtype == 'mkm':
+                      TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                    elif kmmtype == "kmm":
+                      TileMs = ([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
+
+                  CRows = []#[t.regtile[1] for t in templates if t.regtile[1] != "*"]
+                  CCols = []#[t.regtile[2] for t in templates if t.regtile[2] != "*"]
+                  RegMs = []#[t.regtile[0] for t in templates if t.regtile[0] != "*"]
                   for tM in TileMs:
                     for tQ in TileQs:
                       for tK in TileKs:
@@ -524,9 +531,9 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                           continue
                         if arch == 'sisd' and tK != 16384:
                           continue
-                        CRows = factors(tK//p)
-                        CCols = factors(tQ)
-                        RegMs = factors(tM)
+                        if CRows == []: CRows = factors(tK//p)
+                        if CCols == []: CCols = factors(tQ)
+                        if RegMs == []: RegMs = factors(tM)
                         for regRows in CRows:
                           for regCols in CCols:
                             for regM in RegMs:
@@ -761,6 +768,8 @@ if __name__ == "__main__":
 
   for opX in args.opX:
     assert opX in ["N", "T"]
+  if "T" in args.opX and "N" in args.opX:
+    args.opX = ["T"] #Consider only T because T generates both T and N
   for opF in args.opF:
     assert opF in ["N", "T"]
   for t in args.types:
