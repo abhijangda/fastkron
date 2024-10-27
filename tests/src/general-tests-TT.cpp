@@ -21,15 +21,13 @@
   EXPECT_TRUE(result);\
 }
 
-#define M_ 16
-
 #define CONTIGUOUS_TEST_TT(MinN, MaxN, P, Q, Type, Tune) \
-    GENERAL_TEST_TT(MKM, M_, MinN, MaxN, P, Q, Type, Tune, 1, 1, 1, 1); \
+    GENERAL_TEST_TT(MKM, 16, MinN, MaxN, P, Q, Type, Tune, 1, 1, 1, 1); \
     GENERAL_TEST_TT(KMM, 1, MinN, MaxN, P, Q, Type, true, 1, 1, 1, 1); \
     GENERAL_TEST_TT(KMM, 17, MinN, MaxN, P, Q, Type, true, 1, 1, 1, 1); \
 
 #define STRIDED_BATCHED_TEST_TT(MinN, MaxN, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY) \
-    GENERAL_TEST_TT(MKM, M_, MinN, MaxN, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY); \
+    GENERAL_TEST_TT(MKM, 16, MinN, MaxN, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY); \
     GENERAL_TEST_TT(KMM, 3, MinN, MaxN, P, Q, Type, true, BatchZ, BatchX, BatchF, BatchY);
 
 CONTIGUOUS_TEST_TT(1, 10, 2, 1, float, false);

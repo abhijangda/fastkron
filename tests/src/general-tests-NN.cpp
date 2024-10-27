@@ -34,9 +34,9 @@
 
 
 
-#define STRIDED_BATCHED_TEST_NN(MMType, MinN, MaxN, P, Q, Tune, BatchZ, BatchX, BatchF, BatchY) \
-  GENERAL_TEST_NN(MMType, 16, MinN, MaxN, P, Q, float, Tune, BatchZ, BatchX, BatchF, BatchY); \
-  GENERAL_TEST_NN(MMType, 16, MinN, MaxN, P, Q, double, Tune, BatchZ, BatchX, BatchF, BatchY); \
+#define STRIDED_BATCHED_TEST_NN(MinN, MaxN, P, Q, Tune, BatchZ, BatchX, BatchF, BatchY) \
+  GENERAL_TEST_NN(MKM, 16, MinN, MaxN, P, Q, float, Tune, BatchZ, BatchX, BatchF, BatchY); \
+  GENERAL_TEST_NN(MKM, 16, MinN, MaxN, P, Q, double, Tune, BatchZ, BatchX, BatchF, BatchY); \
   GENERAL_TEST_NN(KMM, 1, MinN, MaxN, P, Q, float, true, BatchZ, BatchX, BatchF, BatchY);
 
 CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 1, false);
@@ -79,8 +79,8 @@ CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 936, 505, false);
 // CONTIGUOUS_TEST_MMTYPE_NN(3, 4, 32, 32, true);
 // CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true);
 
-STRIDED_BATCHED_TEST_NN(MKM, 1, 3, 128, 128, true, 2, 2, 2, 2);
-STRIDED_BATCHED_TEST_NN(MKM, 1, 3, 64, 64, false, 2, 2, 2, 2);
-STRIDED_BATCHED_TEST_NN(MKM, 3, 4, 32,  32,  true, 2, 1, 2, 2);
-STRIDED_BATCHED_TEST_NN(MKM, 1, 5, 12,  12,  true, 2, 2, 1, 1);
-STRIDED_BATCHED_TEST_NN(MKM, 3, 4, 5,  5,  false, 2, 1, 2, 2);
+STRIDED_BATCHED_TEST_NN(1, 3, 128, 128, true, 2, 2, 2, 2);
+STRIDED_BATCHED_TEST_NN(1, 3, 64, 64, false, 2, 2, 2, 2);
+STRIDED_BATCHED_TEST_NN(3, 4, 32,  32,  true, 2, 1, 2, 2);
+STRIDED_BATCHED_TEST_NN(1, 5, 12,  12,  true, 2, 2, 1, 1);
+STRIDED_BATCHED_TEST_NN(3, 4, 5,  5,  false, 2, 1, 2, 2);
