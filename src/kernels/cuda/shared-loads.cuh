@@ -118,10 +118,10 @@ void directFgToFsh(const uint NumThreads, const uint tid,
       }
     }
   } else if (Fsh.layout() == fastKronOp_T) {
-    const uint Vecs = Fsh.p()/VecTLen;
+    const uint Vecs = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
   
-    for (uint swid = tid/Vecs; swid < Fsh.q(); swid += ThGroups) {
+    for (uint swid = tid/Vecs; swid < ((opF == fastKronOp_N) ? Fsh.p() : Fsh.q()); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
         ElemT regs[VecTLen] = {0};
         if (opF == fastKronOp_T) {
