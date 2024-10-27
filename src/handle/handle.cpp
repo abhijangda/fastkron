@@ -186,7 +186,7 @@ fastKronError FastKronHandle::xgemkm(const KMMProblem problem,
   return err;
 }
 
-fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatched problem, 
+fastKronError FastKronHandle::xgemkmStridedBatched(const KMMProblemStridedBatched problem, 
                                                    const fastKronBackend backend, 
                                                    void* temp1, void* temp2,
                                                    EpilogueStridedBatchedParams epilogueParams) {
@@ -221,13 +221,16 @@ fastKronError FastKronHandle::xgekmmStridedBatched(const KMMProblemStridedBatche
   err = executeGeMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblemStridedBatched) 
       {return kernelSeriesIter->kernel->getFusedFacs();},
-    [&kernelSeriesIter, epilogueParams, kernelDb, this]
+    [&kernelSeriesIter, &epilogueParams, kernelDb, problem, this]
       (const KMMProblemStridedBatched subProblem, uint32_t rstart, void*[2], KMMProblemStridedBatched::Matrix) {
         fastKronError err;
         auto kernel = *kernelSeriesIter;
 
         KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
+        epilogueParams.isLastFactor = (problem.mmtype() == FastKronMMType::MKM) ?
+                                       kernel.end == kernel.kernel->getFusedFacs()-1 :
+                                       kernel.end + kernel.kernel->getFusedFacs() == problem.n();
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, epilogueParams,
                                      KernelModeNormal);

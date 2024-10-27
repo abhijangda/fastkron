@@ -347,14 +347,26 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
                      uint64_t strideY, T* temp1, T* temp2) {
 
   if (batchCount > 1) {
-    if (std::is_same<T, float>::value) {
-      FastKronCHECK(sgekmmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                      (const float*)x, opx, strideX, (const float**)kpMats, opfs, strideF, (float*)y,
-                      strideY, alpha, beta, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
-    } else if (std::is_same<T, double>::value) {
-      FastKronCHECK(dgekmmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                      (const double*)x, opx, strideX, (const double**)kpMats, opfs, strideF, (double*)y,
-                      strideY, alpha, beta, batchCount, (const double*)z, strideZ, (double*)temp1, (double*)temp2));
+    if (kronmatmulType == FastKronMMType::MKM) {
+      if (std::is_same<T, float>::value) {
+        FastKronCHECK(sgemkmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                        (const float*)x, opx, strideX, (const float**)kpMats, opfs, strideF, (float*)y,
+                        strideY, alpha, beta, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
+      } else if (std::is_same<T, double>::value) {
+        FastKronCHECK(dgemkmStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                        (const double*)x, opx, strideX, (const double**)kpMats, opfs, strideF, (double*)y,
+                        strideY, alpha, beta, batchCount, (const double*)z, strideZ, (double*)temp1, (double*)temp2));
+      }
+    } else if (kronmatmulType == FastKronMMType::KMM) {
+      if (std::is_same<T, float>::value) {
+        FastKronCHECK(sgekmmStridedBatched(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M,
+                        (const float**)kpMats, opfs, strideF, (const float*)x, opx, strideX, (float*)y,
+                        strideY, alpha, beta, batchCount, (const float*)z, strideZ, (float*)temp1, (float*)temp2));
+      } else if (std::is_same<T, double>::value) {
+        FastKronCHECK(dgekmmStridedBatched(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M,
+                        (const double**)kpMats, opfs, strideF, (const double*)x, opx, strideX, (double*)y,
+                        strideY, alpha, beta, batchCount, (const double*)z, strideZ, (double*)temp1, (double*)temp2));
+      }
     }
 
     return;

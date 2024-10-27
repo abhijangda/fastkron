@@ -61,6 +61,7 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
       }
       //P2P is needed when the output of subproblem is distributed
       bool isP2P = isDistributed && startF == 0;
+
       if (tunedKernelsMap.hasKernel(firstPart, isP2P)) {
         //If the first part is tuned then recursively search for best kernel series for
         //the second part.
@@ -354,12 +355,13 @@ fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBa
     KMMProblemStridedBatched::Matrix x = problem.x().like(temp1[0].data());
     KMMProblemStridedBatched::Matrix y = problem.y().like(temp2[0].data());
 
-    KMMProblemStridedBatched tmpProblem(FastKronMMType::MKM, problem.type(), x, problem.opX(),
+    KMMProblemStridedBatched tmpProblem(problem.mmtype(), problem.type(), x, problem.opX(),
                                         problem.n(), &Fs[0][0], problem.opFs(), y,
                                         problem.batchCount());
     tune(tmpProblem, tunedKernelsMapStridedBatched, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
-    minTime = minExecTimeOfSeries(problem, 0, false, retKernelSeries, tunedKernelsMapStridedBatched);
+    minTime = minExecTimeOfSeries(problem, (problem.mmtype() == FastKronMMType::MKM) ? 0 : problem.n() - 1, 
+                                  false, retKernelSeries, tunedKernelsMapStridedBatched);
     Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
     for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
       Logger(LogLevel::Info) << "  " << (*iter) << std::endl;

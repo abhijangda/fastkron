@@ -305,7 +305,7 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
 /**
  * TODO
  */
-fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+fastKronError sgemkmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const float* X, fastKronOp opX, uint64_t strideX,
                      const float* Fs[], fastKronOp opFs, uint64_t strideF[],
@@ -313,7 +313,7 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                      uint32_t batchCount, const float *Y, uint64_t strideY, 
                      float* temp1, float* temp2);
 
-fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
+fastKronError igemkmStridedBatched(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const int* X, fastKronOp opX, uint64_t strideX,
                      const int* Fs[], fastKronOp opFs, uint64_t strideF[],
@@ -321,10 +321,33 @@ fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                      uint32_t batchCount, const int *Y, uint64_t strideY, 
                      int* temp1, int* temp2);
 
-fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
+fastKronError dgemkmStridedBatched(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const double* X, fastKronOp opX, uint64_t strideX,
                      const double* Fs[], fastKronOp opFs, uint64_t strideF[], 
+                     double* Z, uint64_t strideZ, double alpha, double beta,
+                     uint32_t batchCount, const double *Y, uint64_t strideY, double* temp1, double* temp2);
+
+fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                     const float* Fs[], fastKronOp opFs, uint64_t strideF[],
+                     const float* X, fastKronOp opX, uint64_t strideX,
+                     float* Z, uint64_t strideZ, float alpha, float beta,
+                     uint32_t batchCount, const float *Y, uint64_t strideY, 
+                     float* temp1, float* temp2);
+
+fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                     const int* Fs[], fastKronOp opFs, uint64_t strideF[],
+                     const int* X, fastKronOp opX, uint64_t strideX,
+                     int* Z, uint64_t strideZ, int alpha, int beta,
+                     uint32_t batchCount, const int *Y, uint64_t strideY, 
+                     int* temp1, int* temp2);
+
+fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                     const double* Fs[], fastKronOp opFs, uint64_t strideF[],
+                     const double* X, fastKronOp opX, uint64_t strideX, 
                      double* Z, uint64_t strideZ, double alpha, double beta,
                      uint32_t batchCount, const double *Y, uint64_t strideY, double* temp1, double* temp2);
 }

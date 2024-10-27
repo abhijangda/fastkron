@@ -361,7 +361,7 @@ public:
   KMMProblemStridedBatchedT(FastKronMMType kronType, FastKronType eltype, 
                             Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs,
                             Matrix y, int batchCount) :
-                            Base(eltype, x, opX, fs, opFs, y),
+                            Base(kronType, eltype, x, opX, fs, opFs, y),
                             batches(batchCount) {}
 
   KMMProblemStridedBatchedT(FastKronMMType kronType, FastKronType eltype,
