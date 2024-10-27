@@ -128,8 +128,8 @@ void directFgToFsh(const uint NumThreads, const uint tid,
           const uint col = elem*VecTLen;
           const uint row = tileQ*Fsh.q() + swid;
 
-          // if ((kQMultipleOfTileQ || row < F.q()) &&
-          //     (kPMultipleOfTileP || tileP + col < F.p()))
+          if ((kQMultipleOfTileQ || row < F.q()) &&
+              (kPMultipleOfTileP || tileP + col < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
 
           // uint32_t shift = elem; //TODO: RegQ is 16
