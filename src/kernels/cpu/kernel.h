@@ -179,13 +179,14 @@ template<typename X86VecT,
 static CUDA_DEVICE_HOST
 void load(uint32_t tileP, const YElem& y,
           const FCache& Fch, YInterim& Ych, YRegisters& YReg) {
-  const uint VectorLen = X86VecT::VectorLen;
   if (tileP == 0) {
     YReg.zero();
   } else {
     //TODO: For OpY=fastKronOp_T YReg.apply should have last loop in m
+    const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+    const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
     YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
-      e.load(&Ych.at(y.m() + ym, y.q() + yq, y.k()/Fch.p() + yk * VectorLen));
+      e.load(&Ych.at(y.m() + ym * MVectorLen, y.q() + yq, y.k()/Fch.p() + yk * KVectorLen));
     });
   }
 }
@@ -355,7 +356,6 @@ void threadWork(KernelParams& params,
           for (uint32_t k = 0; k < TileSlices; k += SlicesIncr) {
             YRegisters YReg;
             YElem y(m, q, k);
-            std::cout << 367 << " " << m << " " << YReg.m() << std::endl;
             load<X86VecT>(tileP, y, FCache, YCache, YReg);
             mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
             store<OptLevel, EpilogueKindVal, ElemT, X86VecT>(params, fusedParams, epilogueParams, betaVec,
