@@ -166,6 +166,11 @@ public:
   void set(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
     data[(i*shape(1)+j)*shape(2) + k] = val;
   }
+
+  CUDA_DEVICE_HOST
+  T& at(T data[], uint32_t idx) {
+    return data[idx];
+  }
 };
 
 template<typename T, uint32_t M, uint32_t N, uint32_t K>

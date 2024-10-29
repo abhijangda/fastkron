@@ -11,10 +11,11 @@ public:
   CPUKMMKernel(void* kernelInvoker, FastKronType elemType,
                Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
                uint regM, uint regK, uint regQ, uint optLevel,
-               fastKronOp opX, fastKronOp opF, KernelBatchType::Ty kernelBatchType) : 
+               fastKronOp opX, fastKronOp opF, FastKronMMType mmType,
+               KernelBatchType::Ty kernelBatchType) : 
                KMMKernel(kernelInvoker, elemType, f, tileF, tileX,
                          fusedFacs, P2PStore, regM, regK, regQ,
-                         optLevel, opX, opF, kernelBatchType) {}
+                         optLevel, opX, opF, mmType, kernelBatchType) {}
 };
 
 /**
@@ -33,10 +34,11 @@ public:
   X86KMMKernel(X86SIMD simd, void* kernelInvoker, FastKronType elemType,
             Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
             uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF, KernelBatchType::Ty kernelBatchType) :
+            fastKronOp opX, fastKronOp opF, FastKronMMType mmType,
+            KernelBatchType::Ty kernelBatchType) :
             CPUKMMKernel(kernelInvoker, elemType, f, tileF, tileX, fusedFacs,
                          P2PStore, regM, regK, regQ, optLevel, opX, opF,
-                         kernelBatchType),
+                         mmType, kernelBatchType),
             simd(simd) {}
 
   X86SIMD getSIMD() {return simd;}

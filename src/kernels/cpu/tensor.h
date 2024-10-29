@@ -63,15 +63,18 @@ public:
   uint32_t tileCols() const {return isTileKSame ? OptTileX::N() : tileCols_;}
 };
 
-template<typename T, 
+template<typename T, fastKronOp Layout,
          typename OptTileX, typename OptF, typename OptTileF>
-class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<fastKronOp_N, T, OptTileX::M(), OptTileX::N()> {
-  using Base = AbstractFixedShapeTensor2D<fastKronOp_N, T, OptTileX::M(), OptTileX::N()>;
+class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<Layout, T, OptTileX::M(), OptTileX::N()> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, OptTileX::M(), OptTileX::N()>;
   T* data;
 
 public:
   CUDA_DEVICE_HOST
   TransposedDirectShared3D(T* data) : data(data) {}
+
+  CUDA_DEVICE_HOST
+  fastKronOp layout() {return Layout;}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
@@ -127,7 +130,7 @@ public:
   uint32_t p() const {return OptTileF::P();}
 };
 
-template<typename T, typename OptTileX, typename OptTileF, typename OptF>
+template<typename T, fastKronOp OpY, typename OptTileX, typename OptTileF, typename OptF>
 class YInterim : public AbstractFixedShapeTensor3D<T, OptTileX::M(), OptTileF::Q(), OptTileX::N()/OptF::P()> {
   using Base = AbstractFixedShapeTensor3D<T, OptTileX::M(), OptTileF::Q(), OptTileX::N()/OptF::P()>;
   T* data;
@@ -142,9 +145,15 @@ public:
   uint32_t slices() const {return OptTileX::N()/OptF::P();}
   CUDA_DEVICE_HOST
   uint32_t q()      const {return OptTileF::Q();}
+  CUDA_DEVICE_HOST
+  fastKronOp layout() const {return OpY;}
 
   CUDA_DEVICE_HOST
   T& at(const uint32_t m, const uint32_t q, const uint32_t slice) {
-    return Base::at(data, m, q, slice);
+    if (OpY == fastKronOp_N)
+      return Base::at(data, m, q, slice);
+    else if (OpY == fastKronOp_T) {
+      return Base::at(data, q * this->slices() * this->m() + slice * this->m() + m);
+    }
   }
 };

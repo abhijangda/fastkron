@@ -199,3 +199,9 @@ CUDA_DEVICE_HOST uint32_t getXTileK(KernelParams& params) {
   if (kTileKSame) return kTileK;
   return params.tileX.n();
 }
+
+template<fastKronOp Op>
+CUDA_DEVICE constexpr fastKronOp swapFastKronOp() {
+  if (Op == fastKronOp_N) return fastKronOp_T;
+  if (Op == fastKronOp_T) return fastKronOp_N;
+}

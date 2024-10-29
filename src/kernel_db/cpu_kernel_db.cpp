@@ -37,11 +37,10 @@ void CPUKernelDatabase::allocate_caches() {
   for (const auto & [_, kernels] : compiledKernels) {
     for (auto k : kernels) {
       maxTileX = std::max(k->getMaxTileX().numel(), maxTileX);
-      maxTileF = std::max(k->getMaxTileX().numel(), maxTileF);
+      maxTileF = std::max(k->getMaxTileF().numel(), maxTileF);
       maxTileY = std::max(k->getMaxTileY().numel(), maxTileY);
     }
   }
-
   TileXs.alloc(getMaxThreads(), maxTileX * sizeof(double));
   TileFs.alloc(getMaxThreads(), maxTileF * sizeof(double));
   TileYs.alloc(getMaxThreads(), maxTileY * sizeof(double));

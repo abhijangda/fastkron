@@ -26,12 +26,6 @@ CUDA_DEVICE uint32_t getTileQ(uint bid_x, uint QByTileQ) {
   return bid_x%QByTileQ;
 }
 
-template<fastKronOp Op>
-CUDA_DEVICE constexpr fastKronOp swapFastKronOp() {
-  if (Op == fastKronOp_N) return fastKronOp_T;
-  if (Op == fastKronOp_T) return fastKronOp_N;
-}
-
 CUDA_DEVICE
 YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, uint32_t QThreads,
                 const uint32_t MaxP,

@@ -168,18 +168,18 @@ class Kernel:
     if self.kmmtype == "mkm": return "FastKronMMType::MKM"
 
 class CPUKMMKernel(Kernel):
-  def __init__(self, backend : str, arch : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
+  def __init__(self, backend : str, arch : str, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int, rm : int, rk: int, rq: int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, aalign: int, kalign: int, allPowersOf2: int, opX : str, opF : str,
                kernelBatchType : str):
-    super().__init__(shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, rm, rk, rq, allPowersOf2, opX, opF, kernelBatchType)
+    super().__init__(kmmtype, shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, rm, rk, rq, allPowersOf2, opX, opF, kernelBatchType)
     self.aalign = aalign
     self.kalign = kalign
     self.backend = backend
     self.arch = arch
 
   def __repr__(self):
-    return f"{self.backend}_{self.arch}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}"
+    return f"{self.kmmtype}_{self.backend}_{self.arch}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}"
   
   def filename(self):
     return f"{self.kernelname()}.cpp"
@@ -236,19 +236,24 @@ class CPUKMMKernel(Kernel):
 
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
+    if self.kmmtype == "mkm":
+      maxVectorLoopElems = self.shape.k // (self.shape.p**self.fused_kernels)
+      innerMostVectorElems = self.rk
+    else:
+      maxVectorLoopElems = self.tileM
+      innerMostVectorElems = self.rm
+
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
-              and (self.shape.k // self.shape.p) % AVXLen != 0 and self.shape.k % self.rk == 0) or \
-            (self.aalign == AVXLen and self.rk % AVXLen == 0))
-    # cond1 = cond
+              and maxVectorLoopElems % AVXLen != 0 and self.shape.k % self.rk == 0) or \
+            (self.aalign == AVXLen and innerMostVectorElems % AVXLen == 0))
+
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
       MaxRkVecRegs = 4 if self.arch == "avx512" else 2
       MaxRqVecRegs = 4
-      cond = cond and self.rk == min(MaxRkVecRegs * AVXLen, self.shape.k//self.shape.p) and self.rq == min(MaxRqVecRegs, self.tileQ)
-    # if self.shape.k == 16384 and self.shape.p == 128 and self.shape.q == 128 and self.tileQ == 128 and self.tileP == 16 and self.fused_kernels == 1 and self.tileM == 1 and self.rq == 4:
-    #   print(repr(self), cond)
-    #   print(self.shape.k * self.tileM, self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size, self.fused_kernels)
-    # print(self, cond, self.shape.k, self.shape.p, self.rk, self.problem.k, isPowerOfTwo(self.problem.k), (self.shape.k // self.shape.p) % 8 != 0, self.shape.k % self.rk == 0)
+      cond = cond and innerMostVectorElems == min(MaxRkVecRegs * AVXLen, maxVectorLoopElems) 
+      #and self.rq == min(MaxRqVecRegs, self.tileQ)
+
     return cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
@@ -256,10 +261,10 @@ class CPUKMMKernel(Kernel):
               (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.opt_level == 3 and \
               #Next fused intermediate must have atleast AVXLen slices to make sure
               #Transpose X->TileX loads contiguous AVXLen first elements of slices of same P
-               self.shape.q == self.tileQ and (self.shape.k//(self.shape.p**self.fused_kernels)) >= AVXLen) \
+               self.shape.q == self.tileQ and maxVectorLoopElems >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen and self.rm == self.tileM# and self.opt_level == 3
+           self.rq <= AVXLen and (self.rm == self.tileM if self.kmmtype == "mkm" else self.tileM % self.rm == 0) # and self.opt_level == 3
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
 
@@ -599,7 +604,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                       dist = 0
                                       aalign = x_simd_len(backend, arch, tM, tK, opx, elem_type)
                                       kronalign = f_simd_len(backend, arch, tQ, elem_type)
-                                      config = CPUKMMKernel(backend, arch, KronMatMulShape(m, tK, n, p, q),
+                                      config = CPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q),
                                                               KronMatMulShape(m, k, n, ps, qs),
                                                               p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
                                                               dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF, batch_type)
