@@ -29,11 +29,11 @@ public:
 
   void alloc(uint32_t threads, uint32_t size) {
     this->threads = threads;
-    this->size = size;
-    ptr = (void**)malloc(threads * sizeof(void*));
     uint32_t pageSize = getpagesize();
+    this->size = (size/pageSize + 1) * pageSize;
+    ptr = (void**)malloc(threads * sizeof(void*));
     for (uint32_t i = 0; i < threads; i++) {
-      ptr[i] = aligned_alloc(pageSize, size);
+      ptr[i] = aligned_alloc(pageSize, this->size);
     }
   }
 

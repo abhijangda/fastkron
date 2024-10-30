@@ -251,9 +251,8 @@ class CPUKMMKernel(Kernel):
       #15 YMM Registers.
       MaxRkVecRegs = 4 if self.arch == "avx512" else 2
       MaxRqVecRegs = 4
-      cond = cond and innerMostVectorElems == min(MaxRkVecRegs * AVXLen, maxVectorLoopElems) 
+      cond = cond and innerMostVectorElems <= min(MaxRkVecRegs * AVXLen, maxVectorLoopElems) 
       #and self.rq == min(MaxRqVecRegs, self.tileQ)
-
     return cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
@@ -510,7 +509,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+                  TilePs = [min(p, MinTile)] #+ [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
 
                   TileMs = {}
@@ -522,7 +521,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     if kmmtype == 'mkm':
                       TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                     elif kmmtype == "kmm":
-                      TileMs = ([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
+                      TileMs = [32,64,128] #([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
                     TileMs = {t: [] for t in TileMs}
 
                   for tM in TileMs:

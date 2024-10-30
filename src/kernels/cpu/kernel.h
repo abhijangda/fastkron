@@ -230,11 +230,11 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
                            KVectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(KVectorLen, slices);
         const uint32_t numElems = (Ych.layout() == fastKronOp_N) ? slices : MVectorLen;
-        if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
-          X86VecT z;
-          z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, fastKronOp_N), numElems);
-          e.fmadd(beta, z);
-        }
+        // if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
+        //   X86VecT z;
+        //   z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, fastKronOp_N), numElems);
+        //   e.fmadd(beta, z);
+        // }
         e.store(Y.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
     }});
   }
