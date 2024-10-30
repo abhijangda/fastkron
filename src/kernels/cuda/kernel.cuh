@@ -144,9 +144,6 @@ __global__ void cudaKernel(KernelParams params,
   const uint tileK = getTileK(bid_x, QByTileQ);
 
   const YElem yElem = getYElem(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
-  // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0) {
-  //   printf("%d %d %d %d\n", XshSlices, XSlices, TileK, QByTileQ);
-  // }
   const uint tileM = bid_y * TileM;
   //TODO: is this condition optimized for OptLevel == 3?
   if (tileM >= X.m() || tileK * TileK >= X.n()) return;

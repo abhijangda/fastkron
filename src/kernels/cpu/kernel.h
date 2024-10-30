@@ -118,8 +118,9 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
     for (uint32_t m = 0; m < XTile.m(); m += VecTLen) {
       X86VecT slices[VecTLen];
       for (uint32_t pp = 0; pp < VecTLen; pp++) {
-        const ElemT* ptr = (fac == FusedFacs - 1) ? 
-                            XTile.data(m, k/F.p(), tileP + p + pp) : NULL;
+        const ElemT* ptr = (fac == 0) ? 
+                            XTile.data(m, k/F.p(), tileP + p + pp) : 
+                            &Ych.at(m,k/F.p(), tileP + p + pp);
         slices[pp].load(ptr);
       }
 
@@ -197,7 +198,9 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
   const uint KVectorLen = 1;//X86VecT::VectorLen;// (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
   const uint MVectorLen = X86VecT::VectorLen;//1;//X86VecT::VectorLen;//(Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
 
-  if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
+  if ((Ych.layout() == fastKronOp_N && fac > 0) ||
+      (Ych.layout() == fastKronOp_T && fac < fusedParams.NumFused - 1) ||
+      (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       e.store(&Ych.at(y.m()+rm*MVectorLen, y.q() + rq, y.k()/Fch.p() + rk * KVectorLen));
     });
@@ -291,9 +294,13 @@ void threadWork(KernelParams& params,
     betaVec.broadcast(&beta);
   }
 
-  for (int fac = FusedFacs - 1; fac >= 0; fac--) {
+  for (int _fac = FusedFacs - 1; _fac >= 0; _fac--) {
     TransposedDirectShared3D<ElemT, OpY, OptTileX, OptF, OptTileF> 
       TrXCache((ElemT*)params.caches->TileXs[tid]);
+
+    int fac = 0;
+    if (OpY == fastKronOp_N)      fac = _fac;
+    else if (OpY == fastKronOp_T) fac = FusedFacs - 1 - _fac;
 
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);
