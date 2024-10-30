@@ -114,12 +114,19 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
   }
   } else if (Xch.layout() == fastKronOp_T) {
     for (uint32_t k = 0; k < XTile.cols; k += F.p()) {
-    for (uint32_t p = 0; p < Xch.p(); p++) {
-      const ElemT* ptr = (fac == FusedFacs - 1) ? 
-                                 XTile.data(0, k/F.p(), tileP + p) : NULL;
-      memcpy(&Xch.at(0, k/F.p(), p), ptr, XTile.m() * sizeof(ElemT));
-    }
-  }
+    for (uint32_t p = 0; p < Xch.p(); p += VecTLen) {
+    for (uint32_t m = 0; m < XTile.m(); m += VecTLen) {
+      X86VecT slices[VecTLen];
+      for (uint32_t pp = 0; pp < VecTLen; pp++) {
+        const ElemT* ptr = (fac == FusedFacs - 1) ? 
+                            XTile.data(m, k/F.p(), tileP + p + pp) : NULL;
+        slices[pp].load(ptr);
+      }
+
+      for (uint32_t pp = 0; pp < VecTLen; pp++) {
+        slices[pp].store(&Xch.at(m, k/F.p(), p + pp));
+      }
+  }}}
   }
 }
 
@@ -133,8 +140,8 @@ void load(uint32_t tileP, const YElem& y,
     YReg.zero();
   } else {
     //TODO: For OpY=fastKronOp_T YReg.apply should have last loop in m
-    const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
-    const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
+    const uint KVectorLen = 1; //(Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+    const uint MVectorLen = X86VecT::VectorLen;//(Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
     YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
       e.load(&Ych.at(y.m() + ym * MVectorLen, y.q() + yq, y.k()/Fch.p() + yk * KVectorLen));
     });
@@ -183,8 +190,8 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
            const YElem& y, 
            const Factor& F, Matrix& Y, Matrix& Z, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
-  const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
-  const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
+  const uint KVectorLen = 1;//X86VecT::VectorLen;// (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+  const uint MVectorLen = X86VecT::VectorLen;//1;//X86VecT::VectorLen;//(Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
 
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
