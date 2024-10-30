@@ -27,7 +27,11 @@ if (ENABLE_MULTI_GPU AND NOT ENABLE_CUDA)
   message(FATAL_ERROR "ENABLE_MULTI_GPU requires ENABLE_CUDA")
 endif()
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+if (PYMODULE)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+else()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+endif()
 
 if (ENABLE_X86)
   find_package(OpenMP REQUIRED)

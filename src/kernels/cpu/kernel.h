@@ -117,19 +117,39 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
     for (uint32_t p = 0; p < Xch.p(); p += VecTLen) {
     for (uint32_t m = 0; m < XTile.m(); m += VecTLen) {
       X86VecT slices[VecTLen];
-      for (uint32_t pp = 0; pp < VecTLen; pp++) {
-        const ElemT* ptr = (fac == 0) ? 
-                            XTile.data(m, k/F.p(), tileP + p + pp) : 
-                            &Ych.at(m,k/F.p(), tileP + p + pp);
-        slices[pp].load(ptr);
-      }
+      const bool UseAVXStore = 
+          VecTLen > 1 && (kMMultipleOfTileM || XTile.m() - m >= VecTLen);
 
-      for (uint32_t pp = 0; pp < VecTLen; pp++) {
-        if (isLastFactor &&
-            (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
-              slices[pp].mul(alphaVec);
-            }
-        slices[pp].store(&Xch.at(m, k/F.p(), p + pp));
+      if (UseAVXStore) {
+        for (uint32_t pp = 0; pp < VecTLen; pp++) {
+          const ElemT* ptr = (fac == 0) ? 
+                              XTile.data(m, k/F.p(), tileP + p + pp) : 
+                              &Ych.at(m,k/F.p(), tileP + p + pp);
+          slices[pp].load(ptr);
+        }
+
+        for (uint32_t pp = 0; pp < VecTLen; pp++) {
+          if (isLastFactor &&
+              (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+                slices[pp].mul(alphaVec);
+          }
+          slices[pp].store(&Xch.at(m, k/F.p(), p + pp));
+        }
+      } else {
+        for (uint32_t pp = 0; pp < VecTLen; pp++) {
+          const ElemT* ptr = (fac == 0) ? 
+                              XTile.data(m, k/F.p(), tileP + p + pp) : 
+                              &Ych.at(m,k/F.p(), tileP + p + pp);
+          
+          ElemT val = *ptr;
+
+          if (isLastFactor &&
+              (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+            val = alpha * val;
+          }
+
+          Xch.at(m, k/F.p(), p + pp) = val;
+        }
       }
   }}}
   }
@@ -239,11 +259,17 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
       }
 
       if (kMMultipleOfTileM || y.m() + rm*MVectorLen < XTile.m()) {
-        uint32_t slices = (kKMultipleOfTileK &&
-                           XTile.tileCols() % KVectorLen == 0) ? 
-                           KVectorLen : (XTile.cols/F.p() - slice);
-        slices = MIN(KVectorLen, slices);
-        const uint32_t numElems = (Ych.layout() == fastKronOp_N) ? slices : MVectorLen;
+        uint32_t numElems;
+        if (Ych.layout() == fastKronOp_N) {
+          uint32_t slices = (kKMultipleOfTileK &&
+                            XTile.tileCols() % KVectorLen == 0) ? 
+                            KVectorLen : (XTile.cols/F.p() - slice);
+          slices = MIN(KVectorLen, slices);
+          numElems = slices;
+        } else {
+          numElems = kMMultipleOfTileM ? MVectorLen : XTile.m() - (y.m() + rm*MVectorLen);
+          numElems = MIN(MVectorLen, numElems);
+        }
         if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
           X86VecT z;
           z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, Ych.layout()), numElems);

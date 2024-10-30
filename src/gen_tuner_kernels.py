@@ -509,7 +509,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile)] #+ [i for i in factors(p) if i > MinTile]
+                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
 
                   TileMs = {}
