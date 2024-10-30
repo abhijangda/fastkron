@@ -207,15 +207,26 @@ public:
 
   template<typename F>
   CUDA_DEVICE_HOST
-  void apply(F&& fn){
-    #pragma unroll
-    for (uint32_t m = 0; m < M; m++) {
-    #pragma unroll
-    for (uint32_t k = 0; k < K; k++) {
-    #pragma unroll
-    for (uint32_t n = 0; n < N; n++) {
-      fn(at(m, n, k), m, n, k);
-    }}}
+  void apply(fastKronOp layout, F&& fn){
+    if (layout == fastKronOp_N) {
+      #pragma unroll
+      for (uint32_t m = 0; m < M; m++) {
+      #pragma unroll
+      for (uint32_t k = 0; k < K; k++) {
+      #pragma unroll
+      for (uint32_t n = 0; n < N; n++) {
+        fn(at(m, n, k), m, n, k);
+      }}}
+    } else {
+      #pragma unroll
+      for (uint32_t k = 0; k < K; k++) {
+      #pragma unroll
+      for (uint32_t n = 0; n < N; n++) {
+      #pragma unroll
+      for (uint32_t m = 0; m < M; m++) {
+        fn(at(m, n, k), m, n, k);
+      }}}
+    }
   }
 };
 

@@ -115,59 +115,9 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
   } else if (Xch.layout() == fastKronOp_T) {
     for (uint32_t k = 0; k < XTile.cols; k += F.p()) {
     for (uint32_t p = 0; p < Xch.p(); p++) {
-    for (uint32_t m = 0; m < XTile.m(); m += VecTLen) {
-        const bool UseAVXTrans = 
-          VecTLen > 1 && (kMMultipleOfTileM && XTile.m() % VecTLen == 0);
-        if (UseAVXTrans) {
-          X86VecT slices[VecTLen];
-          if (OpX == fastKronOp_T) { // || (OpX == fastKronOp_N and fac < FusedFacs - 1)) {
-            for (uint32_t mm = 0; mm < 1; mm++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? 
-                                 XTile.data(m + mm, k/F.p(), tileP + p) : NULL;
-                                //  &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
-              slices[mm].load(ptr);
-            }
-          } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
-            std::cout << "150" << std::endl; abort();
-            //Gather requires AVX2
-            uint32_t gatherIdxs[VecTLen] = {0};
-            for (uint pp = 0; pp < VecTLen; pp++) {
-              const ElemT* ptr = XTile.data(m, k/F.p() + 0, tileP + p + pp);
-              for (uint32_t slice = 0; slice < VecTLen; slice++) {
-                gatherIdxs[slice] = slice * X.m() * F.p(); //TODO: Assumes TileM == 1
-              }
-
-              slices[pp].gather(ptr, gatherIdxs);
-            }
-          }
-
-          for (uint32_t mm = 0; mm < 1; mm++) {
-            if (fac == FusedFacs - 1 && 
-                (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
-              slices[mm].mul(alphaVec);
-            slices[mm].store(&Xch.at(m + mm, k/F.p(), p));
-          }
-        } else {
-          std::cout << "150" << std::endl; abort();
-          const uint32_t LeftSlices = (XTile.cols - k)/F.p();
-          for (; p < MIN(Xch.p(), F.p() - tileP); p++) {
-            for (uint32_t slice = 0; slice < LeftSlices; slice++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? 
-                                  XTile.data(m, k/F.p() + slice, tileP + p) :
-                                  &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
-              ElemT val = *ptr;
-              if (fac == FusedFacs - 1 &&
-                  (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
-                val = alpha * val;
-              }
-              Xch.at(m, k/F.p() + slice, p) = val;
-            }
-          }
-
-          Xch.zero(m,     k/F.p() + LeftSlices, p,
-                   m + 1, k/F.p() + VecTLen,    Xch.p());
-        }
-      }
+      const ElemT* ptr = (fac == FusedFacs - 1) ? 
+                                 XTile.data(0, k/F.p(), tileP + p) : NULL;
+      memcpy(&Xch.at(0, k/F.p(), p), ptr, XTile.m() * sizeof(ElemT));
     }
   }
   }
@@ -185,7 +135,7 @@ void load(uint32_t tileP, const YElem& y,
     //TODO: For OpY=fastKronOp_T YReg.apply should have last loop in m
     const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
     const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
-    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
       e.load(&Ych.at(y.m() + ym * MVectorLen, y.q() + yq, y.k()/Fch.p() + yk * KVectorLen));
     });
   }
@@ -203,7 +153,7 @@ void mma(uint32_t /*tileP*/, const YElem& y,
   for (uint32_t p = 0; p < Fch.p(); p++) {
     XRegisters<X86VecT, YReg.m(), YReg.k(), 1> XReg;
     FRegisters<X86VecT, 1, YReg.q()> FReg;
-    XReg.apply([&](X86VecT& e, const uint32_t em, const uint32_t ek, const uint32_t ep) {
+    XReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t em, const uint32_t ek, const uint32_t ep) {
       if (Ych.layout() == fastKronOp_N)
         e.load(&Xch.at(y.m() + em, y.k()/Fch.p() + ek*VectorLen, p + ep));
       else {
@@ -215,7 +165,7 @@ void mma(uint32_t /*tileP*/, const YElem& y,
       e.broadcast(&Fch.at(p + ep, y.q() + eq));
     });
 
-    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
       e.fmadd(XReg.at(ym, yk, 0), FReg.at(0, yq));
     });
   }
@@ -237,13 +187,15 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
   const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
 
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
-    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
+    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       e.store(&Ych.at(y.m()+rm*MVectorLen, y.q() + rq, y.k()/Fch.p() + rk * KVectorLen));
     });
   } else {
-    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
+    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
       constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
+      constexpr bool kMMultipleOfTileM = KernelOptimizations::IsMMultipleOfTileM(OptLevel);
+
       uint32_t slice = y.k()/Fch.p() + rk * KVectorLen;
 
       if (!kKMultipleOfTileK && slice >= XTile.cols/F.p()) return;
@@ -272,23 +224,16 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
         }
       }
 
-      if (y.m() + rm*MVectorLen < XTile.m()) {
+      if (kMMultipleOfTileM || y.m() + rm*MVectorLen < XTile.m()) {
         uint32_t slices = (kKMultipleOfTileK &&
                            XTile.tileCols() % KVectorLen == 0) ? 
                            KVectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(KVectorLen, slices);
-        uint32_t numElems = (Ych.layout() == fastKronOp_N) ? slices : MVectorLen;
+        const uint32_t numElems = (Ych.layout() == fastKronOp_N) ? slices : MVectorLen;
         if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
           X86VecT z;
           z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, fastKronOp_N), numElems);
           e.fmadd(beta, z);
-        }
-        if (y.m() + rm * MVectorLen == 1 && yN == 0) {
-          float buff[8] = {1,1,1,1,1};
-          e.store(buff, 8);
-          for (int i = 0; i < 8; i++)
-          if (buff[i] != 32.0f)
-            std::cout << 287 << " " << buff[i] << " " << y.m() + rm * MVectorLen << "  " << yN << std::endl;
         }
         e.store(Y.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
     }});
@@ -457,8 +402,8 @@ void cpuKernel(KernelParams& params,
     #pragma omp parallel for collapse(4)
     for (uint32_t batch = 0; batch < batchCount; batch++)
     for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
+    for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) { //TODO: swap X.n() and X.m() for Opx = fastKronOpT and MKM 
     for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
-    for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
       if (notLastFactor || (!hasAlpha && !hasBeta)) {
         threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
           params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
