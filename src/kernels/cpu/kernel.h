@@ -43,7 +43,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 template<uint OptLevel, uint32_t EpilogueKindVal, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
 static CUDA_DEVICE_HOST
-void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t fac,
+void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t fac, bool isLastFactor,
                     TileX& XTile, XCache& Xch, YInterim& Ych, X86VecT alphaVec, ElemT alpha) {
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
@@ -124,6 +124,10 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
       }
 
       for (uint32_t pp = 0; pp < VecTLen; pp++) {
+        if (isLastFactor &&
+            (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+              slices[pp].mul(alphaVec);
+            }
         slices[pp].store(&Xch.at(m, k/F.p(), p + pp));
       }
   }}}
@@ -237,11 +241,11 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
                            KVectorLen : (XTile.cols/F.p() - slice);
         slices = MIN(KVectorLen, slices);
         const uint32_t numElems = (Ych.layout() == fastKronOp_N) ? slices : MVectorLen;
-        // if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
-        //   X86VecT z;
-        //   z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, fastKronOp_N), numElems);
-        //   e.fmadd(beta, z);
-        // }
+        if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
+          X86VecT z;
+          z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, Ych.layout()), numElems);
+          e.fmadd(beta, z);
+        }
         e.store(Y.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
     }});
   }
@@ -296,7 +300,7 @@ void threadWork(KernelParams& params,
 
       F = F.sameShape(batchedData.getFBatch(params, fac, batch).data());
       //Transpose X data and store to TrXCache to reduce TLB misses
-      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
+      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, epilogueParams.isLastFactor, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
       //Store F to FCache to reduce TLB misses
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 
@@ -381,7 +385,7 @@ void cpuKernel(KernelParams& params,
   const bool hasAlpha  = epilogueParams.template getAlpha<ElemT>() != (ElemT)1.0f;
   const bool hasBeta   = epilogueParams.template getD<ElemT>() != nullptr && 
                          epilogueParams.template getBeta<ElemT>() != (ElemT)0;
-  const bool notLastFactor = params.kp_idx > FusedFacs - 1;
+  const bool notLastFactor = not epilogueParams.isLastFactor;
 
   const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams>().getBatchCount(params);
 
