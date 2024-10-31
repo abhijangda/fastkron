@@ -125,7 +125,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen);
 
       if (UseAVXStore) {
-        if (OpX == fastKronOp_T) {
+        if (OpX == fastKronOp_T || fac > 0) {
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
             const ElemT* ptr = (fac == 0) ? 
                                 XTile.data(m, k/F.p(), tileP + p + pp) : 
@@ -134,9 +134,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           }
         } else if (OpX == fastKronOp_N) {
           for (uint32_t mm = 0; mm < VecTLen; mm++) {
-            const ElemT* ptr = (fac == 0) ? 
-                                XTile.data(m+mm, k/F.p(), tileP + p) : 
-                                &Ych.at(m,k/F.p(), tileP + p);
+            const ElemT* ptr = XTile.data(m+mm, k/F.p(), tileP + p);
             slices[mm].load(ptr);
           }
 
@@ -207,9 +205,9 @@ void load(uint32_t tileP, const YElem& y,
     YReg.zero();
   } else {
     //TODO: For OpY=fastKronOp_T YReg.apply should have last loop in m
-    const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
-    const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
-    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+    const uint KVectorLen = (YReg.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+    const uint MVectorLen = (YReg.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
+    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
       e.load(&Ych.at(y.m() + ym * MVectorLen, y.q() + yq, y.k()/Fch.p() + yk * KVectorLen));
     });
   }
@@ -223,12 +221,13 @@ void mma(uint32_t /*tileP*/, const YElem& y,
          const XCache& Xch, const FCache& Fch,
          YInterim& Ych, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
+  const fastKronOp Layout = YRegisters::layout();
 
   for (uint32_t p = 0; p < Fch.p(); p++) {
-    XRegisters<X86VecT, YReg.m(), YReg.k(), 1> XReg;
+    XRegisters<Layout, X86VecT, YReg.m(), YReg.k(), 1> XReg;
     FRegisters<X86VecT, 1, YReg.q()> FReg;
-    XReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t em, const uint32_t ek, const uint32_t ep) {
-      if (Ych.layout() == fastKronOp_N)
+    XReg.apply([&](X86VecT& e, const uint32_t em, const uint32_t ek, const uint32_t ep) {
+      if (YReg.layout() == fastKronOp_N)
         e.load(&Xch.at(y.m() + em, y.k()/Fch.p() + ek*VectorLen, p + ep));
       else {
         e.load(&Xch.at(y.m() + em*VectorLen, y.k()/Fch.p() + ek, p + ep));
@@ -239,7 +238,7 @@ void mma(uint32_t /*tileP*/, const YElem& y,
       e.broadcast(&Fch.at(p + ep, y.q() + eq));
     });
 
-    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
+    YReg.apply([&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
       e.fmadd(XReg.at(ym, yk, 0), FReg.at(0, yq));
     });
   }
@@ -257,17 +256,17 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
            const YElem& y, 
            const Factor& F, Matrix& Y, Matrix& Z, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
-  const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
-  const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
+  const uint KVectorLen = (YReg.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+  const uint MVectorLen = (YReg.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
 
-  if ((Ych.layout() == fastKronOp_N && fac > 0) ||
-      (Ych.layout() == fastKronOp_T && fac < fusedParams.NumFused - 1) ||
+  if ((YReg.layout() == fastKronOp_N && fac > 0) ||
+      (YReg.layout() == fastKronOp_T && fac < fusedParams.NumFused - 1) ||
       (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
-    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
+    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       e.store(&Ych.at(y.m()+rm*MVectorLen, y.q() + rq, y.k()/Fch.p() + rk * KVectorLen));
     });
   } else {
-    YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
+    YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
       constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
       constexpr bool kMMultipleOfTileM = KernelOptimizations::IsMMultipleOfTileM(OptLevel);
@@ -302,7 +301,7 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
 
       if (kMMultipleOfTileM || y.m() + rm*MVectorLen < XTile.m()) {
         uint32_t numElems;
-        if (Ych.layout() == fastKronOp_N) {
+        if (YReg.layout() == fastKronOp_N) {
           uint32_t slices = (kKMultipleOfTileK &&
                             XTile.tileCols() % KVectorLen == 0) ? 
                             KVectorLen : (XTile.cols/F.p() - slice);
@@ -314,10 +313,10 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
         }
         if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
           X86VecT z;
-          z.load(Z.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
+          z.load(Z.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, YReg.layout()), numElems);
           e.fmadd(beta, z);
         }
-        e.store(Y.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
+        e.store(Y.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, YReg.layout()), numElems);
     }});
   }
 }
@@ -433,8 +432,8 @@ void cpuKernel(KernelParams& params,
   //TODO: YRegisters should have VectorLen for both M and K.
   //TODO: Instead of VectorLen use MVectorLen or KVectorLen in code
   using YRegs = typename std::conditional<MMType == FastKronMMType::MKM, 
-                          YRegisters<X86VecT, RegM, RegK/X86VecT::VectorLen, RegQ>,
-                          YRegisters<X86VecT, RegM/X86VecT::VectorLen, RegK, RegQ>>::type;
+                          YRegisters<OpY, X86VecT, RegM, RegK/X86VecT::VectorLen, RegQ>,
+                          YRegisters<OpY,X86VecT, RegM/X86VecT::VectorLen, RegK, RegQ>>::type;
   using OptTileX = FixedShapeMatrix<OpX, ElemT, TileM, kTileK>;
 
   static_assert(TileM % RegM == 0);

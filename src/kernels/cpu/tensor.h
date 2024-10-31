@@ -155,8 +155,6 @@ public:
   uint32_t slices() const {return OptTileX::N()/OptF::P();}
   CUDA_DEVICE_HOST
   uint32_t q()      const {return OptTileF::Q();}
-  CUDA_DEVICE_HOST
-  fastKronOp layout() const {return OpY;}
 
   CUDA_DEVICE_HOST
   T& at(const uint32_t m, const uint32_t q, const uint32_t slice) {

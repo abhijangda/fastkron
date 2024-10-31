@@ -173,7 +173,7 @@ public:
   }
 };
 
-template<typename T, uint32_t M, uint32_t N, uint32_t K>
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t N, uint32_t K>
 class FixedShapeTensor3D : public AbstractFixedShapeTensor3D<T, M, N, K> {
   T data[M*N*K];
   using Base = AbstractFixedShapeTensor3D<T, M, N, K>;
@@ -182,6 +182,7 @@ public:
   CUDA_DEVICE_HOST
   FixedShapeTensor3D() : Base() {}
 
+  static constexpr fastKronOp layout() {return Layout;}
   CUDA_DEVICE_HOST
   void zero() {Base::zero(data);}
   
@@ -207,8 +208,8 @@ public:
 
   template<typename F>
   CUDA_DEVICE_HOST
-  void apply(fastKronOp layout, F&& fn){
-    if (layout == fastKronOp_N) {
+  void apply(F&& fn){
+    if (Layout == fastKronOp_N) {
       #pragma unroll
       for (uint32_t m = 0; m < M; m++) {
       #pragma unroll
@@ -364,9 +365,9 @@ public:
 };
 
 //Register Tensors
-template<typename T, uint32_t M, uint32_t K, uint32_t Q>
-class YRegisters : public FixedShapeTensor3D<T, M, K, Q> {
-  using Base = FixedShapeTensor3D<T, M, K, Q>;
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t K, uint32_t Q>
+class YRegisters : public FixedShapeTensor3D<Layout, T, M, K, Q> {
+  using Base = FixedShapeTensor3D<Layout, T, M, K, Q>;
 
 public:
   CUDA_DEVICE_HOST
@@ -380,8 +381,8 @@ public:
   static constexpr uint32_t q() {return Q;}
 };
 
-template<typename T, uint32_t M, uint32_t K, uint32_t P>
-class XRegisters : public FixedShapeTensor3D<T, M, K, P>{
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t K, uint32_t P>
+class XRegisters : public FixedShapeTensor3D<Layout, T, M, K, P>{
 public:
   CUDA_DEVICE_HOST
   XRegisters() {}
