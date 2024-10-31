@@ -74,7 +74,7 @@ public:
   TransposedDirectShared3D(T* data) : data(data) {}
 
   CUDA_DEVICE_HOST
-  fastKronOp layout() {return Layout;}
+  constexpr fastKronOp layout() const {return Layout;}
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord1D
@@ -107,10 +107,20 @@ public:
   }
 
   void zero(uint32_t startRow, uint32_t startSlice, uint32_t startElem, uint32_t endRow, uint32_t endSlice, uint32_t endElem) {
-    for (uint32_t r = startRow; r < endRow; r++) {
+    if (layout() == fastKronOp_N) {
+      for (uint32_t r = startRow; r < endRow; r++) {
+        for (uint32_t e = startElem; e < endElem; e++) {
+          for (uint32_t c = startSlice; c < endSlice; c++) {
+            at(r, c, e) = 0.0f;
+          }
+        }
+      }
+    } else {
       for (uint32_t e = startElem; e < endElem; e++) {
         for (uint32_t c = startSlice; c < endSlice; c++) {
-          at(r, c, e) = 0.0f;
+          for (uint32_t r = startRow; r < endRow; r++) {  
+            at(r, c, e) = 0.0f;
+          }
         }
       }
     }

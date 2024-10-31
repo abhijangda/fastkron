@@ -30,7 +30,7 @@
   CONTIGUOUS_TEST_NN(KMM, 1, MinN, MaxN, P, Q, true); \
   CONTIGUOUS_TEST_NN(KMM, 3, MinN, MaxN, P, Q, true); \
   CONTIGUOUS_TEST_NN(KMM, 16, MinN, MaxN, P, Q, true); \
-  CONTIGUOUS_TEST_NN(KMM, 17, MinN, MaxN, P, Q, true); \
+  CONTIGUOUS_TEST_NN(KMM, 20, MinN, MaxN, P, Q, true); \
 
 
 

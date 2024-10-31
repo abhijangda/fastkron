@@ -114,11 +114,15 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
   }
   } else if (Xch.layout() == fastKronOp_T) {
     for (uint32_t k = 0; k < XTile.cols; k += F.p()) {
-    for (uint32_t p = 0; p < Xch.p(); p += VecTLen) {
-    for (uint32_t m = 0; m < XTile.m(); m += VecTLen) {
+    uint32_t p = 0;
+    for (; p < Xch.p(); p += VecTLen) {
+    uint32_t m = 0;
+    for (;m < XTile.m(); m += VecTLen) {
       X86VecT slices[VecTLen];
       const bool UseAVXStore = 
-          VecTLen > 1 && (kMMultipleOfTileM || XTile.m() - m >= VecTLen);
+          VecTLen > 1 && 
+          (kMMultipleOfTileM || XTile.m() - m >= VecTLen) &&
+          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen);
 
       if (UseAVXStore) {
         for (uint32_t pp = 0; pp < VecTLen; pp++) {
@@ -135,12 +139,13 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           }
           slices[pp].store(&Xch.at(m, k/F.p(), p + pp));
         }
-      } else {
+      } else if (XTile.m() - m < VecTLen) {
         for (uint32_t pp = 0; pp < VecTLen; pp++) {
+        uint32_t m1 = m;
+        for (;m1 < XTile.m(); m1++) {
           const ElemT* ptr = (fac == 0) ? 
-                              XTile.data(m, k/F.p(), tileP + p + pp) : 
-                              &Ych.at(m,k/F.p(), tileP + p + pp);
-          
+                              XTile.data(m1, k/F.p(), tileP + p + pp) : 
+                              &Ych.at(m1,k/F.p(), tileP + p + pp);
           ElemT val = *ptr;
 
           if (isLastFactor &&
@@ -148,10 +153,36 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
             val = alpha * val;
           }
 
-          Xch.at(m, k/F.p(), p + pp) = val;
-        }
+          Xch.at(m1, k/F.p(), p + pp) = val;
+        }}
       }
-  }}}
+    }}
+    
+    if (!(kPMultipleOfTileP && Xch.p() % VecTLen == 0)) {
+      uint32_t p = ((F.p() - tileP)/VecTLen) * VecTLen;
+      for (; p < Xch.p(); p++) {
+        uint32_t m = 0;
+        if (p < F.p() - tileP) {
+          for (;m < XTile.m(); m++) {
+            const ElemT* ptr = (fac == 0) ? 
+                                XTile.data(m, k/F.p(), tileP + p) : 
+                                &Ych.at(m,k/F.p(), tileP + p);
+            
+            ElemT val = *ptr;
+
+            if (isLastFactor &&
+                (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+              val = alpha * val;
+            }
+
+            Xch.at(m, k/F.p(), p) = val;
+          }
+        }
+
+        Xch.zero(m, k/F.p(), p,
+                Xch.m(), k/F.p()+1, p+1);
+    }
+  }}
   }
 }
 
