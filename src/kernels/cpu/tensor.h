@@ -65,8 +65,8 @@ public:
 
 template<typename T, fastKronOp Layout,
          typename OptTileX, typename OptF, typename OptTileF>
-class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<Layout, T, OptTileX::M(), OptTileX::N()> {
-  using Base = AbstractFixedShapeTensor2D<Layout, T, OptTileX::M(), OptTileX::N()>;
+class TransposedDirectShared3D : public AbstractFixedShapeTensor2D<Layout, T, OptTileX::M(), (OptTileX::N()/OptF::P()) * OptTileF::P()> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, OptTileX::M(), (OptTileX::N()/OptF::P()) * OptTileF::P()>;
   T* data;
 
 public:

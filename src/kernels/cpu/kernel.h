@@ -196,8 +196,8 @@ void load(uint32_t tileP, const YElem& y,
     YReg.zero();
   } else {
     //TODO: For OpY=fastKronOp_T YReg.apply should have last loop in m
-    const uint KVectorLen = 1; //(Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
-    const uint MVectorLen = X86VecT::VectorLen;//(Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
+    const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+    const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
     YReg.apply(Ych.layout(), [&](X86VecT& e, const uint32_t ym, const uint32_t yk, const uint32_t yq) {
       e.load(&Ych.at(y.m() + ym * MVectorLen, y.q() + yq, y.k()/Fch.p() + yk * KVectorLen));
     });
@@ -246,8 +246,8 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
            const YElem& y, 
            const Factor& F, Matrix& Y, Matrix& Z, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
-  const uint KVectorLen = 1;//X86VecT::VectorLen;// (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
-  const uint MVectorLen = X86VecT::VectorLen;//1;//X86VecT::VectorLen;//(Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
+  const uint KVectorLen = (Ych.layout() == fastKronOp_N) ? X86VecT::VectorLen : 1;
+  const uint MVectorLen = (Ych.layout() == fastKronOp_N) ? 1 : X86VecT::VectorLen;
 
   if ((Ych.layout() == fastKronOp_N && fac > 0) ||
       (Ych.layout() == fastKronOp_T && fac < fusedParams.NumFused - 1) ||
@@ -303,7 +303,7 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
         }
         if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
           X86VecT z;
-          z.load(Z.data<ElemT>((tileM + y.m() + rm), yN, Ych.layout()), numElems);
+          z.load(Z.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
           e.fmadd(beta, z);
         }
         e.store(Y.data<ElemT>(tileM + y.m() + rm*MVectorLen, yN, Ych.layout()), numElems);
