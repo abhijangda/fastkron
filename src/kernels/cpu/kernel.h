@@ -129,7 +129,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
             const ElemT* ptr = (fac == 0) ? 
                                 XTile.data(m, k/F.p(), tileP + p + pp) : 
-                                &Ych.at(0, 0, 0) + (k + p)*Ych.m() + m;
+                                &Ych.at(0, 0, 0) + (k + p + pp)*Ych.m() + m;
             slices[pp].load(ptr);
           }
         } else if (OpX == fastKronOp_N) {
@@ -154,7 +154,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
         for (;m1 < XTile.m(); m1++) {
           const ElemT* ptr = (fac == 0) ? 
                               XTile.data(m1, k/F.p(), tileP + p + pp) : 
-                              &Ych.at(0, 0, 0) + (k + p)*Ych.m() + m;
+                              &Ych.at(0, 0, 0) + (k + p + pp)*Ych.m() + m;
           ElemT val = *ptr;
 
           if (isLastFactor &&
