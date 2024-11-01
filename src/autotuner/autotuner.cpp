@@ -286,7 +286,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
   
   Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
   for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
-    Logger(LogLevel::Info) << "  " << (*iter) << std::endl;
+    Logger(LogLevel::Info) << "  #" << ((retKernelSeries.rend() - iter)-1) << ": " << (*iter) << std::endl;
 #if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
     if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
         ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
