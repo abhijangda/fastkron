@@ -236,23 +236,30 @@ class CPUKMMKernel(Kernel):
 
     #After transposing of slices, TileX has element of each slice in contiguous order.
     #So, number of slices should be multiple of vector
+    totalRegs = 0
     if self.kmmtype == "mkm":
       maxVectorLoopElems = self.shape.k // (self.shape.p**self.fused_kernels)
       innerMostVectorElems = self.rk
+      totalRegs = innerMostVectorElems//AVXLen * self.rm * self.rq + innerMostVectorElems//AVXLen * self.rm + self.rq//AVXLen
     else:
       maxVectorLoopElems = self.tileM
       innerMostVectorElems = self.rm
+      totalRegs = innerMostVectorElems//AVXLen * self.rk * self.rq + innerMostVectorElems//AVXLen * self.rk + self.rq//AVXLen
 
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
               and maxVectorLoopElems % AVXLen != 0 and self.shape.k % self.rk == 0) or \
             (self.aalign == AVXLen and innerMostVectorElems % AVXLen == 0))
+    cond = cond and totalRegs <= 15 # 15 YMM Registers
 
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
       MaxRkVecRegs = 4 if self.arch == "avx512" else 2
       MaxRqVecRegs = 4
-      cond = cond and innerMostVectorElems <= min(MaxRkVecRegs * AVXLen, maxVectorLoopElems) 
-      #and self.rq == min(MaxRqVecRegs, self.tileQ)
+      cond = cond and innerMostVectorElems <= min(MaxRkVecRegs * AVXLen, maxVectorLoopElems)
+
+      if self.shape.p <= 32 and self.shape.q <= 32:
+        cond = cond and self.tileQ == self.shape.q 
+
     return cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
@@ -466,9 +473,12 @@ def simd_lengths(backend: str, arch : str, elem_type: str):
   # assert False, f"Invalid {arch}"
   return lengths
 
-def x_simd_len(backend : str, arch : str, m, cols, op, elem_type):
+def x_simd_len(kmmtype : str, backend : str, arch : str, m, cols, op, elem_type):
   lengths = simd_lengths(backend, arch, elem_type)
-  return max([a for a in lengths if cols % a == 0])
+  if kmmtype == "mkm":
+    return max([a for a in lengths if cols % a == 0])
+  elif kmmtype == "kmm":
+    return max([a for a in lengths if m % a == 0])
 
 def f_simd_len(backend : str, arch : str, cols, elem_type):
   lengths = simd_lengths(backend, arch, elem_type)
@@ -509,7 +519,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+                  TilePs = [min(p, MinTile)] #+ [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
 
                   TileMs = {}
@@ -521,7 +531,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     if kmmtype == 'mkm':
                       TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                     elif kmmtype == "kmm":
-                      TileMs = [32,64,128] #([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
+                      TileMs = [8,16,32,64] #([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
                     TileMs = {t: [] for t in TileMs}
 
                   for tM in TileMs:
@@ -601,7 +611,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                           __configs += [config]
                                     elif backend == 'x86':
                                       dist = 0
-                                      aalign = x_simd_len(backend, arch, tM, tK, opx, elem_type)
+                                      aalign = x_simd_len(kmmtype, backend, arch, tM, tK, opx, elem_type)
                                       kronalign = f_simd_len(backend, arch, tQ, elem_type)
                                       config = CPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q),
                                                               KronMatMulShape(m, k, n, ps, qs),

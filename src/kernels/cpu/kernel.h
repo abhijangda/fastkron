@@ -129,7 +129,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
             const ElemT* ptr = (fac == 0) ? 
                                 XTile.data(m, k/F.p(), tileP + p + pp) : 
-                                &Ych.at(m,k/F.p(), tileP + p + pp);
+                                &Ych.at(0, 0, 0) + (k + p)*Ych.m() + m;
             slices[pp].load(ptr);
           }
         } else if (OpX == fastKronOp_N) {
@@ -154,7 +154,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
         for (;m1 < XTile.m(); m1++) {
           const ElemT* ptr = (fac == 0) ? 
                               XTile.data(m1, k/F.p(), tileP + p + pp) : 
-                              &Ych.at(m1,k/F.p(), tileP + p + pp);
+                              &Ych.at(0, 0, 0) + (k + p)*Ych.m() + m;
           ElemT val = *ptr;
 
           if (isLastFactor &&
@@ -175,7 +175,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           for (;m < XTile.m(); m++) {
             const ElemT* ptr = (fac == 0) ? 
                                 XTile.data(m, k/F.p(), tileP + p) : 
-                                &Ych.at(m,k/F.p(), tileP + p);
+                                &Ych.at(0, 0, 0) + (k + p)*Ych.m() + m;
             
             ElemT val = *ptr;
 
@@ -219,7 +219,7 @@ template<typename X86VecT,
 static CUDA_DEVICE_HOST
 void mma(uint32_t /*tileP*/, const YElem& y, 
          const XCache& Xch, const FCache& Fch,
-         YInterim& Ych, YRegisters& YReg) {
+         YInterim& /*Ych*/, YRegisters& YReg) {
   const uint VectorLen = X86VecT::VectorLen;
   const fastKronOp Layout = YRegisters::layout();
 
@@ -365,16 +365,22 @@ void threadWork(KernelParams& params,
     TransposedDirectShared3D<ElemT, OpY, OptTileX, OptF, OptTileF> 
       TrXCache((ElemT*)params.caches->TileXs[tid]);
 
-    int fac = 0;
-    if (OpY == fastKronOp_N)      fac = _fac;
-    else if (OpY == fastKronOp_T) fac = FusedFacs - 1 - _fac;
+    int fac = 0; bool isLastFactor = epilogueParams.isLastFactor;
+    if (OpY == fastKronOp_N)      {
+      fac = _fac;
+      isLastFactor = isLastFactor && fac == 0;
+    }
+    else if (OpY == fastKronOp_T) {
+      fac = FusedFacs - 1 - _fac;
+      isLastFactor = isLastFactor && fac == FusedFacs - 1;
+    }
 
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);
 
       F = F.sameShape(batchedData.getFBatch(params, fac, batch).data());
       //Transpose X data and store to TrXCache to reduce TLB misses
-      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, epilogueParams.isLastFactor, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
+      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, isLastFactor, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
       //Store F to FCache to reduce TLB misses
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 
