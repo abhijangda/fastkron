@@ -513,11 +513,11 @@ public:
     __m512d __t0, __t1, __t2, __t3, __t4, __t5, __t6, __t7;
     __m512d __tt0, __tt1, __tt2, __tt3, __tt4, __tt5, __tt6, __tt7;
 
-    constexpr int64_t idx1[8] = {0, 8 , 1 , 9 , 4 , 12, 5 , 13};
-    constexpr int64_t idx2[8] = {2, 10, 3 , 11, 6 , 14, 7 , 15};
-    constexpr int64_t idx3[8] = {0, 1 , 8 , 9 , 4 , 5 , 12, 13};
-    constexpr int64_t idx4[8] = {2, 3 , 10, 11, 6 , 7 , 14, 15};
-    constexpr int64_t idx5[8] = {4, 5 , 6 , 7 , 12, 13, 14, 15};
+    alignas(64) constexpr int64_t idx1[8] = {0, 8 , 1 , 9 , 4 , 12, 5 , 13};
+    alignas(64) constexpr int64_t idx2[8] = {2, 10, 3 , 11, 6 , 14, 7 , 15};
+    alignas(64) constexpr int64_t idx3[8] = {0, 1 , 8 , 9 , 4 , 5 , 12, 13};
+    alignas(64) constexpr int64_t idx4[8] = {2, 3 , 10, 11, 6 , 7 , 14, 15};
+    alignas(64) constexpr int64_t idx5[8] = {4, 5 , 6 , 7 , 12, 13, 14, 15};
 
     __m512i vidx1 = _mm512_load_epi64(idx1);
     __m512i vidx2 = _mm512_load_epi64(idx2);
