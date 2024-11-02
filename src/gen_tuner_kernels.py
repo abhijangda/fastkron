@@ -249,7 +249,10 @@ class CPUKMMKernel(Kernel):
     cond = (((self.opX == "T" or not isPowerOfTwo(self.problem.k) or not isPowerOfTwo(self.problem.l)) \
               and maxVectorLoopElems % AVXLen != 0 and self.shape.k % self.rk == 0) or \
             (self.aalign == AVXLen and innerMostVectorElems % AVXLen == 0))
-    cond = cond and totalRegs <= 15 # 15 YMM Registers
+    if self.arch.lower() == "avx":
+      cond = cond and totalRegs <= 16 # 16 YMM Registers
+    elif self.arch.lower() == "avx512":
+      cond = cond and totalRegs <= 32 # 32 ZMM Registers
 
     if isPowerOfTwo(self.shape.p) and isPowerOfTwo(self.shape.q) and self.shape.p >= 4 and self.shape.q >= 4:
       #15 YMM Registers.
