@@ -117,7 +117,7 @@ class FastKronEval:
       backend_flags = "-DENABLE_X86=ON -DENABLE_CUDA=OFF"
     if self.tuningmode == "FullTune":
       backend_flags += " -DFULL_TUNE=ON"
-    run_command('cmake .. ' + backend_flags)
+    run_command('cmake .. ' + backend_flags + ' -DCMAKE_BUILD_TYPE=Release')
     os.chdir(d)
 
   def gen_kernels(self, shape, opX, opF, distKernels):
@@ -225,7 +225,7 @@ def run_nn(device, mode, elemtype, mmtype, dataset):
 def run_nt(device, mode):
   benchmark_single_gpu(device, "N", "T", mode, elemtype, mmtype, dataset)
 
-def run_tt(device, mode, elemtype, dataset):
+def run_tt(device, mode, elemtype, mmtype, dataset):
   benchmark_single_gpu(device, "T", "T", mode, elemtype, mmtype, dataset)
 
 def multi_gpu(scaling):
@@ -258,22 +258,24 @@ if __name__ == "__main__":
   parser.add_argument('-types'       , required=True, type=str, nargs="+")
   parser.add_argument("-tune-modes"  , required=True, type=str, nargs="+")
   parser.add_argument("-dataset"     , required=True, type=str)
-  parser.add_argument("-mmtype"      , required=True, type=str)
+  parser.add_argument("-mmtype"      , required=True, type=str, nargs="+")
 
   args = parser.parse_args()
   
   assert args.dataset in ["large", "full"]
 
-  for backend in args.backends:
-    for elemtype in args.types:
-      for mode in args.tune_modes:
-        assert backend in ["cuda", "x86", "hip"]
-        assert elemtype in ["float", "int", "double"]
-        assert mode in TuningModes
+  for mmtype in args.mmtype:
+    for backend in args.backends:
+      for elemtype in args.types:
+        for mode in args.tune_modes:
+          assert backend in ["cuda", "x86", "hip"]
+          assert elemtype in ["float", "int", "double"]
+          assert mode in TuningModes
+          assert mmtype in ["mkm", "kmm"]
 
-        run_nn(backend, mode, elemtype, args.mmtype, args.dataset)
-        # run_tt(backend, mode, elemtype, args.dataset)
+          run_nn(backend, mode, elemtype, mmtype, args.dataset)
+          run_tt(backend, mode, elemtype, mmtype, args.dataset)
 
-        if backend == "cuda" and mode == "FullTune" and args.dataset == "large":
-          multi_gpu("weak")
-          multi_gpu("strong")
+          if backend == "cuda" and mode == "FullTune" and args.dataset == "large":
+            multi_gpu("weak")
+            multi_gpu("strong")
