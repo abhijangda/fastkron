@@ -506,7 +506,7 @@ class AVX512Double : public X86Vector<double, AVX512DoubleWrapper> {
 public:
   AVX512Double(AVX512DoubleWrapper::VecT v) : X86Vector<double, AVX512DoubleWrapper>(v) {}
   AVX512Double() {}
-  AVX512Double(double /*zero*/) {}
+  AVX512Double(double /*zero*/) {this->zero();}
 
   static void transpose(AVX512Double rows[]) {
     //https://github.com/romeric/Fastor/blob/master/Fastor/backend/transpose/transpose_kernels.h:_MM_TRANSPOSE8_PD
