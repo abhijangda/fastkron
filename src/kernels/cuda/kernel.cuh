@@ -163,7 +163,7 @@ __global__ void cudaKernel(KernelParams params,
   XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
-  register YRegisters<ElemT, RegM, RegK, RegQ> yReg;
+  register YRegisters<fastKronOp_N, ElemT, RegM, RegK, RegQ> yReg; //Layout is not used in CUDA
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
@@ -190,7 +190,7 @@ __global__ void cudaKernel(KernelParams params,
            (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) &&
            (kMMultipleOfTileM || yElem.m() < XTile.m()))
           ) {
-        /*register*/ XRegisters<ElemT, TileM, RegK, TileP> Xr;
+        /*register*/ XRegisters<fastKronOp_N, ElemT, TileM, RegK, TileP> Xr; //Layout is not used in CUDA
         /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
 
         mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
