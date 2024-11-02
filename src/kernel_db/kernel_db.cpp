@@ -240,7 +240,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
       } else {
         firstOpTKernelFound = true;
       }
-      std::cout << 241 << " " << problem << " " << subProblemStart << std::endl;
+
       auto numFusedToKernels = filterFastestFusedKernels(problem, kernels);
 
       if (firstOpTKernelFound && !numFusedToKernels.empty()) {

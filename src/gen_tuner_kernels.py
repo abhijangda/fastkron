@@ -238,9 +238,9 @@ class CPUKMMKernel(Kernel):
     #So, number of slices should be multiple of vector
     totalRegs = 0
     if self.kmmtype == "mkm":
-      maxVectorLoopElems = self.shape.k // (self.shape.p**self.fused_kernels)
+      maxVectorLoopElems = self.shape.k // self.shape.p
       innerMostVectorElems = self.rk
-      totalRegs = innerMostVectorElems//AVXLen * self.rm * self.rq + innerMostVectorElems//AVXLen * self.rm + self.rq//AVXLen
+      totalRegs = self.rk//AVXLen * self.rm * self.rq + self.rk//AVXLen * self.rm + self.rq//AVXLen
     else:
       maxVectorLoopElems = self.tileM
       innerMostVectorElems = self.rm
@@ -260,7 +260,7 @@ class CPUKMMKernel(Kernel):
       if self.shape.p <= 32 and self.shape.q <= 32:
         cond = cond and self.tileQ == self.shape.q 
 
-    return cond and self.shape.k * self.tileM <= 32*1024 and \
+    cond = cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
             (self.fused_kernels == 1 or \
@@ -273,7 +273,7 @@ class CPUKMMKernel(Kernel):
            self.rq <= AVXLen and (self.rm == self.tileM if self.kmmtype == "mkm" else self.tileM % self.rm == 0) # and self.opt_level == 3
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
-
+    return cond
 class GPUKMMKernel(Kernel):
   def __init__(self, backend : str, arch : str, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
@@ -519,7 +519,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
                   MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile)] #+ [i for i in factors(p) if i > MinTile]
+                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
 
                   TileMs = {}

@@ -23,12 +23,12 @@
 
 #define CONTIGUOUS_TEST_TT(MinN, MaxN, P, Q, Type, Tune) \
     GENERAL_TEST_TT(MKM, 16, MinN, MaxN, P, Q, Type, Tune, 1, 1, 1, 1); \
-    GENERAL_TEST_TT(KMM, 1, MinN, MaxN, P, Q, Type, true, 1, 1, 1, 1); \
-    GENERAL_TEST_TT(KMM, 17, MinN, MaxN, P, Q, Type, true, 1, 1, 1, 1); \
+    GENERAL_TEST_TT(KMM, 1, MinN, MaxN, P, Q, Type, Tune, 1, 1, 1, 1); \
+    GENERAL_TEST_TT(KMM, 17, MinN, MaxN, P, Q, Type, Tune, 1, 1, 1, 1); \
 
 #define STRIDED_BATCHED_TEST_TT(MinN, MaxN, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY) \
     GENERAL_TEST_TT(MKM, 16, MinN, MaxN, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY); \
-    GENERAL_TEST_TT(KMM, 3, MinN, MaxN, P, Q, Type, true, BatchZ, BatchX, BatchF, BatchY);
+    GENERAL_TEST_TT(KMM, 3, MinN, MaxN, P, Q, Type, Tune, BatchZ, BatchX, BatchF, BatchY);
 
 CONTIGUOUS_TEST_TT(1, 10, 2, 1, float, false);
 CONTIGUOUS_TEST_TT(1, 10, 1, 6, float, false);
@@ -65,9 +65,9 @@ CONTIGUOUS_TEST_TT(1, 2, 297, 127, float, false);
 CONTIGUOUS_TEST_TT(1, 2, 127, 297, float, false);
 CONTIGUOUS_TEST_TT(1, 2, 936, 505, float, false);
 
-// CONTIGUOUS_TEST_TT(1, 3, 128, 128, float, true);
-// CONTIGUOUS_TEST_TT(3, 4, 32, 32, float, true);
-// CONTIGUOUS_TEST_TT(6, 8, 4, 4, float, true);
+CONTIGUOUS_TEST_TT(1, 3, 128, 128, float, true);
+CONTIGUOUS_TEST_TT(3, 4, 32, 32, float, true);
+CONTIGUOUS_TEST_TT(6, 8, 4, 4, float, true);
 
 STRIDED_BATCHED_TEST_TT(1, 3, 128, 128, float, true, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_TT(3, 4, 32,  32,  float, true, 2, 1, 2, 2);
