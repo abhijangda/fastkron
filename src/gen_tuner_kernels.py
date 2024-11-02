@@ -262,7 +262,6 @@ class CPUKMMKernel(Kernel):
 
       if self.shape.p <= 32 and self.shape.q <= 32:
         cond = cond and self.tileQ == self.shape.q 
-
     cond = cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
@@ -277,6 +276,7 @@ class CPUKMMKernel(Kernel):
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
     return cond
+
 class GPUKMMKernel(Kernel):
   def __init__(self, backend : str, arch : str, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
                tileQ : int, tileP : int, tileM: int,
