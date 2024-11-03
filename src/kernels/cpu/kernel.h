@@ -224,8 +224,8 @@ void mma(uint32_t /*tileP*/, const YElem& y,
   const fastKronOp Layout = YRegisters::layout();
 
   for (uint32_t p = 0; p < Fch.p(); p++) {
-    XRegisters<Layout, X86VecT, YReg.m(), YReg.k(), 1> XReg;
-    FRegisters<X86VecT, 1, YReg.q()> FReg;
+    XRegisters<Layout, X86VecT, YRegisters::m(), YRegisters::k(), 1> XReg;
+    FRegisters<X86VecT, 1, YRegisters::q()> FReg;
     XReg.apply([&](X86VecT& e, const uint32_t em, const uint32_t ek, const uint32_t ep) {
       if (YReg.layout() == fastKronOp_N)
         e.load(&Xch.at(y.m() + em, y.k()/Fch.p() + ek*VectorLen, p + ep));

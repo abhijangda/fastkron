@@ -155,10 +155,12 @@ fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT probl
   for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
     for (int r = 0; r < runs; r++) {
-      //Trash L3 Cache
+
+      /*Trashing the L3 Cache does not seem to have any effect
       uint32_t l3size = ((CPUArchDetails*)hardware[0])->totalL3Size();
       if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3size)
         parallelCopy(trash1, trash2, l3size);
+      */
       double startTime = getCurrTime();
       if (useP2PStore) {
         //FUTURE WORK

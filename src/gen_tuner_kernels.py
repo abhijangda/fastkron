@@ -196,15 +196,16 @@ class CPUKMMKernel(Kernel):
   def pragmaTargetArch(self):
     targetArch = ""
     if self.arch.lower() == "avx" or self.arch.lower() == "avx2":
-      targetArch = 'x86-64-v3'
+      targetArch = 'AVX'
     elif self.arch.lower() == "avx512":
-      targetArch = 'x86-64-v4'
+      targetArch = 'AVX512'
     else:
-      targetArch = 'x86-64-v2'
+      targetArch = 'SISD'
 
-    return f'''#pragma GCC push_options
-#pragma GCC optimization("O3")
-#pragma GCC target("arch={targetArch}")'''
+    return f'''CXX_PRAGMA_PUSH_OPTIONS
+CXX_PRAGMA_O3
+CXX_PRAGMA_ARCH_{targetArch}'''
+
 
   def hostInvokeFile(self):
     return "\n".join(['#include "kernels/params.h"',
@@ -217,7 +218,7 @@ class CPUKMMKernel(Kernel):
                       self.hostFuncDecl()+"{",
                       f"  {self.kernelDecl()}(params, fusedParams, distParams, epilogueParams);",
                       "}",
-                      "#pragma GCC pop_options"])
+                      "CXX_PRAGMA_POP_OPTIONS"])
 
   def kernelInfo(self):
     return f"{self.backend.upper()}KMMKernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"
