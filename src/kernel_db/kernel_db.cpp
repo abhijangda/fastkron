@@ -85,7 +85,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem
   //Find all kernels for each opt level that can compute the problem
   if (findAllKernels(problem, batchType, useP2PStore, allKernels)) {
     //Only execute kernels that are at the max opt level.
-    bool OnlyMaxOptKernels = true;
+    const bool OnlyMaxOptKernels = true;
     uint32_t kernelIdx = 0;
     uint32_t totalKernels = 0;
     for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
@@ -123,7 +123,8 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem
 
   if (minTime < std::numeric_limits<float>::max()) {
     Logger(LogLevel::Debug) << std::fixed << std::setprecision(4) <<
-                "Fastest kernel for " << problem << ": " << bestKernel->str() << " runs in " << minTime << " ms" << std::endl;
+                "Fastest kernel for " << problem << ": " << bestKernel->str() <<
+                " runs in " << minTime << " ms" << std::endl;
     return std::make_pair(bestKernel, minTime);
   }
 
@@ -184,8 +185,8 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
       //one invocation
       for (auto kernel : kernels) {
         if (problem.n() == kernel->getFusedFacs()) {
-          uint32_t start;
-          uint32_t end;
+          uint32_t start = 0;
+          uint32_t end = kernel->getFusedFacs()-1;
           if (problem.mmtype() == FastKronMMType::MKM) {
             start = 0;
             end = kernel->getFusedFacs()-1;

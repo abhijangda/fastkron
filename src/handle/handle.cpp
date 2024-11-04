@@ -9,6 +9,22 @@
 #include "autotuner/autotuner.h"
 #include "kmm/kmmalgo.h"
 
+std::string fastKronOpToStr(const fastKronOp& op) {
+  switch (op) {
+    case fastKronOp_N:
+      return "N";
+    case fastKronOp_T:
+      return "T";
+  }
+
+  return NULL;
+}
+
+std::ostream& operator<<(std::ostream& os, const fastKronOp& op) {
+  os << fastKronOpToStr(op);
+  return os;
+}
+
 FastKronHandle::FastKronHandle(uint32_t backends) :
   backends(backends), autotuner(*this)
 #ifdef ENABLE_CUDA
@@ -89,44 +105,7 @@ fastKronError FastKronHandle::setStream(fastKronBackend backend,
   return fastKronSuccess;
 }
 
-fastKronError FastKronHandle::xgekmm(const KMMProblem problem, const fastKronBackend backend,
-                                     void* temp1, void* temp2, EpilogueParams epilogueParams) {
-  
-  if (problem.y().data()  == nullptr || temp1 == nullptr ||
-      hasBackend(backend) == false) 
-      return fastKronInvalidArgument;
-
-  if (problem.y().data() == epilogueParams.z<void>() && 
-      (temp1 == nullptr || temp2 == nullptr))
-      return fastKronInvalidArgument;
-
-  fastKronError err = fastKronSuccess;
-  // TunedKernelsSeries kernelSeries;
-
-  void* temps[2] = {temp1, temp2};
-  auto kernelDb = getKernelDb(backend);
-  auto kk = *kernelDb->compiledKernels.begin();
-  std::cout << "109 " << kk.second[0]->str() << "  " << kk.second[0]->getFusedFacs() << std::endl;
-
-  err = executeGeKMM(problem, temps, problem.n(),
-    [kk](const KMMProblem)
-      {return kk.second[0]->getFusedFacs();},
-    [kk, epilogueParams, kernelDb, this]
-      (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
-        fastKronError err;
-        // auto kernel = *kernelSeriesIter;
-
-        // KMMKernel* selectedKernel = kernel.;
-        // assert(rstart == kernel.end);
-        err = kernelDb->invokeKernel(kk.second[0], subProblem, rstart, epilogueParams, KernelModeNormal);
-        // kernelSeriesIter++;
-        return err;
-    });
-
-  return err;
-}
-
-fastKronError FastKronHandle::xgemkm(const KMMProblem problem, 
+fastKronError FastKronHandle::xgemm(const KMMProblem problem, 
                                      const fastKronBackend backend, 
                                      void* temp1, void* temp2,
                                      EpilogueParams epilogueParams) {
@@ -186,7 +165,7 @@ fastKronError FastKronHandle::xgemkm(const KMMProblem problem,
   return err;
 }
 
-fastKronError FastKronHandle::xgemkmStridedBatched(const KMMProblemStridedBatched problem, 
+fastKronError FastKronHandle::xgemmStridedBatched(const KMMProblemStridedBatched problem, 
                                                    const fastKronBackend backend, 
                                                    void* temp1, void* temp2,
                                                    EpilogueStridedBatchedParams epilogueParams) {

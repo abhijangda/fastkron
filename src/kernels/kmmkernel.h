@@ -77,8 +77,15 @@ protected:
    */
   fastKronOp opF;
 
-  KernelBatchType::Ty kernelBatchType;
+  /**
+   * @mmType: type of GeMM either GeKMM or GeMKM
+   */
   FastKronMMType mmType;
+
+  /**
+   * @kernelBatchType: Single batch or strided batch
+   */
+  KernelBatchType::Ty kernelBatchType;
 
 public:
   KMMKernel() {}
@@ -86,7 +93,8 @@ public:
   KMMKernel(void* kernelInvoker, FastKronType elemType,
             Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
             uint regM, uint regK, uint regQ, uint optLevel,
-            fastKronOp opX, fastKronOp opF, FastKronMMType mmType, KernelBatchType::Ty kernelBatchType) :
+            fastKronOp opX, fastKronOp opF, FastKronMMType mmType,
+            KernelBatchType::Ty kernelBatchType) :
             kernelInvoker(kernelInvoker), elemType(elemType),
             f(f), tileF(tileF), tileX(tileX), fusedFacs(fusedFacs),
             P2PStore(P2PStore), regM(regM), regK(regK), regQ(regQ),

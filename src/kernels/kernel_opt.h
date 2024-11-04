@@ -21,6 +21,7 @@ struct KernelOptimizations {
     PMultipleOfTileP = 1 << 2,
     //The problem's X.cols is a multiple of kernel's TileX.n()
     KMultipleOfTileK = 1 << 3,
+    //The problem's X.rows is a multiple of kernel's TileX.m()
     MMultipleOfTileM = 1 << 4,
     //The problem Q is less than kernel's TileF.q()
     QLeTileQ         = 1 << 5,
@@ -69,8 +70,9 @@ struct KernelOptimizations {
 
   /**
    * OptLevel3() - Return a bitwise OR of optimizations at level 3.
-   *               At level 3, problem's factor has same shape as kernel's and 
-   *               kernel is invoked with same TileK as kernel's template.
+   *               At level 3, problem's factor has same shape as kernel's,
+   *               kernel is invoked with same TileK as kernel's template, and
+   *               problem's M is multiple of TileM
    */
   CUDA_DEVICE_HOST
   static constexpr uint OptLevel3() {

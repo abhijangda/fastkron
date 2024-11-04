@@ -22,7 +22,7 @@
  * a series of kernels that minimizes the total execution time of the base problem.
  */
 template<typename KMMProblem, typename TunedKernelsMap>
-static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistributed,
+static float minExecTimeOfSeries(KMMProblem problem, int32_t startF, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
                                  TunedKernelsMap tunedKernelsMap) {
   if (startF >= problem.n()) return 0;
@@ -35,19 +35,21 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
                       problem.sub(startF, problem.n() - startF) :
                       problem.rsub(startF, problem.n() - (problem.n() - 1 - startF));
 
-  //Divide the subproblem into two parts. Go through all first/second part pairs 
-  //of the subproblem. Search for tuned kernel of the first part 
+  //Divide the subproblem into two parts. From the last multiplied factor (the reverse order)
+  //go through all first/second part pairs of the subproblem. 
+  //Search for tuned kernel of the first part 
   //and recursively compute minimum time for the second part.
   reverseExecuteGeMM(subProblem, nullptr, typename KMMProblem::Matrix(), 
                       [](const KMMProblem){return 1;},
-    [&](const KMMProblem, int rstart, void*[2], typename KMMProblem::Matrix) {
-      const int subn = (problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
+    [&](const KMMProblem, int32_t rstart, void*[2], typename KMMProblem::Matrix) {
+      const int32_t subn = (problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
                        subProblem.n() - rstart;
 
       auto firstPart = (problem.mmtype() == FastKronMMType::MKM) ?
                         problem.sub(startF, subn) :
                         problem.rsub(startF, subn);
 
+      //Is this the first multiplication of X with the factor?
       bool mulWithFirstFactor = (problem.mmtype() == FastKronMMType::MKM) ?
                                  startF + subn == problem.n() : 
                                  startF + 1 == subn;
@@ -75,8 +77,9 @@ static float minExecTimeOfSeries(KMMProblem problem, uint startF, bool isDistrib
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
+          int32_t endF = ((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1);
           minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(firstPart, isP2P),
-                                                   startF, ((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1),
+                                                   startF, endF,
                                                    firstPart.k(), kernelTime);
         }
       }
@@ -364,17 +367,7 @@ fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBa
                                   false, retKernelSeries, tunedKernelsMapStridedBatched);
     Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
     for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {
-      Logger(LogLevel::Info) << "  " << (*iter) << std::endl;
-#if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
-      if (fastKron.cudaKernels.isDistributed_ and fastKron.cudaKernels.gpusInK_ > 1 and 
-          ((problem.n() - iter->start) % fastKron.cudaKernels.perGPUKronBatch_ == 0 or 
-          iter->start == 0)) {
-        uint gpuM, gpuK;
-        fastKron.getDistributedSizes(problem.m(), problem.k(), gpuM, gpuK);
-        Logger(LogLevel::Info) << "  " << "Communicate [" << gpuM << ", " << gpuK << "] among " << 
-                    "[GM, " << fastKron.cudaKernels.gpusInK_ << "] using " << fastKron.cudaKernels.distComm_ << std::endl;
-      }
-#endif
+      Logger(LogLevel::Info) << "  #" << ((retKernelSeries.rend() - iter)-1) << (*iter) << std::endl;
     }
   }
 

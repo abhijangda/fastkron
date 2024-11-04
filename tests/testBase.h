@@ -232,7 +232,6 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
                   uint M, uint /*N*/, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
                   uint64_t strideX, uint64_t strideZ, uint64_t strideF[], uint64_t strideY, int batchCount,
                   fastKronOp opx, fastKronOp opfs, T alpha, T beta) {
-  fastKronOp opy = fastKronOp_N;
   if (kmmtype == FastKronMMType::MKM) {
   for (int b = 0; b < batchCount; b++) {
   uint secFacRowMulSize = 1;
@@ -576,7 +575,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
 
   const uint64_t strideX = batchCountX > 1 ? M*K : 0;
   uint L = 1;
-  for (int i = 0; i < NUM_KP_MATS; i++) {
+  for (uint32_t i = 0; i < NUM_KP_MATS; i++) {
     if (opfs == fastKronOp_T) {
       L = L * KP_MAT_K[i];
     } else {

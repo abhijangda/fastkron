@@ -59,8 +59,9 @@ CUDAKernelDatabase::~CUDAKernelDatabase() {
   }
 }
 
-fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus,
-                                       int gpusInM, int gpusInK, int gpuKrons) {
+fastKronError CUDAKernelDatabase::init(void* ptrToStream, uint32_t gpus,
+                                       uint32_t gpusInM, uint32_t gpusInK,
+                                       uint32_t gpuKrons) {
   numGPUs_ = gpus;
   setCUDAStream(ptrToStream);
   if (numGPUs_ > numDevices()) {
@@ -69,7 +70,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus,
 
   isDistributed_ = gpus > 1;
 
-  for (int i = 0; i < numGPUs_; i++) {
+  for (uint32_t i = 0; i < numGPUs_; i++) {
     //Get information about each GPU
     auto detail = new CUDAArchDetails(i);
     hardware.push_back(detail);
@@ -79,8 +80,8 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus,
   if (isDistributed_) {
 #ifdef ENABLE_MULTI_GPU
     bool allP2PAccess = true;
-    for (int g1 = 0; g1 < gpus; g1++) {
-      for (int g2 = 0; g2 < gpus; g2++) {
+    for (uint32_t g1 = 0; g1 < gpus; g1++) {
+      for (uint32_t g2 = 0; g2 < gpus; g2++) {
         if (g1 == g2) continue;
         int p2pAccess = -1;
         CUDA_CHECK(cudaDeviceCanAccessPeer(&p2pAccess, g1, g2));
@@ -104,7 +105,7 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus,
       ncclUniqueId ncclId;
       ncclGetUniqueId(&ncclId);
       Logger(LogLevel::Debug) << "Initializing NCCL"<<std::endl;
-      for (int i = 0; i < gpus; i++) {
+      for (uint32_t i = 0; i < gpus; i++) {
         CUDA_CHECK(cudaSetDevice(i));
         ncclComms.push_back(nullptr);
         devs[i] = i;
@@ -173,6 +174,11 @@ fastKronError CUDAKernelDatabase::init(void* ptrToStream, int gpus,
       int s = pthread_barrier_init(&barriers_[i], NULL, gpusInK_);
       PTHREAD_BARRIER_CHECK(s);
     }
+#else
+  (void)gpusInM;
+  (void)gpusInK;
+  (void)gpuKrons;
+  (void)gpus;
 #endif
   }
 
@@ -183,7 +189,7 @@ void CUDAKernelDatabase::setCUDAStream(void* ptrToStream) {
   streams.clear();
   cudaStream_t* t = new cudaStream_t;
   *t = 0;
-  for (int i = 0; i < numGPUs_; i++) {
+  for (uint32_t i = 0; i < numGPUs_; i++) {
     if (ptrToStream != NULL) {
       cudaStream_t* s = new cudaStream_t;
       *s = *(((cudaStream_t*)ptrToStream) + i);
@@ -194,10 +200,10 @@ void CUDAKernelDatabase::setCUDAStream(void* ptrToStream) {
   }
 }
 
-int CUDAKernelDatabase::numDevices() {
+uint32_t CUDAKernelDatabase::numDevices() {
   int devs;
   CUDA_CHECK(cudaGetDeviceCount(&devs));
-  return devs;
+  return (uint32_t)devs;
 }
 
 CUDAArchDetails CUDAKernelDatabase::getCUDADeviceProperties() {
@@ -291,23 +297,23 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
 
   switch(problem.n()) {
     case 1:
-      return invoke(cudaKernel, problem.template factorSlice<1>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<1>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 2:
-      return invoke(cudaKernel, problem.template factorSlice<2>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<2>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 3:
-      return invoke(cudaKernel, problem.template factorSlice<3>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<3>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 4:
-      return invoke(cudaKernel, problem.template factorSlice<4>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<4>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 5:
-      return invoke(cudaKernel, problem.template factorSlice<5>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<5>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 6:
-      return invoke(cudaKernel, problem.template factorSlice<6>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<6>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels: " << problem.n() << std::endl;
       return fastKronKernelNotFound;
@@ -319,14 +325,16 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem pro
                                     const uint fidx,
                                     EpilogueParams epilogueParams,
                                     KernelMode execMode) {
-  return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, epilogueParams, execMode);
+  return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx,
+                                                  epilogueParams, execMode);
 }
 
 fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
                                     const uint fidx,
                                     EpilogueStridedBatchedParams epilogueParams,
                                     KernelMode execMode) {
-  return invokeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(kernel, problem, fidx, epilogueParams, execMode);
+  return invokeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>
+          (kernel, problem, fidx, epilogueParams, execMode);
 }
 
 fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel, 
@@ -340,23 +348,23 @@ fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel,
 
   switch (problem.n()) {
     case 1:
-      return invoke(cudaKernel, problem.template factorSlice<1>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<1>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 2:
-      return invoke(cudaKernel, problem.template factorSlice<2>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<2>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 3:
-      return invoke(cudaKernel, problem.template factorSlice<3>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<3>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 4:
-      return invoke(cudaKernel, problem.template factorSlice<4>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<4>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 5:
-      return invoke(cudaKernel, problem.template factorSlice<5>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<5>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     case 6:
-      return invoke(cudaKernel, problem.template factorSlice<6>(), fidx, distParams, epilogueParams,
-                       execMode, stream);
+      return invoke(cudaKernel, problem.template factorSlice<6>(),
+                    fidx, distParams, epilogueParams, execMode, stream);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels: " << problem.n() << std::endl;
   }
@@ -374,7 +382,7 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
                                              bool useP2PStore,
                                              int warmups, int runs,
                                              float& runtime) {
- #if defined(ENABLE_MULTI_GPU) || defined(FULL_TUNE) 
+ #if defined(ENABLE_MULTI_GPU) 
 //TODO: Also for FULL_TUNE
   if ((dynamic_cast<CUDAKMMKernel*>(kernel))->getLocalSize() > 0
   || (problem.f(0).q() >= 64 && kernel->getMaxTileF().q() <= 32))
@@ -428,8 +436,9 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem probl
                                                       bool useP2PStore,
                                                       int warmups, int runs,
                                                       float& runtime) {
-  return timeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, distParams, epilogueParams, execMode, 
-                                                useP2PStore, warmups, runs, runtime);
+  return timeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, distParams, 
+                                                epilogueParams, execMode, useP2PStore,
+                                                warmups, runs, runtime);
 
 }
 
@@ -441,8 +450,9 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemStride
                                                      bool useP2PStore,
                                                      int warmups, int runs,
                                                      float& runtime) {
-  return timeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(kernel, problem, fidx, distParams, epilogueParams, 
-                                                                            execMode, useP2PStore, warmups, runs, runtime);
+  return timeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>
+            (kernel, problem, fidx, distParams, epilogueParams, 
+             execMode, useP2PStore, warmups, runs, runtime);
 }
 
 std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
@@ -467,11 +477,13 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
         //So, in fused case we want these consective elements to be contiguous in memory
         //which is possible only when below conditions satisfy
 
-        return problem.m() == kernel->getMaxTileX().m() or kernel->getMaxTileX().m() >= MinConsecutiveStoreElems;
+        return problem.m() == kernel->getMaxTileX().m() or 
+               kernel->getMaxTileX().m() >= MinConsecutiveStoreElems;
       }
     };
 
-    std::copy_if(kernels.begin(), kernels.end(), std::back_inserter(validFusedKernels), filter);
+    std::copy_if(kernels.begin(), kernels.end(),
+                 std::back_inserter(validFusedKernels), filter);
   }
 
   return KernelDatabase::filterFastestFusedKernels(problem, validFusedKernels);
@@ -480,7 +492,7 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
 /**
  * blocksPerSM() - Returns blocks per SM occupied by a CUDA kernel based on occupancy
  */
-static float blocksPerSM(const CUDAArchDetails gpu, CUDAKMMKernel* kernel, dim3 grid) {
+static float blocksPerSM(const CUDAArchDetails gpu, CUDAKMMKernel* kernel, dim3 /*grid*/) {
   uint32_t regOcc = gpu.regsPerSM / (kernel->block().x * kernel->getNumRegs());
   uint32_t shmemOcc = gpu.sharedMemPerSM / kernel->getMaxSharedMemSize();
   return min(min(regOcc, shmemOcc), gpu.maxBlocksPerSM);
@@ -509,8 +521,11 @@ KMMKernel* CUDAKernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem,
     };
     std::sort(filteredKernels.begin(), filteredKernels.end(), order);
     for (auto k : filteredKernels) {
-      uint blocksm = blocksPerSM(getCUDADeviceProperties(), (CUDAKMMKernel*)k, ((CUDAKMMKernel*)k)->grid(subProblem));
-      if (((CUDAKMMKernel*)k)->getNumBlocks(subProblem) <= getCUDADeviceProperties().numSMs * blocksm) {
+      uint blocksm = blocksPerSM(getCUDADeviceProperties(), 
+                                 (CUDAKMMKernel*)k, 
+                                 ((CUDAKMMKernel*)k)->grid(subProblem));
+      if (((CUDAKMMKernel*)k)->getNumBlocks(subProblem) <=
+          getCUDADeviceProperties().numSMs * blocksm) {
         return k;
       }
     }

@@ -45,6 +45,9 @@ union AllTypes {
   double get(double) const {return d;}
 };
 
+/**
+ * EpilogueParams - Params for epilogue, i.e., alpha*Y + beta*Z.
+ */
 struct EpilogueParams {
   AllTypes alpha;
   AllTypes beta;
@@ -91,6 +94,9 @@ struct EpilogueParams {
   const ElemT* z()     const {return (const ElemT*)glD;}
 };
 
+/**
+ * EpilogueStridedBatchedParams - Epilogue params for strided batched problem
+ */
 struct EpilogueStridedBatchedParams : public EpilogueParams {
   StridedBatchMatrix Z;
 

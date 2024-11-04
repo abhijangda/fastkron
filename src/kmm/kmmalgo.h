@@ -459,9 +459,9 @@ struct std::hash<KMMProblemStridedBatched> {
 };
 
 /**
- * executeGeKMM() - Execute a function on the problem using the KMM algorithm. 
+ * executeGeMM() - Execute a function on the problem using the MKM/KMM algorithm. 
  *                  See paper for more details on the algorithm.
- * @problem: The problem to execute KMM algorithm.
+ * @problem: The problem to execute MKM/KMM algorithm.
  * @temps: Two Temporary buffers.
  * @swaps: Number of swaps of temporary buffers that will happen.
  * @next: The function to get next factor to compuate.
@@ -469,17 +469,7 @@ struct std::hash<KMMProblemStridedBatched> {
  *
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
-fastKronError executeGeKMM(const KMMProblem problem, void* temps[2],
-                           uint32_t swaps,
-                           std::function<uint (const KMMProblem)> next,
-                           std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
 
-// fastKronError executeGeKMM(const KMMProblemStridedBatched problem, void* temps[2],
-//                            uint32_t swaps,
-//                            std::function<uint (const KMMProblemStridedBatched)> next,
-//                            std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
-
-//TODO:
 fastKronError executeGeMM(const KMMProblem problem, void* temps[2],
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
@@ -491,9 +481,9 @@ fastKronError executeGeMM(const KMMProblemStridedBatched problem, void* temps[2]
                            std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
 
 /**
- * reverseExecuteGeKMM() - Execute a function on the problem using the reverse KMM algorithm
+ * reverseExecuteGeMM() - Execute a function on the problem using the reverse MKM/KMM algorithm
  *                         that starts from the first factor.
- * @problem: The problem to execute KMM algorithm.
+ * @problem: The problem to execute MKM/KMM algorithm.
  * @temps: Two Temporary buffers.
  * @swaps: Number of swaps of temporary buffers that will happen.
  * @next: The function to get next factor to compuate.

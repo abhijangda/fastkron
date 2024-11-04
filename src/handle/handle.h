@@ -156,8 +156,8 @@ class FastKronHandle {
   fastKronError setStream(fastKronBackend backends, void* ptrToStream);
 
   /**
-   * FastKronHandle::xgekmm() - Perform GeKMM
-   * @problem: The GeKMM problem as an object of KMMProblem
+   * FastKronHandle::xgemm() - Perform GeKMM or GeMKM
+   * @problem: The GeKMM/GeMKM problem as an object of KMMProblem
    * @backend: the `fastKronBackend` of kernels
    * @temp1: Temporary array to use
    * @temp2: Temporary array to use
@@ -165,12 +165,10 @@ class FastKronHandle {
    *
    * Return - fastKronError representing the error occurred in the operation
    */
-  fastKronError xgemkm(const KMMProblem problem, const fastKronBackend backend,
-                       void* temp1, void* temp2, EpilogueParams epilogueParams);
-  fastKronError xgekmm(const KMMProblem problem, const fastKronBackend backend,
+  fastKronError xgemm(const KMMProblem problem, const fastKronBackend backend,
                        void* temp1, void* temp2, EpilogueParams epilogueParams);
 
-  fastKronError xgemkmStridedBatched(const KMMProblemStridedBatched problem, 
+  fastKronError xgemmStridedBatched(const KMMProblemStridedBatched problem, 
                                      const fastKronBackend backend,
                                      void* temp1, void* temp2,
                                      EpilogueStridedBatchedParams epilogueParams);

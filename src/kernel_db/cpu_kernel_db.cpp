@@ -62,7 +62,7 @@ fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
   return fastKronSuccess;
 }
 
-template<uint FusedFacs, typename KMMProblem, typename EpilogueParams>
+template<typename KMMProblem, typename EpilogueParams>
 fastKronError invoke(CPUKMMKernel& kernelInfo, 
                      Matrix kernelTileX, Factor kernelTileF,
                      KMMProblem problem,
@@ -92,23 +92,29 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
   Factor kernelTileF = kernel->getTileF(problem);
   switch(problem.n()) {
     case 1:
-      return invoke<1>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<1>(), fidx, caches,
-                       distParams, epilogueParams, execMode);
+      return invoke(cpuKernel, kernelTileX, kernelTileF,
+                    problem.template factorSlice<1>(), fidx,
+                    caches, distParams, epilogueParams, execMode);
     case 2:
-      return invoke<2>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<2>(), fidx, caches,
-                       distParams, epilogueParams, execMode);
+      return invoke(cpuKernel, kernelTileX, kernelTileF,
+                    problem.template factorSlice<2>(), fidx,
+                    caches, distParams, epilogueParams, execMode);
     case 3:
-      return invoke<3>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<3>(), fidx, caches,
-                       distParams, epilogueParams, execMode);
+      return invoke(cpuKernel, kernelTileX, kernelTileF,
+                    problem.template factorSlice<3>(), fidx,
+                    caches, distParams, epilogueParams, execMode);
     case 4:
-      return invoke<4>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<4>(), fidx, caches,
-                       distParams, epilogueParams, execMode);
+      return invoke(cpuKernel, kernelTileX, kernelTileF,
+                    problem.template factorSlice<4>(), fidx,
+                    caches, distParams, epilogueParams, execMode);
     case 5:
-      return invoke<5>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<5>(), fidx, caches,
-                       distParams, epilogueParams, execMode);
+      return invoke(cpuKernel, kernelTileX, kernelTileF,
+                    problem.template factorSlice<5>(), fidx,
+                    caches, distParams, epilogueParams, execMode);
     case 6:
-      return invoke<6>(cpuKernel, kernelTileX, kernelTileF, problem.template factorSlice<6>(), fidx, caches, 
-                       distParams, epilogueParams, execMode);
+      return invoke(cpuKernel, kernelTileX, kernelTileF,
+                    problem.template factorSlice<6>(), fidx,
+                    caches, distParams, epilogueParams, execMode);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels" << std::endl;
       return fastKronKernelNotFound;
@@ -127,40 +133,33 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblemStrid
                                     EpilogueStridedBatchedParams epilogueParams,
                                     KernelMode execMode) {
   return invokeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(
-    kernel, problem, fidx, epilogueParams, execMode);
+            kernel, problem, fidx, epilogueParams, execMode);
 }
 
 template<typename KMMProblemT, typename EpilogueParamsT>
 fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT problem, 
                                             const uint fidx, 
-                                            DistributedParams distParams,
+                                            DistributedParams /*distParams*/,
                                             EpilogueParamsT epilogueParams,
                                             KernelMode execMode, 
                                             bool useP2PStore,
-                                            int warmups, int runs,
+                                            int /*warmups*/, int runs,
                                             float& runtime) {
   runtime = std::numeric_limits<float>::max();
   //Avoid the SISD kernel when running on AVX/AVX512
   if ((*(dynamic_cast<const X86ArchDetails*>(hardware[0]))).simd != X86SIMD::SISD) {
     if (((X86KMMKernel*)kernel)->getSIMD() == X86SIMD::SISD) return fastKronSuccess;
   }
-  // if (kernel->getMaxTileF().q() <= 32)
-  // {
-  //   //skip probably slow kernels
-  //   runtime = std::numeric_limits<float>::max();
-  //   return fastKronSuccess;
-  // }
-  // if (kernel->tileX.n() < 8192 || kernel->tileF.q() < 64) return fastKronSuccess;
+
   fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
     for (int r = 0; r < runs; r++) {
 
-      /*Trashing the L3 Cache does not seem to have any effect
+      //Trashing the L3 Cache does not seem to have any effect
       uint32_t l3size = ((CPUArchDetails*)hardware[0])->totalL3Size();
       if ((problem.x().numel() + problem.y().numel()) * sizeof(float) <= l3size)
         parallelCopy(trash1, trash2, l3size);
-      */
       double startTime = getCurrTime();
       if (useP2PStore) {
         //FUTURE WORK

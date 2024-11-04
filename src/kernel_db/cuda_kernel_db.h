@@ -55,7 +55,8 @@ public:
    *
    * Return - fastKronSuccess if successful otherwise an error
    */
-  fastKronError init(void* ptrToStream, int gpus, int gpusInM, int gpusInK, int gpuKrons);
+  fastKronError init(void* ptrToStream, uint32_t gpus, uint32_t gpusInM, uint32_t gpusInK,
+                     uint32_t gpuKrons);
 
   /**
    * setCUDAStream() - Set CUDA stream for all GPUs.
@@ -68,7 +69,7 @@ private:
   /**
    * numDevices() - Returns number of devices accessible to the process.
    */
-  static int numDevices();
+  static uint32_t numDevices();
 
   /**
    * getCUDADeviceProperties() - Returns GPU device properties of the first GPU.
@@ -129,12 +130,14 @@ public:
                                              DistributedParams distParams, 
                                              EpilogueParams epilogueParams,
                                              KernelMode execMode);
-  virtual fastKronError invokeP2PStoreKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
-                                             const uint fidx,  
-                                             DistributedParams distParams, 
-                                             EpilogueStridedBatchedParams epilogueParams,
-                                             KernelMode execMode)
-                                             {/*P2P not supported for stridedbatched*/}
+  virtual fastKronError invokeP2PStoreKernel(KMMKernel* /*kernel*/, 
+                                             KMMProblemStridedBatched /*problem*/,
+                                             const uint /*fidx*/,  
+                                             DistributedParams /*distParams*/, 
+                                             EpilogueStridedBatchedParams /*epilogueParams*/,
+                                             KernelMode /*execMode*/) {
+    return fastKronKernelNotFound; /*P2P not supported for stridedbatched*/
+  }
   /**
    * timeKernel() - Overriding KernelDatabase::timeKernel
    */
