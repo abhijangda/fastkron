@@ -240,8 +240,14 @@ void perGPUKronMatmul(ThreadArgs* thArgs) {
 
         //TODO: a single switch case for FusedKernels?
         fastKronError status;
-        KMMProblem subProblem(FastKronFloat, gpuM, NumFusedKerns, kronRows, kronCols, (void*)innerPrevResult, 
-                              fastKronOp_N, (void**)krons, fastKronOp_N, (void*)innerCurrResult, prevTempN, currTempN);
+        KMMProblem::Factor tmpFs[NumFusedKerns];
+        for (int iii = 0; iii < NumFusedKerns; iii++) {
+          tmpFs[iii] = Factor(kronRows[iii], kronCols[iii], krons[iii]);
+        }
+        KMMProblem subProblem(FastKronMMType::MKM, FastKronFloat,
+                              Matrix(gpuM, prevTempN, (void*)innerPrevResult), fastKronOp_N, 
+                              NumFusedKerns, tmpFs, fastKronOp_N,
+                              Matrix(gpuM, currTempN, (void*)innerCurrResult));
         status = handle.cudaKernels.invokeP2PStoreKernel(kernel.kernel, subProblem, kernel.end, distParams, 
                                                          EpilogueParams::create<float>(), KernelModeNormal);
         assert(status == fastKronSuccess);
@@ -500,7 +506,15 @@ fastKronError FastKronHandle::distributedsgekmm(const uint NumKronMats, float* x
   void* streams) {
     if (autotuner.distribTunedKernelSeries.size() == 0) {
       TunedKernelsSeries s;
-      autotuner.tune(KMMProblem(FastKronFloat, M, NumKronMats, KronMatRows, KronMatCols, fastKronOp_N, fastKronOp_N), fastKronBackend_CUDA, s);
+      KMMProblem::Factor tmpFs[NumKronMats];
+      for (int i = 0; i < NumKronMats; i++) {
+        tmpFs[i] = Factor(KronMatRows[i], KronMatCols[i]);
+      }
+      autotuner.tune(KMMProblem(FastKronMMType::MKM, FastKronFloat, 
+                     Matrix(M, KMMProblem::getK(KronMatRows, NumKronMats)), fastKronOp_N,
+                     NumKronMats, tmpFs, fastKronOp_N,
+                     Matrix(M, KMMProblem::getK(KronMatCols, NumKronMats))), 
+                     fastKronBackend_CUDA, s);
     }
     return distributedKronMatmul(*this, NumKronMats, (void**)x, (void**)kronMats, (void**)result, M, N, K, 
       KronMatCols, KronMatRows, (void**)temp1, (void**)temp2, (cudaStream_t*)streams);

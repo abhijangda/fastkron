@@ -239,7 +239,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
     float seriesTime = 0;
     TunedKernelsSeries tunedKernelSeries;
 
-    auto tmpProblem = KMMProblem(problem.type(), Matrix(gpuM, gpuK,  temp1[0].data()), 
+    auto tmpProblem = KMMProblem(problem.mmtype(), problem.type(), Matrix(gpuM, gpuK,  temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(gpuM, problem.y().n()/fastKron.cudaKernels.gpusInK_, temp2[0].data()));
 
@@ -255,7 +255,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
                                    subproblem.n());
       distParams.updateGPUResults((void**)gpuResults);
       bool distP2PStore = fastKron.cudaKernels.gpusInK_ > 1 && fastKron.cudaKernels.isDistributed_ && fastKron.cudaKernels.distComm_ == DistComm::P2P;
-      tune(subproblem, kernelDb, distP2PStore, distParams);
+      tune(subproblem, tunedKernelsMap, kernelDb, distP2PStore, distParams);
       TunedKernelsSeries tunedKernels;
       seriesTime += minExecTimeOfSeries(subproblem, 0, distP2PStore,
                                         tunedKernels, tunedKernelsMap);
