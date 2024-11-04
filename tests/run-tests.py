@@ -53,7 +53,7 @@ if not os.path.exists("build/"):
   os.mkdir("build/")
 
 os.chdir("build/")
-cmake = ""
+cmake = "-DCMAKE_BUILD_TYPE=Release "
 for b in backends:
   cmake += f"-DENABLE_{b.upper()}=ON "
 

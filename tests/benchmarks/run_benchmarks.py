@@ -122,7 +122,7 @@ class FastKronEval:
 
   def gen_kernels(self, shape, opX, opF, distKernels):
     if self.tuningmode == 'FullTune':
-      run_command("python3 src/gen_tuner_kernels.py -backend cuda -archs ampere -distinct-factors " + \
+      run_command(f"python3 src/gen_tuner_kernels.py -mm-type {self.mmtype} -backend cuda -archs ampere -distinct-factors " + \
                   str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
                   " -opX " + opX + " -opF " + opF + \
                   (" -dist-kernels " if distKernels else "") + \
@@ -240,7 +240,7 @@ def multi_gpu(scaling):
   for shape in cases:
     GMs = [1, 2, 2, 4, 4]
     GKs = [1, 1, 2, 2, 4]
-    fk = FastKronEval("cuda", "FullTune", "float", multi_gpu=True)
+    fk = FastKronEval("cuda", "FullTune", "float", "mkm", multi_gpu=True)
     fk.gen_kernels(shape, "N", "N", True)
     fk.setup_cmake()
     fk.build_kron()
