@@ -145,8 +145,10 @@ __global__ void cudaKernel(KernelParams params,
 
   const YElem yElem = getYElem(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
   const uint tileM = bid_y * TileM;
-  //TODO: is this condition optimized for OptLevel == 3?
-  if (tileM >= X.m() || tileK * TileK >= X.n()) return;
+
+  if ((!kMMultipleOfTileM && tileM >= X.m()) || 
+      (!kKMultipleOfTileK && tileK * TileK >= X.n()))
+      return;
   
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
                           (kMMultipleOfTileM || TileM == 1) ? TileM : MIN(TileM, X.m() - tileM), 
