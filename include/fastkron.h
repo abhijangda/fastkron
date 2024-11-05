@@ -205,16 +205,29 @@ fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, 
 
 /**
  * Generalized Kronecker Matrix Multiplication fuctions
- * These functions are used to do Generalized Kronecker Matrix-Matrix Multiplication (GeKMM) of the form:
+ * These functions are used to do two kinds of Generalized Kronecker Matrix-Matrix Multiplication (GeKMM).
+ * First is Matrix-Kronecker Matrix (MKM) Multiplication of the form:
  * 
  * $Z = \alpha ~ op(X) \times \left (op(F^1) \otimes op(F^2) \otimes \dots op(F^N) \right) + \beta Y$
  *
-* where,
+ * where,
   * $op$ is no-transpose or transpose operation on a matrix.
   * each $op(F^i)$ is a row-major matrix of size $P^i \times Q^i$.
   * $F^i \otimes F^j$ is Kronecker Product of two matrices
   * $op(X)$ is a row-major matrix of size $M \times \left(P^1 \cdot P^2 \cdot P^3 \dots P^N \right)$
   * $Y$ and $Z$ are row-major matrices of size $M \times \left(Q^1 \cdot Q^2 \cdot Q^3 \dots Q^N \right)$
+  * $\alpha$ and $\beta$ are scalars
+ * 
+ * Second is Kronecker Matrix-Matrix (KMM) Multiplication of the form:
+ * 
+ * $Z = \alpha ~ \left (op(F^1) \otimes op(F^2) \otimes \dots op(F^N) \right) \times op(X) + \beta Y$
+ *
+ * where,
+  * $op$ is no-transpose or transpose operation on a matrix.
+  * each $op(F^i)$ is a row-major matrix of size $Q^i \times P^i$.
+  * $F^i \otimes F^j$ is Kronecker Product of two matrices
+  * $op(X)$ is a row-major matrix of size $\left(P^1 \cdot P^2 \cdot P^3 \dots P^N \right) \times M$
+  * $Y$ and $Z$ are row-major matrices of size $\left(Q^1 \cdot Q^2 \cdot Q^3 \dots Q^N \right) \times M$
   * $\alpha$ and $\beta$ are scalars
 */
 
@@ -238,7 +251,7 @@ fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t
 
 
 /**
- * sgekmm(), igekmm(), dgekmm() - Perform GeKMM.
+ * sgekmm(), igekmm(), dgekmm() - Perform MKM.
  * @handle: is an initialized variable of fastKronHandle.
  * @backend: is the `fastKronBackend` to use to perform the computation.
  * @M: is number of rows of $X$, $Y$, and $Z$.
@@ -288,6 +301,36 @@ fastKronError dgemkm(fastKronHandle handle, fastKronBackend backend,
                      double* Z, double alpha, double beta,
                      const double *Y, double* temp1, double* temp2);
 
+/**
+ * sgekmm(), igekmm(), dgekmm() - Perform GeKMM.
+ * @handle: is an initialized variable of fastKronHandle.
+ * @backend: is the `fastKronBackend` to use to perform the computation.
+ * @M: is number of rows of $X$, $Y$, and $Z$.
+ * @Qs: is an array containing columns of all N Kronecker factors.
+ * @Ps: is an array containing rows of all N Kronecker factors.
+ * @N: is the number of Kronecker factors, $F^i$ s.
+ * @Fs: is an array of N pointers for each $F^i$ s.
+ * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+ * @X: is the pointer to $X$.
+ * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+ * @Z: [OUT] is pointer to the result of GeKMM.
+ * @alpha: scalar 
+ * @beta: scalar
+ * @Y: is pointer to $Y$. This pointer can be NULL only if `beta` is 0.
+ * @temp1: is a temporary buffer required for the computation and cannot be NULL.
+ * @temp2: is another temporary buffer required only when `Z` and `Y` points to the same memory location.
+
+ * Perform GeKMM using 32-bit floating point or 64-bit double floating point operations on 
+ * input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$. These functions 
+ * require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points 
+ * to the same memory location then both temp1 and temp2 must be passed as valid 
+ * memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and 
+ * temp2 can be NULL. All pointers should point to either x86 CPU RAM if 
+ * `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+ * Return: Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error
+   or the error occurred.
+ */
 fastKronError sgekmm(fastKronHandle handle, fastKronBackend backend, 
                      uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
                      const float* Fs[], fastKronOp opFs,
@@ -303,51 +346,124 @@ fastKronError dgekmm(fastKronHandle handle, fastKronBackend backend,
                      const double *Y, double* temp1, double* temp2);
 
 /**
- * TODO
+ * Strided Batched Generalized Kronecker Matrix Multiplication functions
+ * These functions perform batched MKM and KMM. These functions take extra arguments for batch count
+ * of Z, and stride for batch of X, all Fs, Y, and Z.
+ */
+
+/**
+ * sgemkmStridedBatched, igemkmStridedBatched, dgemkmStridedBatched - Strided Batched MKM
+ * @handle: is an initialized variable of fastKronHandle.
+ * @backend: is the `fastKronBackend` to use to perform the computation.
+ * @M: is number of rows of $X$, $Y$, and $Z$.
+ * @N: is the number of Kronecker factors, $F^i$ s.
+ * @Ps: is an array containing rows of all N Kronecker factors.
+ * @Qs: is an array containing columns of all N Kronecker factors.
+ * @X: is the pointer to $X$.
+ * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+ * @strideX: stride of each batch for $X$.
+ * @Fs: is an array of N pointers for each $F^i$ s.
+ * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+ * @strideF: is stride of batch for each factor.
+ * @Z: [OUT] is pointer to the result of GeKMM.
+ * @strideZ: stride of batch of Z.
+ * @alpha: scalar 
+ * @beta: scalar
+ * @Y: is pointer to $Y$. This pointer can be NULL only if `beta` is 0.
+ * @strideY: stride of batch of Y.
+ * @temp1: is a temporary buffer required for the computation and cannot be NULL.
+ * @temp2: is another temporary buffer required only when `Z` and `Y` points to the same memory location.
+
+ * Perform GeKMM using 32-bit floating point or 64-bit double floating point operations on 
+ * input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$. These functions 
+ * require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points 
+ * to the same memory location then both temp1 and temp2 must be passed as valid 
+ * memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and 
+ * temp2 can be NULL. All pointers should point to either x86 CPU RAM if 
+ * `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+ * Return: Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error
+   or the error occurred.
  */
 fastKronError sgemkmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     const float* X, fastKronOp opX, uint64_t strideX,
-                     const float* Fs[], fastKronOp opFs, uint64_t strideF[],
-                     float* Z, uint64_t strideZ, float alpha, float beta,
-                     uint32_t batchCount, const float *Y, uint64_t strideY, 
-                     float* temp1, float* temp2);
+                                   uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                   const float* X, fastKronOp opX, uint64_t strideX,
+                                   const float* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                   float* Z, uint64_t strideZ, float alpha, float beta,
+                                   uint32_t batchCount, const float *Y, uint64_t strideY, 
+                                   float* temp1, float* temp2);
 
 fastKronError igemkmStridedBatched(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     const int* X, fastKronOp opX, uint64_t strideX,
-                     const int* Fs[], fastKronOp opFs, uint64_t strideF[],
-                     int* Z, uint64_t strideZ, int alpha, int beta,
-                     uint32_t batchCount, const int *Y, uint64_t strideY, 
-                     int* temp1, int* temp2);
+                                   uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                   const int* X, fastKronOp opX, uint64_t strideX,
+                                   const int* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                   int* Z, uint64_t strideZ, int alpha, int beta,
+                                   uint32_t batchCount, const int *Y, uint64_t strideY, 
+                                   int* temp1, int* temp2);
 
 fastKronError dgemkmStridedBatched(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     const double* X, fastKronOp opX, uint64_t strideX,
-                     const double* Fs[], fastKronOp opFs, uint64_t strideF[], 
-                     double* Z, uint64_t strideZ, double alpha, double beta,
-                     uint32_t batchCount, const double *Y, uint64_t strideY, double* temp1, double* temp2);
+                                   uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                   const double* X, fastKronOp opX, uint64_t strideX,
+                                   const double* Fs[], fastKronOp opFs, uint64_t strideF[], 
+                                   double* Z, uint64_t strideZ, double alpha, double beta,
+                                   uint32_t batchCount, const double *Y, uint64_t strideY,
+                                   double* temp1, double* temp2);
 
+/**
+ * sgekmmStridedBatched, igekmmStridedBatched, dgekmmStridedBatched - Strided Batched KMM
+ * @handle: is an initialized variable of fastKronHandle.
+ * @backend: is the `fastKronBackend` to use to perform the computation.
+ * @N: is the number of Kronecker factors, $F^i$ s.
+ * @Qs: is an array containing columns of all N Kronecker factors.
+ * @Ps: is an array containing rows of all N Kronecker factors.
+ * @M: is number of rows of $X$, $Y$, and $Z$.
+ * @Fs: is an array of N pointers for each $F^i$ s.
+ * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+ * @strideF: is stride of batch for each factor.
+ * @X: is the pointer to $X$.
+ * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+ * @strideX: stride of each batch for $X$.
+ * @Z: [OUT] is pointer to the result of GeKMM.
+ * @strideZ: stride of batch of Z.
+ * @alpha: scalar 
+ * @beta: scalar
+ * @Y: is pointer to $Y$. This pointer can be NULL only if `beta` is 0.
+ * @strideY: stride of batch of Y.
+ * @temp1: is a temporary buffer required for the computation and cannot be NULL.
+ * @temp2: is another temporary buffer required only when `Z` and `Y` points to the same memory location.
+
+ * Perform GeKMM using 32-bit floating point or 64-bit double floating point operations on 
+ * input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$. These functions 
+ * require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points 
+ * to the same memory location then both temp1 and temp2 must be passed as valid 
+ * memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and 
+ * temp2 can be NULL. All pointers should point to either x86 CPU RAM if 
+ * `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+ * Return: Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error
+   or the error occurred.
+ */
 fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend, 
-                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
-                     const float* Fs[], fastKronOp opFs, uint64_t strideF[],
-                     const float* X, fastKronOp opX, uint64_t strideX,
-                     float* Z, uint64_t strideZ, float alpha, float beta,
-                     uint32_t batchCount, const float *Y, uint64_t strideY, 
-                     float* temp1, float* temp2);
+                                   uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                   const float* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                   const float* X, fastKronOp opX, uint64_t strideX,
+                                   float* Z, uint64_t strideZ, float alpha, float beta,
+                                   uint32_t batchCount, const float *Y, uint64_t strideY, 
+                                   float* temp1, float* temp2);
 
 fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
-                     const int* Fs[], fastKronOp opFs, uint64_t strideF[],
-                     const int* X, fastKronOp opX, uint64_t strideX,
-                     int* Z, uint64_t strideZ, int alpha, int beta,
-                     uint32_t batchCount, const int *Y, uint64_t strideY, 
-                     int* temp1, int* temp2);
+                                   uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                   const int* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                   const int* X, fastKronOp opX, uint64_t strideX,
+                                   int* Z, uint64_t strideZ, int alpha, int beta,
+                                   uint32_t batchCount, const int *Y, uint64_t strideY, 
+                                   int* temp1, int* temp2);
 
 fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
-                     const double* Fs[], fastKronOp opFs, uint64_t strideF[],
-                     const double* X, fastKronOp opX, uint64_t strideX, 
-                     double* Z, uint64_t strideZ, double alpha, double beta,
-                     uint32_t batchCount, const double *Y, uint64_t strideY, double* temp1, double* temp2);
+                                   uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                   const double* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                   const double* X, fastKronOp opX, uint64_t strideX, 
+                                   double* Z, uint64_t strideZ, double alpha, double beta,
+                                   uint32_t batchCount, const double *Y, uint64_t strideY,
+                                   double* temp1, double* temp2);
 }
