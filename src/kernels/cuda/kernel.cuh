@@ -215,61 +215,16 @@ __global__ void cudaKernel(KernelParams params,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
-      const uint glM = rm + yElem.m() + tileM;
-      if (kMMultipleOfTileM || (rm + yElem.m() < XTile.m())) {
-      if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
-          (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
-
-      uint glK;
-      ElemT* yPtr;
-      uint32_t cIdx;
-
-      //Total elements produced from TileK are (TileK/P) * Q
-      //No. of elems produced by slice-multiply of TileK with
-      //the same col of F are: TileK/P, i.e, XshSlices.
-      //These elems are stored consecutively.
-      if (FusedFacs > 1) {
-        //Compute element location inside the tile
-        const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
-                              XshSlices +       // Index of first element produced by this F's col
-                              yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
-        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
-      } else {
-        //Scale element location from within tile to global
-        glK = (yElem.q()   + tq)  * //The index of elems by one column in TileK
-               XSlices            + //Scale the index to global column
-               tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
-               yElem.k()    + tk;   //The element index within consecutive elems
-        if (TileQ < Q) {
-          glK += tileQ * XSlices * TileQ;
-      }}
-
-    
-      if (DistributeToGPUs) {
-        yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
-      } else {
-        cIdx = glM * Y.n() + glK;
-        yPtr = Y.data<ElemT>(glM, glK, OpY);
-        if (params.kp_idx == FusedFacs - 1) {
-          #pragma unroll
-          for (int i = 0; i < StLen; i++) {
-            ElemT yelem = 0;
-            if (OpY == fastKronOp_N) {
-              yelem = yReg.at(rm, tk+i, tq);
-            } else if (OpY == fastKronOp_T) {
-              yelem = yReg.at(rm+i, tk, tq);
-            }
-            yelem = epilogue(epilogueParams, batchedData, Y, batch, cIdx+i, yelem);
-            if (OpY == fastKronOp_N) {
-              yReg.set(rm, tk + i, tq, yelem);
-            } else if (OpY == fastKronOp_T) {
-              yReg.set(rm+i, tk, tq, yelem);
-            }
-          }
-        }
-      }
-      stVecYReg<OpY, StLen>(yPtr, yReg, rm, tk, tq);
-    }}}}
+      storeY<OpY, StLen, TileQ,
+             kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
+             (FusedFacs>1), DistributeToGPUs,
+             ElemT>
+        (params.kp_idx == FusedFacs - 1, batch,
+         rm, tq, tk, XshSlices, XSlices,
+         tileM, tileK, tileQ, P, Q,
+         XTile, Xsh, Y, yElem, yReg,
+         fusedParams, distParams, epilogueParams, batchedData);
+    }}}
   } else if (OpY == fastKronOp_T) {
     #pragma unroll
     for (uint tq = 0; tq < RegQ; tq++) {
@@ -277,62 +232,15 @@ __global__ void cudaKernel(KernelParams params,
     for (uint tk = 0; tk < RegK; tk++) {
     #pragma unroll
     for (uint rm = 0; rm < RegM; rm+=StLen) {
-      const uint glM = rm + yElem.m() + tileM;
-      if (kMMultipleOfTileM || (rm + yElem.m() < XTile.m())) {
-      if ((!kKMultipleOfTileK && yElem.k() + tk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
-          (!kQMultipleOfTileQ && yElem.q() + tq >= MIN(TileQ, Q - tileQ * TileQ))) continue;
-
-      uint glK;
-      ElemT* yPtr;
-      uint32_t cIdx;
-
-      //Total elements produced from TileK are (TileK/P) * Q
-      //No. of elems produced by slice-multiply of TileK with
-      //the same col of F are: TileK/P, i.e, XshSlices.
-      //These elems are stored consecutively.
-      if (FusedFacs > 1) {
-        //Compute element location inside the tile
-        const uint32_t shK = (yElem.q()   + tq) * // F's col multiplied by this thread
-                              XshSlices +       // Index of first element produced by this F's col
-                              yElem.k()   + tk ;  // index of element produced by multiplying this col with this slice
-        glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
-      } else {
-        //Scale element location from within tile to global
-        glK = (yElem.q()   + tq)  * //The index of elems by one column in TileK
-               XSlices            + //Scale the index to global column
-               tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
-               yElem.k()    + tk;   //The element index within consecutive elems
-        if (TileQ < Q) {
-          glK += tileQ * XSlices * TileQ;
-      }}
-
-    
-      if (DistributeToGPUs) {
-        yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
-      } else {
-        cIdx = glK * Y.m() + glM;
-        yPtr = Y.data<ElemT>(glM, glK, OpY);
-        if (epilogueParams.isLastFactor) {
-          //TODO: Combine this same in the above OpY case
-          #pragma unroll
-          for (int i = 0; i < StLen; i++) {
-            ElemT yelem = 0;
-            if (OpY == fastKronOp_N) {
-              yelem = yReg.at(rm, tk+i, tq);
-            } else if (OpY == fastKronOp_T) {
-              yelem = yReg.at(rm+i, tk, tq);
-            }
-            ElemT yElemp = yelem;
-            yelem = epilogue(epilogueParams, batchedData, Y, batch, cIdx+i, yelem);
-            if (OpY == fastKronOp_N) {
-              yReg.set(rm, tk + i, tq, yelem);
-            } else if (OpY == fastKronOp_T) {
-              yReg.set(rm+i, tk, tq, yelem);
-            }
-          }
-        }
-      }
-      stVecYReg<OpY, StLen>(yPtr, yReg, rm, tk, tq);
-    }}}}
+      storeY<OpY, StLen, TileQ, 
+             kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
+             (FusedFacs>1), DistributeToGPUs,
+             ElemT>
+        (epilogueParams.isLastFactor, batch,
+         rm, tq, tk, XshSlices, XSlices,
+         tileM, tileK, tileQ, P, Q,
+         XTile, Xsh, Y, yElem, yReg,
+         fusedParams, distParams, epilogueParams, batchedData);
+    }}}
   }
 }

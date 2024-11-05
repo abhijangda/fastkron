@@ -210,3 +210,77 @@ constexpr uint32_t storeVectorLen() {
 
   return 1;
 }
+
+template<fastKronOp OpY, uint32_t StLen, uint32_t TileQ,
+         bool kMMultipleOfTileM, bool kKMultipleOfTileK, bool kQMultipleOfTileQ,
+         bool isFused, bool DistributeToGPUs,
+         typename ElemT, typename YElem, typename YReg, typename XTileTy, typename XShared,
+         typename FusedParams, typename DistributedParams, typename EpilogueParams, typename GetBatchedData>
+CUDA_DEVICE
+void storeY(const bool isLastFactor, const uint32_t batch,
+            const uint32_t rm, const uint32_t rq, const uint32_t rk,
+            const uint32_t XshSlices, const uint32_t XSlices, 
+            const uint32_t tileM, const uint32_t tileK, const uint32_t tileQ,
+            const uint32_t P, const uint32_t Q,
+            const XTileTy& XTile, const XShared& Xsh,
+            const Matrix& Y, const YElem& yElem, YReg& yReg,
+            const FusedParams& fusedParams, const DistributedParams& distParams,
+            const EpilogueParams& epilogueParams, const GetBatchedData& batchedData) {
+  const uint glM = rm + yElem.m() + tileM;
+  if (!(kMMultipleOfTileM || (rm + yElem.m() < XTile.m()))) return;
+  if ((!kKMultipleOfTileK && yElem.k() + rk >= MIN(XshSlices, XSlices - tileK * XshSlices)) || 
+      (!kQMultipleOfTileQ && yElem.q() + rq >= MIN(TileQ, Q - tileQ * TileQ))) return;
+
+  uint glK;
+  ElemT* yPtr;
+  uint32_t cIdx;
+
+  //Total elements produced from TileK are (TileK/P) * Q
+  //No. of elems produced by slice-multiply of TileK with
+  //the same col of F are: TileK/P, i.e, XshSlices.
+  //These elems are stored consecutively.
+  if (isFused) {
+    //Compute element location inside the tile
+    const uint32_t shK = (yElem.q()   + rq) * // F's col multiplied by this thread
+                          XshSlices +       // Index of first element produced by this F's col
+                          yElem.k()   + rk ;  // index of element produced by multiplying this col with this slice
+    glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
+  } else {
+    //Scale element location from within tile to global
+    glK = (yElem.q()   + rq)  * //The index of elems by one column in TileK
+            XSlices            + //Scale the index to global column
+            tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
+            yElem.k()    + rk;   //The element index within consecutive elems
+    if (TileQ < Q) {
+      glK += tileQ * XSlices * TileQ;
+  }}
+
+
+  if (DistributeToGPUs) {
+    yPtr = p2pStoreAddress<ElemT, DistributedParams>(distParams, Y, glM, glK);
+  } else {
+    if (OpY == fastKronOp_N)
+      cIdx = glM * Y.n() + glK;
+    else
+      cIdx = glK * Y.m() + glM;
+    yPtr = Y.data<ElemT>(glM, glK, OpY);
+    if (isLastFactor){
+      #pragma unroll
+      for (int i = 0; i < StLen; i++) {
+        ElemT yelem = 0;
+        if (OpY == fastKronOp_N) {
+          yelem = yReg.at(rm, rk+i, rq);
+        } else if (OpY == fastKronOp_T) {
+          yelem = yReg.at(rm+i, rk, rq);
+        }
+        yelem = epilogue(epilogueParams, batchedData, Y, batch, cIdx+i, yelem);
+        if (OpY == fastKronOp_N) {
+          yReg.set(rm, rk + i, rq, yelem);
+        } else if (OpY == fastKronOp_T) {
+          yReg.set(rm+i, rk, rq, yelem);
+        }
+      }
+    }
+  }
+  stVecYReg<OpY, StLen>(yPtr, yReg, rm, rk, rq);
+}
