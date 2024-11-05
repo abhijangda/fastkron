@@ -392,18 +392,23 @@ public:
 };
 
 //Register Tensors
-template<fastKronOp Layout, typename T, uint32_t M, uint32_t K, uint32_t Q>
-class YRegisters : public FixedShapeTensor3D<Layout, T, M, K, Q> {
-  using Base = FixedShapeTensor3D<Layout, T, M, K, Q>;
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t K, uint32_t Q, 
+         uint32_t MVectorLen = 1, uint32_t KVectorLen = 1>
+class YRegisters : public FixedShapeTensor3D<Layout, T, M/MVectorLen, K/KVectorLen, Q> {
+  using Base = FixedShapeTensor3D<Layout, T, M/MVectorLen, K/KVectorLen, Q>;
 
 public:
   CUDA_DEVICE_HOST
   YRegisters() {Base::zero();}
 
   CUDA_DEVICE_HOST
-  static constexpr uint32_t m() {return M;}
+  static constexpr uint32_t kvec() {return KVectorLen;} 
   CUDA_DEVICE_HOST
-  static constexpr uint32_t k() {return K;}
+  static constexpr uint32_t mvec() {return MVectorLen;}
+  CUDA_DEVICE_HOST
+  static constexpr uint32_t m() {return M/MVectorLen;}
+  CUDA_DEVICE_HOST
+  static constexpr uint32_t k() {return K/KVectorLen;}
   CUDA_DEVICE_HOST
   static constexpr uint32_t q() {return Q;}
 };
