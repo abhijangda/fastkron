@@ -68,9 +68,6 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
       uint32_t shFcol = qe + rq;
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
-        uint32_t shift = p;
-        if (false) //Shift
-          Fr.set(p, rq, (&Fsh.at(0,0))[(shift+shFcol)%Fsh.q() + p*Fsh.q()]);
         if (true) {//Padding
           Fr.set(p, rq, (&Fsh.at(0,0))[shFcol + p*(Fsh.q() + 1)]);
         }

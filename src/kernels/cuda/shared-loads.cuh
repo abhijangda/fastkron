@@ -85,6 +85,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
   bool loadFullFactor = F.p() == Fsh.p() && F.q() == Fsh.q();
 
   if (Fsh.layout() == fastKronOp_N && (opF == fastKronOp_T || !loadFullFactor)) {
+    //MKM
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
     const uint Vecs     = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
@@ -99,7 +100,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
               (kPMultipleOfTileP || tileP + row < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
           
-          Fsh.store(row, elem * VecTLen, VecTLen, regs);
+          Fsh.store(row, elem * VecTLen, VecTLen, regs, fastKronOp_N);
         } else if (opF == fastKronOp_T) {
           const uint row = tileQ*Fsh.q() + swid;
           const uint col = elem*VecTLen;
@@ -108,9 +109,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
               (kQMultipleOfTileQ || row < F.q()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
           
-          for (int ii = 0; ii < VecTLen; ii++) {
-            Fsh.store(elem * VecTLen + ii, swid, 1, &regs[ii]);
-          }
+          Fsh.store(elem * VecTLen, swid, VecTLen, regs, fastKronOp_T);
         }
 
         //This condition avoids generating this loop giving better performance
@@ -118,6 +117,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
       }
     }
   } else if (Fsh.layout() == fastKronOp_T) {
+    //KMM
     const uint Vecs = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen;
     const uint ThGroups = MAX(1, NumThreads/Vecs);
   
@@ -132,17 +132,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
               (kPMultipleOfTileP || tileP + col < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
 
-          // uint32_t shift = elem; //TODO: RegQ is 16
-          //TODO: Consider this an array of TileP * TileQ. Do not worry about this being a fastKronOp_T layout.
-          //Maybe we will not need this when FVecT = 4 because then number of bank conflicts decreases significantly.
-          // if (false) //Shift
-          //   (&Fsh.at(0,0))[elem * Fsh.q() + (shift + row)%Fsh.q()] = regs[0];//store(row, elemFsh.p(), VecTLen, regs);
-          if (true) {//Padding
-            #pragma unroll
-            for (int ii = 0; ii < VecTLen; ii++) {
-              (&Fsh.at(0,0))[(col+ii)*(Fsh.q()+1) + swid] = regs[ii];
-            }
-          }
+          Fsh.store(col, swid, VecTLen, regs, fastKronOp_T);
         } else if (opF == fastKronOp_N) {
           const uint col = tileQ*Fsh.q() + elem*VecTLen;
           const uint row = swid;
@@ -150,14 +140,8 @@ void directFgToFsh(const uint NumThreads, const uint tid,
           if ((kQMultipleOfTileQ || col < F.q()) &&
               (kPMultipleOfTileP || tileP + row < F.p()))
             ldGlobalVec(F.data<ElemT>(tileP + row, col, opF), regs, VecTLen);
-          
-          if (true) {//Padding
-            //TODO: Do we need padding here?
-            #pragma unroll
-            for (int ii = 0; ii < VecTLen; ii++) {
-              (&Fsh.at(0,0))[(row)*(Fsh.q()+1) + elem*VecTLen+ii] = regs[ii];
-            }
-          }
+
+          Fsh.store(row, elem*VecTLen, VecTLen, regs, fastKronOp_N);
         }
 
         if (Vecs == NumThreads/ThGroups) break;
@@ -177,8 +161,9 @@ template<typename FShared, typename XShared, typename YReg>
 CUDA_DEVICE
 void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShared& Xsh, YReg& Yr, const YElem& yElem) {
   if (Xsh.layout() == fastKronOp_N) {
+    //MKM
     for (int tm = 0; tm < Yr.m(); tm++) {
-      if (tm < m) {
+      if (tm < m) {//TODO: probably do not need this condition
         #pragma unroll
         for (uint tk = 0; tk < Yr.k(); tk++) {
         for (uint tq = 0; tq < Yr.q(); tq++) {
@@ -188,15 +173,16 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
           Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
     }}}}
   } else if (Xsh.layout() == fastKronOp_T) {
-      #pragma unroll
-      for (uint tk = 0; tk < Yr.k(); tk++) {
-      for (uint tq = 0; tq < Yr.q(); tq++) {
-      #pragma unroll
-      for (int tm = 0; tm < Yr.m(); tm++) {
-        const uint32_t MaxXSlices = Xsh.n()/F.p();
-        uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
-        
-        Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
+    //KMM
+    #pragma unroll
+    for (uint tk = 0; tk < Yr.k(); tk++) {
+    for (uint tq = 0; tq < Yr.q(); tq++) {
+    #pragma unroll
+    for (int tm = 0; tm < Yr.m(); tm++) {
+      const uint32_t MaxXSlices = Xsh.n()/F.p();
+      uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
+      
+      Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
     }}}
   }
 }

@@ -253,11 +253,38 @@ public:
 
   CUDA_DEVICE_HOST
   //TODO: Make this Coord2D
-  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems) {
-    #pragma unroll
-    for (uint ve = 0; ve < num; ve++) {
-      uint32_t idx = row * Base::shape(1) + col + ve;
-      Base::set(data, idx, elems[ve]);
+  void store(uint32_t row, uint32_t col, uint32_t num, const T* elems, fastKronOp elemLayout) {
+    if (Layout == fastKronOp_N) {
+      //CUDA MKM
+      if (elemLayout == fastKronOp_N) {
+        #pragma unroll
+        for (uint ve = 0; ve < num; ve++) {
+          uint32_t idx = row * Base::shape(1) + col + ve;
+          Base::set(data, idx, elems[ve]);
+        }
+      } else {
+        #pragma unroll
+        for (uint ve = 0; ve < num; ve++) {
+          uint32_t idx = (row + ve) * Base::shape(1) + col;
+          Base::set(data, idx, elems[ve]);
+        }
+      }
+    } else {
+      //CUDA KMM
+      if (elemLayout == fastKronOp_N) {
+        #pragma unroll
+        for (uint ve = 0; ve < num; ve++) {
+          uint32_t idx = row * (q() + 1) + col + ve;
+          Base::set(data, idx, elems[ve]);
+        }
+      } else {
+        //Padding is probably not needed when using float4/double2
+        #pragma unroll
+        for (uint ve = 0; ve < num; ve++) {
+          uint32_t idx = (row + ve) * (q() + 1) + col;
+          Base::set(data, idx, elems[ve]);
+        }
+      }
     }
   }
   

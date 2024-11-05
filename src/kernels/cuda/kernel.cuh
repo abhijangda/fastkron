@@ -146,8 +146,8 @@ __global__ void cudaKernel(KernelParams params,
   const YElem yElem = getYElem(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
   const uint tileM = bid_y * TileM;
 
-  if ((!kMMultipleOfTileM && tileM >= X.m()) || 
-      (!kKMultipleOfTileK && tileK * TileK >= X.n()))
+  if ((tileM >= X.m()) || 
+      (tileK * TileK >= X.n()))
       return;
   
   Slice<ElemT, OpX> XTile(tileM, tileK * TileK,
@@ -156,7 +156,8 @@ __global__ void cudaKernel(KernelParams params,
                           P, TileP,
                           X);
 
-  extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*TileQ];
+  extern __shared__ ElemT sharedStorage[];//[TileM*ShTileK + TileP*(TileQ+Padding)];
+  //Padding is only applied for KMM
   
   //If X or F are Op_T then transpose then in shared memory
   using XShared = ShiftShared<OpY, ElemT, kXshSlicesSame, 
