@@ -28,20 +28,20 @@ class FastKronNumpy(FastKronBase):
   def device_type(self, x):
     return "cpu"
 
-  def gekmm(self, x, fs, z, alpha, beta, y, temp1, temp2,
+  def gemkm(self, x, fs, z, alpha, beta, y, temp1, temp2,
             trX = False, trF = False):
 
     fn = None
     if x.dtype == np.float32:
-      fn = fastkronX86.libFastKron.sgekmm
+      fn = fastkronX86.libFastKron.sgemkm
     elif x.dtype == np.double:
-      fn = fastkronX86.libFastKron.dgekmm
+      fn = fastkronX86.libFastKron.dgemkm
 
     stridedBatchedFn = None
     if x.dtype == np.float32:
-      stridedBatchedFn = fastkronX86.libFastKron.sgekmmStridedBatched
+      stridedBatchedFn = fastkronX86.libFastKron.sgemkmStridedBatched
     elif x.dtype == np.double:
-      stridedBatchedFn = fastkronX86.libFastKron.dgekmmStridedBatched
+      stridedBatchedFn = fastkronX86.libFastKron.dgemkmStridedBatched
 
     if temp1 is None:
       raise ValueError("Operand temp1 must be valid 2D Tensor")
@@ -53,11 +53,11 @@ class FastKronNumpy(FastKronBase):
       if temp2 is None:
         raise ValueError("Operand temp2 must be a valid Tensor when z == y")
 
-    super().xgekmm(fastkronX86, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
+    super().xgemkm(fastkronX86, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
 
 __fastkronnumpy = FastKronNumpy()
 
-def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -94,8 +94,9 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   else:
     rs, ts = __fastkronnumpy.gekmmSizes(x, fs, trX=trX, trF=trF)
     temp1 = np.ndarray(ts, dtype=x.dtype)
+    temp2 = np.ndarray(ts, dtype=x.dtype) if rs != ts else None
     z = np.ndarray(shape=rs, dtype=x.dtype)
-    __fastkronnumpy.gekmm(x, fs, z, alpha, beta, y, temp1, None, trX, trF)
+    __fastkronnumpy.gemkm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
     z = z.reshape(rs)
 
   return z

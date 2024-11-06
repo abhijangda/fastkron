@@ -3,107 +3,109 @@ import torch
 
 import pyfastkron.fastkrontorch as fk
 
-
 def product(values):
   return reduce((lambda a, b: a * b), values)
 
-def reference(x, fs, trX, trF):
+def transpose(m):
+  axis = tuple(range(len(m.shape[:-2]))) + \
+         (len(m.shape) - 1, len(m.shape) - 2)
+  return torch.transpose(m, -2, -1)
+
+
+def reference(x, fs, trX, trF, device):
   if trX:
-    x = x.T
+    x = transpose(x)
   if trF:
-    fs = [f.T for f in fs]
-  outputKron = fs[0]
-  for m in fs[1:]:
-      outputKron = torch.kron(outputKron, m)
+    fs = [transpose(f) for f in fs]
+
+  batchKron = fs[0].shape[:-2]
+  if len(batchKron) == 0:
+    outputKron = fs[0]
+    for m in fs[1:]:
+        outputKron = torch.kron(outputKron, m)
+  else:
+    batchDims = product(batchKron)
+    for i,f in enumerate(fs):
+      fs[i] = fs[i].reshape((batchDims,) + f.shape[-2:])
+
+    output = fs[0]
+    for f in fs[1:]:
+      prev = output
+      s = (batchDims, prev.shape[-2] * f.shape[-2], prev.shape[-1] * f.shape[-1])
+      output = torch.zeros((batchDims, prev.shape[-2] * f.shape[-2], prev.shape[-1] * f.shape[-1]),
+                           dtype=f.dtype).to(device)
+      for b in range(batchDims):
+        output[b,:,:] = torch.kron(prev.contiguous()[b,:,:], f.contiguous()[b,:,:])
+    outputKron = output.reshape(batchKron + (output.shape[-2], output.shape[-1]))
+
   return torch.matmul(x, outputKron)
 
-def run(m, n, p, q, dtype, device, trX, trF, high=5, m1=1, q1=1):
+def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=[], batchDimZ=[]):
   #Using integer values instead of real numbers because 
   #floating point is not associative
-  xshape = (m, p**n) if not trX else (p**n, m)
+  xshape = [m, p**n] if not trX else [p**n, m]
   if m == 1:
     if trX:
-      xshape = (xshape[0],)
+      xshape = [xshape[0],]
     else:
-      xshape = (xshape[1],)
+      xshape = [xshape[1],]
 
-  if m1 != 1 and not trX:
-    xshape = (m1,) + xshape
- 
-  fshape = (p, q) if not trF else (q, p)
+  xshape = batchDimX + xshape
+
+  fshape = [p, q] if not trF else [q, p]
   if q == 1:
     if trF:
-      fshape = (fshape[1],)
+      fshape = [fshape[1],]
     else:
-      fshape = (fshape[0],)
+      fshape = [fshape[0],]
+  
+  fshape = batchDimFPre + fshape
 
-  # if q1 != 1 and not trF:
-  #   fshape = (q1,) + fshape
+  zshape = batchDimZ + [m,q**n]
+  
+  x = torch.randint(0, high=high,size=xshape, dtype=dtype).to(device)
+  fs = [torch.randint(0, high=high,size=fshape, dtype=dtype).to(device)\
+        for i in range(n)]
+  z = torch.randint(0,high=high, size=zshape, dtype=dtype).to(device)
 
-  x = torch.randint(high=high,size=xshape, dtype=dtype).to(device)
-  fs = [torch.randint(high=high,size=fshape, dtype=dtype).to(device) for i in range(n)]
+  alpha = 1.0
+  beta = 2.0
 
-  y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
+  y = fk.gemkm(x, fs, alpha, beta, z, trX=trX, trF=trF)
 
-  ref = reference(x, fs, trX, trF)
+  ref = alpha * reference(x, fs, trX, trF, device) + beta * z
   val = torch.isclose(y, ref, rtol=1e-04).all().item()
-
-  assert val
-
-def run_2(m, n, ps, qs, dtype, device, trX, trF, high=5, m1=1, q1=1):
-  #Using integer values instead of real numbers because 
-  #floating point is not associative
-  xshape = (m, product(ps)) if not trX else (product(ps), m)
-  if m == 1:
-    if trX:
-      xshape = (xshape[0],)
-    else:
-      xshape = (xshape[1],)
-
-  if m1 != 1 and not trX:
-    xshape = (m1,) + xshape
-  assert (trF is False)
-  # if q1 != 1 and not trF:
-  #   fshape = (q1,) + fshape
-
-  x = torch.randint(high=high,size=xshape, dtype=dtype).to(device)
-  fs = [0,0,0]
-  fs[0] = torch.tensor([[ 2.0000,  0.0000,  0.0000],
-        [ 0.0000,  1.7321,  0.0000],
-        [ 1.0000, -0.5774,  1.2910]], dtype=dtype)
-  fs[1] = torch.tensor([[ 2.0000,  0.0000,  0.0000],
-        [ 0.0000,  1.7321,  0.0000],
-        [ 1.0000, -0.5774,  1.2910]])
-  # fs = [torch.randint(high=high,size=(ps[i], qs[i]), dtype=dtype).to(device) for i in range(n)]
-
-  y = fk.gekmm(x, fs, 1.0, 0.0, None, trX=trX, trF=trF)
-
-  ref = reference(x, fs, trX, trF)
-  val = torch.isclose(y, ref, rtol=1e-04).all().item()
-  print(val)
+  print(52)
   assert val
 
 def device_tests(device):
-  run_2(24, 3, [3,2,4],[3,2,4], torch.float32, device, False, False)
-  return
-  run(1024, 5, 8, 8, torch.float32, device, False, False)
-  run(10, 5, 6, 6, torch.float32, device, True, False)
+  run(128, 5, 8, 8, torch.float32, device, False, False)
   run(10, 5, 6, 6, torch.float32, device, True, False)
 
-  run(10, 3, 32, 8, torch.float32, device, False, False)
-  run(10, 3, 32, 8, torch.float32, device, True, True)
+  run(128, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
+  run(128, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
+  run(128, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
+  run(128, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
+  run(16, 4, 8, 8, torch.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
+  run(16, 4, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
-  run(10, 3, 32, 1, torch.float32, device, False, False)
+  run(16, 4, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,], batchDimZ=[3,1])
 
-  #3-D x
-  run(10, 5, 6, 6, torch.float32, device, False, False, m1=2, q1=1)
-  
-  #Double
+  run(16, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
+  run(32, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
+  run(13, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
+  run(29, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
+
+  #double
   run(11, 10, 3, 3, torch.double, device, False, True)
   run(200, 2, 32, 32, torch.double, device, True, True)
-  
-  #Float16
+
+  run(128, 5, 8, 8, torch.double, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
+
+  #float16
   run(102, 4, 8, 8, torch.float16, device, False, False, high=2)
+  run(102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,], batchDimFPre=[])
+  run(102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,1,], batchDimFPre=[3,])
   run(10, 3, 16, 8, torch.float16, device, True, False, high=2)
 
 def test_cuda():
@@ -115,5 +117,5 @@ def test_cpu():
     device_tests("cpu")
 
 if __name__ == "__main__":
-  # test_cuda()
+  test_cuda()
   test_cpu()

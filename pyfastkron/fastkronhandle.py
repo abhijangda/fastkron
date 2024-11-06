@@ -38,15 +38,15 @@ class FastKronHandle:
   def gekmmSizes(self, xshape, ps, qs):
     return self.libFastKron.gekmmSizes(self.handle, xshape[0], len(ps), ps, qs)
 
-  def xgekmm(self, fngekmm, m, n, ps, qs, x, fs, z, alpha, beta, y, temp1, temp2, trX = False, trF = False):
-    fngekmm(self.handle, self.backend, m, n, ps, qs,
+  def xgemkm(self, fngemkm, m, n, ps, qs, x, fs, z, alpha, beta, y, temp1, temp2, trX = False, trF = False):
+    fngemkm(self.handle, self.backend, m, n, ps, qs,
             x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T,
             fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T,
             z,
             alpha, beta, y, 
             temp1, temp2)
   #TODO: Change argument order according to cublas API see comment in pywapper.cpp
-  def xgekmmStridedBatched(self, fn, m, n, ps, qs, x, strideX, fs, strideFs, batchCount, z, strideZ, alpha, beta, y, strideY, temp1, temp2, trX = False, trF = False):
+  def xgemkmStridedBatched(self, fn, m, n, ps, qs, x, strideX, fs, strideFs, batchCount, z, strideZ, alpha, beta, y, strideY, temp1, temp2, trX = False, trF = False):
     fn(self.handle, self.backend, m, n, ps, qs,
             x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T, strideX,
             fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T, strideFs,

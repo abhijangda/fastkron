@@ -69,7 +69,7 @@ def run(m, n, p, q, dtype, device, trX, trF, high=5, batchDimX=[], batchDimFPre=
   alpha = 1.0
   beta = 2.0
 
-  y = fk.gekmm(x, fs, alpha, beta, z, trX=trX, trF=trF)
+  y = fk.gemkm(x, fs, alpha, beta, z, trX=trX, trF=trF)
 
   ref = alpha * reference(x, fs, trX, trF) + beta * z
   val = np.isclose(y, ref, rtol=1e-04).all().item()
@@ -80,12 +80,12 @@ def device_tests(device):
   run(128, 5, 8, 8, np.float32, device, False, False)
   run(10, 5, 6, 6, np.float32, device, True, False)
 
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
-  run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
+  run(16, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
+  run(16, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
+  run(16, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
+  run(16, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
+  run(16, 4, 8, 8, np.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
+  run(16, 4, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
   run(128, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,], batchDimZ=[3,1])
 

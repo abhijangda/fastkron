@@ -334,7 +334,7 @@ All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GP
     Write result of GeMKM to `Z`. Return `fastKronSuccess` for no error or the error occurred.
 
 
-`fastKronError sgekmmStridedBatched(fastKronHandle handle, 
+`fastKronError sgekmmStridedBatched(fastKronHandle handle,
                                     fastKronBackend backend, 
                                     uint32_t N,
                                     uint32_t Qs[], uint32_t Ps[], uint32_t M,

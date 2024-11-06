@@ -85,72 +85,72 @@ PYBIND11_MODULE(FastKronCUDA, m)
     return py::make_tuple(resultSize, tempSize);
   }, "Returns a tuple of number of elements of the result matrix and temporary matrices for GeKMM.");
 
-  m.def("sgekmm", [](fastKronHandle handle, fastKronBackend backend, 
+  m.def("sgemkm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                      uint64_t X, fastKronOp opX,
                      std::vector<uint64_t> Fs, fastKronOp opFs,
                      uint64_t Y, float alpha, float beta,
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = sgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const float*)X, opX, (const float**)Fs.data(), opFs, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
+    auto err = sgemkm(handle, backend, M, N, Ps.data(), Qs.data(), (const float*)X, opX, (const float**)Fs.data(), opFs, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
     THROW_ERROR(err);
   }, "Perform GeKMM on using 32-bit floating point operations on input matrices.");
 
-  m.def("igekmm", [](fastKronHandle handle, fastKronBackend backend, 
+  m.def("igemkm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                      uint64_t X, fastKronOp opX,
                      std::vector<uint64_t> Fs, fastKronOp opFs,
                      uint64_t Y, int alpha, int beta,
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = igekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, (const int**)Fs.data(), opFs, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
+    auto err = igemkm(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, (const int**)Fs.data(), opFs, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
     THROW_ERROR(err);
-  }, "igekmm");
+  }, "igemkm");
 
-  m.def("dgekmm", [](fastKronHandle handle, fastKronBackend backend, 
+  m.def("dgemkm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                      uint64_t X, fastKronOp opX,
                      std::vector<uint64_t> Fs, fastKronOp opFs,
                      uint64_t Y, double alpha, double beta,
                      uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = dgekmm(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, (const double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
+    auto err = dgemkm(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, (const double**)Fs.data(), opFs, (double*)Y, alpha, beta, (double*)Z, (double*)temp1, (double*)temp2);
     THROW_ERROR(err);
   }, "Perform GeKMM on using 64-bit double floating point operations on input matrices");
 
-  m.def("sgekmmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
+  m.def("sgemkmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
                                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                                     uint64_t X, fastKronOp opX, uint64_t strideX,
                                     std::vector<uint64_t> Fs, fastKronOp opFs, std::vector<uint64_t> strideF,
                                     uint64_t Y, uint64_t strideY, float alpha, float beta,
                                     uint32_t batchCount, uint64_t Z, uint64_t strideZ,
                                     uint64_t temp1, uint64_t temp2) {
-    auto err = sgekmmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const float*)X, opX, strideX,
+    auto err = sgemkmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const float*)X, opX, strideX,
                                     (const float**)Fs.data(), opFs, strideF.data(), (float*)Y, strideY, 
                                     alpha, beta, batchCount, (float*)Z, strideZ,
                                     (float*)temp1, (float*)temp2);
     THROW_ERROR(err);
   }, "Perform GeKMM Strided Batched on using 32-bit floating point operations on input matrices.");
 
-  m.def("igekmmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
+  m.def("igemkmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
                                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                                     uint64_t X, fastKronOp opX, uint64_t strideX,
                                     std::vector<uint64_t> Fs, fastKronOp opFs, std::vector<uint64_t> strideF,
                                     uint64_t Y, uint64_t strideY, uint64_t alpha, uint64_t beta,
                                     uint32_t batchCount, uint64_t Z, uint64_t strideZ,
                                     uint64_t temp1, uint64_t temp2) {
-    auto err = igekmmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, strideX,
+    auto err = igemkmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, strideX,
                                     (const int**)Fs.data(), opFs, strideF.data(), (int*)Y, strideY, 
                                     alpha, beta, batchCount, (int*)Z, strideZ,
                                     (int*)temp1, (int*)temp2);
     THROW_ERROR(err);
   }, "Perform GeKMM Strided Batched on using 32-bit integer point operations on input matrices.");
   //TODO: make the order of arguments same as in cublas API m,n,k,alpha,x,f,z,beta,y
-  m.def("dgekmmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
+  m.def("dgemkmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
                                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                                     uint64_t X, fastKronOp opX, uint64_t strideX,
                                     std::vector<uint64_t> Fs, fastKronOp opFs, std::vector<uint64_t> strideF,
                                     uint64_t Y, uint64_t strideY, double alpha, double beta,
                                     uint32_t batchCount, uint64_t Z, uint64_t strideZ,
                                     uint64_t temp1, uint64_t temp2) {
-    auto err = dgekmmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, strideX,
+    auto err = dgemkmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const double*)X, opX, strideX,
                                     (const double**)Fs.data(), opFs, strideF.data(), (double*)Y, strideY, 
                                     alpha, beta, batchCount, (double*)Z, strideZ,
                                     (double*)temp1, (double*)temp2);

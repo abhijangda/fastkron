@@ -221,7 +221,7 @@ class FastKronBase:
   def device_type(self, x):
     raise NotImplementedError()
 
-  def xgekmm(self, handle, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2,
+  def xgemkm(self, handle, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2,
              trX = False, trF = False):
 
     self.checkShapeAndTypes(x, fs, z, y, trX, trF)
@@ -244,7 +244,7 @@ class FastKronBase:
       if len(xbatch) > 0:
         m = m * product(xbatch)
 
-      handle.xgekmm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
+      handle.xgemkm(fn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
                     self.tensor_data_ptr(x), 
                     self.fptrs(fs),
                     self.tensor_data_ptr(z), alpha, beta, 
@@ -327,7 +327,7 @@ class FastKronBase:
         
         m = self.m(x, trX)
         #Apply StridedBatched on the last dimension
-        handle.xgekmmStridedBatched(stridedBatchedFn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
+        handle.xgemkmStridedBatched(stridedBatchedFn, m, len(fs), self.ps(fs, trF), self.qs(fs, trF),
                                     self.tensor_data_ptr(x[xidx, :]), strideX,
                                     self.fptrs([f[fidx,:] for f in fs]), strideF,
                                     batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ, alpha, beta, 

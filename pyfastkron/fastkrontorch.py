@@ -44,8 +44,8 @@ class FastKronTorch(FastKronBase):
   def supportedTypes(self, x, fs):
     return x.dtype in [torch.float32, torch.float64]
 
-  def trLastTwoDims(self, x, dim1, dim2):
-    return x.transpose(dim1, dim2)
+  def trLastTwoDims(self, x):
+    return x.transpose(-1, -2)
 
   def device_type(self, x):
     return x.device.type 
@@ -56,7 +56,7 @@ class FastKronTorch(FastKronBase):
     elif self.device_type(x) == "cuda":
       return fastkronCUDA
 
-  def gekmm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
+  def gemkm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
 
     if x.device.type == "cuda" and stream is None:
@@ -65,16 +65,20 @@ class FastKronTorch(FastKronBase):
     self.check(x, fs, y, z, stream)
 
     fn = None
+    stridedBatchedFn = None
+    
     if x.dtype == torch.float:
-      fn = self.handle(x).libFastKron.sgekmm
+      fn = self.handle(x).libFastKron.sgemkm
+      stridedBatchedFn = self.handle(x).libFastKron.sgemkmStridedBatched
     elif x.dtype == torch.double:
-      fn = self.handle(x).libFastKron.dgekmm
+      fn = self.handle(x).libFastKron.dgemkm
+      stridedBatchedFn = self.handle(x).libFastKron.dgemkmStridedBatched
 
-    super().xgekmm(self.handle(x), fn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+    super().xgemkm(self.handle(x), fn, stridedBatchedFn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
   
 __fastkrontorch = FastKronTorch()
 
-def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -101,7 +105,7 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   for i,f in enumerate(fs):
     if type(f) is not torch.Tensor:
       raise ValueError(f"Input fs[{i}] should be a Tensor")
-  if y != None and (type(y) is not torch.Tensor or y.ndim != 2):
+  if y != None and type(y) is not torch.Tensor:
     raise ValueError(f"Input 'y' should be a 2D Tensor")
 
   orig_xshape = x.shape
@@ -114,15 +118,8 @@ def gekmm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
     rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)
     temp2 = x.new_empty(ts) if rs != ts else None
-
-    if not trX:
-      z = x.new_empty((x.shape[0], rs//x.shape[0]))
-    else:
-      z = x.new_empty((x.shape[1], rs//x.shape[1]))
-
-    __fastkrontorch.gekmm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
-  
-  if len(orig_xshape) != 2:
-    z = z.reshape((list(orig_xshape[:-1]) + [z.shape[-1]]))
+    z = x.new_empty(size=rs, dtype=x.dtype)
+    __fastkrontorch.gemkm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
+    z = z.reshape(rs)
 
   return z
