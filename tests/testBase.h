@@ -232,7 +232,6 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
                   uint M, uint /*N*/, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
                   uint64_t strideX, uint64_t strideZ, uint64_t strideF[], uint64_t strideY, int batchCount,
                   fastKronOp opx, fastKronOp opfs, T alpha, T beta) {
-  if (kmmtype == FastKronMMType::MKM) {
   for (int b = 0; b < batchCount; b++) {
   uint secFacRowMulSize = 1;
   uint rowsTillNow = 1;
@@ -251,89 +250,70 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
     rowsTillNow *= KP_MAT_N[NUM_KP_MATS - 1 - (kp)];
     colsTillNow *= KP_MAT_K[NUM_KP_MATS - 1 - (kp)];
 
-    #pragma omp parallel for collapse(2)
-    for (uint i = 0; i < M; i++) {
-      for (uint j = 0; j < resultCols; j++) {
-        T r = 0;
+    if (kmmtype == FastKronMMType::MKM) {
+      #pragma omp parallel for collapse(2)
+      for (uint i = 0; i < M; i++) {
+        for (uint j = 0; j < resultCols; j++) {
+          T r = 0;
 
-        for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
-          uint slice = (j / secFacRowMulSize) % kpSecondN;
+          for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
+            uint slice = (j / secFacRowMulSize) % kpSecondN;
 
-          T v2 = 0;
-          if (opfs == fastKronOp_T) {
-            v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + slice*KP_MAT_K[NUM_KP_MATS - 1 - kp] + kp_k];
-          } else {
-            v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + kp_k*kpSecondN + slice];
+            T v2 = 0;
+            if (opfs == fastKronOp_T) {
+              v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + slice*KP_MAT_K[NUM_KP_MATS - 1 - kp] + kp_k];
+            } else {
+              v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + kp_k*kpSecondN + slice];
+            }
+
+            T v1;
+            uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
+            if (opx == fastKronOp_T && kp == 0)
+              v1 = prevKPMatmul[b * stridePrevKPMatmul + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M + i];
+            else
+              v1 = prevKPMatmul[b * stridePrevKPMatmul + i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k];
+            r += v1 * v2;
           }
-
-          T v1;
-          uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
-          if (opx == fastKronOp_T && kp == 0)
-            v1 = prevKPMatmul[b * stridePrevKPMatmul + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M + i];
-          else
-            v1 = prevKPMatmul[b * stridePrevKPMatmul + i* prevKPMatmulCols + (j*kpSecondK)%prevKPMatmulCols + kp_k];
-          r += v1 * v2;
-        }
-        if (kp < NUM_KP_MATS - 1)
-          kpMatmulResult[kp][b*strideZ + i*resultCols + j] = r;
-        else {
-          kpMatmulResult[kp][b*strideZ + i*resultCols + j] = alpha * r + beta*y[b*strideY + i*resultCols + j];
+          if (kp < NUM_KP_MATS - 1)
+            kpMatmulResult[kp][b*strideZ + i*resultCols + j] = r;
+          else {
+            kpMatmulResult[kp][b*strideZ + i*resultCols + j] = alpha * r + beta*y[b*strideY + i*resultCols + j];
+          }
         }
       }
-    }
-  }}}
+    } else if (kmmtype == FastKronMMType::KMM) {
+      #pragma omp parallel for collapse(2)
+      for (uint j = 0; j < resultCols; j++) {
+        for (uint i = 0; i < M; i++) {
+          T r = 0;
 
-  if (kmmtype == FastKronMMType::KMM) {
-  for (int b = 0; b < batchCount; b++) {
-  uint secFacRowMulSize = 1;
-  uint rowsTillNow = 1;
-  uint colsTillNow = 1;
-  uint resultCols = 0;
-  for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
-    T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[kp - 1];
-    uint kpSecondK = KP_MAT_K[kp];
-    uint kpSecondN = KP_MAT_N[kp];
-    int prevKPMatmulCols = (kp == 0) ? K : resultCols;
-    
-    resultCols = (prevKPMatmulCols/kpSecondK) * kpSecondN;
-    secFacRowMulSize = (kp == 0) ? K/kpSecondK : rowsTillNow * (K/(colsTillNow * KP_MAT_K[kp]));
-    //Number of times a column is multiplied with input matrix is equal to 
-    //N/(number of column elements of this matrix * cols so far) * number of rows so far.
-    rowsTillNow *= KP_MAT_N[kp];
-    colsTillNow *= KP_MAT_K[kp];
+          for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
+            uint slice = (j / secFacRowMulSize) % kpSecondN;
 
-    #pragma omp parallel for collapse(2)
-    for (uint j = 0; j < resultCols; j++) {
-      for (uint i = 0; i < M; i++) {
-        T r = 0;
+            T v2 = 0;
+            if (opfs == fastKronOp_T) {
+              v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + slice + kp_k*kpSecondN];
+            } else {
+              v2 = kpMats[NUM_KP_MATS - 1 - kp][b*strideF[NUM_KP_MATS - 1 - kp] + kp_k + slice*kpSecondK];
+            }
 
-        for (uint kp_k = 0; kp_k < kpSecondK; kp_k++) {
-          uint slice = (j / secFacRowMulSize) % kpSecondN;
-
-          T v2 = 0;
-          if (opfs == fastKronOp_T) {
-            v2 = kpMats[kp][b*strideF[kp] + slice + kp_k*kpSecondN];
-          } else {
-            v2 = kpMats[kp][b*strideF[kp] + kp_k + slice*kpSecondK];
+            T v1;
+            uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
+            if (opx == fastKronOp_T && kp == 0)
+              v1 = prevKPMatmul[b * stridePrevKPMatmul + i* prevKPMatmulCols + ((j*kpSecondK)%prevKPMatmulCols + kp_k)];
+            else
+              v1 = prevKPMatmul[b * stridePrevKPMatmul + i + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M];
+            r += v1 * v2;
           }
-
-          T v1;
-          uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
-          if (opx == fastKronOp_T && kp == 0)
-            v1 = prevKPMatmul[b * stridePrevKPMatmul + i* prevKPMatmulCols + ((j*kpSecondK)%prevKPMatmulCols + kp_k)];
-          else
-            v1 = prevKPMatmul[b * stridePrevKPMatmul + i + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M];
-          r += v1 * v2;
-        }
-        if (kp < NUM_KP_MATS - 1)
-          kpMatmulResult[kp][b*strideZ + i + j * M] = r;
-        else {
-          kpMatmulResult[kp][b*strideZ + i + j * M] = alpha * r + beta*y[b*strideY + i + j * M];
+          if (kp < NUM_KP_MATS - 1)
+            kpMatmulResult[kp][b*strideZ + i + j * M] = r;
+          else {
+            kpMatmulResult[kp][b*strideZ + i + j * M] = alpha * r + beta*y[b*strideY + i + j * M];
+          }
         }
       }
     }
   }}
-  }
 }
 
 /**************************************************

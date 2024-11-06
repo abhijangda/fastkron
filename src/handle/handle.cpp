@@ -152,9 +152,9 @@ fastKronError FastKronHandle::xgemm(const KMMProblem problem,
 
         KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-        epilogueParams.isLastFactor = (problem.mmtype() == FastKronMMType::MKM) ?
-                                       kernel.end == kernel.kernel->getFusedFacs()-1 :
-                                       kernel.end + kernel.kernel->getFusedFacs() == problem.n();
+        epilogueParams.isLastFactor = kernel.end == kernel.kernel->getFusedFacs()-1;//(problem.mmtype() == FastKronMMType::MKM) ?
+                                      //  kernel.end == kernel.kernel->getFusedFacs()-1 :
+                                      //  kernel.end + kernel.kernel->getFusedFacs() == problem.n();
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, epilogueParams,
                                      KernelModeNormal);
@@ -177,7 +177,7 @@ fastKronError FastKronHandle::xgemmStridedBatched(const KMMProblemStridedBatched
       (temp1 == nullptr || temp2 == nullptr))
       return fastKronInvalidArgument;
 
-  fastKronError err;
+  fastKronError err = fastKronSuccess;
   TunedKernelsSeries kernelSeries;
 
   void* temps[2] = {temp1, temp2};
@@ -207,9 +207,10 @@ fastKronError FastKronHandle::xgemmStridedBatched(const KMMProblemStridedBatched
 
         KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-        epilogueParams.isLastFactor = (problem.mmtype() == FastKronMMType::MKM) ?
-                                       kernel.end == kernel.kernel->getFusedFacs()-1 :
-                                       kernel.end + kernel.kernel->getFusedFacs() == problem.n();
+        epilogueParams.isLastFactor = kernel.end == kernel.kernel->getFusedFacs()-1;
+        // (problem.mmtype() == FastKronMMType::MKM) ?
+                                      //  kernel.end == kernel.kernel->getFusedFacs()-1 :
+                                      //  kernel.end + kernel.kernel->getFusedFacs() == problem.n();
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, epilogueParams,
                                      KernelModeNormal);
@@ -217,7 +218,7 @@ fastKronError FastKronHandle::xgemmStridedBatched(const KMMProblemStridedBatched
         return err;
     });
 
-  return fastKronSuccess; //err
+  return err;
 }
 
 fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem, 

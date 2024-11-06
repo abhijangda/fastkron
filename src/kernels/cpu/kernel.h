@@ -57,19 +57,11 @@ void threadWork(KernelParams& params,
     betaVec.broadcast(&beta);
   }
 
-  for (int _fac = FusedFacs - 1; _fac >= 0; _fac--) {
+  for (int fac = FusedFacs - 1; fac >= 0; fac--) {
     TransposedDirectShared3D<ElemT, OpY, OptTileX, OptF, OptTileF> 
       TrXCache((ElemT*)params.caches->TileXs[tid]);
 
-    int fac = 0; bool isLastFactor = epilogueParams.isLastFactor;
-    if (OpY == fastKronOp_N)      {
-      fac = _fac;
-      isLastFactor = isLastFactor && fac == 0;
-    }
-    else if (OpY == fastKronOp_T) {
-      fac = FusedFacs - 1 - _fac;
-      isLastFactor = isLastFactor && fac == FusedFacs - 1;
-    }
+    bool isLastFactor = epilogueParams.isLastFactor && fac == 0;
 
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);

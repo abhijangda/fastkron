@@ -97,41 +97,21 @@ fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
   problem = problem.updateY(problem.y().like(firstIterOut));
 
   fastKronError err = fastKronSuccess;
-
-  if (problem.mmtype() == FastKronMMType::MKM) {
-    for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
-      nextF = next(problem);
-      nextF = std::min(nextF, i+1);
-      fastKronOp opX = problem.opX();
-      //First iteration write output with op N
-      if ((uint32_t)i < problem.n() - 1) {
-        opX = fastKronOp_N;
-      }
-      if (i < nextF) problem = problem.updateY(result);
-      auto subProblem = problem.rsub(i, nextF);
-      subProblem.setOpX(opX);
-      err = func(subProblem, i, tmps, result);
-      if (err != fastKronSuccess) break;
-      if (tmps != nullptr)
-        problem.swap(tmps[0], tmps[1]);
+  for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
+    nextF = next(problem);
+    nextF = std::min(nextF, i+1);
+    fastKronOp opX = problem.opX();
+    //First iteration write output with op N
+    if ((uint32_t)i < problem.n() - 1) {
+      opX = fastKronOp_N;
     }
-  } else if (problem.mmtype() == FastKronMMType::KMM) {
-    for (int i = 0; i < problem.n(); i = i + nextF) {
-      nextF = next(problem);
-      fastKronOp opX = problem.opX();
-      //First iteration write output with op N
-      if ((uint32_t)i > 0) {
-        opX = fastKronOp_N;
-      }
-      if (i + nextF > (problem.n() - 1))
-        problem = problem.updateY(result);
-      auto subProblem = problem.sub(i, nextF);
-      subProblem.setOpX(opX);
-      err = func(subProblem, i, tmps, result);
-      if (err != fastKronSuccess) break;
-      if (tmps != nullptr)
-        problem.swap(tmps[0], tmps[1]);
-    }
+    if (i < nextF) problem = problem.updateY(result);
+    auto subProblem = problem.rsub(i, nextF);
+    subProblem.setOpX(opX);
+    err = func(subProblem, i, tmps, result);
+    if (err != fastKronSuccess) break;
+    if (tmps != nullptr)
+      problem.swap(tmps[0], tmps[1]);
   }
 
   return err;
@@ -158,39 +138,19 @@ template<typename KMMProblemType>
 fastKronError reverseExecuteGeMM(KMMProblemType problem, void* tmps[2], typename KMMProblemType::Matrix result,
                                 std::function<uint (const KMMProblemType)> next,
                                 std::function<fastKronError (const KMMProblemType, int start, void*[2], typename KMMProblemType::Matrix)> func) {
-  if (problem.mmtype() == FastKronMMType::MKM) {
-    uint32_t nextF = 1;
-    fastKronError err;
-    for (uint32_t i = 0; i < problem.n(); i = i + nextF) {
-      nextF = next(problem);
-      if (i - (problem.n() - 1) < nextF) 
-        problem = problem.updateY(result);
-      err = func(problem.rsub(i, nextF), i, tmps, result);
-      if (err != fastKronSuccess) break;
-      if (tmps != nullptr)
-        problem.swap(tmps[0], tmps[1]);
-    }
-  } else if (problem.mmtype() == FastKronMMType::KMM) {
-    uint32_t nextF = 1;
-    fastKronError err;
-    for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
-      nextF = next(problem);
-      fastKronOp opX = problem.opX();
-      //First iteration write output with op N
-      if ((uint32_t)i < problem.n() - 1) {
-        opX = fastKronOp_N;
-      }
-      if (i < nextF) problem = problem.updateY(result);
-      auto subProblem = problem.sub(i, nextF);
-      subProblem.setOpX(opX);
-      err = func(subProblem, i, tmps, result);
-      if (err != fastKronSuccess) break;
-      if (tmps != nullptr)
-        problem.swap(tmps[0], tmps[1]);
-    }
+  uint32_t nextF = 1;
+  fastKronError err = fastKronSuccess;
+  for (uint32_t i = 0; i < problem.n(); i = i + nextF) {
+    nextF = next(problem);
+    if (i - (problem.n() - 1) < nextF) 
+      problem = problem.updateY(result);
+    err = func(problem.rsub(i, nextF), i, tmps, result);
+    if (err != fastKronSuccess) break;
+    if (tmps != nullptr)
+      problem.swap(tmps[0], tmps[1]);
   }
 
-  return fastKronSuccess;
+  return err;
 }
 
 fastKronError reverseExecuteGeMM(const KMMProblem problem, void* temps[2],

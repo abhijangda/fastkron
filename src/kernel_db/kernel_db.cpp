@@ -187,13 +187,13 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
         if (problem.n() == kernel->getFusedFacs()) {
           uint32_t start = 0;
           uint32_t end = kernel->getFusedFacs()-1;
-          if (problem.mmtype() == FastKronMMType::MKM) {
+          // if (problem.mmtype() == FastKronMMType::MKM) {
             start = 0;
             end = kernel->getFusedFacs()-1;
-          } else if (problem.mmtype() == FastKronMMType::KMM) {
-            start = kernel->getFusedFacs()-1;
-            end = 0;
-          }
+          // } else if (problem.mmtype() == FastKronMMType::KMM) {
+            // start = kernel->getFusedFacs()-1;
+            // end = 0;
+          // }
           kernelSeries.push_back(TunedKernelFromStart(kernel, start, end, problem.k(), 0.0f));
           goto end;
         }
@@ -215,23 +215,23 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
 
           uint32_t start;
           uint32_t end;
-          if (problem.mmtype() == FastKronMMType::MKM) {
+          // if (problem.mmtype() == FastKronMMType::MKM) {
             start = problem.n() - maxFused->first;
             end = problem.n() - 1;
-          } else if (problem.mmtype() == FastKronMMType::KMM) {
-            start = maxFused->first - 1;
-            end = 0;
-            subProblemStart = start + 1;
-          } else {start = 0; end = 0;}
+          // } else if (problem.mmtype() == FastKronMMType::KMM) {
+            // start = maxFused->first - 1;
+            // end = 0;
+            // subProblemStart = start + 1;
+          // } else {start = 0; end = 0;}
           auto tk = TunedKernelFromStart(this->findKernelForSubProblem(problem, k), 
                                          start, end, problem.k(), 0.0f);
           kernelSeries.push_back(tk);
           firstOpTKernelFound = true;
 
           //Filter remaining kernels for OpX = N and remaining number of factors
-          KMMProblemT subProblem = (problem.mmtype() == FastKronMMType::MKM) ? 
-                                    problem.rsub(problem.n() - 1 - maxFused->first, problem.n() - maxFused->first) :
-                                    problem.sub(start + 1, problem.n() - 1 - start);
+          KMMProblemT subProblem = //(problem.mmtype() == FastKronMMType::MKM) ? 
+                                    problem.rsub(problem.n() - 1 - maxFused->first, problem.n() - maxFused->first);// :
+                                    // problem.sub(start + 1, problem.n() - 1 - start);
           subProblem.setOpX(fastKronOp_N);
           std::vector<KMMKernel*> kernels_OpN;
           findAllFusedKernels(subProblem, false, kernels_OpN);
@@ -260,15 +260,15 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
               uint32_t kend;
               uint32_t remainingLength;
 
-              if (subProblem.mmtype() == FastKronMMType::MKM) {
+              // if (subProblem.mmtype() == FastKronMMType::MKM) {
                 kstart = rstart - (subProblem.n() - 1);
                 kend = rstart;
                 remainingLength = kstart;
-              } else {
-                kstart = rstart + (subProblem.n() - 1);
-                kend = rstart;
-                remainingLength = problem.n() - 1 - kstart;
-              }
+              // } else {
+                // kstart = rstart + (subProblem.n() - 1);
+                // kend = rstart;
+                // remainingLength = problem.n() - 1 - kstart;
+              // }
 
               auto tk = TunedKernelFromStart(this->findKernelAtOptLevel(subProblem, fusedIter->second), 
                                              subProblemStart + kstart, subProblemStart + kend, subProblem.k(), 0.0f);

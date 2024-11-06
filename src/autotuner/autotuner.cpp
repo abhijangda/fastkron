@@ -31,9 +31,9 @@ static float minExecTimeOfSeries(KMMProblem problem, int32_t startF, bool isDist
   TunedKernelFromStart minPrologueKernel;
 
   //Obtain the subproblem starting at startF
-  auto subProblem = (problem.mmtype() == FastKronMMType::MKM) ? 
-                      problem.sub(startF, problem.n() - startF) :
-                      problem.rsub(startF, problem.n() - (problem.n() - 1 - startF));
+  auto subProblem = problem.sub(startF, problem.n() - startF);//(problem.mmtype() == FastKronMMType::MKM) ? 
+                      // problem.sub(startF, problem.n() - startF) :
+                      // problem.rsub(startF, problem.n() - (problem.n() - 1 - startF));
 
   //Divide the subproblem into two parts. From the last multiplied factor (the reverse order)
   //go through all first/second part pairs of the subproblem. 
@@ -42,17 +42,17 @@ static float minExecTimeOfSeries(KMMProblem problem, int32_t startF, bool isDist
   reverseExecuteGeMM(subProblem, nullptr, typename KMMProblem::Matrix(), 
                       [](const KMMProblem){return 1;},
     [&](const KMMProblem, int32_t rstart, void*[2], typename KMMProblem::Matrix) {
-      const int32_t subn = (problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
-                       subProblem.n() - rstart;
+      const int32_t subn = rstart + 1;//(problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
+                            // subProblem.n() - rstart;
 
-      auto firstPart = (problem.mmtype() == FastKronMMType::MKM) ?
-                        problem.sub(startF, subn) :
-                        problem.rsub(startF, subn);
+      auto firstPart = problem.sub(startF, subn) ;//(problem.mmtype() == FastKronMMType::MKM) ?
+                        // problem.sub(startF, subn) :
+                        // problem.rsub(startF, subn);
 
       //Is this the first multiplication of X with the factor?
-      bool mulWithFirstFactor = (problem.mmtype() == FastKronMMType::MKM) ?
-                                 startF + subn == problem.n() : 
-                                 startF + 1 == subn;
+      bool mulWithFirstFactor = startF + subn == problem.n();// (problem.mmtype() == FastKronMMType::MKM) ?
+                                //  startF + subn == problem.n() : 
+                                //  startF + 1 == subn;
 
       if (problem.opX() == fastKronOp_T && mulWithFirstFactor) {
         //If opX is T and the firstPart has reached end of the problem
@@ -70,14 +70,14 @@ static float minExecTimeOfSeries(KMMProblem problem, int32_t startF, bool isDist
         TunedKernelsSeries epilogueKernels;
         float kernelTime = tunedKernelsMap.getKernelTime(firstPart, isP2P);
         float epilogueTime = minExecTimeOfSeries(problem, 
-                                                 ((problem.mmtype() == FastKronMMType::MKM) ? 
-                                                 startF + subn : startF - subn),
+                                                 startF + subn,//((problem.mmtype() == FastKronMMType::MKM) ? 
+                                                //  startF + subn : startF - subn),
                                                  isDistributed,
                                                  epilogueKernels, tunedKernelsMap);
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
-          int32_t endF = ((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1);
+          int32_t endF = startF + rstart;//((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1);
           minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(firstPart, isP2P),
                                                    startF, endF,
                                                    firstPart.k(), kernelTime);
@@ -114,8 +114,7 @@ fastKronError Autotuner::tune(KMMProblemT problem, TunedKernelsMap& tunedKernels
         auto subprob = problem.sub(rstart, endP-rstart+1);
         //Only the first executed subprob has OpX as T otherwise
         //all subprob use OpX as N
-        if ((problem.mmtype() == FastKronMMType::MKM && rstart + subprob.n() < problem.n()) ||
-            (problem.mmtype() == FastKronMMType::KMM && rstart > 0)) {
+        if (rstart + subprob.n() < problem.n()) {
           subprob.setOpX(fastKronOp_N);
         }
         //P2P is needed when the output of subproblem is distributed
@@ -200,7 +199,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
                           problem.n(), &Fs[0][0], problem.opFs(), y);
     tune(tmpProblem, tunedKernelsMap, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
-    minTime = minExecTimeOfSeries(problem, (problem.mmtype() == FastKronMMType::MKM) ? 0 : problem.n() - 1, false, retKernelSeries, tunedKernelsMap);
+    minTime = minExecTimeOfSeries(problem, 0 /*(problem.mmtype() == FastKronMMType::MKM) ? 0 : problem.n() - 1*/, false, retKernelSeries, tunedKernelsMap);
   } else {
 #if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
     //Tuning for Multi GPU
@@ -363,7 +362,7 @@ fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBa
                                         problem.batchCount());
     tune(tmpProblem, tunedKernelsMapStridedBatched, kernelDb, false, DistributedParams());
     Logger(LogLevel::Debug) << "Finding min execution time of the series" << std::endl;
-    minTime = minExecTimeOfSeries(problem, (problem.mmtype() == FastKronMMType::MKM) ? 0 : problem.n() - 1, 
+    minTime = minExecTimeOfSeries(problem, 0/*(problem.mmtype() == FastKronMMType::MKM) ? 0 : problem.n() - 1*/, 
                                   false, retKernelSeries, tunedKernelsMapStridedBatched);
     Logger(LogLevel::Info) << "Minimum Time " << minTime << " through kernels: " << std::endl;
     for (auto iter = retKernelSeries.rbegin(); iter != retKernelSeries.rend(); iter++) {

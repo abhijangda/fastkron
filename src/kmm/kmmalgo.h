@@ -188,7 +188,7 @@ public:
     assert (rstart >= (subn - 1));
 
     uint32_t subk = x().n(), subl = y().n();
-    if (mmtype() == FastKronMMType::MKM) {
+    if (true || mmtype() == FastKronMMType::MKM) {
       if (rstart >= subn) {
         for (uint32_t i = 0; i <= rstart - subn; i++) {
           subl = (subl/factors[i].q())*factors[i].p();
@@ -228,7 +228,7 @@ public:
     assert(subn <= n());
     assert(start + (subn - 1) <= n());
     
-    if (mmtype() == FastKronMMType::MKM) {
+    if (true || mmtype() == FastKronMMType::MKM) {
       for (uint32_t i = 0; i < start; i++) {
         subl = (subl/factors[i].q())*factors[i].p();
       }

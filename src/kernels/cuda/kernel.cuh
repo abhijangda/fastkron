@@ -174,11 +174,7 @@ __global__ void cudaKernel(KernelParams params,
     shiftXgToXsh<kMMultipleOfTileM, kXshSlicesSame, kPMultipleOfTileP, TileP, ElemT, XVecT, OpX>
                 (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
-    for (int _fac = FusedFacs - 1; _fac >= 0; _fac--) {
-      int fac = 0;
-      if (OpY == fastKronOp_N)      fac = _fac;
-      else if (OpY == fastKronOp_T) fac = FusedFacs - 1 - _fac;
-      
+    for (int fac = FusedFacs - 1; fac >= 0; fac--) {
       const Factor F(P, Q, batchedData.getFBatch(params, fac, batch).data());
       //Load F to shared memory
       directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, OpF>
@@ -199,7 +195,7 @@ __global__ void cudaKernel(KernelParams params,
         mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
       }
 
-      if (FusedFacs > 1 && _fac > 0) {
+      if (FusedFacs > 1 && fac > 0) {
         __syncthreads();
         //Store C to shared memory using shift method
         fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg, yElem);
