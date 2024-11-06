@@ -44,8 +44,8 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
       for (; p < Xch.p(); p += VecTLen) {
         const bool UseAVXTrans = 
           VecTLen > 1 &&
-          ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols - k    >= VecTLen * F.p()) && 
-          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen) &&
+          ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols >= VecTLen * F.p() + k) && 
+          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() >= VecTLen + tileP + p) &&
           (Xch.p() >= VecTLen);
         if (UseAVXTrans) {
           X86VecT slices[VecTLen];
@@ -108,10 +108,10 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
       const bool UseAVXStore = 
           VecTLen > 1 && 
           (kMMultipleOfTileM || XTile.m() - m >= VecTLen) &&
-          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() - tileP - p >= VecTLen);
+          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || (F.p() >= VecTLen + tileP + p));
 
       if (UseAVXStore) {
-        if (OpX == fastKronOp_T || fac > 0) {
+        if (OpX == fastKronOp_T || fac < FusedFacs - 1) {
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
             const ElemT* ptr = (fac == FusedFacs - 1) ? 
                                 XTile.data(m, k/F.p(), tileP + p + pp) : 
@@ -134,8 +134,8 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           }
           slices[pp].store(&Xch.at(m, k/F.p(), p + pp));
         }
-      } else if (XTile.m() - m < VecTLen) {
-        for (uint32_t pp = 0; pp < VecTLen; pp++) {
+      } else if (XTile.m() - m < VecTLen && F.p() > tileP + p) {
+        for (uint32_t pp = 0; pp < MIN(VecTLen, F.p() - (tileP + p)); pp++) {
         uint32_t m1 = m;
         for (;m1 < XTile.m(); m1++) {
           const ElemT* ptr = (fac == FusedFacs - 1) ? 
