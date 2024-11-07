@@ -51,7 +51,7 @@ class FastKronNumpy(FastKronBase):
       if temp2 is None:
         raise ValueError("Operand temp2 must be a valid Tensor when z == y")
 
-    super().xgemkm(fastkronX86, fn, stridedBatchedFn,
+    super().xgemm(fastkronX86, FastKronBase.MMTypeMKM, fn, stridedBatchedFn,
                    x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
 
   def gekmm(self, fs, x, z, alpha, beta, y, temp1, temp2,
@@ -77,8 +77,8 @@ class FastKronNumpy(FastKronBase):
       if temp2 is None:
         raise ValueError("Operand temp2 must be a valid Tensor when z == y")
 
-    super().xgekmm(fastkronX86, fn, stridedBatchedFn,
-                   fs, x, z, alpha, beta, y, temp1, temp2, trX, trF)
+    super().xgemm(fastkronX86, FastKronBase.MMTypeKMM, fn, stridedBatchedFn,
+                   x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
 
 __fastkronnumpy = FastKronNumpy()
 

@@ -74,8 +74,28 @@ class FastKronTorch(FastKronBase):
       fn = self.handle(x).libFastKron.dgemkm
       stridedBatchedFn = self.handle(x).libFastKron.dgemkmStridedBatched
 
-    super().xgemkm(self.handle(x), fn, stridedBatchedFn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+    super().xgemm(self.handle(x), FastKronBase.MMTypeMKM, fn, stridedBatchedFn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
   
+  def gekmm(self, fs, x, y, alpha, beta, z, temp1, temp2, 
+            trX = False, trF = False, stream = None):
+
+    if x.device.type == "cuda" and stream is None:
+      stream = torch.cuda.current_stream()
+
+    self.check(x, fs, y, z, stream)
+
+    fn = None
+    stridedBatchedFn = None
+    
+    if x.dtype == torch.float:
+      fn = self.handle(x).libFastKron.sgekmm
+      stridedBatchedFn = self.handle(x).libFastKron.sgekmmStridedBatched
+    elif x.dtype == torch.double:
+      fn = self.handle(x).libFastKron.dgekmm
+      stridedBatchedFn = self.handle(x).libFastKron.dgekmmStridedBatched
+
+    super().xgemm(self.handle(x), FastKronBase.MMTypeKMM, fn, stridedBatchedFn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+
 __fastkrontorch = FastKronTorch()
 
 def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
@@ -115,11 +135,57 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   if not __fastkrontorch.isSupported(x, fs):
     z = __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
   else:
-    rs, ts = __fastkrontorch.gekmmSizes(x, fs, trX=trX, trF=trF)
+    rs, ts = __fastkrontorch.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)
     temp2 = x.new_empty(ts) if rs != ts else None
     z = x.new_empty(size=rs, dtype=x.dtype)
     __fastkrontorch.gemkm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
+    z = z.reshape(rs)
+
+  return z
+
+def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+  '''
+  Perform Generalized Kronecker-Matrix Multiplication:
+  
+  $Z = \alpha ~ X \times \left( F^1 \otimes F^2 \otimes \dots F^N \right) + \beta Y$
+
+  Parameters
+  ----------
+  x  : 2D torch tensor 
+  fs : A list of 2D torch tensor
+  alpha and beta: constants
+  y  : 2D torch tensor
+  trX: Transpose x before computing GeKMM
+  trF: Transpose each element of fs before computing GeKMM
+
+  Returns
+  -------
+  z : 2D torch tensor
+  '''
+
+  if type(x) is not torch.Tensor:
+    raise ValueError("Input 'x' should be a Tensor")
+  if type(fs) is not list:
+    raise ValueError("Input 'fs' should be a list of Tensor")
+  for i,f in enumerate(fs):
+    if type(f) is not torch.Tensor:
+      raise ValueError(f"Input fs[{i}] should be a Tensor")
+  if y != None and type(y) is not torch.Tensor:
+    raise ValueError(f"Input 'y' should be a 2D Tensor")
+
+  orig_xshape = x.shape
+
+  x,fs = __fastkrontorch.reshapeInput(x, fs, trX, trF)
+
+  if not __fastkrontorch.isSupported(x, fs):
+    z = __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
+  else:
+    rs, ts = __fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
+    temp1 = x.new_empty(ts)
+    temp2 = x.new_empty(ts) if rs != ts else None
+    z = x.new_empty(size=rs, dtype=x.dtype)
+    __fastkrontorch.gekmm(fs, x, z, alpha, beta, y, temp1, temp2, trX, trF)
     z = z.reshape(rs)
 
   return z

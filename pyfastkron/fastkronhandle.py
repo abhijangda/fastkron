@@ -60,7 +60,6 @@ class FastKronHandle:
   
   def xgekmm(self, fn, m, n, ps, qs, x, fs, z, alpha, beta, y, 
              temp1, temp2, trX = False, trF = False):
-    print(63, fn, alpha, beta)
     fn(self.handle, self.backend, n, qs, ps, m,
        fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T,
        x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T,
