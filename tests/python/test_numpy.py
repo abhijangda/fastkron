@@ -97,7 +97,7 @@ def run(mmtype, m, n, p, q, dtype, device, trX, trF,
 
 def device_tests(device):
   for mmtype in ["mkm", "kmm"]:
-    run(mmtype, 128, 5, 8, 8, np.float32, device, False, False)
+    run(mmtype, 32, 5, 8, 8, np.float32, device, False, False)
     run(mmtype, 16, 2, 128, 128, np.float32, device, False, False)
 
     run(mmtype, 10, 5, 6, 6, np.float32, device, True, False)
@@ -105,7 +105,7 @@ def device_tests(device):
     run(mmtype, 32, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
     run(mmtype, 16, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
     run(mmtype, 8, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
-    run(mmtype, 1, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
+    run(mmtype, 2, 5, 8, 8, np.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
     run(mmtype, 32, 4, 8, 8, np.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
     run(mmtype, 24, 4, 8, 8, np.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
@@ -121,7 +121,6 @@ def device_tests(device):
     run(mmtype, 200, 2, 32, 32, np.double, device, True, True)
 
     run(mmtype, 128, 5, 8, 8, np.double, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
-    continue
 
     #float16
     run(mmtype, 102, 4, 8, 8, np.float16, device, False, False, high=2)

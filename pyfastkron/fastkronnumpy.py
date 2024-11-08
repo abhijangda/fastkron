@@ -115,7 +115,7 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   x, fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
 
   if not __fastkronnumpy.isSupported(x, fs):
-    z = __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
+    z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
   else:
     rs, ts = __fastkronnumpy.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
     temp1 = np.ndarray(ts, dtype=x.dtype)
@@ -159,7 +159,10 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   x, fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
 
   if not __fastkronnumpy.isSupported(x, fs):
-    z = __fastkronnumpy.shuffleGeKMM(np, x, fs, alpha, beta, y, trX, trF)
+    z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeMKM, x, fs, alpha, beta, 
+                                    __fastkronnumpy.trLastTwoDims(y) if y is not None else None,
+                                    not trX, not trF)
+    z = __fastkronnumpy.trLastTwoDims(z)
   else:
     rs, ts = __fastkronnumpy.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
     temp1 = np.ndarray(ts, dtype=x.dtype)

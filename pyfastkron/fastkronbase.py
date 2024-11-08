@@ -282,13 +282,13 @@ class FastKronBase:
       handlefn = handle.xgemkm if mmtype == FastKronBase.MMTypeMKM else handle.xgekmm
 
       handlefn(fn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
-                    self.tensor_data_ptr(x), 
-                    self.fptrs(fs),
-                    self.tensor_data_ptr(z), alpha, beta, 
-                    self.tensor_data_ptr(y),
-                    self.tensor_data_ptr(temp1), 
-                    self.tensor_data_ptr(temp2), 
-                    trX, trF)
+               self.tensor_data_ptr(x), 
+               self.fptrs(fs),
+               self.tensor_data_ptr(z), alpha, beta, 
+               self.tensor_data_ptr(y),
+               self.tensor_data_ptr(temp1), 
+               self.tensor_data_ptr(temp2), 
+               trX, trF)
     else:
       xbatch, fbatch = self.batchedDims(x, fs[0], addPadding = True)
       if y is not None:
@@ -364,7 +364,6 @@ class FastKronBase:
         
         m = self.m(mmtype, x, trX)
         #Apply StridedBatched on the last dimension
-        print(367, strideF)
         handlefn = handle.xgemkmStridedBatched if mmtype == FastKronBase.MMTypeMKM else handle.xgekmmStridedBatched
         handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
                 self.tensor_data_ptr(x[xidx, :]), strideX,
@@ -383,29 +382,36 @@ class FastKronBase:
       if y is not None:
         y = y.reshape(orig_yshape)
 
-  def shuffleGeKMM(self, framework, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
-    self.checkShapeAndTypes(x, fs, None, y, trX, trF)
+  def shuffleGeMM(self, framework, mmtype, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
+    self.checkShapeAndTypes(mmtype, x, fs, None, y, trX, trF)
 
-    rs, _ = self.gekmmSizes(x, fs, trX=trX, trF=trF)
-    m,  k = self.m(x, trX), self.k(x, trX)
+    rs, _ = self.gekmmSizes(mmtype, x, fs, trX=trX, trF=trF)
+    m,  k = self.m(mmtype, x, trX), self.k(mmtype, x, trX)
 
     if trX:
       x = self.trLastTwoDims(x)
 
     z = x
-    l = rs[-1]
 
     for i,f in enumerate(reversed(fs)):
       if trF: f = self.trLastTwoDims(f)
-      z = z.reshape(z.shape[:-2] + (m * k//self.p(f, False), self.p(f, False)))
+      fp = self.p(mmtype, f, False)
+      z = z.reshape(z.shape[:-2] + (m * k//fp, fp))
       z = framework.matmul(z, f)
-      z = z.reshape(z.shape[:-2] + (m, k//self.p(f, False), self.q(f, False)))
+      z = z.reshape(z.shape[:-2] + (m, k//fp, self.q(mmtype, f, False)))
       z = self.trLastTwoDims(z)
-      z = z.reshape(z.shape[:-3] + (m*k//self.p(f, False), self.q(f, False)))
-      k = (k//self.p(f, False)) * self.q(f, False)
+
+      if mmtype == FastKronBase.MMTypeMKM:
+        zshape = (m*k//fp, self.q(mmtype, f, False))
+      else:
+        zshape = (self.q(mmtype, f, False), m*k//fp)
+
+      z = z.reshape(z.shape[:-3] + zshape)
+      k = (k//fp) * self.q(mmtype, f, False)
 
     if alpha != None:
-      z = alpha * (z.reshape(z.shape[:-2] + (m, l)))
+      z = alpha * (z.reshape(rs))
     if beta != None and y is not None:
       z += beta * y
+
     return z

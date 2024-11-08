@@ -133,7 +133,7 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   x,fs = __fastkrontorch.reshapeInput(x, fs, trX, trF)
 
   if not __fastkrontorch.isSupported(x, fs):
-    z = __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
+    z = __fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
   else:
     rs, ts = __fastkrontorch.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)
@@ -179,7 +179,9 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   x,fs = __fastkrontorch.reshapeInput(x, fs, trX, trF)
 
   if not __fastkrontorch.isSupported(x, fs):
-    z = __fastkrontorch.shuffleGeKMM(torch, x, fs, alpha, beta, y, trX, trF)
+    z = __fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, 
+                                    y.transpose(-2,-1) if y is not None else None,
+                                    not trX, not trF).transpose(-2,-1)
   else:
     rs, ts = __fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)
