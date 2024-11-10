@@ -309,6 +309,10 @@ public:
   StridedBatchBase sameRows(uint32_t cols) const {
     return StridedBatchBase(this->m(), cols, batchStride_, this->data());
   }
+
+  StridedBatchBase diffBatchStride(uint32_t batchStride) const {
+    return StridedBatchBase(this->m(), this->n(), batchStride, this->data());
+  }
 };
 
 using StridedBatchMatrix = StridedBatchBase<Matrix>;

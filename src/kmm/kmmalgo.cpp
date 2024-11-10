@@ -76,7 +76,8 @@ fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
                                                         typename KMMProblemType::Matrix)> func) {
   int nextF = 1;
 
-  void* firstIterOut;
+  typename KMMProblemType::Matrix firstIterOut;
+  typename KMMProblemType::Matrix result = problem.y();
 
   if (tmps != nullptr) {
     if (tmps[1] == nullptr) {
@@ -88,13 +89,12 @@ fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
         tmps[1] = problem.y().data();
       }
     }
-    firstIterOut = tmps[0];
+    firstIterOut = result.like(tmps[0]);
   } else {
-    firstIterOut = problem.y().data();
+    firstIterOut = result;
   }
 
-  typename KMMProblemType::Matrix result = problem.y();
-  problem = problem.updateY(problem.y().like(firstIterOut));
+  problem = problem.setFirstIterOutput(firstIterOut);
 
   fastKronError err = fastKronSuccess;
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
@@ -105,8 +105,9 @@ fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
     if ((uint32_t)i < problem.n() - 1) {
       opX = fastKronOp_N;
     }
-    if (i < nextF) problem = problem.updateY(result);
     auto subProblem = problem.rsub(i, nextF);
+    if (i < nextF) subProblem = subProblem.updateY(result);
+    subProblem.initMMIter(i, i == problem.n() - 1, i < nextF);
     subProblem.setOpX(opX);
     err = func(subProblem, i, tmps, result);
     if (err != fastKronSuccess) break;

@@ -166,9 +166,9 @@ fastKronError FastKronHandle::xgemm(const KMMProblem problem,
 }
 
 fastKronError FastKronHandle::xgemmStridedBatched(const KMMProblemStridedBatched problem, 
-                                                   const fastKronBackend backend, 
-                                                   void* temp1, void* temp2,
-                                                   EpilogueStridedBatchedParams epilogueParams) {
+                                                  const fastKronBackend backend, 
+                                                  void* temp1, void* temp2,
+                                                  EpilogueStridedBatchedParams epilogueParams) {
   if (problem.y().data()  == nullptr || temp1 == nullptr ||
       hasBackend(backend) == false) 
       return fastKronInvalidArgument;

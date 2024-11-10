@@ -136,6 +136,10 @@ public:
   CUDA_DEVICE_HOST
   uint32_t n() const {return factors.len();}
 
+  KMMProblemBase setFirstIterOutput(const Matrix y) const {
+    return KMMProblemBase(mmtype(), type(), x(), opX(), n(), fs(), opFs(), y);
+  }
+
   KMMProblemBase updateY(const Matrix y) const {
     return KMMProblemBase(mmtype(), type(), x(), opX(), n(), fs(), opFs(), y);
   }
@@ -253,6 +257,8 @@ public:
   KMMProblemBase<MatrixT, FactorT, NumFactors> factorSlice() {
     return KMMProblemBase<MatrixT, FactorT, NumFactors>(*this);
   }
+
+  void initMMIter(int i, bool isFirstIter, bool isLastIter) {}
 
   /**
    * swap() - Swap x and y pointers based on temporary pointers.
@@ -391,6 +397,12 @@ public:
     return KMMProblemStridedBatchedT(Base::sub(start, subn), batches);
   }
   
+  KMMProblemStridedBatchedT setFirstIterOutput(const Matrix y) const {
+    return KMMProblemStridedBatchedT(this->mmtype(), this->type(), this->x(), this->opX(), 
+                                     this->n(), this->fs(), this->opFs(),
+                                     y, batches);
+  }
+
   KMMProblemStridedBatchedT updateY(const Matrix y) const {
     return KMMProblemStridedBatchedT(this->mmtype(), this->type(), this->x(), this->opX(), 
                                      this->n(), this->fs(), this->opFs(),
@@ -431,6 +443,26 @@ public:
   template<uint NumFactors>
   KMMProblemStridedBatchedT<NumFactors> factorSlice() {
     return KMMProblemStridedBatchedT<NumFactors>(*this);
+  }
+
+  void initMMIter(int i, bool isFirstIter, bool isLastIter) {
+    if (isFirstIter ^ isLastIter || !isFirstIter && !isLastIter) {
+      if (isFirstIter) {
+        //Set output's batchstride as num elems of output matrix because output is a temp
+        this->out = KMMProblemStridedBatchedT::Matrix(this->y().m(), this->y().n(), 
+                                                      this->m() * this->l(), this->y().data());
+      } else if (isLastIter) {
+        //Set input's batchstride as num elems of input matrix because input is a temp
+        this->in = KMMProblemStridedBatchedT::Matrix(this->x().m(), this->x().n(), 
+                                                      this->m() * this->k(), this->x().data());
+      } else if (!isFirstIter && !isLastIter) {
+        //Do above things
+        this->in = KMMProblemStridedBatchedT::Matrix(this->x().m(), this->x().n(), 
+                                                      this->m() * this->k(), this->x().data());
+        this->out = KMMProblemStridedBatchedT::Matrix(this->y().m(), this->y().n(), 
+                                                      this->m() * this->l(), this->y().data());
+      }
+    }
   }
 
   void swap(void* temp1, void* temp2) {
