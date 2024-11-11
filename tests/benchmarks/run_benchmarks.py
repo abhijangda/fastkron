@@ -82,7 +82,8 @@ class GPyTorchEval:
         t1 = time.time()
         for i in range(r):
             y = x @ kp
-        torch.cuda.synchronize()
+        if self.backend == "cuda":
+          torch.cuda.synchronize()
         t2 = time.time()
         return (t2-t1)*1000/r
     
@@ -90,17 +91,26 @@ class GPyTorchEval:
     t = min(run_case(5), run_case(5), run_case(5), run_case(5), run_case(5))
     flops = shape.flops()/(t/1e3)
     return (flops/1e9,)
-  
+
 class FastKronEval:
-  def __init__(self, backend, mode, elemtype, mmtype, multi_gpu=False):
+  def __init__(self, backend, mode, elemtype, mmtype, multi_gpu=False, use_python_module=False):
     self.backend = backend
     self.tuningmode = mode
     self.built = False
     self.elemtype = elemtype
     self.mmtype = mmtype
     self.multi_gpu = multi_gpu
-  
+    self.use_python_module = use_python_module
+    if use_python_module:
+      assert mode == "NoTune"
+      import pyfastkron.fastkrontorch as fk
+      if self.mmtype == "mkm":
+        self.fastkron_mm = fk.gemkm
+      else:
+        self.fastkron_mm = fk.gekmm
+
   def setup_cmake(self):
+    if self.use_python_module: return
     if self.built == True:
       return
     d = os.getcwd()
@@ -121,34 +131,78 @@ class FastKronEval:
     os.chdir(d)
 
   def gen_kernels(self, shape, opX, opF, distKernels):
-    if self.tuningmode == 'FullTune':
-      run_command(f"python3 src/gen_tuner_kernels.py -mm-type {self.mmtype} -backend cuda -archs ampere -distinct-factors " + \
-                  str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
-                  " -opX " + opX + " -opF " + opF + \
-                  (" -dist-kernels " if distKernels else "") + \
-                  " -backend " + self.backend + " -types " + self.elemtype + " -opt-levels 3")
-    elif self.tuningmode == 'FastTune' or self.tuningmode == 'NoTune':
-      run_command("cd build/")
+    if not self.use_python_module:
+      if self.tuningmode == 'FullTune':
+        run_command(f"python3 src/gen_tuner_kernels.py -mm-type {self.mmtype} -backend cuda -archs ampere -distinct-factors " + \
+                    str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
+                    " -opX " + opX + " -opF " + opF + \
+                    (" -dist-kernels " if distKernels else "") + \
+                    " -backend " + self.backend + " -types " + self.elemtype + " -opt-levels 3")
+      elif self.tuningmode == 'FastTune' or self.tuningmode == 'NoTune':
+        run_command("cd build/")
+    else:
+      pass
 
   def build_kron(self):
-    run_command(f"cd build && make benchmark_{self.backend} -j")
+    if not self.use_python_module:
+      run_command(f"cd build && make benchmark_{self.backend} -j")
+    else:
+      pass #run_command(f"pip install .")
 
   def run_fastkron(self, shape, GM, GK, LocalKrons, opX, opF):
-    kron = f"cd build && ./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w {50 if self.tuningmode=='NoTune' else 20} -t {self.elemtype} {'' if self.tuningmode=='NoTune' else '--tune'} --opx {opX} --opf {opF} -a 1 -b 0 --gemmtype {self.mmtype}"
-    if GM * GK != 1:
-      kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
-    kron += " --backend " + self.backend
+    if not self.use_python_module:
+      kron = f"cd build && ./tests/benchmarks/benchmark_{self.backend} -m {shape.m} -n {shape.n} -p {shape.ps[0]} -q {shape.qs[0]} -r 10 -w {50 if self.tuningmode=='NoTune' else 20} -t {self.elemtype} {'' if self.tuningmode=='NoTune' else '--tune'} --opx {opX} --opf {opF} -a 1 -b 0 --gemmtype {self.mmtype}"
+      if GM * GK != 1:
+        kron += f" --gpus {GM*GK} --GM {GM} --GK {GK} --gpuLocalKrons {LocalKrons}"
+      kron += " --backend " + self.backend
 
-    o = run_command(kron + " --fuse")
-    fused = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
-    fusedtime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
-    if shape.ps[0] <= 32 and shape.ps[0] == shape.qs[0]:
-      o = run_command(kron)
-      wofuse = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
-      wofusetime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
+      o = run_command(kron + " --fuse")
+      fused = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
+      fusedtime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
+      if shape.ps[0] <= 32 and shape.ps[0] == shape.qs[0]:
+        o = run_command(kron)
+        wofuse = re.findall(r"GFLOPS\: ([\d\.]+)", o)[0]
+        wofusetime = re.findall(r"Time: ([\d\.]+) ms", o)[0]
+      else:
+        wofuse = fused
+        wofusetime = fusedtime
     else:
-      wofuse = fused
-      wofusetime = fusedtime
+      with torch.no_grad():
+        fs = []
+        if self.elemtype == "float":
+          elemtype = torch.float
+        elif self.elemtype == "double":
+          elemtype = torch.double
+        for p,q in zip(shape.ps, shape.qs):
+          if opF == "T": 
+            f = torch.ones(q, p, dtype=elemtype)
+            f = f.mT
+          else:
+            f = torch.ones(p, q, dtype=elemtype)
+          if self.backend == 'cuda':
+            f = f.cuda()
+          fs += [f]
+        if opX == "T":
+          x = torch.ones(shape.k, shape.m, dtype=elemtype)
+          x = x.mT
+        else:
+          x = torch.ones(shape.m, shape.k, dtype=elemtype)
+        if self.backend == 'cuda':
+          x = x.cuda()
+        def run_case(r):
+            t1 = time.time()
+            for i in range(r):
+              self.fastkron_mm(x, fs)
+            if self.backend == "cuda":
+              torch.cuda.synchronize()
+            t2 = time.time()
+            return (t2-t1)*1000/r
+
+        run_case(20)
+        t = min(run_case(10), run_case(10), run_case(10), run_case(10), run_case(10))
+        flops = shape.flops()/(t/1e3)
+        fused = flops/1e9
+        wofuse = fused
 
     if GM*GK == 1:
       return (shape, float(wofuse), float(fused))
@@ -164,7 +218,7 @@ class FastKronEval:
         self.built = True
     return self.run_fastkron(shape, 1, 1, 1, opX, opF)
 
-def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset):
+def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_pymodule):
   print(f"------- Single {device.upper()} {mmtype.upper()} {elemtype.upper()} {mode} {opX}{opF} -------")
   device = device.lower()
   cases = []
@@ -206,27 +260,27 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset):
               continue
             cases += [Shape(m, n, p, q)]
 
-  fkeval = FastKronEval(device, mode, elemtype, mmtype)
+  fkeval = FastKronEval(device, mode, elemtype, mmtype, use_python_module=use_pymodule)
   fkeval.setup_cmake()
   for shape in cases:
-    try:
-      fk = fkeval.run_single_gpu(shape, opX, opF)
-    except:
-      fk = (shape, 1, 1)
+    # try:
+    fk = fkeval.run_single_gpu(shape, opX, opF)
+    # except:
+      # fk = (shape, 1, 1)
     try:
       gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
     except:
       gp = (1, 1)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
 
-def run_nn(device, mode, elemtype, mmtype, dataset):
-  benchmark_single_gpu(device, "N", "N", mode, elemtype, mmtype, dataset)
+def run_nn(device, mode, elemtype, mmtype, dataset, use_pymodule):
+  benchmark_single_gpu(device, "N", "N", mode, elemtype, mmtype, dataset, use_pymodule)
 
 def run_nt(device, mode):
   benchmark_single_gpu(device, "N", "T", mode, elemtype, mmtype, dataset)
 
-def run_tt(device, mode, elemtype, mmtype, dataset):
-  benchmark_single_gpu(device, "T", "T", mode, elemtype, mmtype, dataset)
+def run_tt(device, mode, elemtype, mmtype, dataset, use_pymodule):
+  benchmark_single_gpu(device, "T", "T", mode, elemtype, mmtype, dataset, use_pymodule)
 
 def multi_gpu(scaling):
   cases = []
@@ -259,6 +313,7 @@ if __name__ == "__main__":
   parser.add_argument("-tune-modes"  , required=True, type=str, nargs="+")
   parser.add_argument("-dataset"     , required=True, type=str)
   parser.add_argument("-mmtype"      , required=True, type=str, nargs="+")
+  parser.add_argument("-use-pymodule", required=False, action='store_true', default=False)
 
   args = parser.parse_args()
   
@@ -273,9 +328,9 @@ if __name__ == "__main__":
           assert mode in TuningModes
           assert mmtype in ["mkm", "kmm"]
 
-          run_nn(backend, mode, elemtype, mmtype, args.dataset)
-          run_tt(backend, mode, elemtype, mmtype, args.dataset)
+          # run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
+          run_tt(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
 
-          if backend == "cuda" and mode == "FullTune" and args.dataset == "large":
+          if not args.pymodule and backend == "cuda" and mode == "FullTune" and args.dataset == "large":
             multi_gpu("weak")
             multi_gpu("strong")
