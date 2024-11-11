@@ -7,7 +7,7 @@ namespace py = pybind11;
 
 #define THROW_ERROR(err) {\
   if ((err) != fastKronSuccess) {\
-    throw std::runtime_error(fastKronGetErrorString(err));\
+    throw std::runtime_error("FastKronError: " + fastKronGetErrorString(err));\
   }\
 }
 

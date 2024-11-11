@@ -59,7 +59,8 @@ class FastKronTorch(FastKronBase):
     elif self.device_type(x) == "cuda":
       return fastkronCUDA
 
-  def asContiguousTensor(self, x):
+  def asContiguousTensor(self, x, forceContiguous=False):
+    if forceContiguous: return False, x.contiguous()
     if x.is_contiguous(): return False, x
     if x.ndim > 1 and x.stride()[-2] == 1 and x.stride()[-1] == x.shape[-2]: return True, x
     return False, x.contiguous()
@@ -140,6 +141,7 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
     raise ValueError(f"Input 'y' should be a 2D Tensor")
   
   trX,x, trF,fs = __fastkrontorch.reshapeInput(x, fs)
+
   if torch.is_grad_enabled() or not __fastkrontorch.isSupported(x, fs):
     z = __fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
   else:

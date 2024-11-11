@@ -28,7 +28,8 @@ class FastKronNumpy(FastKronBase):
       axes = list(range(len(x.shape) - 3)) + [len(x.shape) - 2, len(x.shape) - 3, len(x.shape) - 1]
     return x.transpose(axes)
 
-  def asContiguousTensor(self, x):
+  def asContiguousTensor(self, x, forceContiguous=False):
+    if forceContiguous: return False, x.ascontiguousarray()
     if x.data.c_contiguous: return False, x
     strides = self.stride(x)
     if x.ndim > 1 and strides[-2] == 1 and \

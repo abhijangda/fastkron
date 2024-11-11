@@ -86,7 +86,7 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
     fs = [transpose(f) for f in fs]
 
   alpha = 3.0
-  beta = 2.0
+  beta = 1.0
 
   if mmtype == "mkm":
     y = fk.gemkm(x, fs, alpha, beta, z)
@@ -96,8 +96,9 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
   ref = alpha * reference(mmtype, x, fs, device)
   if z != None:
     ref += beta * z
+
   val = torch.isclose(y, ref).all().item()
-  print(52)
+  print(101)
   assert val
 
 def device_tests(device):

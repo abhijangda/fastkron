@@ -56,7 +56,7 @@ class FastKronBase:
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
 
-  def asContiguousTensor(self, x):
+  def asContiguousTensor(self, x, forceContiguous=False):
     raise NotImplementedError()
   
   def stride(self, x):
@@ -104,9 +104,22 @@ class FastKronBase:
     else:
       if len(x.shape) == 1:
         x = x.reshape((1,x.shape[0]))
-    
+
+    trFs = []
+
     for f in fs:
       trF, f = self.asContiguousTensor(f)
+      trFs += [trF]
+
+    if len(set(trFs)) > 1:
+      #When factors have different values of trF then 
+      #make all factors contiguous and set trF to False
+      for i,f in enumerate(fs):
+        fs[i] = self.asContiguousTensor(f, forceContiguous=True)
+        trFs[i] = False
+
+    for i,f in enumerate(fs):
+      trF = trFs[i]
       if trF:
         if f.ndim == 1:
           f = f.reshape((1, fs[0]))
@@ -114,7 +127,7 @@ class FastKronBase:
         if f.ndim == 1:
           f = f.reshape((fs[0], 1))
 
-    return trX, x, trF, fs
+    return trX, x, trFs[0], fs
 
   def batchedDims(self, x1, x2, addPadding=True):
     x1batch = x1.shape[:-2]
@@ -135,10 +148,10 @@ class FastKronBase:
     for s1, s2 in zip(reversed(shape1), reversed(shape2)):
       if s1 == s2:
         finalShape += (s1,)
-      elif s1 != 1:
-        finalShape += (s1,)
-      elif s2 != 1:
+      elif s1 == 1:
         finalShape += (s2,)
+      elif s2 == 1:
+        finalShape += (s1,)
       else:
         raise ValueError(f"Shape {shape1} of x and {shape2} of f are not broadcastable")
 
@@ -183,7 +196,7 @@ class FastKronBase:
     
     if x.dtype != fs[0].dtype:
       raise ValueError(f"Operand types mismatches {x.dtype} != {fs[0].dtype}")
-    
+
     if len(set([f.dtype for f in fs])) != 1:
       raise ValueError(f"Type of Kronecker factors do not match. Found {len(set([f.dtype for f in fs]))} different types")
 
@@ -220,6 +233,9 @@ class FastKronBase:
             trX = False, trF = False):
 
     self.checkShapeAndTypes(mmtype, x, fs, z, y, trX, trF)
+
+    if beta != 0.0 and y == None:
+      raise ValueError(f"When beta != 0 {beta} then y should not be None")
 
     orig_xshape = x.shape
     orig_fshape = []
@@ -259,8 +275,12 @@ class FastKronBase:
 
       z = z.reshape((product(z.shape[:-2]),)+z.shape[-2:])
       x = x.reshape((product(xbatch),)+x.shape[-2:])
+
       for i in range(len(fs)):
         fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
+      #After above reshape a tensor made by slicing a parent tensor, like [0:M:N]
+      #will force the reshape to make the tensor contiguous, so recompute trX and trF
+      trX, x, trF, fs = self.reshapeInput(x, fs)
 
       if y is not None:
         y = y.reshape((product(ybatch),) + y.shape[-2:])
@@ -275,7 +295,7 @@ class FastKronBase:
         #Go through each linear index of batch dimensions of Z
         xidx = fidx = zidx = yidx = None
         strideX = strideF = strideZ = strideY = 0
-        strideZ = product(z.shape[-2:])
+        strideZ = self.stride(z)[0]
         zidx = yidx = batchLinearIdxZ
         
         xidx = 0
@@ -305,16 +325,16 @@ class FastKronBase:
         dim = -1
         if xbatch[dim] > 1 and fbatch[dim] == 1:
           #Batched X with same Fs
-          strideX = product(self.stride(x)[:-2])
+          strideX = self.stride(x)[0]
           strideF = [0 for f in fs]
         elif xbatch[dim] == fbatch[dim]:
           #Each X with corresponding Fs
-          strideX = product(self.stride(x)[0:-2])
-          strideF = [product(self.stride(f)[0:-2]) for f in fs]
+          strideX = self.stride(x)[0]
+          strideF = [self.stride(f)[0] for f in fs]
         elif xbatch[dim] == 1 and fbatch[dim] > 1:
           #Same X with batched Fs
           strideX = 0
-          strideF = [product(self.stride(f)[0:-2]) for f in fs]
+          strideF = [self.stride(f)[0] for f in fs]
         
         if zbatch[dim] == ybatch[dim]:
           strideY = strideZ
@@ -324,9 +344,8 @@ class FastKronBase:
           raise ValueError(f"Output 'z' {z.shape} cannot be broadcastable to 'y' {y.shape}")
         
         m = self.m(mmtype, x, trX)
-
-        #Apply StridedBatched on the last dimension
         handlefn = handle.xgemkmStridedBatched if mmtype == FastKronBase.MMTypeMKM else handle.xgekmmStridedBatched
+        #Apply StridedBatched on the last dimension
         handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
                 self.tensor_data_ptr(x[xidx, :]), strideX,
                 self.fptrs([f[fidx,:] for f in fs]), strideF,
