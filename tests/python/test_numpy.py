@@ -11,12 +11,7 @@ def transpose(m):
          (len(m.shape) - 1, len(m.shape) - 2)
   return m.transpose(axis)
 
-def reference(mmtype, x, fs, trX, trF):
-  if trX:
-    x = transpose(x)
-  if trF:
-    fs = [transpose(f) for f in fs]
-
+def reference(mmtype, x, fs):
   batchKron = fs[0].shape[:-2]
   if len(batchKron) == 0:
     outputKron = fs[0]
@@ -81,16 +76,20 @@ def run(mmtype, m, n, p, q, dtype, device, trX, trF,
   fs = [np.random.randint(0, high=high,size=fshape).astype(dtype)\
         for i in range(n)]
   z = np.random.randint(0,   high=high,size=zshape).astype(dtype)
+  if trX:
+    x = transpose(x)
+  if trF:
+    fs = [transpose(f) for f in fs]
 
   alpha = 3.0
-  beta = 2.0
+  beta = 0.0
 
   if mmtype == "mkm":
-    y = fk.gemkm(x, fs, alpha, beta, z, trX=trX, trF=trF)
+    y = fk.gemkm(x, fs, alpha, beta, z)
   elif mmtype == "kmm":
-    y = fk.gekmm(fs, x, alpha, beta, z, trX=trX, trF=trF)
+    y = fk.gekmm(fs, x, alpha, beta, z)
 
-  ref = alpha * reference(mmtype, x, fs, trX, trF) + beta * z
+  ref = alpha * reference(mmtype, x, fs) + beta * z
   val = np.isclose(y, ref, rtol=1e-04).all().item()
   print(52)
   assert val

@@ -56,29 +56,22 @@ class FastKronBase:
   def tensor_data_ptr(self, tensor):
     raise NotImplementedError()
 
+  def asContiguousTensor(self, x):
+    raise NotImplementedError()
   
+  def stride(self, x):
+    raise NotImplementedError()
+
   def p(self, mmtype, f, trF):
     if mmtype == FastKronBase.MMTypeMKM:
-      if trF:
-        return f.shape[-1]
-      else:
         return f.shape[-2]
     elif mmtype == FastKronBase.MMTypeKMM:
-      if trF:
-        return f.shape[-2]
-      else:
         return f.shape[-1]
   
   def q(self, mmtype, f, trF):
     if mmtype == FastKronBase.MMTypeMKM:
-      if trF:
-        return f.shape[-2]
-      else:
         return f.shape[-1]
     elif mmtype == FastKronBase.MMTypeKMM:
-      if trF:
-        return f.shape[-1]
-      else:
         return f.shape[-2]
 
   def ps(self, mmtype, fs, trF):
@@ -89,55 +82,22 @@ class FastKronBase:
 
   def m(self, mmtype, x, trX):
     if mmtype == FastKronBase.MMTypeMKM:
-      if trX:
-        return x.shape[-1]
-      else:
         return x.shape[-2]
     elif mmtype == FastKronBase.MMTypeKMM:
-      if trX:
-        return x.shape[-2]
-      else:
         return x.shape[-1]
   
   def k(self, mmtype, x, trX):
     if mmtype == FastKronBase.MMTypeMKM:
-      if trX:
-        return x.shape[-2]
-      else:
-        return x.shape[-1]
+      return x.shape[-1]
     elif mmtype == FastKronBase.MMTypeKMM:
-      if trX:
-        return x.shape[-1]
-      else:
-        return x.shape[-2]
+      return x.shape[-2]
 
   def fptrs(self, fs):
     return [self.tensor_data_ptr(f) for f in fs]
 
-  def xfsShape(self, xshape, fshapes, trX, trF):
-    newxshape = None
-    newfshapes = []
+  def reshapeInput(self, x, fs):
+    trX, x = self.asContiguousTensor(x)
 
-    if trX == False:
-      if len(xshape) == 1:
-        newxshape = (1, xshape[0])
-
-    elif trX:
-      if len(xshape) == 1:
-        newxshape = (xshape[0], 1)
-
-    for fs in fshapes:
-      newfshapes += [fshapes]
-      if trF == False:
-        if len(fs) == 1:
-          newfshapes[-1] = [(fs[0], 1)]
-      elif trF:
-        if len(fs) == 1:
-          newfshapes[-1] = [(1, fs[0])]
-
-    return newxshape, newfshapes
-
-  def reshapeInput(self, x, fs, trX, trF):
     if trX:
       if len(x.shape) == 1:
         x = x.reshape((x.shape[0], 1))
@@ -146,6 +106,7 @@ class FastKronBase:
         x = x.reshape((1,x.shape[0]))
     
     for f in fs:
+      trF, f = self.asContiguousTensor(f)
       if trF:
         if f.ndim == 1:
           f = f.reshape((1, fs[0]))
@@ -153,7 +114,7 @@ class FastKronBase:
         if f.ndim == 1:
           f = f.reshape((fs[0], 1))
 
-    return x, fs
+    return trX, x, trF, fs
 
   def batchedDims(self, x1, x2, addPadding=True):
     x1batch = x1.shape[:-2]
@@ -249,7 +210,7 @@ class FastKronBase:
         raise ValueError(f"Input operand 'y' shape {y.shape} cannot be broadcasted to output 'z' shape {z.shape}")
       assert y.dtype   == z.dtype
 
-  def trLastTwoDims(self, x):
+  def trLastTwoDims(self, mmtype, x):
     raise NotImplementedError()
 
   def device_type(self, x):
@@ -344,16 +305,16 @@ class FastKronBase:
         dim = -1
         if xbatch[dim] > 1 and fbatch[dim] == 1:
           #Batched X with same Fs
-          strideX = product(x.shape[-2:])
+          strideX = product(self.stride(x)[:-2])
           strideF = [0 for f in fs]
         elif xbatch[dim] == fbatch[dim]:
           #Each X with corresponding Fs
-          strideX = product(x.shape[-2:])
-          strideF = [product(f.shape[-2:]) for f in fs]
+          strideX = product(self.stride(x)[0:-2])
+          strideF = [product(self.stride(f)[0:-2]) for f in fs]
         elif xbatch[dim] == 1 and fbatch[dim] > 1:
           #Same X with batched Fs
           strideX = 0
-          strideF = [product(f.shape[-2:]) for f in fs]
+          strideF = [product(self.stride(f)[0:-2]) for f in fs]
         
         if zbatch[dim] == ybatch[dim]:
           strideY = strideZ
@@ -363,13 +324,14 @@ class FastKronBase:
           raise ValueError(f"Output 'z' {z.shape} cannot be broadcastable to 'y' {y.shape}")
         
         m = self.m(mmtype, x, trX)
+
         #Apply StridedBatched on the last dimension
         handlefn = handle.xgemkmStridedBatched if mmtype == FastKronBase.MMTypeMKM else handle.xgekmmStridedBatched
         handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
                 self.tensor_data_ptr(x[xidx, :]), strideX,
                 self.fptrs([f[fidx,:] for f in fs]), strideF,
                 batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ, alpha, beta, 
-                self.tensor_data_ptr(y[yidx, :]), strideY,
+                self.tensor_data_ptr(y[yidx, :]) if y is not None else 0, strideY,
                 self.tensor_data_ptr(temp1), 
                 self.tensor_data_ptr(temp2), 
                 trX, trF)
@@ -382,32 +344,34 @@ class FastKronBase:
       if y is not None:
         y = y.reshape(orig_yshape)
 
-  def shuffleGeMM(self, framework, mmtype, x, fs, alpha = None, beta = None, y = None, trX = False, trF = False):
+  def shuffleGeMM(self, framework, mmtype, x, fs,
+                  alpha = None, beta = None, 
+                  y = None, trX = False, trF = False):
     self.checkShapeAndTypes(mmtype, x, fs, None, y, trX, trF)
 
     rs, _ = self.gekmmSizes(mmtype, x, fs, trX=trX, trF=trF)
     m,  k = self.m(mmtype, x, trX), self.k(mmtype, x, trX)
 
-    if trX:
-      x = self.trLastTwoDims(x)
-
     z = x
 
-    for i,f in enumerate(reversed(fs)):
-      if trF: f = self.trLastTwoDims(f)
+    enumerator = enumerate(fs) if mmtype == FastKronBase.MMTypeKMM else enumerate(reversed(fs))
+    for i,f in enumerator:
       fp = self.p(mmtype, f, False)
-      z = z.reshape(z.shape[:-2] + (m * k//fp, fp))
-      z = framework.matmul(z, f)
-      z = z.reshape(z.shape[:-2] + (m, k//fp, self.q(mmtype, f, False)))
-      z = self.trLastTwoDims(z)
-
+      fq = self.q(mmtype, f, False)
       if mmtype == FastKronBase.MMTypeMKM:
-        zshape = (m*k//fp, self.q(mmtype, f, False))
-      else:
-        zshape = (self.q(mmtype, f, False), m*k//fp)
-
+        z = z.reshape(z.shape[:-2] + (m * k//fp, fp))
+        z = framework.matmul(z, f)
+        z = z.reshape(z.shape[:-2] + (m, k//fp, fq))
+        z = self.trLastTwoDims(mmtype, z)
+        zshape = (m*k//fp, fq)
+      elif mmtype == FastKronBase.MMTypeKMM:
+        z = z.reshape(z.shape[:-2] + (fp, m * k//fp))
+        z = framework.matmul(f, z)
+        z = z.reshape(z.shape[:-2] + (fq, k//fp,m))
+        z = self.trLastTwoDims(mmtype, z)
+        zshape = (fq, m*k//fp)
       z = z.reshape(z.shape[:-3] + zshape)
-      k = (k//fp) * self.q(mmtype, f, False)
+      k = (k//fp) * fq
 
     if alpha != None:
       z = alpha * (z.reshape(rs))

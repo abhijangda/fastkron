@@ -44,8 +44,11 @@ class FastKronTorch(FastKronBase):
   def supportedTypes(self, x, fs):
     return x.dtype in [torch.float32, torch.float64]
 
-  def trLastTwoDims(self, x):
-    return x.transpose(-1, -2)
+  def trLastTwoDims(self, mmtype, x):
+    if mmtype == FastKronBase.MMTypeMKM:
+      return x.transpose(-1, -2)
+    elif mmtype == FastKronBase.MMTypeKMM:
+      return x.transpose(-2, -3)
 
   def device_type(self, x):
     return x.device.type 
@@ -55,6 +58,14 @@ class FastKronTorch(FastKronBase):
       return fastkronX86
     elif self.device_type(x) == "cuda":
       return fastkronCUDA
+
+  def asContiguousTensor(self, x):
+    if x.is_contiguous(): return False, x
+    if x.ndim > 1 and x.stride()[-2] == 1 and x.stride()[-1] == x.shape[-2]: return True, x
+    return False, x.contiguous()
+
+  def stride(self, x):
+    return x.stride()
 
   def gemkm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
@@ -98,7 +109,7 @@ class FastKronTorch(FastKronBase):
 
 __fastkrontorch = FastKronTorch()
 
-def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -127,12 +138,9 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
       raise ValueError(f"Input fs[{i}] should be a Tensor")
   if y != None and type(y) is not torch.Tensor:
     raise ValueError(f"Input 'y' should be a 2D Tensor")
-
-  orig_xshape = x.shape
-
-  x,fs = __fastkrontorch.reshapeInput(x, fs, trX, trF)
-
-  if not __fastkrontorch.isSupported(x, fs):
+  
+  trX,x, trF,fs = __fastkrontorch.reshapeInput(x, fs)
+  if torch.is_grad_enabled() or not __fastkrontorch.isSupported(x, fs):
     z = __fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
   else:
     rs, ts = __fastkrontorch.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
@@ -144,7 +152,7 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
 
   return z
 
-def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -174,14 +182,11 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
   if y != None and type(y) is not torch.Tensor:
     raise ValueError(f"Input 'y' should be a 2D Tensor")
 
-  orig_xshape = x.shape
+  trX,x, trF,fs = __fastkrontorch.reshapeInput(x, fs)
 
-  x,fs = __fastkrontorch.reshapeInput(x, fs, trX, trF)
-
-  if not __fastkrontorch.isSupported(x, fs):
-    z = __fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, 
-                                    y.transpose(-2,-1) if y is not None else None,
-                                    not trX, not trF).transpose(-2,-1)
+  if torch.is_grad_enabled() or not __fastkrontorch.isSupported(x, fs):
+    z = __fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeKMM, x, fs, alpha, beta, 
+                                    y, trX, trF)
   else:
     rs, ts = __fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)

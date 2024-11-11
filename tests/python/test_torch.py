@@ -11,13 +11,7 @@ def transpose(m):
          (len(m.shape) - 1, len(m.shape) - 2)
   return torch.transpose(m, -2, -1)
 
-
-def reference(mmtype, x, fs, trX, trF, device):
-  if trX:
-    x = transpose(x)
-  if trF:
-    fs = [transpose(f) for f in fs]
-
+def reference(mmtype, x, fs, device):
   batchKron = fs[0].shape[:-2]
   if len(batchKron) == 0:
     outputKron = fs[0]
@@ -43,91 +37,100 @@ def reference(mmtype, x, fs, trX, trF, device):
   elif mmtype == "kmm":
     return torch.matmul(outputKron, x)
 
-def run(mmtype, m, n, p, q, dtype, device, trX, trF,
+def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
         high=5, batchDimX=[], batchDimFPre=[], batchDimZ=[]):
+
+  if type(ps) is int:
+    ps = [ps]
+
+  if len(ps) == 1:
+    ps = [ps[0]]*n
+  
+  if type(qs) is int:
+    qs = [qs]
+
+  if len(qs) == 1:
+    qs = [qs[0]]*n
+
   #Using integer values instead of real numbers because 
   #floating point is not associative
   if mmtype == "mkm":
-    xshape = [m, p**n] if not trX else [p**n, m]
+    xshape = [m, product(ps)] if not trX else [product(ps), m]
   elif mmtype == "kmm":
-    xshape = [p**n, m] if not trX else [m, p**n]
-
-  if m == 1:
-    if trX:
-      xshape = [xshape[0],]
-    else:
-      xshape = [xshape[1],]
+    xshape = [product(ps), m] if not trX else [m, product(ps)]
 
   xshape = list(batchDimX) + xshape
 
   if mmtype == "mkm":
-    fshape = [p, q] if not trF else [q, p]
+    fshape = [[ps[i], qs[i]] if not trF else [qs[i], ps[i]] for i in range(n)]
   elif mmtype == "kmm":
-    fshape = [q, p] if not trF else [p, q]
-
-  if q == 1:
-    if trF:
-      fshape = [fshape[1],]
-    else:
-      fshape = [fshape[0],]
+    fshape = [[qs[i], ps[i]] if not trF else [ps[i], qs[i]] for i in range(n)]
   
-  fshape = list(batchDimFPre) + fshape
+  fshape = [list(batchDimFPre) + fshape[i] for i in range(n)]
 
   zshape = list(batchDimZ)
 
   if mmtype == "mkm":
-    zshape += [m,q**n]
+    zshape += [m,product(qs)]
   elif mmtype == "kmm":
-    zshape += [q**n,m]
-  
+    zshape += [product(qs),m]
+
   x = torch.randint(0, high=high,size=xshape, dtype=dtype).to(device)
-  fs = [torch.randint(0, high=high,size=fshape, dtype=dtype).to(device)\
+  fs = [torch.randint(0, high=high,size=fshape[i], dtype=dtype).to(device)\
         for i in range(n)]
   z = torch.randint(0,high=high, size=zshape, dtype=dtype).to(device)
 
-  alpha = 1.0
+  if trX:
+    x = transpose(x)
+  if trF:
+    fs = [transpose(f) for f in fs]
+
+  alpha = 3.0
   beta = 2.0
 
   if mmtype == "mkm":
-    y = fk.gemkm(x, fs, alpha, beta, z, trX=trX, trF=trF)
+    y = fk.gemkm(x, fs, alpha, beta, z)
   elif mmtype == "kmm":
-    y = fk.gekmm(fs, x, alpha, beta, z, trX=trX, trF=trF)
+    y = fk.gekmm(fs, x, alpha, beta, z)
 
-  ref = alpha * reference(mmtype, x, fs, trX, trF, device) + beta * z
-  val = torch.isclose(y, ref, rtol=1e-04).all().item()
+  ref = alpha * reference(mmtype, x, fs, device)
+  if z != None:
+    ref += beta * z
+  val = torch.isclose(y, ref).all().item()
   print(52)
   assert val
 
 def device_tests(device):
-  for mmtype in ["mkm", "kmm"]:
-    run(mmtype, 16, 5, 8, 8, torch.float32, device, False, False)
-    run(mmtype, 10, 5, 6, 6, torch.float32, device, True, False)
+  with torch.no_grad():
+    for mmtype in ["mkm", "kmm"]:
+      run(mmtype, 16, 5, 8, 8, torch.float32, device, False, False)
+      run(mmtype, 10, 5, 6, 6, torch.float32, device, True, False)
 
-    run(mmtype, 16, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
-    run(mmtype, 32, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
-    run(mmtype, 8, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
-    run(mmtype, 2, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
-    run(mmtype, 32, 4, 8, 8, torch.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
-    run(mmtype, 24, 4, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
+      run(mmtype, 16, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[], batchDimZ=[2,])
+      run(mmtype, 32, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,3], batchDimFPre=[2,3])
+      run(mmtype, 8, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[3,])
+      run(mmtype, 2, 5, 8, 8, torch.float32, device, False, False, batchDimX=[2,1,], batchDimFPre=[2,4,])
+      run(mmtype, 32, 4, 8, 8, torch.float32, device, False, False, batchDimX=[3,3,1,], batchDimFPre=[3,1,4,])
+      run(mmtype, 24, 4, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,])
 
-    run(mmtype, 16, 4, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,], batchDimZ=[3,1])
+      run(mmtype, 16, 4, 8, 8, torch.float32, device, False, False, batchDimX=[2,], batchDimFPre=[3,2,], batchDimZ=[3,1])
 
-    run(mmtype, 16, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
-    run(mmtype, 32, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
-    run(mmtype,13, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
-    run(mmtype, 29, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
+      run(mmtype, 16, 4, 16, 8, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
+      run(mmtype, 32, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
+      run(mmtype,13, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
+      run(mmtype, 19, 3, 8, 32, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
 
-    #double
-    run(mmtype, 11, 10, 3, 3, torch.double, device, False, True)
-    run(mmtype, 200, 2, 32, 32, torch.double, device, True, True)
+      #double
+      run(mmtype, 11, 10, 3, 3, torch.double, device, False, True)
+      run(mmtype, 200, 2, 32, 32, torch.double, device, True, True)
 
-    run(mmtype, 128, 5, 8, 8, torch.double, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
+      run(mmtype, 128, 5, 8, 8, torch.double, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
 
-    #float16
-    run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2)
-    run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,], batchDimFPre=[])
-    run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,1,], batchDimFPre=[3,])
-    run(mmtype, 10, 3, 16, 8, torch.float16, device, True, False, high=2)
+      #float16
+      run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2)
+      run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,], batchDimFPre=[])
+      run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,1,], batchDimFPre=[3,])
+      run(mmtype, 10, 3, 16, 8, torch.float16, device, True, False, high=2)
 
 def test_cuda():
   if fk.__fastkrontorch.hasCUDA():

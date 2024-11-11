@@ -21,9 +21,22 @@ class FastKronNumpy(FastKronBase):
   def supportedTypes(self, x, fs):
     return x.dtype in [np.float32, np.double]
 
-  def trLastTwoDims(self, x):
-    axes = list(range(len(x.shape) - 2)) + [len(x.shape) - 1, len(x.shape) - 2]
+  def trLastTwoDims(self, mmtype, x):
+    if mmtype == FastKronBase.MMTypeMKM:
+      axes = list(range(len(x.shape) - 2)) + [len(x.shape) - 1, len(x.shape) - 2]
+    elif mmtype == FastKronBase.MMTypeKMM:
+      axes = list(range(len(x.shape) - 3)) + [len(x.shape) - 2, len(x.shape) - 3, len(x.shape) - 1]
     return x.transpose(axes)
+
+  def asContiguousTensor(self, x):
+    if x.data.c_contiguous: return False, x
+    strides = self.stride(x)
+    if x.ndim > 1 and strides[-2] == 1 and \
+       strides[-1] == x.shape[-2] * 1: return True, x
+    return False, x.ascontiguousarray()
+  
+  def stride(self, x):
+    return [s//x.dtype.itemsize for s in x.strides]
 
   def device_type(self, x):
     return "cpu"
@@ -82,7 +95,7 @@ class FastKronNumpy(FastKronBase):
 
 __fastkronnumpy = FastKronNumpy()
 
-def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
   '''
   Perform Generalized Matrix Kronecker-Matrix Multiplication :
   
@@ -110,9 +123,7 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
     if type(f) is not np.ndarray:
       raise ValueError(f"Input fs[{i}] should be a ndarray")
 
-  orig_xshape = x.shape
-
-  x, fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
+  trX,x, trF,fs = __fastkronnumpy.reshapeInput(x, fs)
 
   if not __fastkronnumpy.isSupported(x, fs):
     z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
@@ -126,7 +137,7 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
 
   return z
 
-def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
+def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   '''
   Perform Generalized Kronecker-Matrix Matrix Multiplication :
   
@@ -154,15 +165,11 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None, trX = False, trF = False):
     if type(f) is not np.ndarray:
       raise ValueError(f"Input fs[{i}] should be a ndarray")
 
-  orig_xshape = x.shape
-
-  x, fs = __fastkronnumpy.reshapeInput(x, fs, trX, trF)
+  trX,x, trF,fs = __fastkronnumpy.reshapeInput(x, fs)
 
   if not __fastkronnumpy.isSupported(x, fs):
-    z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeMKM, x, fs, alpha, beta, 
-                                    __fastkronnumpy.trLastTwoDims(y) if y is not None else None,
-                                    not trX, not trF)
-    z = __fastkronnumpy.trLastTwoDims(z)
+    z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeKMM, x, fs, alpha, beta, 
+                                    y, trX, trF)
   else:
     rs, ts = __fastkronnumpy.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
     temp1 = np.ndarray(ts, dtype=x.dtype)
