@@ -32,6 +32,12 @@ FastKronHandle::FastKronHandle(uint32_t backends) :
 #endif
 {}
 
+fastKronOp swapFastKronOp(fastKronOp op) {
+  if (op == fastKronOp_N) return fastKronOp_T;
+  if (op == fastKronOp_T) return fastKronOp_N;
+  return fastKronOp_N;
+}
+
 FastKronHandle::~FastKronHandle() {}
 
 fastKronError FastKronHandle::initCUDABackend(void* ptrToStream, int gpus,
@@ -105,7 +111,7 @@ fastKronError FastKronHandle::setStream(fastKronBackend backend,
   return fastKronSuccess;
 }
 
-fastKronError FastKronHandle::xgemm(const KMMProblem problem, 
+fastKronError FastKronHandle::xgemm(KMMProblem problem, 
                                      const fastKronBackend backend, 
                                      void* temp1, void* temp2,
                                      EpilogueParams epilogueParams) {
@@ -116,6 +122,12 @@ fastKronError FastKronHandle::xgemm(const KMMProblem problem,
   if (problem.y().data() == epilogueParams.z<void>() && 
       (temp1 == nullptr || temp2 == nullptr))
       return fastKronInvalidArgument;
+
+  if (problem.mmtype() == FastKronMMType::KMM && problem.m() == 1) {
+    fastKronOp opF = swapFastKronOp(problem.opFs());
+    problem = KMMProblem(FastKronMMType::MKM, problem.type(), problem.x(),
+                         fastKronOp_N, problem.n(), problem.fs(), opF, problem.y());
+  }
 
   fastKronError err;
   TunedKernelsSeries kernelSeries;
@@ -165,7 +177,7 @@ fastKronError FastKronHandle::xgemm(const KMMProblem problem,
   return err;
 }
 
-fastKronError FastKronHandle::xgemmStridedBatched(const KMMProblemStridedBatched problem, 
+fastKronError FastKronHandle::xgemmStridedBatched(KMMProblemStridedBatched problem, 
                                                   const fastKronBackend backend, 
                                                   void* temp1, void* temp2,
                                                   EpilogueStridedBatchedParams epilogueParams) {

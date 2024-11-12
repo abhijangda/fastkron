@@ -165,10 +165,10 @@ class FastKronHandle {
    *
    * Return - fastKronError representing the error occurred in the operation
    */
-  fastKronError xgemm(const KMMProblem problem, const fastKronBackend backend,
+  fastKronError xgemm(KMMProblem problem, const fastKronBackend backend,
                        void* temp1, void* temp2, EpilogueParams epilogueParams);
 
-  fastKronError xgemmStridedBatched(const KMMProblemStridedBatched problem, 
+  fastKronError xgemmStridedBatched(KMMProblemStridedBatched problem, 
                                      const fastKronBackend backend,
                                      void* temp1, void* temp2,
                                      EpilogueStridedBatchedParams epilogueParams);

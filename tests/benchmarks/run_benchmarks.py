@@ -105,9 +105,9 @@ class FastKronEval:
       assert mode == "NoTune"
       import pyfastkron.fastkrontorch as fk
       if self.mmtype == "mkm":
-        self.fastkron_mm = fk.gemkm
+        self.fastkron_mm = lambda x,fs: fk.gemkm(x, fs)
       else:
-        self.fastkron_mm = fk.gekmm
+        self.fastkron_mm = lambda x,fs: fk.gekmm(fs, x)
 
   def setup_cmake(self):
     if self.use_python_module: return
@@ -182,11 +182,19 @@ class FastKronEval:
           if self.backend == 'cuda':
             f = f.cuda()
           fs += [f]
-        if opX == "T":
-          x = torch.ones(shape.k, shape.m, dtype=elemtype)
-          x = x.mT
-        else:
-          x = torch.ones(shape.m, shape.k, dtype=elemtype)
+        if self.mmtype == "mkm":
+          if opX == "T":
+            x = torch.ones(shape.k, shape.m, dtype=elemtype)
+            x = x.mT
+          else:
+            x = torch.ones(shape.m, shape.k, dtype=elemtype)
+        elif self.mmtype == "kmm":
+          if opX == "T":
+            x = torch.ones(shape.m, shape.k, dtype=elemtype)
+            x = x.mT
+          else:
+            x = torch.ones(shape.k, shape.m, dtype=elemtype)
+
         if self.backend == 'cuda':
           x = x.cuda()
         def run_case(r):
@@ -249,6 +257,11 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
             Shape(M, 4, 64, 64),
             #  Shape(M, 3, 128, 128)
             ]
+  elif dataset == "small":
+    for M in range(4,16,4):
+      for n in range(1,4):
+        cases += [Shape(M, n, 8, 8), Shape(M, n, 16,16), Shape(M, n, 32, 32)]
+
   elif dataset == "full":
     MAX_SIZE = 256 * 1024 * 1024 if device == "x86" else 1024*1024*1024
     factor = 2 if elemtype == "double" else 1
@@ -263,10 +276,10 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
   fkeval = FastKronEval(device, mode, elemtype, mmtype, use_python_module=use_pymodule)
   fkeval.setup_cmake()
   for shape in cases:
-    # try:
-    fk = fkeval.run_single_gpu(shape, opX, opF)
-    # except:
-      # fk = (shape, 1, 1)
+    try:
+      fk = fkeval.run_single_gpu(shape, opX, opF)
+    except:
+      fk = (shape, 1, 1)
     try:
       gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
     except:
@@ -317,7 +330,7 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
   
-  assert args.dataset in ["large", "full"]
+  assert args.dataset in ["large", "full", "small"]
 
   for mmtype in args.mmtype:
     for backend in args.backends:
@@ -328,9 +341,9 @@ if __name__ == "__main__":
           assert mode in TuningModes
           assert mmtype in ["mkm", "kmm"]
 
-          # run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
+          run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
           run_tt(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
 
-          if not args.pymodule and backend == "cuda" and mode == "FullTune" and args.dataset == "large":
+          if not args.use_pymodule and backend == "cuda" and mode == "FullTune" and args.dataset == "large":
             multi_gpu("weak")
             multi_gpu("strong")
