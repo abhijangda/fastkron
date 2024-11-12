@@ -7,7 +7,8 @@ std::string strOfFastKronMMType(FastKronMMType mmtype) {
 }
 
 std::size_t std::hash<KMMProblem>::operator()(const KMMProblem& problem) const {
-  std::size_t h = hash<uint>()(problem.m()) ^ hash<uint>()(problem.k()) ^ hash<uint>()(problem.n());
+  std::size_t h = hash<uint>()(problem.mmtype()) ^ hash<uint>()(problem.m()) ^
+                  hash<uint>()(problem.k()) ^ hash<uint>()(problem.n());
   for (uint32_t i = 0; i < problem.n(); i++) {
     h = h ^ problem.f(i).hash();
   }

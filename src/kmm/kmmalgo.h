@@ -277,7 +277,8 @@ public:
   }
 
   bool operator==(const KMMProblemBase& other) const {
-    bool eq = x() == other.x() && opX() == other.opX()   &&
+    bool eq = mmtype() == other.mmtype() &&
+              x() == other.x() && opX() == other.opX()   &&
               n() == other.n() && opFs() == other.opFs() &&
               y() == other.y();
     if (eq) {

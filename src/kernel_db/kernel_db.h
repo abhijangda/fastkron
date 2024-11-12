@@ -228,7 +228,7 @@ public:
 
 private:
   template<typename KMMProblemT, typename KernelCache>
-  TunedKernelsSeries kernelSeriesForProblem(KMMProblemT problem, KernelCache problemToKernelCache);
+  TunedKernelsSeries kernelSeriesForProblem(KMMProblemT problem, KernelCache& problemToKernelCache);
 
   /**
    * tuneKernelForProblem() - Find tuned kernel for problem.

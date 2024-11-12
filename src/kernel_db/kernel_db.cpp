@@ -150,7 +150,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemStridedBatch
 }
 
 template<typename KMMProblemT, typename KernelCache>
-TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, KernelCache problemToKernelCache) {
+TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, KernelCache& problemToKernelCache) {
   //If a kernel series for the problem is already found then return that
   if (problemToKernelCache.find(problem) != problemToKernelCache.end())
     return problemToKernelCache[problem];
@@ -247,15 +247,9 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
               uint32_t kend;
               uint32_t remainingLength;
 
-              // if (subProblem.mmtype() == FastKronMMType::MKM) {
-                kstart = rstart - (subProblem.n() - 1);
-                kend = rstart;
-                remainingLength = kstart;
-              // } else {
-                // kstart = rstart + (subProblem.n() - 1);
-                // kend = rstart;
-                // remainingLength = problem.n() - 1 - kstart;
-              // }
+              kstart = rstart - (subProblem.n() - 1);
+              kend = rstart;
+              remainingLength = kstart;
 
               auto tk = TunedKernelFromStart(this->findKernelAtOptLevel(subProblem, fusedIter->second), 
                                              subProblemStart + kstart, subProblemStart + kend, subProblem.k(), 0.0f);
@@ -294,7 +288,6 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
   }
 
   problemToKernelCache[problem] = kernelSeries;
-
   return kernelSeries;
 }
 
