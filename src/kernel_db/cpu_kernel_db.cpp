@@ -125,7 +125,8 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
                                     const uint fidx,
                                     EpilogueParams epilogueParams,
                                     KernelMode execMode) {
-  return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, epilogueParams, execMode);
+  return invokeKernel<KMMProblem, EpilogueParams>(
+    kernel, problem, fidx, epilogueParams, execMode);
 }
 
 fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
@@ -370,7 +371,7 @@ X86KernelDatabase::X86KernelDatabase() {
 
 template<typename KMMProblemT>
 KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem,
-                                                    const std::vector<KMMKernel*>& kernelsForOptLevel) {
+                                                   const std::vector<KMMKernel*>& kernelsForOptLevel) {
   if (kernelsForOptLevel.size() > 0) {
     //Find kernels that have either same P or same Q
     std::vector<KMMKernel*> kernelsWithSamePOrQ;
@@ -384,6 +385,7 @@ KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem,
     } else {
       filteredKernels = kernelsForOptLevel;
     }
+    filteredKernels = filterKernelsForKMM(subProblem, filteredKernels);
 
     X86SIMD simd = getX86CPUProperties().simd;
     std::vector<KMMKernel*> kernelsForArch;

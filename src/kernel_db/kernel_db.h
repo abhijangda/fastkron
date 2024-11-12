@@ -269,6 +269,55 @@ private:
                       std::vector<std::vector<KMMKernel*>>& kernels);
 
 protected:
+  template<typename KMMProblemT>
+  std::vector<KMMKernel*> filterKernelsForKMM(KMMProblemT subProblem, std::vector<KMMKernel*>& input) {
+    if (subProblem.mmtype() == FastKronMMType::MKM)
+      return input;
+
+    //For KMM prefer kernels where M % TileM is true
+    std::vector<KMMKernel*> filteredKernels;
+
+    //Sort kernels in descending order of TileM
+    std::sort(input.begin(), input.end(),
+              [](auto k1, auto k2) {
+                return k1->getMaxTileX().m() > k2->getMaxTileX().m();
+              });
+
+    std::vector<KMMKernel*> kernelsWithMMultipleOfTileM;
+    std::copy_if(input.begin(), input.end(),
+                  std::back_inserter(kernelsWithMMultipleOfTileM),
+                  [subProblem](auto& kernel) {return subProblem.m() % kernel->getMaxTileX().m() == 0;});
+    //Only include kernels that have maximum TileM so that loads
+    //in TileM dimension are contiguous
+    if (kernelsWithMMultipleOfTileM.size() > 0) {
+      uint32_t maxTileM = kernelsWithMMultipleOfTileM[0]->getMaxTileX().m();
+      std::copy_if(kernelsWithMMultipleOfTileM.begin(), kernelsWithMMultipleOfTileM.end(),
+                    std::back_inserter(filteredKernels),
+                    [maxTileM] (auto &kernel) {return kernel->getMaxTileX().m() == maxTileM;});
+    } else {
+      //When there is no kernel where M % TileM == 0,
+      //get kernels with max TileM where M > TileM
+      std::vector<KMMKernel*> kernelsMaxTileM;
+      for (auto k : input) {
+        if (k->getMaxTileX().m() < subProblem.m()) {
+          if (kernelsMaxTileM.size() == 0)
+            kernelsMaxTileM.push_back(k);
+          else {
+            if (kernelsMaxTileM[0]->getMaxTileX().m() == k->getMaxTileX().m()) {
+              kernelsMaxTileM.push_back(k);
+            } else break;
+          }
+        }
+      }
+      if (kernelsMaxTileM.size() > 0)
+        filteredKernels = kernelsMaxTileM;
+      else
+        filteredKernels = input;
+    }
+
+    return filteredKernels;
+  }
+
   /**
    * findKernelForSubProblem() - Find best kernel for a sub problem 
    *                             (of single factor) from a map of opt level to kernels. 
