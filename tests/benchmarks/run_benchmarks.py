@@ -49,7 +49,7 @@ class Shape:
     return repr(self) == repr(other)
 
 class GPyTorchEval:
-  def __init__(self, backend, elemtype):
+  def __init__(self, backend, elemtype, mmtype):
     self.backend = backend
     if elemtype == "float":
       self.elemtype = torch.float
@@ -59,29 +59,46 @@ class GPyTorchEval:
       self.elemtype = torch.half
     if self.backend == "x86" and "OMP_NUM_THREADS" in os.environ:
       torch.set_num_threads(int(os.environ["OMP_NUM_THREADS"]))
+    self.mmtype = mmtype
 
-  def run_single_gpu(self, shape):
-    r = self._run_kron(shape)
+  def run_single_gpu(self, shape, opX, opFs):
+    r = self._run_kron(shape, opX, opFs)
     torch.cuda.empty_cache()
     return r
 
-  def _run_kron(self, shape):
+  def _run_kron(self, shape, opX, opFs):
     import gpytorch as gp
     import torch
     factors = []
     for p,q in zip(shape.ps, shape.qs):
       f = torch.ones(p, q, dtype=self.elemtype)
+      if opFs == "T":
+        f = f.mT
       if self.backend == 'cuda':
         f = f.cuda()
-      factors += [f] 
-    x = torch.ones(shape.m, shape.k, dtype=self.elemtype)
+      factors += [f]
+    if opX == "T":
+      if self.mmtype == "mkm":
+        x = torch.ones(shape.k, shape.m, dtype=self.elemtype)
+      else:
+        x = torch.ones(shape.m, shape.k, dtype=self.elemtype)
+      x = x.mT
+    else:
+      if self.mmtype == "mkm":
+        x = torch.ones(shape.m, shape.k, dtype=self.elemtype)
+      else:
+        x = torch.ones(shape.k, shape.m, dtype=self.elemtype)
     if self.backend == 'cuda':
       x = x.cuda()
     kp = gp.lazy.KroneckerProductLazyTensor(*factors)
     def run_case(r):
         t1 = time.time()
-        for i in range(r):
-            y = x @ kp
+        if self.mmtype == "kmm":
+          for i in range(r):
+              y = kp @ x
+        else:
+          for i in range(r):
+              y = x @ kp
         if self.backend == "cuda":
           torch.cuda.synchronize()
         t2 = time.time()
@@ -243,11 +260,11 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
       M2 = 128
 
     cases = [
-            Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
-            Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
-            Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
-            Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
-            Shape(M, 2, 128, 128), 
+            # Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
+            # Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
+            # Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
+            # Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
+            # Shape(M, 2, 128, 128), 
             Shape(M2, 3, 128, 128)]
 
     M = 16
@@ -281,7 +298,7 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
     except:
       fk = (shape, 1, 1)
     try:
-      gp = GPyTorchEval(device, elemtype).run_single_gpu(shape)
+      gp = GPyTorchEval(device, elemtype, mmtype).run_single_gpu(shape, opX, opF)
     except:
       gp = (1, 1)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
