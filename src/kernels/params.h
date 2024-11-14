@@ -104,6 +104,10 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
   EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, StridedBatchMatrix Z) : 
     EpilogueParams(alpha, beta, Z.data()), Z(Z) {}
 
+  EpilogueStridedBatchedParams(EpilogueParams params, Matrix Y) :
+    EpilogueStridedBatchedParams(params.alpha, params.beta,
+                                 StridedBatchMatrix(Y.m(), Y.n(), 0, (void*)params.glD)) {}
+
   template<typename ElemT>
   static EpilogueStridedBatchedParams create() {
     return EpilogueStridedBatchedParams(AllTypes((ElemT)1.0f), 

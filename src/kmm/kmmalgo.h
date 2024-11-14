@@ -384,6 +384,21 @@ public:
                             int batchCount) :
                             Base(kronType, eltype, x, opX, fs, opFs, y), batches(batchCount) {}
   
+  KMMProblemStridedBatchedT(KMMProblemT<kMaxFactors> problem) : 
+    KMMProblemStridedBatchedT(problem.mmtype(), problem.type(),
+                              StridedBatchMatrix(problem.x().m(), problem.x().n(), 0, problem.x().data()),
+                              problem.opX(),
+                              stridedFactorsFromFactors(problem.n(), problem.fs()), problem.opFs(),
+                              StridedBatchMatrix(problem.y().m(), problem.x().n(), 0, problem.y().data()), 1) {}
+
+  static Factors stridedFactorsFromFactors(uint32_t n, const ::Factor* fs) {
+    Factor stridedFs[n];
+    for (uint32_t i = 0; i < n; i++) {
+      stridedFs[i] = StridedBatchFactor(fs[i].p(), fs[i].q(), 1, fs[i].data());
+    }
+    return Factors(stridedFs, n);
+  }
+
   template<uint32_t OtherMaxFactors>
   KMMProblemStridedBatchedT(const KMMProblemStridedBatchedT<OtherMaxFactors>& other) : 
               Base(other.mmtype(), other.type(), other.x(), other.opX(), 

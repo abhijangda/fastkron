@@ -148,16 +148,16 @@ if(ENABLE_CUDA)
       set(FK_CUDA_ARCH ${arch} ${FK_CUDA_ARCH})
     endforeach()
 
-    execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend cuda -archs ${FK_CUDA_ARCH} -mm-type mkm kmm -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -batch-type cont strided -match-configs-file ${SRC}/kernels/best-kernels/a100-kernels ${SRC}/kernels/best-kernels/kmm-a100-kernels)
+    execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend cuda -archs ${FK_CUDA_ARCH} -mm-type mkm kmm -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -batch-type cont -match-configs-file ${SRC}/kernels/best-kernels/a100-kernels ${SRC}/kernels/best-kernels/kmm-a100-kernels -opt-levels 3)
   endif()
-  include(${CUDA}/kron-kernels/kernels.cmake OPTIONAL)
+  include(${CUDA}/kron-kernels/kernels.cmake)
   if (EXISTS ${CUDA}/kron-kernels/kernel_decl.inc)
     set(CUDA_HEADER_FILES ${CUDA}/kron-kernels/kernel_decl.inc)
   else()
     set(CUDA_HEADER_FILES)
   endif()
 
-  set(CUDA_HEADER_FILES 
+  set(CUDA_HEADER_FILES
       ${CUDA_HEADER_FILES}
       ${CUDA}/utils.cuh 
       ${CUDA}/shared-loads.cuh
@@ -177,9 +177,9 @@ endif()
 if(ENABLE_X86)
   if (FULL_TUNE)
   else()
-    execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend x86 -archs sisd avx avx512 -mm-type mkm kmm -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -batch-type cont strided -match-configs-file ${SRC}/kernels/best-kernels/x86-avx-kernels ${SRC}/kernels/best-kernels/kmm-x86-avx-kernels)
+    execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend x86 -archs sisd avx -mm-type mkm kmm -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -batch-type strided -match-configs-file ${SRC}/kernels/best-kernels/x86-avx-kernels ${SRC}/kernels/best-kernels/kmm-x86-avx-kernels)
   endif()
-  include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake OPTIONAL)
+  include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
   if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc) 
     set(X86_HEADER_FILES
         ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
@@ -261,7 +261,7 @@ if (PYMODULE)
       ${CUDA_HEADER_FILES}
       ${X86_HEADER_FILES}
       ${HIP_HEADER_FILES})
-  install(TARGETS ${FastKron_NAME} DESTINATION ${SKBUILD_PROJECT_NAME})
+  #install(TARGETS ${FastKron_NAME} DESTINATION ${SKBUILD_PROJECT_NAME})
 else()
   add_library(${FastKron_NAME}
     SHARED

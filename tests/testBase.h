@@ -710,7 +710,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
       kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
     } else 
 #endif
-    {
+    {  
       printf("546: %p %p %p %p\n", dX[0], dY[0], dResult[0], dTemp1[0]);
       kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
     }
