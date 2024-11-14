@@ -122,7 +122,7 @@ class FastKronEval:
       assert mode == "NoTune"
       import pyfastkron.fastkrontorch as fk
       if self.mmtype == "mkm":
-        self.fastkron_mm = lambda x,fs: fk.gemkm(x, fs)
+        self.fastkron_mm = fk.gemkm
       else:
         self.fastkron_mm = lambda x,fs: fk.gekmm(fs, x)
 
@@ -215,17 +215,21 @@ class FastKronEval:
         if self.backend == 'cuda':
           x = x.cuda()
         def run_case(r):
-            t1 = time.time()
-            for i in range(r):
-              self.fastkron_mm(x, fs)
-            if self.backend == "cuda":
-              torch.cuda.synchronize()
-            t2 = time.time()
-            return (t2-t1)*1000/r
+          total_time = 0
+          t1 = time.time()
+          for i in range(r):
+            self.fastkron_mm(x, fs)
+          if self.backend == "cuda":
+            torch.cuda.synchronize()
+          t2 = time.time()
+          return (t2-t1)/r
 
-        run_case(20)
+        # import torch.autograd.profiler as profiler
+        # with profiler.profile(with_stack=True, profile_memory=True, record_shapes=True) as prof:
+          # run_case(20)
         t = min(run_case(10), run_case(10), run_case(10), run_case(10), run_case(10))
-        flops = shape.flops()/(t/1e3)
+        # print(231, prof.key_averages().table(sort_by="self_cpu_time_total"))
+        flops = shape.flops()/t
         fused = flops/1e9
         wofuse = fused
 
@@ -260,20 +264,22 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
       M2 = 128
 
     cases = [
-            # Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
-            # Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
-            # Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
-            # Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
-            # Shape(M, 2, 128, 128), 
-            Shape(M2, 3, 128, 128)]
-
-    M = 16
-    cases += [Shape(M, 8, 8, 8),
-            Shape(M, 6, 16, 16),
-            Shape(M, 5, 32, 32),
-            Shape(M, 4, 64, 64),
-            #  Shape(M, 3, 128, 128)
+            Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
+            Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
+            Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
+            Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
+            Shape(M, 2, 128, 128), 
+            Shape(M2, 3, 128, 128)
             ]
+
+    if not use_pymodule:
+      M = 16
+      cases += [Shape(M, 8, 8, 8),
+              Shape(M, 6, 16, 16),
+              Shape(M, 5, 32, 32),
+              Shape(M, 4, 64, 64),
+              Shape(M, 3, 128, 128)
+              ]
   elif dataset == "small":
     for M in range(4,16,4):
       for n in range(1,4):
@@ -292,16 +298,18 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
 
   fkeval = FastKronEval(device, mode, elemtype, mmtype, use_python_module=use_pymodule)
   fkeval.setup_cmake()
+
   for shape in cases:
-    try:
-      fk = fkeval.run_single_gpu(shape, opX, opF)
-    except:
-      fk = (shape, 1, 1)
-    try:
-      gp = GPyTorchEval(device, elemtype, mmtype).run_single_gpu(shape, opX, opF)
-    except:
-      gp = (1, 1)
+    fk = fkeval.run_single_gpu(shape, opX, opF)
+    # try:
+    # except:
+      # fk = (shape, 1, 1)
+#    try:
+    gp = GPyTorchEval(device, elemtype, mmtype).run_single_gpu(shape, opX, opF)
+  #  except:
+    #gp = (1, 1)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
+    time.sleep(10) #sleep to let system cool down
 
 def run_nn(device, mode, elemtype, mmtype, dataset, use_pymodule):
   benchmark_single_gpu(device, "N", "N", mode, elemtype, mmtype, dataset, use_pymodule)
@@ -348,6 +356,16 @@ if __name__ == "__main__":
   args = parser.parse_args()
   
   assert args.dataset in ["large", "full", "small"]
+
+  if args.use_pymodule and (os.getenv("LD_PRELOAD") is None or "tcmalloc" not in os.getenv("LD_PRELOAD")):
+    print(
+    """
+It is recommended to use TCMalloc, which caches allocations.
+Using the default GLibc ptmalloc, would decrease performance of CPU code because memory allocations becomes bottleneck.
+Install TCMalloc in your conda env as `conda install conda-forge::gperftools` or in Ubuntu as `sudo apt install gperftools`.
+Then run using `LD_PRELOAD=<path to libtcmalloc.so> TCMALLOC_RELEASE_RATE=0 <python>`
+    """
+    )
 
   for mmtype in args.mmtype:
     for backend in args.backends:
