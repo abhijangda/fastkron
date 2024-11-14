@@ -347,8 +347,10 @@ protected:
    * 
    * Return - A map of number of fused problems -> a vector of all fused kernels for the number.
    */
-  virtual std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
+  std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
           filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
+  virtual bool isFastFusedKernel(const KMMProblem& problem, const KMMKernel* kernel, uint32_t fusedFacs) = 0;
+
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
           filterFastestFusedKernels(const KMMProblemStridedBatched& problem, const std::vector<KMMKernel*>& kernels) {
     return filterFastestFusedKernels(problem.batchProblem(0), kernels);

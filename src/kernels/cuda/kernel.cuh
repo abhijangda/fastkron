@@ -174,7 +174,7 @@ __global__ void cudaKernel(KernelParams params,
     shiftXgToXsh<kMMultipleOfTileM, kXshSlicesSame, kPMultipleOfTileP, TileP, ElemT, XVecT, OpX>
                 (NumThreads, RegK, tileP, tid, XTile, Xsh);
     #pragma unroll
-    for (int fac = FusedFacs - 1; fac >= 0; fac--) {
+    for (int fac = ((FusedFacs == 1) ? 1 : params.problem.n()) - 1; fac >= 0; fac--) {
       const Factor F(P, Q, batchedData.getFBatch(params, fac, batch).data());
       //Load F to shared memory
       directFgToFsh<kPMultipleOfTileP, kQMultipleOfTileQ, ElemT, FVecT, OpF>
@@ -218,7 +218,7 @@ __global__ void cudaKernel(KernelParams params,
              kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
              (FusedFacs>1), DistributeToGPUs,
              ElemT>
-        (params.kp_idx == FusedFacs - 1, batch,
+        (params.kp_idx == ((FusedFacs == 1 ? 1 : params.problem.n()) - 1), batch,
          rm, tq, tk, XshSlices, XSlices,
          tileM, tileK, tileQ, P, Q,
          XTile, Xsh, Y, yElem, yReg,

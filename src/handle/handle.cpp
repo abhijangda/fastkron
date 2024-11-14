@@ -164,7 +164,7 @@ fastKronError FastKronHandle::xgemm(KMMProblem problem,
   //Execute GeKMM algorithm using above kernels
   err = executeGeMM(problem, temps, kernelSeries.size(),
     [&kernelSeriesIter](const KMMProblem) 
-      {return kernelSeriesIter->kernel->getFusedFacs();},
+      {return kernelSeriesIter->end - kernelSeriesIter->start + 1;},
     [&kernelSeriesIter, &epilogueParams, kernelDb, problem, this]
       (const KMMProblem subProblem, uint32_t rstart, void*[2], Matrix) {
         fastKronError err;

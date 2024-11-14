@@ -186,11 +186,9 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
       //Find if a kernel can fuse all factors of the problem in
       //one invocation
       for (auto kernel : kernels) {
-        if (problem.n() == kernel->getFusedFacs()) {
+        if (problem.n() <= kernel->getFusedFacs()) {
           uint32_t start = 0;
-          uint32_t end = kernel->getFusedFacs()-1;
-          start = 0;
-          end = kernel->getFusedFacs()-1;
+          uint32_t end = problem.n() - 1;
           kernelSeries.push_back(TunedKernelFromStart(kernel, start, end, problem.k(), 0.0f));
           goto end;
         }
@@ -236,7 +234,6 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
       if (firstOpTKernelFound && !numFusedToKernels.empty()) {
         //From above filtered kernels find the kernel series using a greedy approach.
         //The approach always selects the kernel with the maximum number of fusion
-
         auto fusedIter = numFusedToKernels.begin();
 
         executeGeMM(problem, nullptr, problem.n(),
@@ -263,7 +260,6 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
               return fastKronSuccess;
           });
       }
-
       if (!kernelSeries.empty()) goto end;
     }
 
@@ -300,9 +296,8 @@ bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore,
   auto it = compiledKernels.find(key);
   if (it == compiledKernels.end()) return false;
   std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
-    [useP2PStore, problem, this](auto& kernel){return kernel->getFusedFacs() <= problem.n() && 
-                                               kernel->getOptLevel() == KernelOptimizations::MaxOptLevel() &&
-                                               kernel->canCompute(problem, this->hardware[0], useP2PStore, false);});
+    [useP2PStore, problem, this](auto& kernel){return kernel->getOptLevel() == KernelOptimizations::MaxOptLevel() &&
+                                                      kernel->canCompute(problem, this->hardware[0], useP2PStore, false);});
   return true;
 }
 
@@ -370,11 +365,22 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> numFusedToKernels;
 
   for (auto kernel : kernels) {
-    if (kernel->getFusedFacs() <= problem.n()) {
-      if (numFusedToKernels.find(kernel->getFusedFacs()) == numFusedToKernels.end())
-        numFusedToKernels[kernel->getFusedFacs()] = std::vector<KMMKernel*>();
-      numFusedToKernels[kernel->getFusedFacs()].push_back(kernel);
-    }      
+    if (kernel->getFusedFacs() == 1) {
+      //Always add a single fac kernel
+      if (numFusedToKernels.find(1) == numFusedToKernels.end())
+        numFusedToKernels[1] = {};
+      numFusedToKernels[1].push_back(kernel);
+      continue;
+    }
+
+    for (uint32_t numFusedFacs = 2; numFusedFacs <= kernel->getFusedFacs(); numFusedFacs++) {
+      bool addFusedKernel = isFastFusedKernel(problem, kernel, numFusedFacs);
+      if (addFusedKernel && numFusedFacs <= problem.n()) {
+        if (numFusedToKernels.find(numFusedFacs) == numFusedToKernels.end())
+          numFusedToKernels[numFusedFacs] = {};
+        numFusedToKernels[numFusedFacs].push_back(kernel);
+      }
+    }
   }
 
   return numFusedToKernels;

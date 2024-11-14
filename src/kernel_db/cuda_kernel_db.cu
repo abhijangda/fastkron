@@ -259,15 +259,13 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
                      cudaStream_t stream) {
   cudaError_t status;
 
-  KernelParams<KMMProblemT> params (problem, nullptr, 
-                                  kernelInfo.getTileX(problem), 
-                                  kernelInfo.getTileF(problem), 
-                                  fidx, execMode);
+  KernelParams<KMMProblemT> params (problem, nullptr,
+                                    kernelInfo.getTileX(problem),
+                                    kernelInfo.getTileF(problem),
+                                    fidx, execMode);
 
   FusedParams<KMMProblemT> fusedParams (problem, kernelInfo.getMaxTileX().n());
-  // dim3 g = kernelInfo.grid(problem);
-  // std::cout <<fidx << "  " << g.x << " " << g.y << " " << g.z << std::endl;
-  // std::cout << 264 << " " << kernelInfo.getSharedMemSize(problem) << std::endl;
+
   //TODO: Change this to kernelInfo.invoke
   typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
                                      DistributedParams&, EpilogueParams&, 
@@ -280,7 +278,8 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
                                                stream);
   status = cudaGetLastError();
   if (status != cudaSuccess) 
-    Logger(LogLevel::Debug) << "Error invoking CUDA kernel " << cudaGetErrorString(status) << std::endl;
+    Logger(LogLevel::Debug) << "Error invoking kernel " << kernelInfo.str() << " : "<< 
+                                cudaGetErrorString(status) << std::endl;
 
   return (status == cudaSuccess) ? fastKronSuccess : fastKronInvalidArgument;
 }
@@ -294,8 +293,14 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
   DistributedParams distParams;
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDAKMMKernel& cudaKernel = dynamic_cast<CUDAKMMKernel&>(*kernel);
+  if (problem.n() > kernel->getFusedFacs()) {
+    Logger(LogLevel::Debug) << "Kernel with " << kernel->getFusedFacs()      <<
+                               " fused factors cannot compute problem with " <<
+                               problem.n() << " factors" << std::endl;
+    return fastKronInvalidArgument;
+  }
 
-  switch(problem.n()) {
+  switch(kernel->getFusedFacs()) {
     case 1:
       return invoke(cudaKernel, problem.template factorSlice<1>(),
                     fidx, distParams, epilogueParams, execMode, stream);
@@ -455,38 +460,30 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemStride
              execMode, useP2PStore, warmups, runs, runtime);
 }
 
-std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
-  CUDAKernelDatabase::filterFastestFusedKernels(const KMMProblem& problem, 
-                                                const std::vector<KMMKernel*>& kernels) {
+bool CUDAKernelDatabase::isFastFusedKernel(const KMMProblem& problem, 
+                                           const KMMKernel* kernel,
+                                           uint32_t numFusedFacs) {
 
   uint32_t MinConsecutiveStoreElems = (getCUDADeviceProperties().smArch == SMArch::ampere) ? 16 : 8;
 
-  //A fused kernel stores logP (TK) consecutive elements.
-  //Remove all kernels that stores (< MinConsecutiveStoreElems).
-  std::vector<KMMKernel*> validFusedKernels;
-  
-  {
-    auto filter = [problem, MinConsecutiveStoreElems](KMMKernel* kernel) {
-      if (problem.mmtype() == FastKronMMType::MKM) {
-        //In MKM consecutive threads stores slices of the same row
-        const uint32_t PpowerN = (uint32_t)powf(problem.f(0).p(), kernel->getFusedFacs());
-        const uint32_t consecutiveStoreElems = kernel->getMaxTileX().n()/PpowerN;
-        return consecutiveStoreElems >= MinConsecutiveStoreElems;
-      } else {
-        //In KMM consecutive threads stores consecutive elements of the M dimension of Z
-        //So, in fused case we want these consective elements to be contiguous in memory
-        //which is possible only when below conditions satisfy
+  if (numFusedFacs > kernel->getFusedFacs()) return false;
+  if (numFusedFacs > problem.n())            return false;
 
-        return problem.m() == kernel->getMaxTileX().m() or 
-               kernel->getMaxTileX().m() >= MinConsecutiveStoreElems;
-      }
-    };
+  if (problem.mmtype() == FastKronMMType::MKM) {
+    //In MKM, a fused kernel stores logP (TK) consecutive elements.
+    //A fast fused kernel should store >= MinConsecutiveStoreElems 
+    //consecutive elements.
+    const uint32_t PpowerN = (uint32_t)powf(problem.f(0).p(), numFusedFacs);
+    const uint32_t consecutiveStoreElems = kernel->getMaxTileX().n()/PpowerN;
+    return consecutiveStoreElems >= MinConsecutiveStoreElems;
+  } else {
+    //In KMM consecutive threads stores consecutive elements of the M dimension of Z
+    //So, in fused case we want these consective elements to be contiguous in memory
+    //which is possible only when below conditions satisfy
 
-    std::copy_if(kernels.begin(), kernels.end(),
-                 std::back_inserter(validFusedKernels), filter);
-  }
-
-  return KernelDatabase::filterFastestFusedKernels(problem, validFusedKernels);
+    return problem.m() == kernel->getMaxTileX().m() or
+           kernel->getMaxTileX().m() >= MinConsecutiveStoreElems;
+  } 
 }
 
 /**

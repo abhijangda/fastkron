@@ -173,8 +173,8 @@ protected:
   /**
    * filterFastestFusedKernels() - Overriding KernelDatabase::filterFastestFusedKernels
    */ 
-  virtual std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
-          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
+  virtual bool isFastFusedKernel(const KMMProblem& problem, const KMMKernel* kernel,
+                                 uint32_t numFusedFacs);
 
   /**
    * findKernelAtOptLevel() - Overriding KernelDatabase::findKernelAtOptLevel
