@@ -89,7 +89,7 @@ bool KMMKernel::canCompute(KMMProblem problem, const HardwareDetails*,
   //TODO: exactFuse is not needed any more?
   bool ret = problem.mmtype() == mmType && problem.type() == elemType &&
               problem.opFs() == opF && problem.opX() == opX && 
-              P2PStore == p2p &&
+              P2PStore == p2p && ((exactFuse && problem.n() <= fusedFacs) || !exactFuse) &&
               //tileX.n()/MaxF.p() > problem.f(0).p() && //Kernel's TileX is greater than P
               kernelBatchType == probBatchType;
 

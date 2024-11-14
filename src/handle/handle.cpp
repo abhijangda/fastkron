@@ -172,7 +172,7 @@ fastKronError FastKronHandle::xgemm(KMMProblem problem,
 
         KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
-        epilogueParams.isLastFactor = kernel.end == kernel.kernel->getFusedFacs()-1;
+        epilogueParams.isLastFactor = kernel.end == subProblem.n()-1;
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, epilogueParams,
                                      KernelModeNormal);
