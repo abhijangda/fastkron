@@ -45,7 +45,7 @@ class build_ext(build_ext_orig):
 
         # example of build args
         build_args = [
-            '--config', config,
+            '--config ' + config,
             '-j'
         ]
         os.chdir(str(build_temp))
