@@ -155,6 +155,8 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
   if (problemToKernelCache.find(problem) != problemToKernelCache.end())
     return problemToKernelCache[problem];
   
+  KMMProblemT origProblem = problem;
+
   TunedKernelsSeries kernelSeries;
   {
     //Use a fast algorithm to search for a good kernel series
@@ -287,7 +289,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
     }
   }
 
-  problemToKernelCache[problem] = kernelSeries;
+  problemToKernelCache[origProblem] = kernelSeries;
   return kernelSeries;
 }
 
