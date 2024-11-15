@@ -29,7 +29,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 template<uint OptLevel, uint32_t EpilogueKindVal, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
 static CUDA_DEVICE_HOST
-void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t fac, bool isLastFactor,
+void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t /*fac*/, bool isFirstFactor, bool isLastFactor,
                     TileX& XTile, XCache& Xch, YInterim& Ych, X86VecT alphaVec, ElemT alpha) {
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
@@ -49,15 +49,15 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           (Xch.p() >= VecTLen);
         if (UseAVXTrans) {
           X86VecT slices[VecTLen];
-          if (OpX == fastKronOp_N || (OpX == fastKronOp_T and fac < FusedFacs - 1)) {
+          if (OpX == fastKronOp_N || (OpX == fastKronOp_T and !isFirstFactor)) {
             for (uint32_t slice = 0; slice < VecTLen; slice++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? 
+              const ElemT* ptr = (isFirstFactor) ?
                                 XTile.data(m, k/F.p() + slice, tileP + p) :
                                 &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
               slices[slice].load(ptr);
             }
             X86VecT::transpose(slices);
-          } else if (OpX == fastKronOp_T and fac == FusedFacs - 1) {
+          } else if (OpX == fastKronOp_T and isFirstFactor) {
             //Gather requires AVX2
             uint32_t gatherIdxs[VecTLen] = {0};
             for (uint pp = 0; pp < VecTLen; pp++) {
@@ -71,7 +71,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           }
 
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
-            if (fac == FusedFacs - 1 && 
+            if (isFirstFactor && 
                 (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
               slices[pp].mul(alphaVec);
             slices[pp].store(&Xch.at(m, k/F.p(), p+pp));
@@ -80,11 +80,11 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           const uint32_t LeftSlices = (XTile.cols - k)/F.p();
           for (; p < MIN(Xch.p(), F.p() - tileP); p++) {
             for (uint32_t slice = 0; slice < LeftSlices; slice++) {
-              const ElemT* ptr = (fac == FusedFacs - 1) ? 
+              const ElemT* ptr = (isFirstFactor) ? 
                                   XTile.data(m, k/F.p() + slice, tileP + p) :
                                   &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
               ElemT val = *ptr;
-              if (fac == FusedFacs - 1 &&
+              if (isFirstFactor &&
                   (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
                 val = alpha * val;
               }
@@ -111,9 +111,9 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
           ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || (F.p() >= VecTLen + tileP + p));
 
       if (UseAVXStore) {
-        if (OpX == fastKronOp_T || fac < FusedFacs - 1) {
+        if (OpX == fastKronOp_T || !isFirstFactor) {
           for (uint32_t pp = 0; pp < VecTLen; pp++) {
-            const ElemT* ptr = (fac == FusedFacs - 1) ? 
+            const ElemT* ptr = (isFirstFactor) ? 
                                 XTile.data(m, k/F.p(), tileP + p + pp) : 
                                 &Ych.at(0, 0, 0) + (k + p + pp)*Ych.m() + m;
             slices[pp].load(ptr);
@@ -138,7 +138,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
         for (uint32_t pp = 0; pp < MIN(VecTLen, F.p() - (tileP + p)); pp++) {
         uint32_t m1 = m;
         for (;m1 < XTile.m(); m1++) {
-          const ElemT* ptr = (fac == FusedFacs - 1) ? 
+          const ElemT* ptr = (isFirstFactor) ? 
                               XTile.data(m1, k/F.p(), tileP + p + pp) : 
                               &Ych.at(0, 0, 0) + (k + p + pp)*Ych.m() + m;
           ElemT val = *ptr;
@@ -159,7 +159,7 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t f
         uint32_t m = 0;
         if (p < F.p() - tileP) {
           for (;m < XTile.m(); m++) {
-            const ElemT* ptr = (fac == FusedFacs - 1) ? 
+            const ElemT* ptr = (isFirstFactor) ? 
                                 XTile.data(m, k/F.p(), tileP + p) : 
                                 &Ych.at(0, 0, 0) + (k + p)*Ych.m() + m;
             

@@ -97,7 +97,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem
     for (auto iter = allKernels.rbegin(); iter != allKernels.rend(); iter++) {
       for (auto kernel : *iter) {
         kernelIdx += 1;
-        if (!kernel->canCompute(problem, hardware[0], useP2PStore)) continue;
+        if (!kernel->canCompute(problem, hardware[0], useP2PStore, batchType)) continue;
         Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << totalKernels
                                 << ": " << kernel->str() << std::endl;
         float kernelTime = std::numeric_limits<float>::max();
@@ -296,8 +296,10 @@ bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore,
   auto it = compiledKernels.find(key);
   if (it == compiledKernels.end()) return false;
   std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
-    [useP2PStore, problem, this](auto& kernel){return kernel->getOptLevel() == KernelOptimizations::MaxOptLevel() &&
-                                                      kernel->canCompute(problem, this->hardware[0], useP2PStore, false);});
+    [useP2PStore, problem, batchType, this](auto& kernel){
+      return kernel->getOptLevel() == KernelOptimizations::MaxOptLevel() &&
+             kernel->canCompute(problem, this->hardware[0], useP2PStore, batchType, false);
+    });
   return true;
 }
 
@@ -320,7 +322,7 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
 
     if (it != compiledKernels.end()) {
       for (auto k : it->second) {
-        if (k->canCompute(problem, hardware[0], useP2PStore) &&
+        if (k->canCompute(problem, hardware[0], useP2PStore, batchType) &&
             k->getOptLevel() == KernelOptimizations::MaxOptLevel()) {
           kernels[k->getOptLevel()].push_back(k);
         }
@@ -334,7 +336,7 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
 
   for (auto it : compiledKernels) {
     for (auto kernel : it.second) {
-      if (kernel->canCompute(problem, hardware[0], useP2PStore)) {
+      if (kernel->canCompute(problem, hardware[0], useP2PStore, batchType)) {
         kernels[kernel->getOptLevel()].push_back(kernel);
       }
     }

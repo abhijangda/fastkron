@@ -40,7 +40,7 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
         //Elem idx in Fused Slice
         uint32_t elem = (tileK/XTile.tileCols()) * fusedParams.XShFusedSlices +
                         xshCol%fusedParams.XShFusedSlices;
-        yN = glSlice + sliceElem + elem; 
+        yN = glSlice + sliceElem + elem;
       } else {
         yN = (y.q() + rq) * XSlices +
              (tileK/XTile.tileCols()) * XTileSlices +

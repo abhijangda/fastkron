@@ -90,7 +90,15 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
   CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
   Matrix kernelTileX = kernel->getTileX(problem);
   Factor kernelTileF = kernel->getTileF(problem);
-  switch(problem.n()) {
+  
+  if (problem.n() > kernel->getFusedFacs()) {
+    Logger(LogLevel::Debug) << "Kernel with " << kernel->getFusedFacs()      <<
+                               " fused factors cannot compute problem with " <<
+                               problem.n() << " factors" << std::endl;
+    return fastKronInvalidArgument;
+  }
+
+  switch(kernel->getFusedFacs()) {
     case 1:
       return invoke(cpuKernel, kernelTileX, kernelTileF,
                     problem.template factorSlice<1>(), fidx,

@@ -293,7 +293,7 @@ public:
   void load(const ElemT* ptr, uint32_t sz) {
     if (sz == VectorLen) {
       load(ptr);
-    } else if (VectorLen > 1) {
+    } else {
       ElemT elems[VectorLen];
       memcpy(elems, ptr, sz * sizeof(ElemT));
       load(elems);
@@ -307,7 +307,7 @@ public:
   void store(ElemT* ptr, uint32_t sz) const {
     if (sz == VectorLen)
       store(ptr);
-    else if (VectorLen > 1) {
+    else {
       ElemT elems[VectorLen];
       vectorStore<ElemT, UnderlyingVecT>(elems, vec.data);
       memcpy(ptr, elems, sz * sizeof(ElemT));

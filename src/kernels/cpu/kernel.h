@@ -57,18 +57,19 @@ void threadWork(KernelParams& params,
     betaVec.broadcast(&beta);
   }
 
-  for (int fac = FusedFacs - 1; fac >= 0; fac--) {
+  for (int fac = ((FusedFacs == 1) ? 1 : params.problem.n()) - 1; fac >= 0; fac--) {
     TransposedDirectShared3D<ElemT, OpY, OptTileX, OptF, OptTileF> 
       TrXCache((ElemT*)params.caches->TileXs[tid]);
 
     bool isLastFactor = epilogueParams.isLastFactor && fac == 0;
+    bool isFirstFactor = ((uint32_t)fac) == (((FusedFacs == 1) ? 1 : params.problem.n()) - 1);
 
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);
 
       F = F.sameShape(batchedData.getFBatch(params, fac, batch).data());
       //Transpose X data and store to TrXCache to reduce TLB misses
-      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, isLastFactor, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
+      transposeCache<OptLevel, EpilogueKindVal, ElemT, X86VecT, OpX, FusedFacs>(X, F, tileP, fac, isFirstFactor, isLastFactor, XTile, TrXCache, YCache, alphaVec, epilogueParams.template getAlpha<ElemT>());
       //Store F to FCache to reduce TLB misses
       directCache<OptLevel, ElemT, OpF>(F, FCache, tileP, tileQ);
 

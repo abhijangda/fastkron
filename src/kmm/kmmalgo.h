@@ -389,7 +389,7 @@ public:
                               StridedBatchMatrix(problem.x().m(), problem.x().n(), 0, problem.x().data()),
                               problem.opX(),
                               stridedFactorsFromFactors(problem.n(), problem.fs()), problem.opFs(),
-                              StridedBatchMatrix(problem.y().m(), problem.x().n(), 0, problem.y().data()), 1) {}
+                              StridedBatchMatrix(problem.y().m(), problem.y().n(), 0, problem.y().data()), 1) {}
 
   static Factors stridedFactorsFromFactors(uint32_t n, const ::Factor* fs) {
     Factor stridedFs[n];

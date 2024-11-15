@@ -114,6 +114,7 @@ public:
   Factor getMaxTileF()  const {return tileF;}
   fastKronOp getOpX()   const {return opX;}
   fastKronOp getOpF()   const {return opF;}
+  KernelBatchType::Ty getBatchType() const {return kernelBatchType;}
 
   /**
    * Check if a kernel is valid.
