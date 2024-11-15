@@ -259,23 +259,39 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
                      cudaStream_t stream) {
   cudaError_t status;
 
-  KernelParams<KMMProblemT> params (problem, nullptr,
-                                    kernelInfo.getTileX(problem),
-                                    kernelInfo.getTileF(problem),
-                                    fidx, execMode);
+  const uint32_t MaxGridX = (1<<30) - 1;
+  const uint32_t MaxGridY = (1<<16) - 1;
+  const uint32_t MaxGridZ = (1<<16) - 1;
+  dim3 grid = kernelInfo.grid(problem);
 
-  FusedParams<KMMProblemT> fusedParams (problem, kernelInfo.getMaxTileX().n());
+  for (uint32_t grid_z = 0; grid_z < grid.z; grid_z += MaxGridZ) {
+  for (uint32_t grid_x = 0; grid_x < grid.x; grid_x += MaxGridX) {
+  for (uint32_t grid_y = 0; grid_y < grid.y; grid_y += MaxGridY) {
+    KernelParams<KMMProblemT> params (problem, nullptr,
+                                      kernelInfo.getTileX(problem),
+                                      kernelInfo.getTileF(problem),
+                                      fidx, execMode,
+                                      grid_x, grid_y, grid_z);
 
-  //TODO: Change this to kernelInfo.invoke
-  typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
-                                     DistributedParams&, EpilogueParams&, 
-                                     dim3, dim3, uint32_t, cudaStream_t);
-  KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, 
-                                               epilogueParams, 
-                                               kernelInfo.grid(problem),
-                                               kernelInfo.block(),
-                                               kernelInfo.getSharedMemSize(problem),
-                                               stream);
+    FusedParams<KMMProblemT> fusedParams (problem, kernelInfo.getMaxTileX().n());
+
+    //TODO: Change this to kernelInfo.invoke
+    typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
+                                      DistributedParams&, EpilogueParams&, 
+                                      dim3, dim3, uint32_t, cudaStream_t);
+    
+    dim3 subGrid = dim3(MIN(grid.x - grid_x, MaxGridX),
+                        MIN(grid.y - grid_y, MaxGridY),
+                        MIN(grid.z - grid_z, MaxGridZ));
+    
+    KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, 
+                                                epilogueParams, 
+                                                subGrid,
+                                                kernelInfo.block(),
+                                                kernelInfo.getSharedMemSize(problem),
+                                                stream);
+  }}}
+
   status = cudaGetLastError();
   if (status != cudaSuccess) 
     Logger(LogLevel::Debug) << "Error invoking kernel " << kernelInfo.str() << " : "<< 
@@ -327,9 +343,16 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
 
 
 fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem problem,
-                                    const uint fidx,
-                                    EpilogueParams epilogueParams,
-                                    KernelMode execMode) {
+                                               const uint fidx,
+                                               EpilogueParams epilogueParams,
+                                               KernelMode execMode) {
+  if (kernel->getBatchType() == KernelBatchType::StridedBatched) {
+    //Execute a single batch problem using a strided batched kernel
+    KMMProblemStridedBatched stridedProblem(problem);
+    EpilogueStridedBatchedParams stridedEpilogue(epilogueParams, problem.y());
+
+    return invokeKernel(kernel, stridedProblem, fidx, stridedEpilogue, execMode);
+  }
   return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx,
                                                   epilogueParams, execMode);
 }

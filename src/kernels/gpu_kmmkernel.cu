@@ -10,12 +10,5 @@ std::string GPUKMMKernel::str() const {
 bool GPUKMMKernel::canCompute(KMMProblem problem, const HardwareDetails* hw, bool p2p, 
                               KernelBatchType::Ty probBatchType,
                               bool exactFuse) {
-  if (KMMKernel::canCompute(problem, hw, p2p, probBatchType, exactFuse)) {
-    dim3 g = grid(problem);
-    if (g.y >= 65536 || g.z >= 65536) {
-      return false;
-    }
-    return true;
-  }
-  return false;
+  return KMMKernel::canCompute(problem, hw, p2p, probBatchType, exactFuse);
 }

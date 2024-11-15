@@ -101,7 +101,7 @@ std::pair<KMMKernel*, float> KernelDatabase::findTunedKernel(KMMProblemT problem
         Logger(LogLevel::Debug) << "Kernel " << kernelIdx << "/" << totalKernels
                                 << ": " << kernel->str() << std::endl;
         float kernelTime = std::numeric_limits<float>::max();
-        fastKronError status;
+        fastKronError status = fastKronSuccess;
         status = timeKernel(kernel, problem, fidx, distParams,
                             EpilogueParams::template create<float>(), KernelModeTuning, 
                             useP2PStore, warmups, runs, kernelTime);
@@ -294,12 +294,18 @@ bool KernelDatabase::findAllFusedKernels(KMMProblem problem, bool useP2PStore,
                                          KernelBatchType::Ty batchType) {
   DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), batchType};
   auto it = compiledKernels.find(key);
-  if (it == compiledKernels.end()) return false;
+  if (it != compiledKernels.end()) {
   std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(kernels), 
     [useP2PStore, problem, batchType, this](auto& kernel){
       return kernel->getOptLevel() == KernelOptimizations::MaxOptLevel() &&
              kernel->canCompute(problem, this->hardware[0], useP2PStore, batchType, false);
     });
+  }
+
+  if (batchType == KernelBatchType::Normal) {
+    findAllFusedKernels(problem, useP2PStore, kernels, KernelBatchType::StridedBatched);
+  }
+  
   return true;
 }
 
@@ -319,7 +325,6 @@ bool KernelDatabase::findAllKernels(KMMProblem problem, KernelBatchType::Ty batc
   if (!AllOptKernels) {
     DbKey key = DbKey{problem.f(0), problem.opX(), problem.opFs(), batchType};
     auto it = compiledKernels.find(key);
-
     if (it != compiledKernels.end()) {
       for (auto k : it->second) {
         if (k->canCompute(problem, hardware[0], useP2PStore, batchType) &&

@@ -78,19 +78,19 @@ struct EpilogueParams {
 
   //TODO: Change to alphaAs<type>
   template<typename ElemT>
-  CUDA_DEVICE
+  CUDA_DEVICE_HOST
   ElemT        getAlpha() const {return alpha.get((ElemT)0);}
   
   template<typename ElemT>
-  CUDA_DEVICE
+  CUDA_DEVICE_HOST
   ElemT        getBeta()  const {return beta.get((ElemT)0);}
   
   template<typename ElemT>
-  CUDA_DEVICE
+  CUDA_DEVICE_HOST
   const ElemT* getD()     const {return (const ElemT*)glD;}
   
   template<typename ElemT>
-  CUDA_DEVICE
+  CUDA_DEVICE_HOST
   const ElemT* z()     const {return (const ElemT*)glD;}
 };
 
@@ -106,7 +106,9 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
 
   EpilogueStridedBatchedParams(EpilogueParams params, Matrix Y) :
     EpilogueStridedBatchedParams(params.alpha, params.beta,
-                                 StridedBatchMatrix(Y.m(), Y.n(), 0, (void*)params.glD)) {}
+                                 StridedBatchMatrix(Y.m(), Y.n(), 0, (void*)params.glD)) {
+    isLastFactor = params.isLastFactor;
+  }
 
   template<typename ElemT>
   static EpilogueStridedBatchedParams create() {
@@ -144,14 +146,20 @@ struct KernelParams {
   const uint kp_idx;
   KernelMode execMode;
   CPUCaches* caches;
+  
+  uint32_t startGridx;
+  uint32_t startGridy;
+  uint32_t startGridz;
 
   KernelParams(KMMProblemT problem_, CPUCaches* caches,
-               Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode) :
+               Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode,
+               uint32_t startGridx = 0, uint32_t startGridy = 0, uint32_t startGridz = 0) :
                problem(problem_), 
                tileX(tileX), tileF(tileF),
                XshSlices(tileX.n()/problem_.f(0).p()),
                XSlices(problem_.x().n()/problem_.f(0).p()),
-               kp_idx(kp_idx), execMode(execMode), caches(caches) {}
+               kp_idx(kp_idx), execMode(execMode), caches(caches),
+               startGridx(startGridx), startGridy(startGridy), startGridz(startGridz) {}
 };
 
 template<typename KMMProblemT>

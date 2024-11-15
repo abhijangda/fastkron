@@ -111,7 +111,7 @@ __global__ void cudaKernel(KernelParams params,
 
   GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams> batchedData;
 
-  const uint32_t batch = blockIdx.z;
+  const uint32_t batch = (KernelBatch == KernelBatchType::Normal) ? 0 : (params.startGridz + blockIdx.z);
 
   const Matrix X = batchedData.getXBatch(params, batch);
   const Matrix Y = batchedData.getYBatch(params, batch);
@@ -134,9 +134,10 @@ __global__ void cudaKernel(KernelParams params,
   const fastKronOp OpF = (kmmType == FastKronMMType::MKM) ? kOpF : swapFastKronOp<kOpF>();
   const fastKronOp OpY = (kmmType == FastKronMMType::MKM) ? fastKronOp_N : fastKronOp_T;
 
-  const uint bid_x = (OpX == fastKronOp_N) ? blockIdx.x : ((KernelBatch == KernelBatchType::Normal ? blockIdx.z * 32768 : 0) + 
-                                                            blockIdx.y);
-  const uint bid_y = (OpX == fastKronOp_N) ? blockIdx.y : blockIdx.x;
+  const uint bid_x = (OpX == fastKronOp_N) ? params.startGridx + blockIdx.x: 
+                                             params.startGridy + blockIdx.y;
+  const uint bid_y = (OpX == fastKronOp_N) ? params.startGridy + blockIdx.y:
+                                             params.startGridx + blockIdx.x;
   const uint tid   = threadIdx.x;
 
   //TODO: Make this Coord2D

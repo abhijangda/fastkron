@@ -425,6 +425,13 @@ class KernelTemplate:
     self.fused = int(next(parts))
     self.tileX = parseMatrix(next(parts))
     self.regtile = parseRegTile(next(parts))
+    opxfs = next(parts, None)
+    if opxfs != None:
+      self.opX = opxfs[0]
+      self.opF = opxfs[1]
+      self.batch_type = next(parts)
+    else:
+      self.opX = self.opF = self.batch_type = "*"
 
   def is_template_of_kernel(self, kernel):
     if not (self.mmtype == '*' or self.mmtype == kernel.kmmtype):
@@ -447,6 +454,12 @@ class KernelTemplate:
     if not (self.tileX[0] == kernel.tileM and self.tileX[1] == kernel.shape.k):
       return False
     if self.regtile != "*" and not (self.regtile == (kernel.rm, kernel.rk, kernel.rq)):
+      return False
+    if self.opX != "*" and not self.opX == kernel.opX:
+      return False
+    if self.opF != "*" and not self.opF == kernel.opF:
+      return False
+    if self.batch_type != "*" and not self.batch_type == kernel.kernelBatchType:
       return False
     return True
 

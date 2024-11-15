@@ -129,6 +129,7 @@ fastKronError FastKronHandle::xgemm(KMMProblem problem,
                          fastKronOp_N, problem.n(), problem.fs(), opF, problem.y());
   }
 
+#ifndef FULL_TUNE
   if (backend == fastKronBackend_X86) {
     //On x86 use strided kernels for cont problems
     KMMProblemStridedBatched stridedProblem(problem);
@@ -136,6 +137,7 @@ fastKronError FastKronHandle::xgemm(KMMProblem problem,
 
     return xgemmStridedBatched(stridedProblem, backend, temp1, temp2, stridedEpilogue);
   }
+#endif
 
   fastKronError err;
   TunedKernelsSeries kernelSeries;
