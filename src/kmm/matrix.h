@@ -361,6 +361,8 @@ public:
       idx = row + idx * parent.m();
       return &ptr[idx];
     }
+
+    return nullptr;
   }
 
   CUDA_DEVICE_HOST
@@ -375,6 +377,7 @@ public:
       idx = idx * parent.m() + row;
       return idx;
     }
+    return 0;
   }
 
   CUDA_DEVICE_HOST

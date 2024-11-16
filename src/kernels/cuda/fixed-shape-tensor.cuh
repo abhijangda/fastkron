@@ -30,6 +30,8 @@ public:
         default: return 0;
       }
     }
+
+    return 0;
   }
 
   CUDA_DEVICE_HOST
