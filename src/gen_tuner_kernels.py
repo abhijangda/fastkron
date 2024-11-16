@@ -262,7 +262,8 @@ CXX_PRAGMA_ARCH_{targetArch}'''
       cond = cond and innerMostVectorElems <= min(MaxRkVecRegs * AVXLen, maxVectorLoopElems)
 
       if self.shape.p <= 32 and self.shape.q <= 32:
-        cond = cond and self.tileQ == self.shape.q 
+        cond = cond and self.tileQ == self.shape.q
+
     cond = cond and self.shape.k * self.tileM <= 32*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
@@ -430,8 +431,11 @@ class KernelTemplate:
       self.opX = opxfs[0]
       self.opF = opxfs[1]
       self.batch_type = next(parts)
+      dist = next(parts)
+      self.opt_level = next(parts)
     else:
-      self.opX = self.opF = self.batch_type = "*"
+      self.opX = self.opF = self.batch_type = self.opt_level = "*"
+    
 
   def is_template_of_kernel(self, kernel):
     if not (self.mmtype == '*' or self.mmtype == kernel.kmmtype):
@@ -460,6 +464,8 @@ class KernelTemplate:
     if self.opF != "*" and not self.opF == kernel.opF:
       return False
     if self.batch_type != "*" and not self.batch_type == kernel.kernelBatchType:
+      return False
+    if self.opt_level != "*" and str(kernel.opt_level) not in self.opt_level:
       return False
     return True
 
