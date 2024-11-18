@@ -9,15 +9,28 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
                   XShared& Xsh) {
   const int VecTLen = sizeof(VecT)/sizeof(ElemT);
   if (OpX == fastKronOp_N) {
-    for (uint row = 0; row < XTile.m(); row += 1) {
+    const uint Vecs = Xsh.n()/VecTLen;
+    const uint ThGroups = MAX(1, NumThreads/Vecs);
+
+    for (uint row =  ((Xsh.layout() == fastKronOp_N) ? 0 : tid/Vecs);
+              row <  ((Xsh.layout() == fastKronOp_N) ? XTile.m() : Xsh.m());
+              row += ((Xsh.layout() == fastKronOp_N) ? 1 : ThGroups)) {
     //Use NumThreads in the loop adder instead of blockDim.x for better perf
-    for (uint k = tid*VecTLen; k < Xsh.n(); k += NumThreads*VecTLen) {
+    for (uint k =  ((Xsh.layout() == fastKronOp_N) ? tid * VecTLen : tid % Vecs);
+              k <  ((Xsh.layout() == fastKronOp_N) ? Xsh.n() : Vecs);
+              k += ((Xsh.layout() == fastKronOp_N) ? NumThreads * VecTLen : NumThreads/ThGroups)) {
       ElemT regs[VecTLen] = {0};
 
       if (kPMultipleOfTileP && kXshSlicesSame) {
-        ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-        //When MMType is KMM then VecTLen is 1
-        Xsh.store(row, k, RegK, VecTLen, regs);
+        if (Xsh.layout() == fastKronOp_N) {
+          ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
+          Xsh.store(row, k, RegK, VecTLen, regs);
+        } else {
+          ldGlobalVec(XTile.data(row, k * VecTLen, tileP), regs, VecTLen);
+          //When MMType is KMM then VecTLen is 1
+          for (int i = 0; i < VecTLen; i++)
+            Xsh.store(row, k * VecTLen + i, RegK, 1, &regs[i]);
+        }
       } else {
         //TODO: Valid only when VecTLen == 1
         uint32_t slice = k/Xsh.p();
@@ -31,6 +44,9 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
         }
         Xsh.store(row, slice, elem, RegK, VecTLen, regs);
       }
+
+      //This condition avoids generating this loop giving better performance
+      if (Xsh.layout() == fastKronOp_T && Vecs == NumThreads/ThGroups) break;
     }}
   } else if (OpX == fastKronOp_T) {
     //TODO: Similar to directFgToFsh. combine both?

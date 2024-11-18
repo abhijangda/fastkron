@@ -476,7 +476,7 @@ def x_mem_vector_len(m, cols, op, mmtype, elem_type):
     if mmtype == "mkm":
       return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
     elif mmtype == "kmm":
-      if op == "T": return 1 #return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
+      if op == "T": return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])
       return max([a for a in memory_vector_lengths(elem_type) if m % a == 0])
 
 def f_mem_vector_len(rows, cols, op, mmtype, elem_type):
