@@ -159,25 +159,47 @@ void cpuKernel(KernelParams& params,
   const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams>().getBatchCount(params);
 
   if (OpX == fastKronOp_N) {
-    #pragma omp parallel for collapse(4)
-    for (uint32_t batch = 0; batch < batchCount; batch++)
-    for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
-    for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
-    for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
-      if (notLastFactor || (!hasAlpha && !hasBeta)) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
-          params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
-        );
-      } else if (hasAlpha && !hasBeta) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+    if (OpY == fastKronOp_N) {abort();
+      #pragma omp parallel for collapse(4)
+      for (uint32_t batch = 0; batch < batchCount; batch++)
+      for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
+      for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
+      for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
+        if (notLastFactor || (!hasAlpha && !hasBeta)) {
+          threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
             params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
-        );
-      } else if (hasBeta) {
-        threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+          );
+        } else if (hasAlpha && !hasBeta) {
+          threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+              params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
+          );
+        } else if (hasBeta) {
+          threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+              params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
+          );
+        }
+      }}}
+    } else {
+      #pragma omp parallel for collapse(4)
+      for (uint32_t batch = 0; batch < batchCount; batch++)
+      for (uint32_t tileQ = 0; tileQ < Q    ; tileQ += TileQ) {
+      for (uint32_t tileK = 0; tileK < X.n(); tileK += TileK) {
+      for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {
+        if (notLastFactor || (!hasAlpha && !hasBeta)) {
+          threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::None, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
             params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
-        );
-      }
-    }}}
+          );
+        } else if (hasAlpha && !hasBeta) {
+          threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::Alpha, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+              params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
+          );
+        } else if (hasBeta) {
+          threadWork<ElemT, X86VecT, OpX, OpF, OpY, OptLevel, EpilogueKind::Alpha | EpilogueKind::Beta, FusedFacs, OptF, OptTileF, OptTileX, KernelBatch, YRegs> (
+              params, fusedParams, epilogueParams, batch, tileM, tileK, tileQ, TileK
+          );
+        }
+      }}}
+    }
   } else if (OpX == fastKronOp_T) {
     if (OpY == fastKronOp_N) {
       #pragma omp parallel for collapse(4)
