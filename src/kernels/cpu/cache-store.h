@@ -29,7 +29,7 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
 template<uint OptLevel, uint32_t EpilogueKindVal, typename ElemT, typename X86VecT, fastKronOp OpX,
          uint FusedFacs, typename TileX, typename XCache, typename YInterim>
 static CUDA_DEVICE_HOST
-void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t /*fac*/, bool isFirstFactor, bool isLastFactor,
+void transposeCache(const Matrix& /*X*/, const Factor& F, uint32_t tileP, uint32_t /*fac*/, bool isFirstFactor, bool isLastFactor,
                     TileX& XTile, XCache& Xch, YInterim& Ych, X86VecT alphaVec, ElemT alpha) {
   const uint32_t VecTLen = X86VecT::VectorLen;
   const bool kPMultipleOfTileP = KernelOptimizations::IsPMultipleOfTileP(OptLevel);
@@ -38,67 +38,131 @@ void transposeCache(const Matrix& X, const Factor& F, uint32_t tileP, uint32_t /
   const bool kTileKMultipleOfSlices = XTile.tileCols() % VecTLen == 0;
 
   if (Xch.layout() == fastKronOp_N) {
-  for (uint32_t m = 0; m < XTile.m(); m++) {
-    for (uint32_t k = 0; k < XTile.cols; k += VecTLen * F.p()) {
-      uint32_t p = 0;
-      for (; p < Xch.p(); p += VecTLen) {
-        const bool UseAVXTrans = 
-          VecTLen > 1 &&
-          ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols >= VecTLen * F.p() + k) && 
-          ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() >= VecTLen + tileP + p) &&
-          (Xch.p() >= VecTLen);
-        if (UseAVXTrans) {
-          X86VecT slices[VecTLen];
-          if (OpX == fastKronOp_N || (OpX == fastKronOp_T and !isFirstFactor)) {
-            for (uint32_t slice = 0; slice < VecTLen; slice++) {
-              const ElemT* ptr = (isFirstFactor) ?
-                                XTile.data(m, k/F.p() + slice, tileP + p) :
-                                &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
-              slices[slice].load(ptr);
-            }
-            X86VecT::transpose(slices);
-          } else if (OpX == fastKronOp_T and isFirstFactor) {
-            //Gather requires AVX2
-            uint32_t gatherIdxs[VecTLen] = {0};
-            for (uint pp = 0; pp < VecTLen; pp++) {
-              const ElemT* ptr = XTile.data(m, k/F.p() + 0, tileP + p + pp);
+    if (OpX == fastKronOp_N || !isFirstFactor) {
+    for (uint32_t m = 0; m < XTile.m(); m++) {
+      for (uint32_t k = 0; k < XTile.cols; k += VecTLen * F.p()) {
+        uint32_t p = 0;
+        for (; p < Xch.p(); p += VecTLen) {
+          const bool UseAVXTrans = 
+            VecTLen > 1 &&
+            ((kKMultipleOfTileK && kTileKMultipleOfSlices) || XTile.cols >= VecTLen * F.p() + k) && 
+            ((kPMultipleOfTileP && Xch.p() % VecTLen == 0) || F.p() >= VecTLen + tileP + p) &&
+            (Xch.p() >= VecTLen);
+          if (UseAVXTrans) {
+            X86VecT slices[VecTLen];
+            if (OpX == fastKronOp_N || (OpX == fastKronOp_T and !isFirstFactor)) {
               for (uint32_t slice = 0; slice < VecTLen; slice++) {
-                gatherIdxs[slice] = slice * X.m() * F.p(); //TODO: Assumes TileM == 1
-              }
-
-              slices[pp].gather(ptr, gatherIdxs);
-            }
-          }
-
-          for (uint32_t pp = 0; pp < VecTLen; pp++) {
-            if (isFirstFactor && 
-                (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
-              slices[pp].mul(alphaVec);
-            slices[pp].store(&Xch.at(m, k/F.p(), p+pp));
-          }
-        } else {
-          const uint32_t LeftSlices = (XTile.cols - k)/F.p();
-          for (; p < MIN(Xch.p(), F.p() - tileP); p++) {
-            for (uint32_t slice = 0; slice < LeftSlices; slice++) {
-              const ElemT* ptr = (isFirstFactor) ? 
+                const ElemT* ptr = (isFirstFactor) ?
                                   XTile.data(m, k/F.p() + slice, tileP + p) :
                                   &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
-              ElemT val = *ptr;
-              if (isFirstFactor &&
-                  (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
-                val = alpha * val;
+                slices[slice].load(ptr);
               }
-              Xch.at(m, k/F.p() + slice, p) = val;
+              X86VecT::transpose(slices);
+            } else if (OpX == fastKronOp_T and isFirstFactor) {
+              //Gather requires AVX2
+              for (uint pp = 0; pp < VecTLen; pp++) {
+                const ElemT* ptr = XTile.data(m, k/F.p() + 0, tileP + p + pp);
+                slices[pp].load(ptr);
+              }
+            }
+
+            for (uint32_t pp = 0; pp < VecTLen; pp++) {
+              if (isFirstFactor && 
+                  (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
+                slices[pp].mul(alphaVec);
+              slices[pp].store(&Xch.at(m, k/F.p(), p+pp));
+            }
+          } else {
+            const uint32_t LeftSlices = (XTile.cols - k)/F.p();
+            for (; p < MIN(Xch.p(), F.p() - tileP); p++) {
+              for (uint32_t slice = 0; slice < LeftSlices; slice++) {
+                const ElemT* ptr = (isFirstFactor) ? 
+                                    XTile.data(m, k/F.p() + slice, tileP + p) :
+                                    &Ych.at(m,0,0) + k + slice*F.p() + tileP + p;
+                ElemT val = *ptr;
+                if (isFirstFactor &&
+                    (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+                  val = alpha * val;
+                }
+                Xch.at(m, k/F.p() + slice, p) = val;
+              }
+            }
+
+            Xch.zero(m,     k/F.p() + LeftSlices, p,
+                    m + 1, k/F.p() + VecTLen,    Xch.p());
+          }
+    }}}} else if (OpX == fastKronOp_T) {
+      for (uint32_t p = 0; p < Xch.p(); p++) {
+      if (kPMultipleOfTileP || p + tileP < F.p()) {
+        uint32_t m = 0;
+        for (; m < XTile.m(); m += VecTLen) {
+        uint32_t k = 0;
+        for (; k < XTile.cols; k += F.p() * VecTLen) {
+          const bool UseAVXTrans = 
+              VecTLen > 1 &&
+              ((kKMultipleOfTileK && kTileKMultipleOfSlices)   || XTile.cols >= VecTLen * F.p() + k) && 
+              ((kMMultipleOfTileM && XTile.m() % VecTLen == 0) || XTile.m() >= VecTLen + m);
+
+          if (UseAVXTrans) {
+            X86VecT slices[VecTLen];
+            for (uint32_t s = 0; s < VecTLen; s++) {
+              const ElemT* ptr = XTile.data(m, k/F.p() + s, tileP + p);
+              slices[s].load(ptr);
+            }
+
+            X86VecT::transpose(slices);
+
+            for (uint32_t mm = 0; mm < VecTLen; mm++) {
+              if (isFirstFactor && 
+                    (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha)
+                  slices[mm].mul(alphaVec);
+              slices[mm].store(&Xch.at(m + mm, k/F.p(), p));
+            }
+          } else if (XTile.m() - m < VecTLen && XTile.cols > k) {
+            printf("116 %d %d %d\n", k, VecTLen * F.p(), XTile.cols);
+            // const uint32_t LeftSlices = (XTile.cols - k)/F.p();
+            for (; k < XTile.cols; k += F.p()) {
+              for (uint32_t mm = m; mm < XTile.m(); mm++) {
+                const ElemT* ptr = XTile.data(mm, k/F.p(), tileP + p);
+                ElemT val = *ptr;
+                if (isFirstFactor &&
+                    (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+                  val = alpha * val;
+                }
+                Xch.at(mm, k/F.p(), p) = val;
+              }
+              // Xch.zero(XTile.m(), k/F.p() + LeftSlices, p,
+              //          Xch.m()  , k/F.p() + VecTLen   , Xch.p());
             }
           }
+        }}
+        
+        if (!(kKMultipleOfTileK && kTileKMultipleOfSlices) &&
+            (XTile.cols/F.p()) % VecTLen != 0 && p < F.p()) {
+          uint32_t m = 0;
+          for (; m < XTile.m(); m++) {
+          uint32_t k = 0;
+          for (; k < XTile.cols; k += F.p()) {
+            const ElemT* ptr = XTile.data(m, k/F.p(), tileP + p);
+            ElemT val = *ptr;
+            if (isFirstFactor &&
+                (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
+              val = alpha * val;
+            }
+            Xch.at(m, k/F.p(), p) = val;
+          }
+        }
+      }
+      }
 
-          Xch.zero(m,     k/F.p() + LeftSlices, p,
-                  m + 1, k/F.p() + VecTLen,    Xch.p());
+      if (!kPMultipleOfTileP && p + tileP >= F.p()) {
+        for (uint32_t m = 0; m < Xch.m(); m++) {
+          Xch.zero(m,       0,      tileP + p,
+                   m+1, Xch.slices(), tileP + p + 1);
         }
       }
     }
-  }
-  } else if (Xch.layout() == fastKronOp_T) {
+  }} else if (Xch.layout() == fastKronOp_T) {
     for (uint32_t k = 0; k < XTile.cols; k += F.p()) {
     uint32_t p = 0;
     for (; p < Xch.p(); p += VecTLen) {

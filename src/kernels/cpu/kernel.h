@@ -159,7 +159,7 @@ void cpuKernel(KernelParams& params,
   const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams>().getBatchCount(params);
 
   if (OpX == fastKronOp_N) {
-    if (OpY == fastKronOp_N) {abort();
+    if (OpY == fastKronOp_N) {
       #pragma omp parallel for collapse(4)
       for (uint32_t batch = 0; batch < batchCount; batch++)
       for (uint32_t tileM = 0; tileM < X.m(); tileM += TileM) {

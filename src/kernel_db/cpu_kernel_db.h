@@ -34,6 +34,7 @@ public:
     ptr = (void**)malloc(threads * sizeof(void*));
     for (uint32_t i = 0; i < threads; i++) {
       ptr[i] = aligned_alloc(pageSize, this->size);
+      memset(ptr[i], 1, this->size);
     }
   }
 

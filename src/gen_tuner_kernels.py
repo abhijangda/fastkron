@@ -274,7 +274,7 @@ CXX_PRAGMA_ARCH_{targetArch}'''
                self.shape.q == self.tileQ and maxVectorLoopElems >= AVXLen) \
             ) and \
            self.dist in [0, 1] and \
-           self.rq <= AVXLen and (self.rm == self.tileM if self.kmmtype == "mkm" else self.tileM % self.rm == 0) # and self.opt_level == 3
+           self.rq <= AVXLen and (self.tileM % self.rm == 0) # and self.opt_level == 3
           #  and \
           #  self.rq > 1 and self.shape.k >= 8192 and self.rk > 8
     return cond
@@ -430,9 +430,9 @@ class KernelTemplate:
     if opxfs != None:
       self.opX = opxfs[0]
       self.opF = opxfs[1]
-      self.batch_type = next(parts)
-      dist = next(parts)
-      self.opt_level = next(parts)
+      self.batch_type = next(parts, "*")
+      dist = next(parts, "*")
+      self.opt_level = next(parts, "*")
     else:
       self.opX = self.opF = self.batch_type = self.opt_level = "*"
     
@@ -552,7 +552,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     TileMs[t.tileX[0]] += [t]
                   if len(TileMs) == 0:
                     if kmmtype == 'mkm':
-                      TileMs = [1,2,4,8] if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                      TileMs = [1,2,4,8,16]# if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
                     elif kmmtype == "kmm":
                       TileMs = [8,16,32,64] #([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
                     TileMs = {t: [] for t in TileMs}
