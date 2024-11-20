@@ -365,7 +365,7 @@ class GPUKMMKernel(Kernel):
            self.shape.k % self.shape.p == 0 and \
            self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
-           self.rk in [1, 2, 4] and self.rm in [1,2,4] and \
+           self.rk in [1, 2, 4, 8] and self.rm in [1,2,4, 8] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
@@ -471,7 +471,7 @@ class KernelTemplate:
 
 def x_mem_vector_len(m, cols, op, mmtype, elem_type):
   if (op == "T" and mmtype == "mkm"):
-    return 1 #max([a for a in [1, 2, 4] if m % a == 0])
+    return max([a for a in memory_vector_lengths(elem_type) if m % a == 0])
   else:
     if mmtype == "mkm":
       return max([a for a in memory_vector_lengths(elem_type) if cols % a == 0])

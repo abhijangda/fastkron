@@ -332,28 +332,49 @@ public:
 
   CUDA_DEVICE_HOST
   void store(uint32_t startRow, uint32_t startCol, uint32_t RegK, 
-             uint32_t numElems, T* elems) {
+              uint32_t numElems, T* elems, fastKronOp elemOp) {
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
       uint32_t col = 0;
       uint32_t row = 0;
       if (Layout == fastKronOp_N) {
-        uint32_t shCol = startCol + i;
-        uint32_t elem  = shCol%p();
-        uint32_t slice = shCol/p();
-        uint32_t shift = slice/RegK;
-        //TODO: Do we need shift when TileK/RegK < 32? I do not think
-        col = slice*p() + (shift + elem)%p();
-        // CUDA_DEVICE_ASSERT(row * n() + col < numel());
-        row = startRow;
+        if (elemOp == fastKronOp_N) {
+          uint32_t shCol = startCol + i;
+          uint32_t elem  = shCol%p();
+          uint32_t slice = shCol/p();
+          uint32_t shift = slice/RegK;
+          //TODO: Do we need shift when TileK/RegK < 32? I do not think
+          col = slice*p() + (shift + elem)%p();
+          // CUDA_DEVICE_ASSERT(row * n() + col < numel());
+          row = startRow;
+        } else {
+          uint32_t shCol = startCol;
+          uint32_t elem  = shCol%p();
+          uint32_t slice = shCol/p();
+          uint32_t shift = slice/RegK;
+          //TODO: Do we need shift when TileK/RegK < 32? I do not think
+          col = slice*p() + (shift + elem)%p();
+          // CUDA_DEVICE_ASSERT(row * n() + col < numel());
+          row = startRow + i;
+        }
       } else {
-        uint32_t shCol = startCol;
-        uint32_t elem  = shCol%p();
-        uint32_t slice = shCol/p();
-        uint32_t shift = 0;//slice/RegK;
-        col = shCol;
-        //TODO: When shift is 0 use vector store
-        row = (startRow + i + shift);// % kM; //TODO: Commenting out kM removes any shared mem store bank conflicts
+        if (elemOp == fastKronOp_T) {
+          uint32_t shCol = startCol;
+          uint32_t elem  = shCol%p();
+          uint32_t slice = shCol/p();
+          uint32_t shift = 0;//slice/RegK;
+          col = shCol + i;
+          //TODO: When shift is 0 use vector store
+          row = (startRow + shift);
+        } else {
+          uint32_t shCol = startCol;
+          uint32_t elem  = shCol%p();
+          uint32_t slice = shCol/p();
+          uint32_t shift = 0;//slice/RegK;
+          col = shCol;
+          //TODO: When shift is 0 use vector store
+          row = (startRow + i + shift);// % kM; //TODO: Commenting out kM removes any shared mem store bank conflicts
+        }
       }
       Base::set(data, row, col, elems[i]);
     }

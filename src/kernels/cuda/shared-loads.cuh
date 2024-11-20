@@ -13,23 +13,27 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
     const uint ThGroups = MAX(1, NumThreads/Vecs);
 
     for (uint row =  ((Xsh.layout() == fastKronOp_N) ? 0 : tid/Vecs);
-              row <  ((Xsh.layout() == fastKronOp_N) ? XTile.m() : Xsh.m());
+              row <  XTile.m();
               row += ((Xsh.layout() == fastKronOp_N) ? 1 : ThGroups)) {
     //Use NumThreads in the loop adder instead of blockDim.x for better perf
     for (uint k =  ((Xsh.layout() == fastKronOp_N) ? tid * VecTLen : tid % Vecs);
               k <  ((Xsh.layout() == fastKronOp_N) ? Xsh.n() : Vecs);
               k += ((Xsh.layout() == fastKronOp_N) ? NumThreads * VecTLen : NumThreads/ThGroups)) {
       ElemT regs[VecTLen] = {0};
+      const fastKronOp elemOp = (Xsh.layout() == fastKronOp_N) ?
+                                  fastKronOp_N : //MKM
+                                  fastKronOp_T; //KMM
 
       if (kPMultipleOfTileP && kXshSlicesSame) {
         if (Xsh.layout() == fastKronOp_N) {
           ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-          Xsh.store(row, k, RegK, VecTLen, regs);
+          Xsh.store(row, k, RegK, VecTLen, regs, elemOp);
         } else {
           ldGlobalVec(XTile.data(row, k * VecTLen, tileP), regs, VecTLen);
           //When MMType is KMM then VecTLen is 1
-          for (int i = 0; i < VecTLen; i++)
-            Xsh.store(row, k * VecTLen + i, RegK, 1, &regs[i]);
+          Xsh.store(row, k * VecTLen, RegK, VecTLen, regs, elemOp);
+          // for (int i = 0; i < VecTLen; i++)
+          //   Xsh.store(row, k * VecTLen + i, RegK, 1, &regs[i], elemOp);
         }
       } else {
         //TODO: Valid only when VecTLen == 1
@@ -54,16 +58,19 @@ void shiftXgToXsh(const uint NumThreads, const uint RegK,
     const uint ThGroups = MAX(1, NumThreads/Vecs);
 
     for (uint swid = tid/Vecs; swid < Xsh.n(); swid += ThGroups) {
-    for (uint elem = tid%Vecs; elem < Vecs && (kMMultipleOfTileM ? true : elem*VecTLen < XTile.m()); 
+    for (uint elem = tid%Vecs;
+         elem < Vecs && (kMMultipleOfTileM ? true : elem*VecTLen < XTile.m()); 
          elem += NumThreads/ThGroups) {
       ElemT regs[VecTLen] = {0};
 
       const uint row = elem*VecTLen;
       const uint k = swid;
+      const fastKronOp elemOp = (Xsh.layout() == fastKronOp_N) ?
+                                  fastKronOp_T : //MKM
+                                  fastKronOp_N; //KMM
       if (kPMultipleOfTileP && kXshSlicesSame) {
         ldGlobalVec(XTile.data(row, k, tileP), regs, VecTLen);
-        //When MMType is MKM then VecTLen is 1
-        Xsh.store(row, k, RegK, VecTLen, regs);
+        Xsh.store(row, k, RegK, VecTLen, regs, elemOp);
       } else {
         uint32_t slice = k/Xsh.p();
         uint32_t elem  = k%Xsh.p();
@@ -186,7 +193,7 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
           const uint32_t MaxXSlices = Xsh.n()/F.p();
           uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
           
-          Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
+          Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq), fastKronOp_N);
     }}}}
   } else if (Xsh.layout() == fastKronOp_T) {
     //KMM
@@ -198,7 +205,7 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
       const uint32_t MaxXSlices = Xsh.n()/F.p();
       uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
       
-      Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq));
+      Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq), fastKronOp_T);
     }}}
   }
 }
