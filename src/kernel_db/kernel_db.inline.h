@@ -13,7 +13,7 @@ void KernelDatabase::loadKernels(SubClassKernel* kernels, uint32_t numKernels) {
     compiledKernels.at(key).push_back(&info);
   }
 
-  if (Logger(LogLevel::Debug).valid()) {
+  if (false && Logger(LogLevel::Debug).valid()) {
     //Print loaded kernels
     uint numKernelsLoaded = 0;
     Logger(LogLevel::Debug) << "Loading compiled kernels" << std::endl;

@@ -119,7 +119,6 @@ void transposeCache(const Matrix& /*X*/, const Factor& F, uint32_t tileP, uint32
               slices[mm].store(&Xch.at(m + mm, k/F.p(), p));
             }
           } else if (XTile.m() - m < VecTLen && XTile.cols > k) {
-            printf("116 %d %d %d\n", k, VecTLen * F.p(), XTile.cols);
             // const uint32_t LeftSlices = (XTile.cols - k)/F.p();
             for (; k < XTile.cols; k += F.p()) {
               for (uint32_t mm = m; mm < XTile.m(); mm++) {
