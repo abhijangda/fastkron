@@ -264,7 +264,7 @@ CXX_PRAGMA_ARCH_{targetArch}'''
       if self.shape.p <= 32 and self.shape.q <= 32:
         cond = cond and self.tileQ == self.shape.q
 
-    cond = cond and self.shape.k * self.tileM <= 32*1024 and \
+    cond = cond and self.shape.k * self.tileM <= 128*1024 and \
            self.shape.k % self.shape.p == 0 and \
            self.tileM * (self.shape.k//self.shape.p) * self.tileQ * elem_size <= 1*1024*1024 and \
             (self.fused_kernels == 1 or \
@@ -541,7 +541,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if str((ps[0], qs[0])) in kernelTemplates and len(kernelTemplates[str((ps[0], qs[0]))]) > 0:
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
-                  MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
+                  MinTile = 16 #if backend == 'x86' and elem_type == "double" else 32
                   TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
 
