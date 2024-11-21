@@ -15,6 +15,9 @@ def run_command(command):
   if s != 0:
     print (f"Running {command}\n", o)
     assert False
+  # print(f"\n\n{command}")
+  # print(o)
+  # print("\n\n\n")
   return o
 
 def total_gpu_memory():
@@ -150,7 +153,11 @@ class FastKronEval:
   def gen_kernels(self, shape, opX, opF, distKernels):
     if not self.use_python_module:
       if self.tuningmode == 'FullTune':
-        run_command(f"python3 src/gen_tuner_kernels.py -mm-type {self.mmtype} -backend cuda -archs ampere -distinct-factors " + \
+        cuda_arch = torch.cuda.get_device_properties(0).major*10
+        if cuda_arch < 70: cuda_arch = "maxwell"
+        elif cuda_arch == 70: cuda_arch = "volta"
+        else: cuda_arch = "ampere"
+        run_command(f"python3 src/gen_tuner_kernels.py -mm-type {self.mmtype} -backend cuda -archs {cuda_arch} -distinct-factors " + \
                     str(shape.n) + " " + " ".join([f"{pq[0]},{pq[1]}" for pq in zip(shape.ps, shape.qs)]) + \
                     " -opX " + opX + " -opF " + opF + \
                     (" -dist-kernels " if distKernels else "") + \

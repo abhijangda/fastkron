@@ -40,9 +40,9 @@ kmm_cuda_volta_128_f_2x2_2x2_1_16x64_1x4x2_**_strided_*_2|3
 kmm_cuda_volta_64_f_2x2_2x2_6_2x64_1x1x2_**_strided_*_2|3
 kmm_cuda_volta_64_f_2x2_2x2_1_2x64_1x1x2_**_strided_*_2|3
 
-kmm_cuda_volta_256_d_128x128_32x64_1_16x512_2x2x4_**_*_*_*
-kmm_cuda_volta_128_d_128x128_32x64_1_2x4096_1x1x32_**_*_*_*
-kmm_cuda_volta_128_d_128x128_32x64_1_2x256_1x2x1_**_*_*_*
+kmm_cuda_volta_128_d_128x128_16x64_1_16x512_2x2x8_**_*_*_*
+kmm_cuda_volta_64_d_128x128_16x128_1_2x1024_1x4x8_**_*_*_*
+kmm_cuda_volta_128_d_128x128_32x64_1_2x512_1x4x1_**_*_*_*
 
 kmm_cuda_volta_256_d_64x64_32x64_1_16x128_1x2x4_**_*_*_*
 kmm_cuda_volta_128_d_64x64_32x64_1_2x2048_1x1x32_**_*_*_*

@@ -47,6 +47,7 @@ YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, ui
 
     return YElem(yM,yQ,yK);
   }
+  return YElem(0,0,0);
 }
 
 template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
