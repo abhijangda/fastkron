@@ -186,14 +186,14 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
   if (Xsh.layout() == fastKronOp_N) {
     //MKM
     for (int tm = 0; tm < Yr.m(); tm++) {
-      if (tm < m) {//TODO: probably do not need this condition
+      if (true) {//TODO: probably do not need this condition
         #pragma unroll
         for (uint tk = 0; tk < Yr.k(); tk++) {
         for (uint tq = 0; tq < Yr.q(); tq++) {
           const uint32_t MaxXSlices = Xsh.n()/F.p();
           uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
           
-          Xsh.store(tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq), fastKronOp_N);
+          Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq), fastKronOp_N);
     }}}}
   } else if (Xsh.layout() == fastKronOp_T) {
     //KMM
@@ -205,7 +205,7 @@ void fusionYrToXSh(const uint32_t m, const Factor& F, const FShared& Fsh, XShare
       const uint32_t MaxXSlices = Xsh.n()/F.p();
       uint32_t shXk = yElem.q()*MaxXSlices + tq*MaxXSlices + yElem.k() + tk;
       
-      Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq), fastKronOp_T);
+      Xsh.store(yElem.m() + tm, shXk, Yr.k(), 1, &Yr.at(tm, tk, tq), fastKronOp_N);
     }}}
   }
 }
