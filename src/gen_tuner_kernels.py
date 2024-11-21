@@ -365,7 +365,7 @@ class GPUKMMKernel(Kernel):
            self.shape.k % self.shape.p == 0 and \
            self.num_threads >= 64 and self.threads() <= 1024 and \
            self.shared_mem_usage <= MAX_SHARED_MEM and \
-           self.rk in [1, 2, 4, 8] and self.rm in [1,2,4, 8] and \
+           self.rk in [1, 2, 4] and self.rm in [1,2,4] and \
            (self.fused_kernels == 1 or (self.fused_kernels > 1 and self.fused_kernels <= 6 and self.shape.p == self.tileP and self.shape.q == self.tileQ and self.opt_level == 3)) and \
            self.dist in [0, 1] and \
            self.rq <= 32 and \
@@ -541,8 +541,8 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                   if str((ps[0], qs[0])) in kernelTemplates and len(kernelTemplates[str((ps[0], qs[0]))]) > 0:
                     templates = kernelTemplates[str((ps[0], qs[0]))]
 
-                  MinTile = 16 #if backend == 'x86' and elem_type == "double" else 32
-                  TilePs = [min(p, MinTile)] + [i for i in factors(p) if i > MinTile]
+                  MinTile = 16 if backend == 'x86' and elem_type == "double" else 32
+                  TilePs = [min(p, MinTile)] #+ [i for i in factors(p) if i > MinTile]
                   TileKs = set([t.tileX[1] for t in templates if t.tileX[1] != "*"])
 
                   TileMs = {}
@@ -552,7 +552,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                     TileMs[t.tileX[0]] += [t]
                   if len(TileMs) == 0:
                     if kmmtype == 'mkm':
-                      TileMs = [1,2,4,8,16]# if opx == "T" else [1,2] #[2 ** i for i in range(0, int(math.log2(m)))]
+                      TileMs = [4,8] if opx == "T" else [1] #[2 ** i for i in range(0, int(math.log2(m)))]
                     elif kmmtype == "kmm":
                       TileMs = [8,16,32,64] #([2,4,16] + ([32] if p >= 32 else [])) #if opx == "N" else [2,4,16]
                     TileMs = {t: [] for t in TileMs}

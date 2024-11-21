@@ -410,16 +410,16 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
                                              bool useP2PStore,
                                              int warmups, int runs,
                                              float& runtime) {
- #if defined(ENABLE_MULTI_GPU)
+//  #if defined(ENABLE_MULTI_GPU)
 //TODO: Also for FULL_TUNE
   if ((dynamic_cast<CUDAKMMKernel*>(kernel))->getLocalSize() > 0
-  || (kernel->getMaxTileF().q() <= problem.f(0).q()/2)) //problem.f(0).q() >= 64 && 
+      || kernel->getMaxTileF().q() < problem.f(0).q()/2) //problem.f(0).q() >= 64 && 
   {
     //skip probably slow kernels
     runtime = std::numeric_limits<float>::max();
     return fastKronSuccess;
   }
- #endif 
+//  #endif 
 
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
