@@ -69,13 +69,24 @@ class FastKronTorch(FastKronBase):
   def stride(self, x):
     return x.stride()
 
-  def gemkm(self, x, fs, y, alpha, beta, z, temp1, temp2, 
-            trX = False, trF = False, stream = None):
+  def gemkm(self, requires_grad, x, fs, 
+            y = None, alpha = 1, beta = 0, stream = None):
+    if type(x) is not torch.Tensor:
+      raise ValueError("Input 'x' should be a Tensor")
+    if type(fs) is not list:
+      raise ValueError("Input 'fs' should be a list of Tensor")
+    for i,f in enumerate(fs):
+      if type(f) is not torch.Tensor:
+        raise ValueError(f"Input fs[{i}] should be a Tensor")
+    if y != None and type(y) is not torch.Tensor:
+      raise ValueError(f"Input 'y' should be a 2D Tensor")
+
+    trX,x, trF,fs = fastkrontorch.reshapeInput(x, fs)
 
     if x.device.type == "cuda" and stream is None:
       stream = torch.cuda.current_stream()
 
-    self.check(x, fs, y, z, stream)
+    self.check(x, fs, y, None, stream)
 
     fn = None
     stridedBatchedFn = None
@@ -86,8 +97,18 @@ class FastKronTorch(FastKronBase):
     elif x.dtype == torch.double:
       fn = self.handle(x).libFastKron.dgemkm
       stridedBatchedFn = self.handle(x).libFastKron.dgemkmStridedBatched
+    print(100, requires_grad)
+    if requires_grad or not self.isSupported(x, fs):
+      z = self.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
+    else:
+      rs, ts = self.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
+      z = x.new_empty(rs)
+      temp1 = x.new_empty(ts)
+      temp2 = x.new_empty(ts) if rs != ts else None
+      super().xgemm(self.handle(x), FastKronBase.MMTypeMKM, fn, stridedBatchedFn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+      z = z.reshape(rs)
 
-    super().xgemm(self.handle(x), FastKronBase.MMTypeMKM, fn, stridedBatchedFn, x, fs, y, alpha, beta, z, temp1, temp2, trX, trF)
+    return z
   
   def gekmm(self, fs, x, y, alpha, beta, z, temp1, temp2, 
             trX = False, trF = False, stream = None):
@@ -113,46 +134,16 @@ fastkrontorch = FastKronTorch()
 
 class GeMKM(torch.autograd.Function):
   @staticmethod
-  def forward(x: torch.Tensor, fs: List[torch.Tensor]) -> torch.Tensor:
-    if type(x) is not torch.Tensor:
-      raise ValueError("Input 'x' should be a Tensor")
-    if type(fs) is not list:
-      raise ValueError("Input 'fs' should be a list of Tensor")
-    for i,f in enumerate(fs):
-      if type(f) is not torch.Tensor:
-        raise ValueError(f"Input fs[{i}] should be a Tensor")
-    # if y != None and type(y) is not torch.Tensor:
-    #   raise ValueError(f"Input 'y' should be a 2D Tensor")
-
-    trX,x, trF,fs = fastkrontorch.reshapeInput(x, fs)
-    if torch.is_grad_enabled() or not fastkrontorch.isSupported(x, fs):
-      z = fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
-    else:
-      rs, ts = fastkrontorch.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
-      z = x.new_empty(rs)
-      temp1 = x.new_empty(ts)
-      temp2 = x.new_empty(ts) if rs != ts else None
-      alpha = 1
-      beta = 0
-      y = None
-      fastkrontorch.gemkm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
-      z = z.reshape(rs)
-
-    return z
-  
-  @staticmethod
-  def setup_context(ctx, inputs, z):
-    # x, fs, _, _ = inputs
-    ctx.save_for_backward(*inputs)
+  def forward(ctx, x: torch.Tensor, fs: List[torch.Tensor]) -> torch.Tensor:
+    return fastkrontorch.gemkm(True, x, fs)
 
   @staticmethod
   def backend(ctx, grad_z):
     return None, None
 
-
 class GeKMM(torch.autograd.Function):
   @staticmethod
-  def forward(fs: List[torch.Tensor], x: torch.Tensor) -> torch.Tensor:
+  def forward(ctx, fs: List[torch.Tensor], x: torch.Tensor) -> torch.Tensor:
     if type(x) is not torch.Tensor:
       raise ValueError("Input 'x' should be a Tensor")
     if type(fs) is not list:
@@ -164,6 +155,10 @@ class GeKMM(torch.autograd.Function):
     #   raise ValueError(f"Input 'y' should be a 2D Tensor")
 
     trX,x, trF,fs = fastkrontorch.reshapeInput(x, fs)
+
+    alpha = 1
+    beta = 0
+    y = None
 
     if torch.is_grad_enabled() or not fastkrontorch.isSupported(x, fs):
       z = fastkrontorch.shuffleGeMM(torch, FastKronBase.MMTypeKMM, x, fs, alpha, beta, 
@@ -172,19 +167,11 @@ class GeKMM(torch.autograd.Function):
       rs, ts = fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
       temp1 = x.new_empty(ts)
       temp2 = x.new_empty(ts) if rs != ts else None
-      alpha = 1
-      beta = 0
-      y = None
       z = x.new_empty(size=rs, dtype=x.dtype)
       fastkrontorch.gekmm(fs, x, z, alpha, beta, y, temp1, temp2, trX, trF)
       z = z.reshape(rs)
 
     return z
-
-  @staticmethod
-  def setup_context(ctx, inputs, z):
-    # x, fs, _, _ = inputs
-    ctx.save_for_backward(*inputs)
 
   @staticmethod
   def backend(ctx, grad_z):
@@ -209,7 +196,10 @@ def gemkm(x: torch.Tensor, fs: List[torch.Tensor]) -> torch.Tensor:
   -------
   z : 2D torch tensor
   '''
-  return GeMKM.apply(x, fs)
+  if torch.is_grad_enabled():
+    return GeMKM.apply(x, fs)
+  else:
+    return fastkrontorch.gemkm(False, x, fs)
 
 def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   '''
