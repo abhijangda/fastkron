@@ -363,7 +363,7 @@ class FastKronBase:
       if y is not None:
         y = y.reshape(orig_yshape)
 
-  def shuffleGeMM(self, framework, mmtype, x, fs,
+  def shuffleGeMM(self, requires_grad, framework, mmtype, x, fs,
                   alpha = None, beta = None, 
                   y = None, trX = False, trF = False):
     self.checkShapeAndTypes(mmtype, x, fs, None, y, trX, trF)
@@ -372,7 +372,8 @@ class FastKronBase:
     m,  k = self.m(mmtype, x, trX), self.k(mmtype, x, trX)
 
     z = x
-
+    zs = []
+    print(376, z.shape)
     enumerator = enumerate(fs) if mmtype == FastKronBase.MMTypeKMM else enumerate(reversed(fs))
     for i,f in enumerator:
       fp = self.p(mmtype, f, False)
@@ -389,7 +390,10 @@ class FastKronBase:
         z = z.reshape(z.shape[:-2] + (fq, k//fp,m))
         z = self.trLastTwoDims(mmtype, z)
         zshape = (fq, m*k//fp)
+      zbatchShape = z.shape[:-3]
       z = z.reshape(z.shape[:-3] + zshape)
+      print(394, z.shape, "zbatchShape", zbatchShape, m, k//fp, fq)
+      if requires_grad: zs += [z.reshape(zbatchShape + (m, (k//fp) * fq))]
       k = (k//fp) * fq
 
     if alpha != None:
@@ -397,4 +401,4 @@ class FastKronBase:
     if beta != None and y is not None:
       z += beta * y
 
-    return z
+    return z, zs
