@@ -410,4 +410,4 @@ class FastKronBase:
     if beta != None and y is not None:
       z += beta * y
 
-    return z, zs
+    return z
