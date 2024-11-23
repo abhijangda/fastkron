@@ -95,15 +95,23 @@ class FastKronBase:
   def fptrs(self, fs):
     return [self.tensor_data_ptr(f) for f in fs]
 
-  def reshapeInput(self, x, fs):
+  def reshapeInput(self, mmtype, x, fs):
     trX, x = self.asContiguousTensor(x)
 
-    if trX:
-      if len(x.shape) == 1:
-        x = x.reshape((x.shape[0], 1))
-    else:
-      if len(x.shape) == 1:
-        x = x.reshape((1,x.shape[0]))
+    if mmtype == FastKronBase.MMTypeMKM:
+      if trX:
+        if x.ndim == 1:
+          x = x.reshape((x.shape[0], 1))
+      else:
+        if x.ndim == 1:
+          x = x.reshape((1,x.shape[0]))
+    elif mmtype == FastKronBase.MMTypeKMM:
+      if trX:
+        if len(x.shape) == 1:
+          x = x.reshape((1, x.shape[0]))
+      else:
+        if len(x.shape) == 1:
+          x = x.reshape((x.shape[0], 1))
 
     trFs = []
 
@@ -280,7 +288,7 @@ class FastKronBase:
         fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
       #After above reshape a tensor made by slicing a parent tensor, like [0:M:N]
       #will force the reshape to make the tensor contiguous, so recompute trX and trF
-      trX, x, trF, fs = self.reshapeInput(x, fs)
+      trX, x, trF, fs = self.reshapeInput(mmtype, x, fs)
 
       if y is not None:
         y = y.reshape((product(ybatch),) + y.shape[-2:])
@@ -373,7 +381,7 @@ class FastKronBase:
 
     z = x
     zs = []
-    print(376, z.shape)
+
     enumerator = enumerate(fs) if mmtype == FastKronBase.MMTypeKMM else enumerate(reversed(fs))
     for i,f in enumerator:
       fp = self.p(mmtype, f, False)
@@ -384,16 +392,17 @@ class FastKronBase:
         z = z.reshape(z.shape[:-2] + (m, k//fp, fq))
         z = self.trLastTwoDims(mmtype, z)
         zshape = (m*k//fp, fq)
+        grad_zshape = (m, (k//fp) * fq)
       elif mmtype == FastKronBase.MMTypeKMM:
         z = z.reshape(z.shape[:-2] + (fp, m * k//fp))
         z = framework.matmul(f, z)
         z = z.reshape(z.shape[:-2] + (fq, k//fp,m))
         z = self.trLastTwoDims(mmtype, z)
         zshape = (fq, m*k//fp)
+        grad_zshape = (fq * (k//fp), m)
       zbatchShape = z.shape[:-3]
       z = z.reshape(z.shape[:-3] + zshape)
-      print(394, z.shape, "zbatchShape", zbatchShape, m, k//fp, fq)
-      if requires_grad: zs += [z.reshape(zbatchShape + (m, (k//fp) * fq))]
+      if requires_grad: zs += [z.reshape(zbatchShape + grad_zshape)]
       k = (k//fp) * fq
 
     if alpha != None:
