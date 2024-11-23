@@ -323,7 +323,7 @@ template<typename T>
 static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastKronMMType kronmatmulType, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* z, T* y, T alpha, T beta,
                      uint M, uint/*N*/, uint/*K*/, uint KP_MAT_N[], uint KP_MAT_K[], 
                      uint32_t batchCount, uint64_t strideX, uint64_t strideZ, uint64_t strideF[],
-                     uint64_t strideY, T* temp1, T* temp2) {
+                     uint64_t strideY, T* temp1, T* temp2, bool isforward) {
 
   if (batchCount > 1) {
     if (kronmatmulType == FastKronMMType::MKM) {
@@ -508,7 +508,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
                       uint numIters, uint warmup, 
                       bool useUVA, int gpuInRows, int gpuInCols, int gpus,
                       uint kronBatch, bool checkResults, bool useFusion,
-                      bool tune, fastKronBackend backend, bool verbose) {
+                      bool tune, fastKronBackend backend, bool isforward, bool verbose) {
   verbose = true;
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
@@ -627,11 +627,12 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   tempSize = tempSize * sizeof(T);
   T* dX[gpus];
   T* dY[gpus];
-  T* dResult[gpus];
+  T* dResult[gpus * ((isforward) ? NUM_KP_MATS : 1)];
   T* dKpMats[gpus*NUM_KP_MATS];
   T* dTemp1[gpus];
   T *dTemp2[gpus];
-  for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = nullptr;}
+
+  for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = dIntermediates[i] = nullptr;}
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
 #ifdef ENABLE_MULTI_GPU
   if (useDistributed) {
@@ -675,10 +676,17 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
-    FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], batchCountZ*tempSize));
-    if (resultSize < tempSize) FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], batchCountZ*tempSize));
-    FastKronCHECK(backendMalloc(backend, (void**)&dResult[g], batchCountZ*resultSize));
-    FastKronCHECK(backendMemset(backend, (void*)dResult[g], 0, batchCountZ*resultSize));
+    if (isforward) {
+      for (int i = 1; i < NUM_KP_MATS; i++) {
+        FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + i], batchCountZ*tempSize));
+      }
+      FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + 0], batchCountZ*resultSize));
+    } else {
+      FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], batchCountZ*tempSize));
+      if (resultSize < tempSize) FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], batchCountZ*tempSize));
+      FastKronCHECK(backendMalloc(backend, (void**)&dResult[g], batchCountZ*resultSize));
+      FastKronCHECK(backendMemset(backend, (void*)dResult[g], 0, batchCountZ*resultSize));
+    }
   }
   printf("520 sizeX %lu\n", sizeX);
   if (checkResults) {
@@ -712,7 +720,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
 #endif
     {  
       printf("546: %p %p %p %p\n", dX[0], dY[0], dResult[0], dTemp1[0]);
-      kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
+      kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0], isforward);
     }
     for (int g = 0; g < gpus; g++) {
       if (backend == fastKronBackend_CUDA) { 

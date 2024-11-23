@@ -305,6 +305,113 @@ fastKronError dgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                                                          std::get<1>(problem));
 }
 
+fastKronError sgemkmForward(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const float* X,
+                            fastKronOp opX, const float* Fs[], fastKronOp opFs, float* Y,
+                            float alpha, float beta, const float *Z[], float* temp1, float* temp2) {
+  KMMProblem problem(FastKronMMType::MKM, FastKronFloat,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
+  // return ((FastKronHandle*)handle)->xgemm(problem, backend, (void*)temp1, (void*)temp2,
+  //                                          EpilogueParams::create<float>(alpha, beta, Z));
+}
+
+fastKronError dgemkmForward(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
+                            fastKronOp opX, const double* Fs[], fastKronOp opFs, double* Y,
+                            double alpha, double beta, const double *Z[], double* temp1, double* temp2) {
+  KMMProblem problem(FastKronMMType::MKM, FastKronDouble,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
+  // return ((FastKronHandle*)handle)->xgemm(problem, backend, (void*)temp1, (void*)temp2, 
+  //                                          EpilogueParams::create<double>(alpha, beta, Z));
+}
+
+fastKronError sgekmmForward(fastKronHandle handle, fastKronBackend backend, 
+                            uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                            const float* Fs[], fastKronOp opFs,
+                            const float* X, fastKronOp opX,
+                            float* Y[], float alpha, float beta,
+                            const float *Z) {
+  KMMProblem problem(FastKronMMType::KMM, FastKronFloat,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
+  // return ((FastKronHandle*)handle)->xgemm(problem, backend, (void*)temp1, (void*)temp2, 
+  //                                         EpilogueParams::create<float>(alpha, beta, Z));
+}
+
+fastKronError dgekmmForward(fastKronHandle handle, fastKronBackend backend, 
+                            uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                            const double* Fs[], fastKronOp opFs,
+                            const double* X, fastKronOp opX,
+                            double* Y[], double alpha, double beta,
+                            const double *Z) {
+  KMMProblem problem(FastKronMMType::KMM, FastKronDouble,
+                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
+                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
+                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
+  // return ((FastKronHandle*)handle)->xgemm(problem, backend, (void*)temp1, (void*)temp2, 
+  //                                          EpilogueParams::create<double>(alpha, beta, Z));
+}
+
+fastKronError sgemkmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+                                          uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                          const float* X, fastKronOp opX, uint64_t strideX,
+                                          const float* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                          float* Y[], uint64_t strideY[], float alpha, float beta,
+                                          uint32_t batchCount, const float *Z, uint64_t strideZ) {
+  auto problem = createStridedBatchedProblem(FastKronMMType::MKM, FastKronFloat,
+                                             M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF, 
+                                             Y, strideY, alpha, beta, batchCount, Z, strideZ);
+  // return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
+  //                                                        temp1, temp2,
+  //                                                        std::get<1>(problem));
+}
+
+fastKronError dgemkmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                                          uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                          const double* X, fastKronOp opX, uint64_t strideX,
+                                          const double* Fs[], fastKronOp opFs, uint64_t strideF[], 
+                                          double* Y[], uint64_t strideY[], double alpha, double beta,
+                                          uint32_t batchCount, const double *Z, uint64_t strideZ,
+                                          double* temp1, double* temp2) {
+  auto problem = createStridedBatchedProblem(FastKronMMType::MKM, FastKronDouble,
+                                             M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF,
+                                             Y, strideY, alpha, beta, batchCount, Z, strideZ);
+  // return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
+  //                                                        temp1, temp2,
+  //                                                        std::get<1>(problem));
+}
+
+fastKronError sgekmmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+                                          uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                          const float* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                          const float* X, fastKronOp opX, uint64_t strideX,
+                                          float* Y[], uint64_t strideY[], float alpha, float beta,
+                                          uint32_t batchCount, const float *Z, uint64_t strideZ) {
+  auto problem = createStridedBatchedProblem(FastKronMMType::KMM, FastKronFloat,
+                                             M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF, 
+                                             Y, strideY, alpha, beta, batchCount, Z, strideZ);
+  // return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
+  //                                                        temp1, temp2,
+  //                                                        std::get<1>(problem));
+}
+
+fastKronError dgekmmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                                          uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                          const double* Fs[], fastKronOp opFs, uint64_t strideF[],
+                                          const double* X, fastKronOp opX, uint64_t strideX, 
+                                          double* Y[], uint64_t strideY[], double alpha, double beta,
+                                          uint32_t batchCount, const double *Z, uint64_t strideZ) {
+  auto problem = createStridedBatchedProblem(FastKronMMType::KMM, FastKronDouble,
+                                             M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF,
+                                             Y, strideY, alpha, beta, batchCount, Z, strideZ);
+  // return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
+  //                                                        temp1, temp2,
+  //                                                        std::get<1>(problem));
+}
+
 #ifdef ENABLE_MULTI_GPU
 fastKronError fastKronMgSGEMM(fastKronHandle handle, const uint NumKronMats, void* x[], void* kronMats[], void* result[],
                                  uint M, uint N, uint K, uint KronMatCols[], uint KronMatRows[], void** temp1, void** temp2,
