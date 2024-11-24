@@ -133,6 +133,14 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
                                     const uint fidx,
                                     EpilogueParams epilogueParams,
                                     KernelMode execMode) {
+if (kernel->getBatchType() == KernelBatchType::StridedBatched) {
+    //Execute a single batch problem using a strided batched kernel
+    KMMProblemStridedBatched stridedProblem(problem);
+    EpilogueStridedBatchedParams stridedEpilogue(epilogueParams, problem.y());
+
+    return invokeKernel(kernel, stridedProblem, fidx, stridedEpilogue, execMode);
+  }
+
   return invokeKernel<KMMProblem, EpilogueParams>(
     kernel, problem, fidx, epilogueParams, execMode);
 }

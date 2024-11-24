@@ -323,8 +323,7 @@ template<typename T>
 static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastKronMMType kronmatmulType, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* z, T* y, T alpha, T beta,
                      uint M, uint/*N*/, uint/*K*/, uint KP_MAT_N[], uint KP_MAT_K[], 
                      uint32_t batchCount, uint64_t strideX, uint64_t strideZ, uint64_t strideF[],
-                     uint64_t strideY, T* temp1, T* temp2, bool isforward) {
-
+                     uint64_t strideY, T* temp1, T* temp2) {
   if (batchCount > 1) {
     if (kronmatmulType == FastKronMMType::MKM) {
       if (std::is_same<T, float>::value) {
@@ -378,6 +377,44 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
       FastKronCHECK(dgekmm(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
                       (const double**)kpMats, opfs, (const double*)x, opx, (double*)y,
                       alpha, beta, (const double*)z, (double*)temp1, (double*)temp2));
+    }
+  }
+
+  return;
+}
+
+template<typename T>
+static void kronGEMMForward(fastKronHandle handle, const fastKronBackend backend, FastKronMMType kronmatmulType, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* z, T* y[], T alpha, T beta,
+                     uint M, uint/*N*/, uint/*K*/, uint KP_MAT_N[], uint KP_MAT_K[], 
+                     uint32_t batchCount, uint64_t strideX, uint64_t strideZ, uint64_t strideF[],
+                     uint64_t strideY) {
+  if (kronmatmulType == FastKronMMType::MKM) {
+    if (std::is_same<T, float>::value) {
+      //TODO: Change KMM to MKM
+      FastKronCHECK(sgemkmForward(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                      (const float*)x, opx, (const float**)kpMats, opfs, (float**)y,
+                      alpha, beta, (const float*)z));
+    } else if (std::is_same<T, int>::value) {
+      // FastKronCHECK(igemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+      //                 (const int*)x, opx, (const int**)kpMats, opfs, (int*)y,
+      //                 alpha, beta, (const int*)z, (int*)temp1, (int*)temp2));
+    } else if (std::is_same<T, double>::value) {
+      // FastKronCHECK(dgemkmForward(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+      //                 (const double*)x, opx, (const double**)kpMats, opfs, (double**)y,
+      //                 alpha, beta, (const double*)z));
+    } else {
+      printf("Invalid type\n");
+      return;
+    }
+  } else if (kronmatmulType == FastKronMMType::KMM) {
+    if (std::is_same<T, float>::value) {
+      // FastKronCHECK(sgekmmForward(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
+      //                 (const float**)kpMats, opfs, (const float*)x, opx, (float**)y,
+      //                 alpha, beta, (const float*)z));
+    } else if (std::is_same<T, double>::value) {
+      // FastKronCHECK(dgekmmForward(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
+      //                 (const double**)kpMats, opfs, (const double*)x, opx, (double**)y,
+      //                 alpha, beta, (const double*)z));
     }
   }
 
@@ -621,10 +658,22 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   }
   size_t resultSize = 0;
   size_t tempSize = 0;
-  FastKronCHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
-                           &resultSize, &tempSize));
-  resultSize = resultSize * sizeof(T);
-  tempSize = tempSize * sizeof(T);
+  size_t intermediateSizes[NUM_KP_MATS];
+  if (isforward) {
+    FastKronCHECK(gekmmSizesForward(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
+                                    intermediateSizes));
+    for (int i = 0; i < NUM_KP_MATS; i++) intermediateSizes[i] = intermediateSizes[i] * sizeof(T);
+    resultSize = intermediateSizes[0];
+    printf("intermediateSizes: ");
+    for (int i = 0; i < NUM_KP_MATS; i++) printf("%ld ", intermediateSizes[i]);
+    printf("\n");
+  } else {
+    FastKronCHECK(gekmmSizes(handle, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,
+                            &resultSize, &tempSize));
+    resultSize = resultSize * sizeof(T);
+    tempSize = tempSize * sizeof(T);
+    printf("resultSize %lu tempSize %lu\n", resultSize, tempSize);
+  }
   T* dX[gpus];
   T* dY[gpus];
   T* dResult[gpus * ((isforward) ? NUM_KP_MATS : 1)];
@@ -632,7 +681,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   T* dTemp1[gpus];
   T *dTemp2[gpus];
 
-  for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = dIntermediates[i] = nullptr;}
+  for (int i =0; i < gpus; i++) {dTemp1[i] = dTemp2[i] = nullptr;}
   uint64_t sizeX = ((uint64_t)M) * ((uint64_t)K) * sizeof(T);
 #ifdef ENABLE_MULTI_GPU
   if (useDistributed) {
@@ -672,13 +721,12 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   //   else
   //     abort();
   // }
-  printf("resultSize %lu tempSize %lu\n", resultSize, tempSize);
   for (int g = 0; g < gpus; g++) {
     if (backend == fastKronBackend_CUDA) CUDACHECK(cudaSetDevice(g));
     if (backend == fastKronBackend_HIP) HIPCHECK(hipSetDevice(g));
     if (isforward) {
       for (int i = 1; i < NUM_KP_MATS; i++) {
-        FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + i], batchCountZ*tempSize));
+        FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + i], batchCountZ*intermediateSizes[i]));
       }
       FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + 0], batchCountZ*resultSize));
     } else {
@@ -704,7 +752,11 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
     {
       //CPU implementation of algorithm
       for (uint i = 0; i < NUM_KP_MATS; i++) {
-        hKpMatmulResult[i] = new T[batchCountZ*tempSize * gpus];
+        if (isforward) {
+          hKpMatmulResult[i] = new T[batchCountZ * intermediateSizes[i] * gpus];
+        } else {
+          hKpMatmulResult[i] = new T[batchCountZ*tempSize * gpus];
+        }
       }
 
       slicedMatmul(kronmatmulType, NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, strideY, batchCountZ, opx, opfs, alpha, beta);
@@ -718,9 +770,11 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
       kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
     } else 
 #endif
-    {  
+    if (isforward) {
+      kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult, alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ); 
+    } else {  
       printf("546: %p %p %p %p\n", dX[0], dY[0], dResult[0], dTemp1[0]);
-      kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0], isforward);
+      kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
     }
     for (int g = 0; g < gpus; g++) {
       if (backend == fastKronBackend_CUDA) { 
@@ -782,6 +836,8 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
 #if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
+      } else if (isforward) {
+        // kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ); 
       } else {
         kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
       }
@@ -832,6 +888,8 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
 #if defined(TEST_BACKEND_CUDA) && defined(ENABLE_MULTI_GPU)
           kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
+        } else if (isforward) {
+          // kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ);
         } else {
           kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
         }

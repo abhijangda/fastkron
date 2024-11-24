@@ -166,7 +166,10 @@ class FastKronHandle {
    * Return - fastKronError representing the error occurred in the operation
    */
   fastKronError xgemm(KMMProblem problem, const fastKronBackend backend,
-                       void* temp1, void* temp2, EpilogueParams epilogueParams);
+                      void* temp1, void* temp2, EpilogueParams epilogueParams);
+
+  fastKronError xgemm(bool isforward, KMMProblem problem, const fastKronBackend backend,
+                      KMMProblem::Intermediates intermediates, EpilogueParams epilogueParams);
 
   fastKronError xgemmStridedBatched(KMMProblemStridedBatched problem, 
                                      const fastKronBackend backend,
@@ -181,18 +184,22 @@ class FastKronHandle {
    * Return - fastKronError representing the error in the operation
    */
   fastKronError gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
-
+  fastKronError gekmmSizesForward(KMMProblem problem, size_t* sizes);
   /**
-   * FastKronHandle::gekmmResultTemp() - Initialize GeKMM result and temporary matrix with shapes
+   * FastKronHandle::gekmmIntermediateSizes() - Initialize GeKMM result and temporary matrix with shapes
    * @problem: The GeKMM problem as an object of KMMProblem
    * @result: [OUT] The result matrix 
    * @temp: [OUT] The temporary matrix
    *
    * Return - fastKronError representing the error in the operation
    */
-  fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& temp);
-  fastKronError gekmmResultTemp(KMMProblemStridedBatched problem, 
-                                StridedBatchMatrix& result, StridedBatchMatrix& temp);
+  fastKronError gekmmIntermediateSizes(KMMProblem problem, Matrix* intermediates);
+  fastKronError gekmmIntermediateSizes(KMMProblemStridedBatched problem, 
+                                       StridedBatchMatrix* intermediates);
+
+  fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& maxTemp);
+  fastKronError gekmmResultTemp(KMMProblemStridedBatched problem, StridedBatchMatrix& result,
+                                StridedBatchMatrix& maxTemp);
 
   #ifdef ENABLE_MULTI_GPU
   void getDistributedSizes(uint M, uint K, uint& gpuM, uint& gpuK);

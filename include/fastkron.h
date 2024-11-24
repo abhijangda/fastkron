@@ -248,7 +248,8 @@ fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, 
  */
 fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                          size_t* yElems, size_t* tmpElems);
-
+fastKronError gekmmSizesForward(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                size_t* intermediateSizes);
 
 /**
  * sgekmm(), igekmm(), dgekmm() - Perform MKM.

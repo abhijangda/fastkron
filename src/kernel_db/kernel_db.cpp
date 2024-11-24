@@ -156,6 +156,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
     return problemToKernelCache[problem];
   
   KMMProblemT origProblem = problem;
+  typename KMMProblemT::Intermediates emptyIntermediates;
 
   TunedKernelsSeries kernelSeries;
   {
@@ -236,12 +237,12 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
         //The approach always selects the kernel with the maximum number of fusion
         auto fusedIter = numFusedToKernels.begin();
 
-        executeGeMM(problem, nullptr, problem.n(),
+        executeGeMM(problem, emptyIntermediates, problem.n(),
           [&fusedIter](const KMMProblemT) {
             return fusedIter->first;
           },
           [subProblemStart, problem, &fusedIter, &kernelSeries, &numFusedToKernels, this]
-            (const KMMProblemT subProblem, int rstart, void*[2], typename KMMProblemT::Matrix) {
+            (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrix) {
               uint32_t kstart;
               uint32_t kend;
               uint32_t remainingLength;
@@ -265,10 +266,10 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
 
     //No Fused kernel case found
     {
-      executeGeMM(problem, nullptr, problem.n(),
+      executeGeMM(problem, emptyIntermediates, problem.n(),
         [](const KMMProblemT) {return 1;},
         [&kernelSeries, this]
-          (const KMMProblemT subProblem, int rstart, void*[2], typename KMMProblemT::Matrix) {
+          (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrix) {
             std::vector<std::vector<KMMKernel*>> kernels;
             findAllKernels(subProblem, KernelBatchType::Normal, false, kernels);
             auto tk = TunedKernelFromStart(this->findKernelForSubProblem(subProblem, kernels), 

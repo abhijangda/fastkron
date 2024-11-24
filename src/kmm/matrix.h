@@ -278,6 +278,45 @@ public:
   }
 };
 
+template<typename MatrixBase, uint32_t MaxSize>
+class MatrixArrayBase : public StackArray<MatrixBase, MaxSize> {
+  using Base = StackArray<MatrixBase, MaxSize>;
+  MatrixArrayBase(StackArray<MatrixBase, MaxSize> arr) : Base(arr) {}
+
+public:
+  MatrixArrayBase(uint32_t n, const uint32_t m, const uint32_t* ns, void* const* ptrs) : 
+    Base(nullptr, n) {
+    // assert (n < MaxSize);
+    for (uint32_t i = 0; i < n; i++) {
+      Base::array[i] = MatrixBase(m, ns[i], ptrs ? ptrs[i] : nullptr);
+    }
+  }
+
+  MatrixArrayBase() : Base(nullptr, 0) {}
+
+  MatrixArrayBase(const MatrixBase* matrices, uint32_t n)     : Base(matrices, n) {}
+  MatrixArrayBase(std::initializer_list<MatrixBase> matList) : Base(matList) {}
+
+  CUDA_DEVICE_HOST
+  MatrixBase& operator[](int index) {
+    return Base::array[index];
+  }
+
+  CUDA_DEVICE_HOST
+  const MatrixBase& operator[](int index) const {
+    return Base::array[index];
+  }
+
+  MatrixArrayBase sub(uint32_t start, uint32_t len) const {
+    return MatrixArrayBase(Base::sub(start, len));
+  }
+
+  template<uint32_t SliceSize>
+  MatrixArrayBase<MatrixBase, SliceSize> slice(uint32_t start) const {
+    return MatrixArrayBase<MatrixBase, SliceSize>(this->template slice<SliceSize>(start));
+  }
+};
+
 /******************Strided Batch Matrices*****************/
 template<typename MatrixBase>
 class StridedBatchBase : public MatrixBase {

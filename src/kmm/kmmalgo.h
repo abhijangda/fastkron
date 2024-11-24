@@ -30,6 +30,7 @@ public:
   using Matrix = MatrixT;
   using Factor = FactorT;
   using Factors = FactorArrayBase<FactorT, MaxFactors>;
+  using Intermediates = MatrixArrayBase<MatrixT, MaxFactors>;
 
 protected:
   /**
@@ -49,7 +50,7 @@ protected:
   //On CUDA keep Factors at the end of class to get
   //best performance
   Factors factors;
-  
+
 public:
   KMMProblemBase(FastKronMMType kronType, FastKronType eltype,
                  Matrix x, fastKronOp opX, Factors fs, fastKronOp opFs, Matrix y) :
@@ -518,15 +519,15 @@ struct std::hash<KMMProblemStridedBatched> {
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
 
-fastKronError executeGeMM(const KMMProblem problem, void* temps[2],
+fastKronError executeGeMM(const KMMProblem problem, KMMProblem::Intermediates temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
-                           std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
+                           std::function<fastKronError (const KMMProblem, int, typename KMMProblem::Matrix)> func);
 
-fastKronError executeGeMM(const KMMProblemStridedBatched problem, void* temps[2],
+fastKronError executeGeMM(const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Intermediates temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblemStridedBatched)> next,
-                           std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
+                           std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrix)> func);
 
 /**
  * reverseExecuteGeMM() - Execute a function on the problem using the reverse MKM/KMM algorithm
@@ -542,12 +543,12 @@ fastKronError executeGeMM(const KMMProblemStridedBatched problem, void* temps[2]
 fastKronError reverseExecuteGeMM(const KMMProblem problem, void* temps[2],
                                 typename KMMProblem::Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<fastKronError (const KMMProblem, int, void*[2], typename KMMProblem::Matrix)> func);
+                                std::function<fastKronError (const KMMProblem, int, typename KMMProblem::Matrix)> func);
 
 fastKronError reverseExecuteGeMM(const KMMProblemStridedBatched problem, void* temps[2],
                                 typename KMMProblemStridedBatched::Matrix result,
                                 std::function<uint (const KMMProblemStridedBatched)> next,
-                                std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], typename KMMProblemStridedBatched::Matrix)> func);
+                                std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrix)> func);
 
 bool checkDistributedKronSizes(const KMMProblem problem,
                                const uint LocalKrons, const uint gpusInK);

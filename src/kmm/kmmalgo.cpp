@@ -58,10 +58,10 @@ bool checkDistributedKronSizes(const KMMProblem problem,
   if (gpusInK > 1 and LocalN >= problem.n()) return false;
   
   bool correct = true;
-
-  executeGeMM(problem, nullptr, 0,
+  KMMProblem::Intermediates emptyIntermediates;
+  executeGeMM(problem, emptyIntermediates, 0,
     [](const KMMProblem /*kmm*/) {return 1;},
-    [&correct, gpusInK](const KMMProblem kmm, int /*rstart*/, void* /*t1*/, Matrix /*result*/) {
+    [&correct, gpusInK](const KMMProblem kmm, int /*rstart*/, Matrix /*result*/) {
       correct = correct && (kmm.l() % gpusInK == 0);
       return fastKronSuccess;
     });
@@ -71,26 +71,26 @@ bool checkDistributedKronSizes(const KMMProblem problem,
 
 /*MKM Algorithm functions*/
 template<typename KMMProblemType>
-fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
+fastKronError executeGeMM(KMMProblemType problem, typename KMMProblemType::Intermediates tmps, uint32_t swaps,
                            std::function<uint (const KMMProblemType)> next,
-                           std::function<fastKronError (const KMMProblemType, int rstart, void*[2], 
+                           std::function<fastKronError (const KMMProblemType, int rstart,
                                                         typename KMMProblemType::Matrix)> func) {
   int nextF = 1;
 
   typename KMMProblemType::Matrix firstIterOut;
   typename KMMProblemType::Matrix result = problem.y();
 
-  if (tmps != nullptr) {
-    if (tmps[1] == nullptr) {
+  if (tmps.len() > 0) {
+    if (tmps[1].data() == nullptr) {
       if (swaps % 2 == 1) {
         tmps[1] = tmps[0];
-        tmps[0] = problem.y().data();
+        tmps[0] = problem.y();
       } else {
         tmps[0] = tmps[0];
-        tmps[1] = problem.y().data();
+        tmps[1] = problem.y();
       }
     }
-    firstIterOut = result.like(tmps[0]);
+    firstIterOut = result.like(tmps[0].data());
   } else {
     firstIterOut = result;
   }
@@ -110,27 +110,27 @@ fastKronError executeGeMM(KMMProblemType problem, void* tmps[2], uint32_t swaps,
     if (i < nextF) subProblem = subProblem.updateY(result);
     subProblem.initMMIter(i, i == problem.n() - 1, i < nextF);
     subProblem.setOpX(opX);
-    err = func(subProblem, i, tmps, result);
+    err = func(subProblem, i, result);
     if (err != fastKronSuccess) break;
-    if (tmps != nullptr)
-      problem.swap(tmps[0], tmps[1]);
+    if (tmps.len() > 0)
+      problem.swap(tmps[0].data(), tmps[1].data());
   }
 
   return err;
 }
 
-fastKronError executeGeMM(const KMMProblem problem, void* temps[2],
+fastKronError executeGeMM(const KMMProblem problem, KMMProblem::Intermediates temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
-                           std::function<fastKronError (const KMMProblem, int, void*[2], 
+                           std::function<fastKronError (const KMMProblem, int,
                                          typename KMMProblem::Matrix)> func) {
   return executeGeMM<KMMProblem>(problem, temps, swaps, next, func);
 }
 
-fastKronError executeGeMM(const KMMProblemStridedBatched problem, void* temps[2],
+fastKronError executeGeMM(const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Intermediates temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblemStridedBatched)> next,
-                           std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], 
+                           std::function<fastKronError (const KMMProblemStridedBatched, int, 
                                          typename KMMProblemStridedBatched::Matrix)> func) {
   return executeGeMM<KMMProblemStridedBatched>(problem, temps, swaps, next, func);
 }
@@ -139,14 +139,14 @@ fastKronError executeGeMM(const KMMProblemStridedBatched problem, void* temps[2]
 template<typename KMMProblemType>
 fastKronError reverseExecuteGeMM(KMMProblemType problem, void* tmps[2], typename KMMProblemType::Matrix result,
                                 std::function<uint (const KMMProblemType)> next,
-                                std::function<fastKronError (const KMMProblemType, int start, void*[2], typename KMMProblemType::Matrix)> func) {
+                                std::function<fastKronError (const KMMProblemType, int start, typename KMMProblemType::Matrix)> func) {
   uint32_t nextF = 1;
   fastKronError err = fastKronSuccess;
   for (uint32_t i = 0; i < problem.n(); i = i + nextF) {
     nextF = next(problem);
     if (i - (problem.n() - 1) < nextF) 
       problem = problem.updateY(result);
-    err = func(problem.rsub(i, nextF), i, tmps, result);
+    err = func(problem.rsub(i, nextF), i, result);
     if (err != fastKronSuccess) break;
     if (tmps != nullptr)
       problem.swap(tmps[0], tmps[1]);
@@ -158,7 +158,7 @@ fastKronError reverseExecuteGeMM(KMMProblemType problem, void* tmps[2], typename
 fastKronError reverseExecuteGeMM(const KMMProblem problem, void* temps[2],
                                 typename KMMProblem::Matrix result,
                                 std::function<uint (const KMMProblem)> next,
-                                std::function<fastKronError (const KMMProblem, int, void*[2], 
+                                std::function<fastKronError (const KMMProblem, int, 
                                                              typename KMMProblem::Matrix)> func) {
   return reverseExecuteGeMM<KMMProblem>(problem, temps, result, next, func);
 }
@@ -166,7 +166,7 @@ fastKronError reverseExecuteGeMM(const KMMProblem problem, void* temps[2],
 fastKronError reverseExecuteGeMM(const KMMProblemStridedBatched problem, void* temps[2],
                                 typename KMMProblemStridedBatched::Matrix result,
                                 std::function<uint (const KMMProblemStridedBatched)> next,
-                                std::function<fastKronError (const KMMProblemStridedBatched, int, void*[2], 
+                                std::function<fastKronError (const KMMProblemStridedBatched, int, 
                                                              typename KMMProblemStridedBatched::Matrix)> func) {
   return reverseExecuteGeMM<KMMProblemStridedBatched>(problem, temps, result, next, func);
 }
