@@ -12,11 +12,18 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
            const YElem& y, 
            const Factor& F, Matrix& Y, Matrix& Z, FCache& Fch, TileX& XTile,
            YInterim& Ych, YRegisters& YReg) {
+  bool storeY = false;
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       e.store(&Ych.at(y.m() + rm * YReg.mvec(), y.q() + rq, y.k()/Fch.p() + rk * YReg.kvec()));
     });
   } else {
+    storeY = true;
+  }
+
+  bool storeFusedIntermediate = (fac > 0 && fusedParams.intermediates[fac].data() != nullptr);
+
+  if (storeFusedIntermediate || storeY) {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
       constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
@@ -36,10 +43,10 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
         //Scale shared mem slice idx to global mem idx
         uint32_t glSlice = (xshCol/XTileSlices)*XSlices;
         //Scale shared fused slice to global mem
-        uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices)*fusedParams.XglFusedSlices;
+        uint32_t sliceElem = ((xshCol%XTileSlices)/fusedParams.XShFusedSlices[fac])*fusedParams.XglFusedSlices[fac];
         //Elem idx in Fused Slice
-        uint32_t elem = (tileK/XTile.tileCols()) * fusedParams.XShFusedSlices +
-                        xshCol%fusedParams.XShFusedSlices;
+        uint32_t elem = (tileK/XTile.tileCols()) * fusedParams.XShFusedSlices[fac] +
+                        xshCol%fusedParams.XShFusedSlices[fac];
         yN = glSlice + sliceElem + elem;
       } else {
         yN = (y.q() + rq) * XSlices +
@@ -62,12 +69,18 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
           numElems = kMMultipleOfTileM ? YReg.mvec() : XTile.m() - (y.m() + rm*YReg.mvec());
           numElems = MIN(YReg.mvec(), numElems);
         }
-        if ((EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
+        if (storeY && (EpilogueKindVal & EpilogueKind::Beta) == EpilogueKind::Beta) {
           X86VecT z;
           z.load(Z.data<ElemT>(tileM + y.m() + rm*YReg.mvec(), yN, YReg.layout()), numElems);
           e.fmadd(beta, z);
         }
-        e.store(Y.data<ElemT>(tileM + y.m() + rm*YReg.mvec(), yN, YReg.layout()), numElems);
+        uint32_t yM = tileM + y.m() + rm*YReg.mvec();
+        if (storeFusedIntermediate) {
+          Matrix inter = fusedParams.intermediates[fac];
+          e.store(inter.data<ElemT>(yM, yN, YReg.layout()), numElems);
+        } else {
+          e.store(Y.data<ElemT>(yM, yN, YReg.layout()), numElems);
+        }
     }});
   }
 }

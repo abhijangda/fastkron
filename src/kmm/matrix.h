@@ -274,16 +274,17 @@ public:
 
   template<uint32_t SliceSize>
   FactorArrayBase<FactorBase, SliceSize> slice(uint32_t start) const {
-    return FactorArrayBase<FactorArrayBase, SliceSize>(this->template slice<SliceSize>(start));
+    return FactorArrayBase<FactorArrayBase, SliceSize>(Base::template slice<SliceSize>(start));
   }
 };
 
 template<typename MatrixBase, uint32_t MaxSize>
 class MatrixArrayBase : public StackArray<MatrixBase, MaxSize> {
   using Base = StackArray<MatrixBase, MaxSize>;
-  MatrixArrayBase(StackArray<MatrixBase, MaxSize> arr) : Base(arr) {}
 
 public:
+  MatrixArrayBase(StackArray<MatrixBase, MaxSize> arr) : Base(arr) {}
+
   MatrixArrayBase(uint32_t n, const uint32_t m, const uint32_t* ns, void* const* ptrs) : 
     Base(nullptr, n) {
     // assert (n < MaxSize);
@@ -294,8 +295,8 @@ public:
 
   MatrixArrayBase() : Base(nullptr, 0) {}
 
-  MatrixArrayBase(const MatrixBase* matrices, uint32_t n)     : Base(matrices, n) {}
-  MatrixArrayBase(std::initializer_list<MatrixBase> matList) : Base(matList) {}
+  MatrixArrayBase(const MatrixBase* matrices, uint32_t n)    : Base(matrices, n) {}
+  MatrixArrayBase(std::initializer_list<MatrixBase> matList) : Base(matList)     {}
 
   CUDA_DEVICE_HOST
   MatrixBase& operator[](int index) {
@@ -313,7 +314,16 @@ public:
 
   template<uint32_t SliceSize>
   MatrixArrayBase<MatrixBase, SliceSize> slice(uint32_t start) const {
-    return MatrixArrayBase<MatrixBase, SliceSize>(this->template slice<SliceSize>(start));
+    return MatrixArrayBase<MatrixBase, SliceSize>(Base::template slice<SliceSize>(start));
+  }
+
+  template<uint32_t SliceSize>
+  MatrixArrayBase<MatrixBase, SliceSize> sliceOrEmpty(uint32_t start) const {
+    return MatrixArrayBase<MatrixBase, SliceSize>(Base::template sliceOrEmpty<SliceSize>(start));
+  }
+
+  MatrixArrayBase<MatrixBase, MaxSize> slice(uint32_t start, uint32_t size) const {
+    return MatrixArrayBase<MatrixBase, MaxSize>(Base::slice(start, size));
   }
 };
 
@@ -332,6 +342,9 @@ public:
 
   StridedBatchBase(uint32_t rows, uint32_t cols, uint32_t batchStride, void* data) :
     MatrixBase(rows, cols, data), batchStride_(batchStride) {}
+
+  StridedBatchBase(MatrixBase& base) :
+    StridedBatchBase(base.m(), base.n(), 0, base.data()) {}
 
   uint32_t batchStride() const {return batchStride_;}
 

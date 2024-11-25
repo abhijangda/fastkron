@@ -134,10 +134,12 @@ public:
    */
   virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                      const uint fidx,
+                                     KMMProblem::Matrices intermediates,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode) = 0;
   virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
                                      const uint fidx,
+                                     KMMProblemStridedBatched::Matrices intermediates,
                                      EpilogueStridedBatchedParams epilogueParams,
                                      KernelMode execMode) = 0;
   /**

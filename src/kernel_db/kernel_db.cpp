@@ -156,7 +156,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
     return problemToKernelCache[problem];
   
   KMMProblemT origProblem = problem;
-  typename KMMProblemT::Intermediates emptyIntermediates;
+  typename KMMProblemT::Matrices emptyIntermediates;
 
   TunedKernelsSeries kernelSeries;
   {
@@ -242,7 +242,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
             return fusedIter->first;
           },
           [subProblemStart, problem, &fusedIter, &kernelSeries, &numFusedToKernels, this]
-            (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrix) {
+            (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrices) {
               uint32_t kstart;
               uint32_t kend;
               uint32_t remainingLength;
@@ -269,7 +269,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
       executeGeMM(problem, emptyIntermediates, problem.n(),
         [](const KMMProblemT) {return 1;},
         [&kernelSeries, this]
-          (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrix) {
+          (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrices) {
             std::vector<std::vector<KMMKernel*>> kernels;
             findAllKernels(subProblem, KernelBatchType::Normal, false, kernels);
             auto tk = TunedKernelFromStart(this->findKernelForSubProblem(subProblem, kernels), 

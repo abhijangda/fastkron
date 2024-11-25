@@ -723,6 +723,9 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
         FastKronCHECK(backendMalloc(backend, (void**)&dIntermediates[g * (NUM_KP_MATS-1) + i], batchCountZ*intermediateSizes[i]));
       }
       FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + 0], batchCountZ*resultSize));
+      for (int i = 0; i < NUM_KP_MATS - 1; i++)
+        printf("727 %p ",dIntermediates[g * (NUM_KP_MATS-1) + i]);
+      printf(" %p\n", dResult[g * NUM_KP_MATS + 0]);
     } else {
       FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], batchCountZ*tempSize));
       if (resultSize < tempSize) FastKronCHECK(backendMalloc(backend, (void**)&dTemp2[g], batchCountZ*tempSize));
@@ -754,7 +757,6 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
       }
 
       hKpMatmulResult[0] = new T[batchCountZ*resultSize * gpus];
-      printf("hKpMatmulResult %p %p %p\n", hKpMatmulResult[0], hKpMatmulResult[1], hKpMatmulResult[2]);
       slicedMatmul(kronmatmulType, NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, strideY, batchCountZ, opx, opfs, alpha, beta);
       hResult = hKpMatmulResult[0];
     }
@@ -784,6 +786,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
     if (verbose) printf("checking results\n");
     if (isforward) {
       for (int i = 0; i < NUM_KP_MATS - 1; i++) {
+        printf("789 intermediate %d %p\n", i, dIntermediates[i]);
         T* dIntermediateToHost = (T*)malloc(batchCountZ * intermediateSizes[i]);
 
         FastKronCHECK(backendMemcpyDeviceToHost(backend, dIntermediateToHost, dIntermediates[i], batchCountZ * intermediateSizes[i]));

@@ -30,7 +30,7 @@ public:
   using Matrix = MatrixT;
   using Factor = FactorT;
   using Factors = FactorArrayBase<FactorT, MaxFactors>;
-  using Intermediates = MatrixArrayBase<MatrixT, MaxFactors>;
+  using Matrices = MatrixArrayBase<MatrixT, MaxFactors>;
 
 protected:
   /**
@@ -530,15 +530,15 @@ struct std::hash<KMMProblemStridedBatched> {
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
 
-fastKronError executeGeMM(const KMMProblem problem, KMMProblem::Intermediates temps,
+fastKronError executeGeMM(const KMMProblem problem, KMMProblem::Matrices temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
-                           std::function<fastKronError (const KMMProblem, int, typename KMMProblem::Matrix)> func);
+                           std::function<fastKronError (const KMMProblem, int, typename KMMProblem::Matrices)> func);
 
-fastKronError executeGeMM(const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Intermediates temps,
+fastKronError executeGeMM(const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Matrices temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblemStridedBatched)> next,
-                           std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrix)> func);
+                           std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrices)> func);
 
 /**
  * reverseExecuteGeMM() - Execute a function on the problem using the reverse MKM/KMM algorithm

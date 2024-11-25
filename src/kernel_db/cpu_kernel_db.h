@@ -121,10 +121,12 @@ public:
    */
   virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                      const uint fidx,
+                                     KMMProblem::Matrices intermediates,
                                      EpilogueParams epilogueParams,
                                      KernelMode execMode);
   virtual fastKronError invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
                                      const uint fidx,
+                                     KMMProblemStridedBatched::Matrices intermediates,
                                      EpilogueStridedBatchedParams epilogueParams,
                                      KernelMode execMode);
   /**
@@ -139,9 +141,10 @@ public:
 private:
   template<typename KMMProblem, typename EpilogueParams>
   fastKronError invokeKernel(KMMKernel* kernel, KMMProblem problem,
-                                     const uint fidx,
-                                     EpilogueParams epilogueParams,
-                                     KernelMode execMode);
+                             const uint fidx,
+                             typename KMMProblem::Matrices intermediates,
+                             EpilogueParams epilogueParams,
+                             KernelMode execMode);
 public:
   /**
    * timeKernel() - Overriding KernelDatabase::timeKernel

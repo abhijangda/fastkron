@@ -164,17 +164,23 @@ struct KernelParams {
 
 template<typename KMMProblemT>
 struct FusedParams {
-  uint XShFusedSlices;
-  uint XglFusedSlices;
   static const uint32_t NumFused = KMMProblemT::MaxFactors;
+  uint XShFusedSlices[NumFused];
+  uint XglFusedSlices[NumFused];
+  typename KMMProblemT::Matrices intermediates;
 
-  FusedParams(KMMProblemT problem, const uint TileSizeColsA) {
-    const Factor factorPower = std::reduce(problem.fs(), problem.fs() + problem.n(), Factor(1,1), [](Factor prev, Factor curr) {
-      return Factor(prev.p() * curr.p(), prev.q() * curr.q());
-    });
+  FusedParams(KMMProblemT problem, typename KMMProblemT::Matrices intermediates, const uint TileSizeColsA) :
+    intermediates(intermediates) {
+    for (int i = problem.n() - 1; i >= 0; i--) {
+      const Factor factorPower = std::reduce(problem.fs() + i, problem.fs() + problem.n(),
+                                             Factor(1,1), 
+                                             [](Factor prev, Factor curr) {
+                                               return Factor(prev.p() * curr.p(), prev.q() * curr.q());
+                                             });
 
-    XShFusedSlices = TileSizeColsA/factorPower.p();
-    XglFusedSlices = problem.k()/factorPower.p();
+      XShFusedSlices[i] = TileSizeColsA/factorPower.p();
+      XglFusedSlices[i] = problem.k()/factorPower.p();
+    }
   }
 };
 
