@@ -392,29 +392,29 @@ static void kronGEMMForward(fastKronHandle handle, const fastKronBackend backend
     if (std::is_same<T, float>::value) {
       //TODO: Change KMM to MKM
       FastKronCHECK(sgemkmForward(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                      (const float*)x, opx, (const float**)kpMats, opfs, (float*)y,
-                      (const float*)z, (float**)intermediates));
+                    (const float*)x, opx, (const float**)kpMats, opfs, (float*)y,
+                    (const float*)z, (float**)intermediates));
     } else if (std::is_same<T, int>::value) {
       // FastKronCHECK(igemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
       //                 (const int*)x, opx, (const int**)kpMats, opfs, (int*)y,
       //                 alpha, beta, (const int*)z, (int*)temp1, (int*)temp2));
     } else if (std::is_same<T, double>::value) {
-      // FastKronCHECK(dgemkmForward(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-      //                 (const double*)x, opx, (const double**)kpMats, opfs, (double**)y,
-      //                 alpha, beta, (const double*)z));
+      FastKronCHECK(dgemkmForward(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
+                    (const double*)x, opx, (const double**)kpMats, opfs, (double*)y,
+                    (const double*)z, (double**)intermediates));
     } else {
       printf("Invalid type\n");
       return;
     }
   } else if (kronmatmulType == FastKronMMType::KMM) {
     if (std::is_same<T, float>::value) {
-      // FastKronCHECK(sgekmmForward(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
-      //                 (const float**)kpMats, opfs, (const float*)x, opx, (float**)y,
-      //                 alpha, beta, (const float*)z));
+      FastKronCHECK(sgekmmForward(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M,  
+                    (const float**)kpMats, opfs, (const float*)x, opx, (float*)y,
+                    (const float*)z, (float**)intermediates));
     } else if (std::is_same<T, double>::value) {
-      // FastKronCHECK(dgekmmForward(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M, 
-      //                 (const double**)kpMats, opfs, (const double*)x, opx, (double**)y,
-      //                 alpha, beta, (const double*)z));
+      FastKronCHECK(dgekmmForward(handle, backend, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, M,  
+                    (const double**)kpMats, opfs, (const double*)x, opx, (double*)y,
+                    (const double*)z, (double**)intermediates));
     }
   }
 
@@ -786,7 +786,6 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
     if (verbose) printf("checking results\n");
     if (isforward) {
       for (int i = 0; i < NUM_KP_MATS - 1; i++) {
-        printf("789 intermediate %d %p\n", i, dIntermediates[i]);
         T* dIntermediateToHost = (T*)malloc(batchCountZ * intermediateSizes[i]);
 
         FastKronCHECK(backendMemcpyDeviceToHost(backend, dIntermediateToHost, dIntermediates[i], batchCountZ * intermediateSizes[i]));
@@ -850,7 +849,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
         kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
       } else if (isforward) {
-        // kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ); 
+        kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, (beta == 0) ? nullptr : dY[0], dResult[0], dIntermediates, alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ); 
       } else {
         kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
       }
@@ -902,7 +901,7 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
           kronDistributedGEMM<T>(handle, NUM_KP_MATS, dX, dKpMats, dResult, M, N, K, KP_MAT_N, KP_MAT_K, dTemp1, dTemp2, stream);
 #endif
         } else if (isforward) {
-          // kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ);
+          kronGEMMForward<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, (beta == 0) ? nullptr : dY[0], dResult[0], dIntermediates, alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ); 
         } else {
           kronGEMM<T>(handle, backend, kronmatmulType, NUM_KP_MATS, dX[0], opx, dKpMats, opfs, dY[0], dResult[0], alpha, beta, M, N, K, KP_MAT_N, KP_MAT_K, batchCountZ, strideX, strideY, strideF, strideZ, dTemp1[0], dTemp2[0]);
         }

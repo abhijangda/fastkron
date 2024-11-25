@@ -472,29 +472,25 @@ fastKronError sgemkmForward(fastKronHandle handle, fastKronBackend backend,
                             uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                             const float* X, fastKronOp opX,
                             const float* Fs[], fastKronOp opFs,
-                            float* Z,
-                            const float *Y, float* Intermediates[]);
+                            float* Z, const float *Y, float* Intermediates[]);
 
 fastKronError dgemkmForward(fastKronHandle handle, fastKronBackend backend,
                             uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                             const double* X, fastKronOp opX,
                             const double* Fs[], fastKronOp opFs,
-                            double* Z[], double alpha, double beta,
-                            const double *Y);
+                            double* Z, const double *Y, double* Intermediates[]);
 
 fastKronError sgekmmForward(fastKronHandle handle, fastKronBackend backend, 
                             uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
                             const float* Fs[], fastKronOp opFs,
                             const float* X, fastKronOp opX,
-                            float* Z[], float alpha, float beta,
-                            const float *Y);
+                            float* Z, const float *Y, float* Intermediates[]);
 
 fastKronError dgekmmForward(fastKronHandle handle, fastKronBackend backend, 
                             uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
                             const double* Fs[], fastKronOp opFs,
                             const double* X, fastKronOp opX,
-                            double* Z[], double alpha, double beta,
-                            const double *Y);
+                            double* Z, const double *Y, double* Intermediates[]);
 
 fastKronError sgemkmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend, 
                                           uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
