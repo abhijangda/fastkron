@@ -80,19 +80,24 @@ fastKronError executeGeMM(KMMProblemType problem, typename KMMProblemType::Inter
   typename KMMProblemType::Matrix firstIterOut;
   typename KMMProblemType::Matrix result = problem.y();
 
-  if (tmps.len() > 0) {
-    if (tmps[1].data() == nullptr) {
-      if (swaps % 2 == 1) {
-        tmps[1] = tmps[0];
-        tmps[0] = problem.y();
-      } else {
-        tmps[0] = tmps[0];
-        tmps[1] = problem.y();
-      }
-    }
-    firstIterOut = result.like(tmps[0].data());
+  bool keepIntermediates = tmps.len() == (problem.n() - 1);
+
+  if (keepIntermediates) {
   } else {
-    firstIterOut = result;
+    if (tmps.len() > 0) {
+      if (tmps[1].data() == nullptr) {
+        if (swaps % 2 == 1) {
+          tmps[1] = tmps[0];
+          tmps[0] = problem.y();
+        } else {
+          tmps[0] = tmps[0];
+          tmps[1] = problem.y();
+        }
+      }
+      firstIterOut = result.like(tmps[0].data());
+    } else {
+      firstIterOut = result;
+    }
   }
 
   problem = problem.setFirstIterOutput(firstIterOut);
@@ -107,12 +112,22 @@ fastKronError executeGeMM(KMMProblemType problem, typename KMMProblemType::Inter
       opX = fastKronOp_N;
     }
     auto subProblem = problem.rsub(i, nextF);
-    if (i < nextF) subProblem = subProblem.updateY(result);
+    if (i < nextF) {
+      subProblem = subProblem.updateY(result);
+    }
+    else if (keepIntermediates) {
+      subProblem = subProblem.updateY(tmps[i-1]);
+    }
+
+    if (keepIntermediates && i < problem.n() - 1) {
+      subProblem = subProblem.updateX(tmps[(i + nextF)-1]);
+    }
+
     subProblem.initMMIter(i, i == problem.n() - 1, i < nextF);
     subProblem.setOpX(opX);
     err = func(subProblem, i, result);
     if (err != fastKronSuccess) break;
-    if (tmps.len() > 0)
+    if (!keepIntermediates && tmps.len() > 0)
       problem.swap(tmps[0].data(), tmps[1].data());
   }
 

@@ -249,7 +249,7 @@ fastKronError fastKronSetStream(fastKronHandle handle, fastKronBackend backend, 
 fastKronError gekmmSizes(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                          size_t* yElems, size_t* tmpElems);
 fastKronError gekmmSizesForward(fastKronHandle handle, uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                                size_t* intermediateSizes);
+                                size_t* resultSize, size_t* intermediateSizes);
 
 /**
  * sgekmm(), igekmm(), dgekmm() - Perform MKM.
@@ -472,8 +472,8 @@ fastKronError sgemkmForward(fastKronHandle handle, fastKronBackend backend,
                             uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                             const float* X, fastKronOp opX,
                             const float* Fs[], fastKronOp opFs,
-                            float* Z[], float alpha, float beta,
-                            const float *Y);
+                            float* Z,
+                            const float *Y, float* Intermediates[]);
 
 fastKronError dgemkmForward(fastKronHandle handle, fastKronBackend backend,
                             uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],

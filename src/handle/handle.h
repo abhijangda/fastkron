@@ -169,7 +169,7 @@ class FastKronHandle {
                       void* temp1, void* temp2, EpilogueParams epilogueParams);
 
   fastKronError xgemm(bool isforward, KMMProblem problem, const fastKronBackend backend,
-                      KMMProblem::Intermediates intermediates, EpilogueParams epilogueParams);
+                      void** intermediates, EpilogueParams epilogueParams);
 
   fastKronError xgemmStridedBatched(KMMProblemStridedBatched problem, 
                                      const fastKronBackend backend,
@@ -184,18 +184,18 @@ class FastKronHandle {
    * Return - fastKronError representing the error in the operation
    */
   fastKronError gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
-  fastKronError gekmmSizesForward(KMMProblem problem, size_t* sizes);
+  fastKronError gekmmSizesForward(KMMProblem problem, size_t* resultSize, size_t* intermediateSizes);
   /**
-   * FastKronHandle::gekmmIntermediateSizes() - Initialize GeKMM result and temporary matrix with shapes
+   * FastKronHandle::gekmmIntermediate() - Initialize GeKMM result and temporary matrix with shapes
    * @problem: The GeKMM problem as an object of KMMProblem
    * @result: [OUT] The result matrix 
    * @temp: [OUT] The temporary matrix
    *
    * Return - fastKronError representing the error in the operation
    */
-  fastKronError gekmmIntermediateSizes(KMMProblem problem, Matrix* intermediates);
-  fastKronError gekmmIntermediateSizes(KMMProblemStridedBatched problem, 
-                                       StridedBatchMatrix* intermediates);
+  fastKronError gekmmIntermediates(KMMProblem problem, void* ptrs[], Matrix* intermediates);
+  fastKronError gekmmIntermediates(KMMProblemStridedBatched problem, void* ptrs[],
+                                  StridedBatchMatrix* intermediates);
 
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& maxTemp);
   fastKronError gekmmResultTemp(KMMProblemStridedBatched problem, StridedBatchMatrix& result,

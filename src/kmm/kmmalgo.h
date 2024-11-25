@@ -144,6 +144,10 @@ public:
   KMMProblemBase updateY(const Matrix y) const {
     return KMMProblemBase(mmtype(), type(), x(), opX(), n(), fs(), opFs(), y);
   }
+
+  KMMProblemBase updateX(const Matrix x) const {
+    return KMMProblemBase(mmtype(), type(), x, opX(), n(), fs(), opFs(), y());
+  }
   
   /**
    * ps() / qs() - Return and write rows / cols of all factors to given array.
@@ -426,6 +430,12 @@ public:
                                      y, batches);
   }
 
+  KMMProblemStridedBatchedT updateX(const Matrix x) const {
+    return KMMProblemStridedBatchedT(this->mmtype(), this->type(), x, this->opX(),
+                                     this->n(), this->fs(), this->opFs(),
+                                     this->y(), batches);
+  }
+
   template<typename T>
   KMMProblem batchProblem(uint b) const {
     typename Factor::Base baseFs[this->n()];
@@ -463,6 +473,7 @@ public:
   }
 
   void initMMIter(int i, bool isFirstIter, bool isLastIter) {
+    std::cout << __FILE__ << "  " << __LINE__ << std::endl;
     if (isFirstIter ^ isLastIter || !isFirstIter && !isLastIter) {
       if (isFirstIter) {
         //Set output's batchstride as num elems of output matrix because output is a temp

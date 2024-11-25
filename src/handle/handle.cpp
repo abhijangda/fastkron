@@ -120,28 +120,15 @@ fastKronError FastKronHandle::xgemm(KMMProblem problem, const fastKronBackend ba
   if (problem.y().data() == epilogueParams.z<void>() && 
       (temp1 == nullptr || temp2 == nullptr))
       return fastKronInvalidArgument;
-  
-  size_t resultSize;
-  size_t tempSize;
 
-  fastKronError err = gekmmSizes(problem, &resultSize, &tempSize);
-  if (err != fastKronSuccess) return err;
+  void* temps[2] = {temp1, temp2};
 
-  KMMProblem::Matrix m1 = KMMProblem::Matrix(problem.m(), tempSize/problem.m(), temp1);
-  KMMProblem::Matrix m2 = KMMProblem::Matrix(problem.m(), tempSize/problem.m(), temp2);
-
-  KMMProblem::Intermediates intermediates({});
-
-  if (temp1 && temp2)       intermediates = {m1, m2};
-  else if (temp1 && !temp2) intermediates = {m1};
-  else if (!temp1 && temp2) intermediates = {m2};
-
-  return xgemm(false, problem, backend, intermediates, epilogueParams);
+  return xgemm(false, problem, backend, temps, epilogueParams);
 }
 
 fastKronError FastKronHandle::xgemm(bool isforward, KMMProblem problem, 
                                     const fastKronBackend backend, 
-                                    KMMProblem::Intermediates intermediates,
+                                    void** intermediatePtrs,
                                     EpilogueParams epilogueParams) {
 
   if (problem.mmtype() == FastKronMMType::KMM && problem.m() == 1) {
@@ -172,10 +159,32 @@ fastKronError FastKronHandle::xgemm(bool isforward, KMMProblem problem,
   }
 
   auto kernelSeriesIter = kernelSeries.begin();
+  KMMProblem::Intermediates intermediates({});
+  if (isforward) {
+    Matrix intermediatesArray[problem.n() - 1];
+    gekmmIntermediates(problem, intermediatePtrs, intermediatesArray);
+    intermediates = KMMProblem::Intermediates(intermediatesArray, problem.n() - 1);
+  } else {
+    size_t resultSize;
+    size_t tempSize;
+
+    fastKronError err = gekmmSizes(problem, &resultSize, &tempSize);
+    if (err != fastKronSuccess) return err;
+
+    void* temp1 = intermediatePtrs[0];
+    void* temp2 = intermediatePtrs[1];
+
+    KMMProblem::Matrix m1 = KMMProblem::Matrix(problem.m(), tempSize/problem.m(), temp1);
+    KMMProblem::Matrix m2 = KMMProblem::Matrix(problem.m(), tempSize/problem.m(), temp2);
+
+    if (temp1 && temp2)       intermediates = {m1, m2};
+    else if (temp1 && !temp2) intermediates = {m1};
+    else if (!temp1 && temp2) intermediates = {m2};
+  }
 
   //Execute GeKMM algorithm using above kernels
   err = executeGeMM(problem, intermediates, kernelSeries.size(),
-    [&kernelSeriesIter](const KMMProblem) 
+    [&kernelSeriesIter](const KMMProblem)
       {return kernelSeriesIter->end - kernelSeriesIter->start + 1;},
     [&kernelSeriesIter, &epilogueParams, kernelDb, problem, this]
       (const KMMProblem subProblem, uint32_t rstart, Matrix) {
@@ -248,7 +257,8 @@ fastKronError FastKronHandle::xgemmStridedBatched(KMMProblemStridedBatched probl
   return err;
 }
 
-fastKronError FastKronHandle::gekmmIntermediateSizes(KMMProblem problem, Matrix* intermediates) {
+fastKronError FastKronHandle::gekmmIntermediates(KMMProblem problem, void* ptrs[], 
+                                                 Matrix* intermediates) {
 #ifdef ENABLE_CUDA
   if (cudaKernels.isDistributed_) {
     if (!checkDistributedKronSizes(problem, 
@@ -260,9 +270,14 @@ fastKronError FastKronHandle::gekmmIntermediateSizes(KMMProblem problem, Matrix*
 
   auto e = executeGeMM(problem, KMMProblem::Intermediates({}), 0,
     [](const KMMProblem) {return 1;},
-    [&intermediates]
+    [ptrs, &intermediates]
     (const KMMProblem kmm, uint32_t rstart, Matrix) {
-      intermediates[rstart] = kmm.y();
+      if (rstart == 0) return fastKronSuccess;
+      if (ptrs != nullptr) {
+        intermediates[rstart - 1] = KMMProblem::Matrix(kmm.y().like(ptrs[rstart - 1]));
+      }
+      else
+        intermediates[rstart - 1] = kmm.y();
       return fastKronSuccess;
     });
   
@@ -271,12 +286,12 @@ fastKronError FastKronHandle::gekmmIntermediateSizes(KMMProblem problem, Matrix*
 
 fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
                                               Matrix& result, Matrix& maxTemp) {
-  Matrix intermediates[problem.n()];
+  Matrix intermediates[problem.n()-1];
   //TODO: Should move to individual backend
-  fastKronError e = gekmmIntermediateSizes(problem, intermediates);
+  fastKronError e = gekmmIntermediates(problem, nullptr, intermediates);
 
-  result = intermediates[0];
-  maxTemp = *std::max_element(intermediates, intermediates + problem.n(), 
+  result = problem.y();
+  maxTemp = *std::max_element(intermediates, intermediates + problem.n()-1,
                               [](Matrix& a, Matrix& b) {
                                 return a.n() < b.n();
                               });
@@ -299,12 +314,16 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
   return e;
 }
 
-fastKronError FastKronHandle::gekmmIntermediateSizes(KMMProblemStridedBatched problem,
-                                                     StridedBatchMatrix* intermediates) {
+fastKronError FastKronHandle::gekmmIntermediates(KMMProblemStridedBatched problem, void* ptrs[],
+                                                 StridedBatchMatrix* intermediates) {
   auto e = executeGeMM(problem, KMMProblemStridedBatched::Intermediates({}), 0,
     [](const KMMProblemStridedBatched) {return 1;},
-    [&intermediates]
+    [ptrs, &intermediates]
     (const KMMProblemStridedBatched kmm, uint32_t rstart, StridedBatchMatrix) {
+      if (ptrs != nullptr) {
+        std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+        abort();
+      }
       intermediates[rstart] = kmm.y();
       return fastKronSuccess;
     });
@@ -313,12 +332,12 @@ fastKronError FastKronHandle::gekmmIntermediateSizes(KMMProblemStridedBatched pr
 
 fastKronError FastKronHandle::gekmmResultTemp(KMMProblemStridedBatched problem, StridedBatchMatrix& result,
                                               StridedBatchMatrix& maxTemp) {
-  StridedBatchMatrix intermediates[problem.n()];
+  StridedBatchMatrix intermediates[problem.n()-1];
   //TODO: Should move to individual backend
-  fastKronError e = gekmmIntermediateSizes(problem, intermediates);
+  fastKronError e = gekmmIntermediates(problem, nullptr, intermediates);
 
-  result = intermediates[0];
-  maxTemp = *std::max_element(intermediates, intermediates + problem.n(), 
+  result = problem.y();
+  maxTemp = *std::max_element(intermediates, intermediates + problem.n()-1,
                               [](Matrix& a, Matrix& b) {
                                 return a.n() < b.n();
                               });
@@ -332,9 +351,9 @@ fastKronError FastKronHandle::gekmmSizes(KMMProblem problem,
   if (resultSize == nullptr) return fastKronInvalidArgument;
   if (tempSize   == nullptr) return fastKronInvalidArgument;
 
-  Matrix intermediates[problem.n()];
+  Matrix intermediates[problem.n()-1];
   //TODO: Should move to individual backend
-  fastKronError e = gekmmIntermediateSizes(problem, intermediates);
+  fastKronError e = gekmmIntermediates(problem, nullptr, intermediates);
 
   Matrix result, maxTemp;
   
@@ -346,17 +365,20 @@ fastKronError FastKronHandle::gekmmSizes(KMMProblem problem,
 }
 
 fastKronError FastKronHandle::gekmmSizesForward(KMMProblem problem,
-                                                size_t* sizes) {
-  if (sizes == nullptr) return fastKronInvalidArgument;
+                                                size_t* resultSize, size_t* intermediateSizes) {
+  if (resultSize == nullptr || intermediateSizes == nullptr)
+    return fastKronInvalidArgument;
 
-  Matrix intermediates[problem.n()];
+  Matrix intermediates[problem.n()-1];
   //TODO: Should move to individual backend
-  fastKronError e = gekmmIntermediateSizes(problem, intermediates);
+  fastKronError e = gekmmIntermediates(problem, nullptr, intermediates);
 
-  if (e == fastKronSuccess) {
-    for (uint32_t i = 0; i < problem.n(); i++)
-      sizes[i] = intermediates[i].numel();
-  }
+  if (e != fastKronSuccess) return e;
+
+  for (uint32_t i = 0; i < problem.n() - 1; i++)
+    intermediateSizes[i] = intermediates[i].numel();
+  
+  *resultSize = problem.y().numel();
 
   return e;
 }
