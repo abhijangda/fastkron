@@ -351,6 +351,8 @@ public:
   template<typename T>
   CUDA_DEVICE_HOST
   MatrixBase batch(uint32_t batch) const {
+    if (this->data() == nullptr)
+      return MatrixBase(this->m(), this->n(), nullptr);
     return MatrixBase(this->m(), this->n(), this->template data<T>(batch * batchStride_));
   }
 

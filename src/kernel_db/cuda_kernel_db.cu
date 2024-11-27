@@ -252,7 +252,8 @@ fastKronError CUDAKernelDatabase::initTune() {
  */
 template<typename KMMProblemT, typename EpilogueParamsT>
 fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
-                     const uint fidx, 
+                     const uint fidx,
+                     typename KMMProblemT::Matrices intermediates,
                      DistributedParams distParams,
                      EpilogueParamsT epilogueParams,
                      KernelMode execMode,
@@ -273,7 +274,7 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
                                       fidx, execMode,
                                       grid_x, grid_y, grid_z);
 
-    FusedParams<KMMProblemT> fusedParams (problem, kernelInfo.getMaxTileX().n());
+    FusedParams<KMMProblemT> fusedParams (problem, intermediates, kernelInfo.getMaxTileX().n());
 
     //TODO: Change this to kernelInfo.invoke
     typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
@@ -304,6 +305,7 @@ template<typename KMMProblem, typename EpilogueParams>
 fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
                                                KMMProblem problem,
                                                const uint fidx,
+                                               typename KMMProblem::Matrices intermediates,
                                                EpilogueParams epilogueParams,
                                                KernelMode execMode) {
   DistributedParams distParams;
@@ -319,22 +321,29 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
   switch(kernel->getFusedFacs()) {
     case 1:
       return invoke(cudaKernel, problem.template factorSlice<1>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<1>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 2:
       return invoke(cudaKernel, problem.template factorSlice<2>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<2>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 3:
       return invoke(cudaKernel, problem.template factorSlice<3>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<3>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 4:
       return invoke(cudaKernel, problem.template factorSlice<4>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<4>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 5:
       return invoke(cudaKernel, problem.template factorSlice<5>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<5>(0),
+                    distParams, epilogueParams, execMode, stream);
+
     case 6:
       return invoke(cudaKernel, problem.template factorSlice<6>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<6>(0),
+                    distParams, epilogueParams, execMode, stream);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels: " << problem.n() << std::endl;
       return fastKronKernelNotFound;
@@ -344,25 +353,32 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel,
 
 fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem problem,
                                                const uint fidx,
+                                               KMMProblem::Matrices intermediates,
                                                EpilogueParams epilogueParams,
                                                KernelMode execMode) {
   if (kernel->getBatchType() == KernelBatchType::StridedBatched) {
     //Execute a single batch problem using a strided batched kernel
     KMMProblemStridedBatched stridedProblem(problem);
     EpilogueStridedBatchedParams stridedEpilogue(epilogueParams, problem.y());
-
-    return invokeKernel(kernel, stridedProblem, fidx, stridedEpilogue, execMode);
+    KMMProblemStridedBatched::Matrix stridedIntermediatesArr[intermediates.len()];
+    for (uint32_t i = 0; i < intermediates.len(); i++) {
+      stridedIntermediatesArr[i] = KMMProblemStridedBatched::Matrix(intermediates[i]);
+    }
+    return invokeKernel(kernel, stridedProblem, fidx,
+      KMMProblemStridedBatched::Matrices(stridedIntermediatesArr, intermediates.len()),
+      stridedEpilogue, execMode);
   }
-  return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx,
+  return invokeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, intermediates,
                                                   epilogueParams, execMode);
 }
 
 fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
                                     const uint fidx,
+                                    KMMProblemStridedBatched::Matrices intermediates,
                                     EpilogueStridedBatchedParams epilogueParams,
                                     KernelMode execMode) {
   return invokeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>
-          (kernel, problem, fidx, epilogueParams, execMode);
+          (kernel, problem, fidx, intermediates, epilogueParams, execMode);
 }
 
 fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel, 
@@ -373,26 +389,27 @@ fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel,
                                                        KernelMode execMode) {
   cudaStream_t stream = *(cudaStream_t*)streams[distParams.proc()];
   CUDAKMMKernel& cudaKernel = dynamic_cast<CUDAKMMKernel&>(*kernel);
+  KMMProblem::Matrices intermediates({});
 
   switch (problem.n()) {
     case 1:
       return invoke(cudaKernel, problem.template factorSlice<1>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<1>(0), distParams, epilogueParams, execMode, stream);
     case 2:
       return invoke(cudaKernel, problem.template factorSlice<2>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<2>(0), distParams, epilogueParams, execMode, stream);
     case 3:
       return invoke(cudaKernel, problem.template factorSlice<3>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<3>(0), distParams, epilogueParams, execMode, stream);
     case 4:
       return invoke(cudaKernel, problem.template factorSlice<4>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<4>(0), distParams, epilogueParams, execMode, stream);
     case 5:
       return invoke(cudaKernel, problem.template factorSlice<5>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<5>(0), distParams, epilogueParams, execMode, stream);
     case 6:
       return invoke(cudaKernel, problem.template factorSlice<6>(),
-                    fidx, distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<6>(0), distParams, epilogueParams, execMode, stream);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels: " << problem.n() << std::endl;
   }
@@ -421,6 +438,9 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
   // }
 //  #endif 
 
+  std::vector<typename KMMProblemT::Matrix> vecIntermediates(10);
+  typename KMMProblemT::Matrices fakeIntermediates(vecIntermediates.data(), vecIntermediates.size());
+
   cudaStream_t stream = *(cudaStream_t*)streams[0];
   CUDA_CHECK(cudaStreamSynchronize(stream));
   cudaEvent_t startEvent, endEvent;
@@ -433,7 +453,7 @@ fastKronError CUDAKernelDatabase::timeKernel(KMMKernel* kernel,
       status = invokeP2PStoreKernel(kernel, problem, fidx,
                                     distParams, epilogueParams, execMode);
     } else {
-      status = invokeKernel(kernel, problem, fidx,
+      status = invokeKernel(kernel, problem, fidx, fakeIntermediates,
                             epilogueParams, execMode);
     }
   }

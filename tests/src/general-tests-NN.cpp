@@ -41,47 +41,47 @@
   GENERAL_TEST_NN(MKM, 16, MinN, MaxN, P, Q, float, Tune, IsForward, BatchZ, BatchX, BatchF, BatchY); \
   GENERAL_TEST_NN(MKM, 16, MinN, MaxN, P, Q, double, Tune, IsForward, BatchZ, BatchX, BatchF, BatchY); \
   
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 1, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(5, 10, 2, 2, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 3, 3, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 4, 4, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 7, 5, 5, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 7, 6, 6, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 6, 8, 8, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 5, 12, 12, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 5, 16, 16, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 5, 24, 24, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 31, 31, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 32, 32, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 50, 50, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 55, 55, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 62, 62, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 64, 64, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 127, 127, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 128, 128, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 129, 129, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 255, 255, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 297, 297, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 384, 384, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 505, 505, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 512, 512, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 739, 739, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 1024, 1024, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 1, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(5, 10, 2, 2, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 3, 3, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 4, 4, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 7, 5, 5, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 7, 6, 6, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 6, 8, 8, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 5, 12, 12, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 5, 16, 16, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 5, 24, 24, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 31, 31, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 32, 32, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 50, 50, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 55, 55, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 62, 62, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 64, 64, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 127, 127, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 128, 128, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 129, 129, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 255, 255, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 297, 297, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 384, 384, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 505, 505, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 512, 512, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 739, 739, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 1024, 1024, false, false);
 
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 4, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 5, 1, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 2, 4, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 31, 63, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 63, 31, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 297, 127, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 127, 297, false, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 936, 505, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 1, 4, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 5, 1, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 10, 2, 4, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 31, 63, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 4, 63, 31, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 297, 127, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 127, 297, false, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 2, 936, 505, false, false);
 
-// CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 128, 128, true, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(3, 4, 32, 32, true, false);
-// CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true, false);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 128, 128, true, false);
+CONTIGUOUS_TEST_MMTYPE_NN(3, 4, 32, 32, true, false);
+CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true, false);
 
-// CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true, true);
+CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true, true);
 
 STRIDED_BATCHED_TEST_NN(1, 3, 128, 128, true, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_NN(1, 3, 64, 64,  false, false, 2, 2, 2, 2);

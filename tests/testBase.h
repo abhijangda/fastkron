@@ -578,8 +578,10 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   verbose = true;
   if (verbose)
     printf("Matmul: %d x %d x %d, Num KP Factors: %d\n", M, N, K, NUM_KP_MATS);
-  if (isforward && (alpha != (T)1.0f || beta != (T)0.0f))
+  if (isforward && (alpha != (T)1.0f || beta != (T)0.0f)) {
     printf("for forward alpha == 1 and beta == 0\n");
+    return false;
+  }
   bool useDistributed = gpus > 1;
   // if (useDistributed and gpuInRows * gpuInCols != gpus)
   //   printf("gpuInRows * gpuInCols != gpus: %d != %d\n", gpuInRows * gpuInCols, gpus);

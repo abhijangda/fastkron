@@ -26,15 +26,15 @@ ElemT* p2pStoreAddress(const DistParams& distParams, const Matrix& Y,
 
 template<typename FusedParams, typename XShared>
 CUDA_DEVICE
-uint32_t fusedYColumn(const FusedParams& params, const Matrix& Y, const XShared& Xsh,
+uint32_t fusedYColumn(const FusedParams& params, const uint32_t fac, const Matrix& Y, const XShared& Xsh,
                       const uint32_t tileK, const uint32_t P, const uint32_t Q, const uint32_t xshCol) {
   const uint32_t XTileSlices = Xsh.n()/P;
   //Scale shared mem slice idx to global mem idx
   uint32_t glSlice = (xshCol/XTileSlices)*(Y.n()/Q);
   //Scale shared fused slice to global mem
-  uint32_t sliceElem = ((xshCol%XTileSlices)/params.XShFusedSlices)*params.XglFusedSlices;
+  uint32_t sliceElem = ((xshCol%XTileSlices)/params.XShFusedSlices[fac])*params.XglFusedSlices[fac];
   //Elem idx in Fused Slice
-  uint32_t elem = tileK * params.XShFusedSlices + xshCol%params.XShFusedSlices;
+  uint32_t elem = tileK * params.XShFusedSlices[fac] + xshCol%params.XShFusedSlices[fac];
   return glSlice + sliceElem + elem;
 }
 
@@ -217,7 +217,7 @@ template<fastKronOp OpY, uint32_t StLen, uint32_t TileQ,
          typename ElemT, typename YElem, typename YReg, typename XTileTy, typename XShared,
          typename FusedParams, typename DistributedParams, typename EpilogueParams, typename GetBatchedData>
 CUDA_DEVICE
-void storeY(const bool isLastFactor, const uint32_t batch,
+void storeVectorY(const bool isLastFactor, const uint32_t fac, const uint32_t batch,
             const uint32_t rm, const uint32_t rq, const uint32_t rk,
             const uint32_t XshSlices, const uint32_t XSlices, 
             const uint32_t tileM, const uint32_t tileK, const uint32_t tileQ,
@@ -244,7 +244,7 @@ void storeY(const bool isLastFactor, const uint32_t batch,
     const uint32_t shK = (yElem.q()   + rq) * // F's col multiplied by this thread
                           XshSlices +       // Index of first element produced by this F's col
                           yElem.k()   + rk ;  // index of element produced by multiplying this col with this slice
-    glK = fusedYColumn(fusedParams, Y, Xsh, tileK, P, Q, shK);
+    glK = fusedYColumn(fusedParams, fac, Y, Xsh, tileK, P, Q, shK);
   } else {
     //Scale element location from within tile to global
     glK = (yElem.q()   + rq)  * //The index of elems by one column in TileK
@@ -283,4 +283,62 @@ void storeY(const bool isLastFactor, const uint32_t batch,
     }
   }
   stVecYReg<OpY, StLen>(yPtr, yReg, rm, rk, rq);
+}
+
+
+template<fastKronOp OpY, uint32_t RegM, uint32_t RegK, uint32_t RegQ, 
+         uint32_t TileQ,
+         bool kMMultipleOfTileM, bool kKMultipleOfTileK, bool kQMultipleOfTileQ,
+         uint32_t FusedFacs, bool DistributeToGPUs, uint32_t XAlignment,
+         typename ElemT, typename YElem, typename YReg, typename XTileTy, typename XShared,
+         typename KernelParams, typename FusedParams, typename DistributedParams, typename EpilogueParams, typename GetBatchedData>
+CUDA_DEVICE
+void storeY(const uint32_t fac, const uint32_t batch,
+            const uint32_t XshSlices, const uint32_t XSlices, 
+            const uint32_t tileM, const uint32_t tileK, const uint32_t tileQ,
+            const uint32_t P, const uint32_t Q,
+            const XTileTy& XTile, const XShared& Xsh,
+            const Matrix& Y, const YElem& yElem, YReg& yReg,
+            const KernelParams& params,
+            const FusedParams& fusedParams, const DistributedParams& distParams,
+            const EpilogueParams& epilogueParams, const GetBatchedData& batchedData) {
+  constexpr uint32_t StLen = storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
+                                              FusedFacs, XAlignment, RegM, RegK>();
+
+  if (OpY == fastKronOp_N) {
+    #pragma unroll
+    for (uint rm = 0; rm < RegM; rm++) {
+    #pragma unroll
+    for (uint tq = 0; tq < RegQ; tq++) {
+    #pragma unroll
+    for (uint tk = 0; tk < RegK; tk += StLen) {
+      storeVectorY<OpY, StLen, TileQ,
+             kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
+             (FusedFacs>1), DistributeToGPUs,
+             ElemT>
+        (params.kp_idx == ((FusedFacs == 1 ? 1 : params.problem.n()) - 1) && fac == 0,
+         fac, batch,
+         rm, tq, tk, XshSlices, XSlices,
+         tileM, tileK, tileQ, P, Q,
+         XTile, Xsh, Y, yElem, yReg,
+         fusedParams, distParams, epilogueParams, batchedData);
+    }}}
+  } else if (OpY == fastKronOp_T) {
+    #pragma unroll
+    for (uint tq = 0; tq < RegQ; tq++) {
+    #pragma unroll
+    for (uint tk = 0; tk < RegK; tk++) {
+    #pragma unroll
+    for (uint rm = 0; rm < RegM; rm+=StLen) {
+      storeVectorY<OpY, StLen, TileQ, 
+             kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
+             (FusedFacs>1), DistributeToGPUs,
+             ElemT>
+        (epilogueParams.isLastFactor && fac == 0, fac, batch,
+         rm, tq, tk, XshSlices, XSlices,
+         tileM, tileK, tileQ, P, Q,
+         XTile, Xsh, Y, yElem, yReg,
+         fusedParams, distParams, epilogueParams, batchedData);
+    }}}
+  }
 }

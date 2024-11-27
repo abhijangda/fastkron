@@ -110,7 +110,7 @@ __global__ void cudaKernel(KernelParams params,
                 typename std::conditional<FAlignment == 2, Vec2T,
                                           Vec4T>::type>::type>::type;
 
-  GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams> batchedData;
+  GetBatchedData<KernelBatch, ElemT, KernelParams, FusedParams, EpilogueParams> batchedData;
 
   const uint32_t batch = (KernelBatch == KernelBatchType::Normal) ? 0 : (params.startGridz + blockIdx.z);
 
@@ -201,47 +201,21 @@ __global__ void cudaKernel(KernelParams params,
         __syncthreads();
         //Store C to shared memory using shift method
         fusionYrToXSh(XTile.m(), F, Fsh, Xsh, yReg, yElem);
+        
+        Matrix fusedInter = batchedData.getIntermediateBatch(fusedParams, fac, batch);
+        if (fusedInter.data() != nullptr) {
+          storeY<OpY, RegM, RegK, RegQ, TileQ,
+                kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ, FusedFacs, DistributeToGPUs, XAlignment,
+                ElemT> (fac, batch, XshSlices, XSlices, tileM, tileK, tileQ, P, Q, XTile, Xsh, fusedInter, yElem, yReg,
+                        params, fusedParams, distParams, epilogueParams, batchedData);
+        }
       }
 
       __syncthreads();
   }}
 
-  constexpr uint32_t StLen = storeVectorLen<OpY, kMMultipleOfTileM, kKMultipleOfTileK, 
-                                              FusedFacs, XAlignment, RegM, RegK>();
-
-  if (OpY == fastKronOp_N) {
-    #pragma unroll
-    for (uint rm = 0; rm < RegM; rm++) {
-    #pragma unroll
-    for (uint tq = 0; tq < RegQ; tq++) {
-    #pragma unroll
-    for (uint tk = 0; tk < RegK; tk += StLen) {
-      storeY<OpY, StLen, TileQ,
-             kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
-             (FusedFacs>1), DistributeToGPUs,
-             ElemT>
-        (params.kp_idx == ((FusedFacs == 1 ? 1 : params.problem.n()) - 1), batch,
-         rm, tq, tk, XshSlices, XSlices,
-         tileM, tileK, tileQ, P, Q,
-         XTile, Xsh, Y, yElem, yReg,
-         fusedParams, distParams, epilogueParams, batchedData);
-    }}}
-  } else if (OpY == fastKronOp_T) {
-    #pragma unroll
-    for (uint tq = 0; tq < RegQ; tq++) {
-    #pragma unroll
-    for (uint tk = 0; tk < RegK; tk++) {
-    #pragma unroll
-    for (uint rm = 0; rm < RegM; rm+=StLen) {
-      storeY<OpY, StLen, TileQ, 
-             kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
-             (FusedFacs>1), DistributeToGPUs,
-             ElemT>
-        (epilogueParams.isLastFactor, batch,
-         rm, tq, tk, XshSlices, XSlices,
-         tileM, tileK, tileQ, P, Q,
-         XTile, Xsh, Y, yElem, yReg,
-         fusedParams, distParams, epilogueParams, batchedData);
-    }}}
-  }
+  storeY<OpY, RegM, RegK, RegQ, TileQ,
+         kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ, FusedFacs, DistributeToGPUs, XAlignment,
+         ElemT> (0, batch, XshSlices, XSlices, tileM, tileK, tileQ, P, Q, XTile, Xsh, Y, yElem, yReg,
+                 params, fusedParams, distParams, epilogueParams, batchedData);
 }
