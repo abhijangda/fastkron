@@ -6,7 +6,7 @@
  *                  for both batch types.
  */
 template<KernelBatchType::Ty KernelBatch, typename ElemT, 
-         typename KernelParams, typename EpilogueParams>
+         typename KernelParams, typename FusedParams, typename EpilogueParams>
 struct GetBatchedData {
   /**
    * getBatchCount - Get number of batches in the problem.
@@ -37,13 +37,16 @@ struct GetBatchedData {
    */
   CUDA_DEVICE_HOST
   Matrix getZBatch(const EpilogueParams& params, const Matrix& Y, int batch) const;
+
+  CUDA_DEVICE_HOST
+  Matrix getIntermediateBatch(const FusedParams& params, int fac, uint32_t batch) const;
 };
 
 /**
  * GetBatchedData specliazed for single batched problem.
  */
-template<typename ElemT, typename KernelParams, typename EpilogueParams>
-struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams, EpilogueParams> {
+template<typename ElemT, typename KernelParams, typename FusedParams, typename EpilogueParams>
+struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams, FusedParams, EpilogueParams> {
   uint getBatchCount(const KernelParams& /*params*/) const {return 1;}
   
   CUDA_DEVICE_HOST
@@ -65,13 +68,18 @@ struct GetBatchedData<KernelBatchType::Normal, ElemT, KernelParams, EpiloguePara
   Matrix getZBatch(const EpilogueParams& params, const Matrix& Y, int /*batch*/) const {
     return Matrix(Y.m(), Y.n(), (void*)params.template z<ElemT>());
   }
+
+  CUDA_DEVICE_HOST
+  Matrix getIntermediateBatch(const FusedParams& params, int fac, uint32_t batch) const {
+    return params.intermediates[fac];
+  }
 };
 
 /**
  * GetBatchedData specliazed for strided batched problem.
  */
-template<typename ElemT, typename KernelParams, typename EpilogueParams>
-struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams, EpilogueParams> {
+template<typename ElemT, typename KernelParams, typename FusedParams, typename EpilogueParams>
+struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams, FusedParams, EpilogueParams> {
   uint getBatchCount(const KernelParams& params) const {return params.problem.batchCount();}
 
   CUDA_DEVICE_HOST
@@ -92,5 +100,10 @@ struct GetBatchedData<KernelBatchType::StridedBatched, ElemT, KernelParams, Epil
   CUDA_DEVICE_HOST
   Matrix getZBatch(const EpilogueParams& params, const Matrix& /*Y*/, int batch) const {
     return params.getZ().template batch<ElemT>(batch);
+  }
+
+  CUDA_DEVICE_HOST
+  Matrix getIntermediateBatch(const FusedParams& params, int fac, uint32_t batch) const {
+    return params.intermediates[fac].template batch<ElemT>(batch);
   }
 };

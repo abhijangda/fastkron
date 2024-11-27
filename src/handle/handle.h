@@ -172,9 +172,14 @@ class FastKronHandle {
                       void** intermediates, EpilogueParams epilogueParams);
 
   fastKronError xgemmStridedBatched(KMMProblemStridedBatched problem, 
-                                     const fastKronBackend backend,
-                                     void* temp1, void* temp2,
-                                     EpilogueStridedBatchedParams epilogueParams);
+                                    const fastKronBackend backend,
+                                    void* temp1, void* temp2,
+                                    EpilogueStridedBatchedParams epilogueParams);
+
+  fastKronError xgemmStridedBatched(bool isforward, KMMProblemStridedBatched problem, 
+                                    const fastKronBackend backend,
+                                    void** intermediates, uint64_t strideIntermediates[],
+                                    EpilogueStridedBatchedParams epilogueParams);
   /**
    * FastKronHandle::gekmmSizes() - Obtain GeKMM result and temporary sizes
    * @problem: The GeKMM problem as an object of KMMProblem
@@ -195,7 +200,8 @@ class FastKronHandle {
    */
   fastKronError gekmmIntermediates(KMMProblem problem, void* ptrs[], Matrix* intermediates);
   fastKronError gekmmIntermediates(KMMProblemStridedBatched problem, void* ptrs[],
-                                  StridedBatchMatrix* intermediates);
+                                   uint64_t strideIntermediates[],
+                                   StridedBatchMatrix* intermediates);
 
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& maxTemp);
   fastKronError gekmmResultTemp(KMMProblemStridedBatched problem, StridedBatchMatrix& result,

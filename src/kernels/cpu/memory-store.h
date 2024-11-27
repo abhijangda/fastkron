@@ -10,8 +10,8 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
            uint32_t fac, uint32_t /*batch*/,
            uint32_t tileM, uint32_t tileK, uint32_t tileP, uint32_t tileQ,
            const YElem& y, 
-           const Factor& F, Matrix& Y, Matrix& Z, FCache& Fch, TileX& XTile,
-           YInterim& Ych, YRegisters& YReg) {
+           const Factor& F, Matrix& Y, Matrix& FusedIntermediate, Matrix& Z,
+           FCache& Fch, TileX& XTile, YInterim& Ych, YRegisters& YReg) {
   bool storeY = false;
   if (fac > 0 || (Fch.p() <= F.p() && tileP < F.p() - Fch.p())) {
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
@@ -76,8 +76,7 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
         }
         uint32_t yM = tileM + y.m() + rm*YReg.mvec();
         if (storeFusedIntermediate) {
-          Matrix inter = fusedParams.intermediates[fac];
-          e.store(inter.data<ElemT>(yM, yN, YReg.layout()), numElems);
+          e.store(FusedIntermediate.data<ElemT>(yM, yN, YReg.layout()), numElems);
         } else {
           e.store(Y.data<ElemT>(yM, yN, YReg.layout()), numElems);
         }

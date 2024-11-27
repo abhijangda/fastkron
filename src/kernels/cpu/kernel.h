@@ -31,7 +31,7 @@ void threadWork(KernelParams& params,
   constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
   constexpr bool kTileKSame        = KernelOptimizations::IsTileKSame       (OptLevel);
   constexpr bool kFactorShapeSame  = KernelOptimizations::IsFactorShapeSame (OptLevel);
-  GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams> batchedData;
+  GetBatchedData<KernelBatch, ElemT, KernelParams, FusedParams, EpilogueParams> batchedData;
 
   Matrix X = batchedData.getXBatch(params, batch);
   Matrix Y = batchedData.getYBatch(params, batch);
@@ -63,6 +63,7 @@ void threadWork(KernelParams& params,
 
     bool isLastFactor = epilogueParams.isLastFactor && fac == 0;
     bool isFirstFactor = ((uint32_t)fac) == (((FusedFacs == 1) ? 1 : params.problem.n()) - 1);
+    Matrix FusedIntermediate = batchedData.getIntermediateBatch(fusedParams, fac, batch);
 
     for (uint32_t tileP = 0; tileP < F.p(); tileP += OptTileF::P()) {
       DirectShared<OpF, ElemT, OptTileF::P(), OptTileF::Q()> FCache((ElemT*)params.caches->TileFs[tid]);
@@ -85,7 +86,8 @@ void threadWork(KernelParams& params,
             mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
             store<OptLevel, EpilogueKindVal, ElemT, X86VecT>(params, fusedParams, epilogueParams, betaVec,
                                                              fac, batch, tileM, tileK, tileP, tileQ,
-                                                             y, F, Y, Z, FCache, XTile, YCache, YReg);
+                                                             y, F, Y, FusedIntermediate, Z,
+                                                             FCache, XTile, YCache, YReg);
         }}}
       } else if (OpY == fastKronOp_T) {
         for (uint32_t q = 0; q < OptTileF::Q(); q += YRegisters::q())   {
@@ -100,7 +102,8 @@ void threadWork(KernelParams& params,
             mma<X86VecT>(tileP, y, TrXCache, FCache, YCache, YReg);
             store<OptLevel, EpilogueKindVal, ElemT, X86VecT>(params, fusedParams, epilogueParams, betaVec,
                                                              fac, batch, tileM, tileK, tileP, tileQ,
-                                                             y, F, Y, Z, FCache, XTile, YCache, YReg);
+                                                             y, F, Y, FusedIntermediate, Z,
+                                                             FCache, XTile, YCache, YReg);
         }}}
       }
     }
@@ -156,7 +159,9 @@ void cpuKernel(KernelParams& params,
                          epilogueParams.template getBeta<ElemT>() != (ElemT)0;
   const bool notLastFactor = not epilogueParams.isLastFactor;
 
-  const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT, KernelParams, EpilogueParams>().getBatchCount(params);
+  const uint32_t batchCount = GetBatchedData<KernelBatch, ElemT,
+                                             KernelParams, FusedParams,
+                                             EpilogueParams>().getBatchCount(params);
 
   if (OpX == fastKronOp_N) {
     if (OpY == fastKronOp_N) {

@@ -473,6 +473,8 @@ public:
   }
 
   void initMMIter(int i, bool isFirstIter, bool isLastIter) {
+    return;
+
     std::cout << __FILE__ << "  " << __LINE__ << std::endl;
     if (isFirstIter ^ isLastIter || !isFirstIter && !isLastIter) {
       if (isFirstIter) {
@@ -530,12 +532,12 @@ struct std::hash<KMMProblemStridedBatched> {
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
 
-fastKronError executeGeMM(const KMMProblem problem, KMMProblem::Matrices temps,
+fastKronError executeGeMM(bool keepIntermediates, const KMMProblem problem, KMMProblem::Matrices temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblem)> next,
                            std::function<fastKronError (const KMMProblem, int, typename KMMProblem::Matrices)> func);
 
-fastKronError executeGeMM(const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Matrices temps,
+fastKronError executeGeMM(bool keepIntermediates, const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Matrices temps,
                            uint32_t swaps,
                            std::function<uint (const KMMProblemStridedBatched)> next,
                            std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrices)> func);
