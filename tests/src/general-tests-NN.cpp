@@ -1,6 +1,14 @@
 #include "gtest/gtest.h"
 #include "testBase.h"
 
+template<typename T>
+bool test(FastKronMMType mmtype, const uint M, const uint N, const uint K, const uint NUM_KP_MATS, 
+          uint* KP_MAT_N, uint* KP_MAT_K, fastKronOp opx, fastKronOp opfs,
+          uint32_t batchCountZ, uint32_t batchCountX, uint32_t batchCountF, uint32_t batchCountY,
+          T alpha, T beta, bool tune, bool isforward) {
+  return run<T>(mmtype, M, N, K, NUM_KP_MATS, KP_MAT_N, KP_MAT_K, opx, opfs, batchCountZ, batchCountX, batchCountF, batchCountY, alpha, beta, 1, 0, false, 1, 1, 1, 1, true, true, tune, getTestBackend(), isforward, false);
+}
+
 #define GENERAL_TEST_NN(MMType, M, MinFacs, MaxFacs, P, Q, Type, Tune, IsForward, BatchZ, BatchX, BatchF, BatchY) \
   TEST(EXPAND(TEST_BACKEND,Fusion), MMType##_##Type##_##M##x##MinFacs##_##MaxFacs##_##P##x##Q##_##Tune##_##IsForward##_##BatchZ##x##BatchX##x##BatchF##x##BatchY##_##NN) { \
   bool result = true;\
@@ -17,7 +25,7 @@
     }\
     Type alpha = IsForward ? 1.0f : 2.0f;\
     Type beta = IsForward ? 0.0f : 1.0f;\
-    result = result and run<Type>(MMType, M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_N, fastKronOp_N, BatchZ,BatchX,BatchF,BatchY, (Type)alpha, (Type)beta, 1, 0, false, 1, 1, 1, 1, true, true, Tune, getTestBackend(), IsForward, false);\
+    result = result and test(MMType, M, N, K, Facs, KP_MAT_N, KP_MAT_K, fastKronOp_N, fastKronOp_N, BatchZ, BatchX, BatchF, BatchY, alpha, beta, Tune, IsForward);\
     if (!result) abort();\
   }\
   EXPECT_TRUE(result);\
@@ -81,12 +89,78 @@ CONTIGUOUS_TEST_MMTYPE_NN(1, 3, 128, 128, true, false);
 CONTIGUOUS_TEST_MMTYPE_NN(3, 4, 32, 32, true, false);
 CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true, false);
 
-CONTIGUOUS_TEST_MMTYPE_NN(6, 8, 4, 4, true, true);
+CONTIGUOUS_TEST_MMTYPE_NN(1, 8, 4, 4, true, true);
 
 STRIDED_BATCHED_TEST_NN(1, 3, 128, 128, true, false, 2, 2, 2, 2);
-STRIDED_BATCHED_TEST_NN(1, 3, 64, 64,  false, false, 2, 2, 2, 2);
+STRIDED_BATCHED_TEST_NN(1, 3, 32, 16,  false, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_NN(3, 4, 32, 32, true, false, 2, 1, 2, 2);
-STRIDED_BATCHED_TEST_NN(1, 5, 12, 12, true, false, 2, 2, 1, 1);
-STRIDED_BATCHED_TEST_NN(3, 4, 5,  5,   false, false, 2, 1, 2, 2);
+STRIDED_BATCHED_TEST_NN(1, 5, 12, 16, true, false, 2, 2, 1, 1);
+STRIDED_BATCHED_TEST_NN(3, 4, 32,  64,   false, false, 2, 1, 2, 2);
 
 STRIDED_BATCHED_TEST_NN(3, 4, 5,  5,   true, true, 2, 1, 2, 2);
+
+#define GENERAL_DISTINCT_FACTORS_TEST_NN(MMType, M, FacCase, Type, Tune, IsForward, BatchZ, BatchX, BatchF, BatchY)\
+  TEST(EXPAND(TEST_BACKEND, Fusion), MMType##_##Type##_##M##x##FacCase##_##Tune##_##IsForward##_##BatchZ##x##BatchX##x##BatchY##_##NN) {\
+    uint Facs, *P, *Q;\
+    if (FacCase == 0) {\
+      Facs = 3;\
+      P = new uint[Facs];\
+      Q = new uint[Facs];\
+      uint P_[] = {2, 5, 6};\
+      uint Q_[] = {3, 2, 4};\
+      memcpy(P, P_, sizeof(uint)*Facs);\
+      memcpy(Q, Q_, sizeof(uint)*Facs);\
+    } else if (FacCase == 1) {\
+      Facs = 2;\
+      P = new uint[Facs];\
+      Q = new uint[Facs];\
+      uint P_[] = {14, 19};\
+      uint Q_[] = {15, 13};\
+      memcpy(P, P_, sizeof(uint)*Facs);\
+      memcpy(Q, Q_, sizeof(uint)*Facs);\
+    } else if (FacCase == 2) {\
+      Facs = 4;\
+      P = new uint[Facs];\
+      Q = new uint[Facs];\
+      uint P_[] = {14, 19, 34, 21};\
+      uint Q_[] = {15, 13, 23, 34};\
+      memcpy(P, P_, sizeof(uint)*Facs);\
+      memcpy(Q, Q_, sizeof(uint)*Facs);\
+    }\
+    uint N = 1, K = 1;\
+    for (uint i = 0; i < (uint)Facs; i++) {\
+      N *= Q[i];\
+      K *= P[i];\
+    }\
+    Type alpha = IsForward ? 1.0f : 2.0f;\
+    Type beta = IsForward ? 0.0f : 1.0f;\
+    bool result = test(MMType, M, N, K, Facs, P, Q, fastKronOp_N, fastKronOp_N, BatchZ, BatchX, BatchF, BatchY, alpha, beta, Tune, IsForward);\
+    delete[] P;\
+    delete[] Q;\
+    EXPECT_TRUE(result);\
+  }\
+
+#define DISTINCT_FACTORS_TEST_NN(MMType, FacCase, BatchZ, BatchX, BatchF, BatchY) \
+  GENERAL_DISTINCT_FACTORS_TEST_NN(MMType, 16, FacCase, float, false, false, BatchZ, BatchX, BatchF, BatchY);\
+  GENERAL_DISTINCT_FACTORS_TEST_NN(MMType, 3, FacCase, double, false, false, BatchZ, BatchX, BatchF, BatchY);\
+  GENERAL_DISTINCT_FACTORS_TEST_NN(MMType, 16, FacCase, float, true, false, BatchZ, BatchX, BatchF, BatchY);\
+  GENERAL_DISTINCT_FACTORS_TEST_NN(MMType, 3, FacCase, double, false, true, BatchZ, BatchX, BatchF, BatchY);\
+  GENERAL_DISTINCT_FACTORS_TEST_NN(MMType, 3, FacCase, float, true, true, BatchZ, BatchX, BatchF, BatchY);\
+
+
+
+DISTINCT_FACTORS_TEST_NN(MKM, 0, 1, 1, 1, 1);
+DISTINCT_FACTORS_TEST_NN(MKM, 1, 1, 1, 1, 1);
+DISTINCT_FACTORS_TEST_NN(MKM, 2, 1, 1, 1, 1);
+
+DISTINCT_FACTORS_TEST_NN(KMM, 0, 1, 1, 1, 1);
+DISTINCT_FACTORS_TEST_NN(KMM, 1, 1, 1, 1, 1);
+DISTINCT_FACTORS_TEST_NN(KMM, 2, 1, 1, 1, 1);
+
+DISTINCT_FACTORS_TEST_NN(MKM, 0, 2, 1, 2, 2);
+DISTINCT_FACTORS_TEST_NN(MKM, 1, 2, 2, 2, 2);
+DISTINCT_FACTORS_TEST_NN(MKM, 2, 2, 2, 2, 2);
+
+DISTINCT_FACTORS_TEST_NN(KMM, 0, 2, 2, 2, 2);
+DISTINCT_FACTORS_TEST_NN(KMM, 1, 2, 2, 2, 2);
+DISTINCT_FACTORS_TEST_NN(KMM, 2, 2, 2, 2, 2);

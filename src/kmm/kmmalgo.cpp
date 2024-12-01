@@ -77,32 +77,10 @@ fastKronError executeGeMM(bool keepIntermediates, KMMProblemType problem, typena
                                                         typename KMMProblemType::Matrices)> func) {
   int nextF = 1;
 
-  typename KMMProblemType::Matrix firstIterOut;
   typename KMMProblemType::Matrix result = problem.y();
 
-  if (keepIntermediates) {
-    tmps.push_front(problem.y());
-    tmps.push_back(problem.x());
-  } else {
-    if (tmps.len() > 0) {
-      if (tmps[1].data() == nullptr) {
-        if (swaps % 2 == 1) {
-          tmps[1] = tmps[0];
-          tmps[0] = problem.y();
-        } else {
-          tmps[0] = tmps[0];
-          tmps[1] = problem.y();
-        }
-      }
-      firstIterOut = result.like(tmps[0].data());
-    } else {
-      firstIterOut = result;
-    }
-  }
-
-  problem = problem.setFirstIterOutput(firstIterOut);
-
   fastKronError err = fastKronSuccess;
+
   for (int i = problem.n() - 1; i >= 0; i = i - nextF) {
     nextF = next(problem);
     nextF = std::min(nextF, i+1);
@@ -112,28 +90,28 @@ fastKronError executeGeMM(bool keepIntermediates, KMMProblemType problem, typena
       opX = fastKronOp_N;
     }
     auto subProblem = problem.rsub(i, nextF);
+
     if (i < nextF) {
       subProblem = subProblem.updateY(result);
     }
-    else if (keepIntermediates) {
-      subProblem = subProblem.updateY(tmps[i-nextF+1]);
-    }
-    typename KMMProblemType::Matrices results({});
-    if (keepIntermediates) {
+
+    if (tmps.len() > 0) {
+      if (i < nextF) {} else {
+        subProblem = subProblem.updateY(tmps[i-nextF+1]);
+      }
       subProblem = subProblem.updateX(tmps[i+1]);
-      results = tmps.slice(i - nextF + 1, nextF);
-    } else {
-      results = {subProblem.y()};
     }
 
+    typename KMMProblemType::Matrices results({});
+    if (tmps.len() > 0)
+      results = tmps.slice(i - nextF + 1, nextF);
     //TODO: Remove this statement after running tests
     // subProblem.initMMIter(i, i == problem.n() - 1, i < nextF);
     subProblem.setOpX(opX);
     err = func(subProblem, i, results);
-    if (subProblem.y().data() != nullptr)
     if (err != fastKronSuccess) break;
-    if (!keepIntermediates && tmps.len() > 0)
-      problem.swap(tmps[0].data(), tmps[1].data());
+    // if (!keepIntermediates && tmps.len() > 0)
+    //   problem.swap(tmps[0].data(), tmps[1].data());
   }
 
   return err;

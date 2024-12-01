@@ -230,13 +230,14 @@ void baselineKPThenMatmul(uint NUM_KP_MATS, int* result, int* x, int* kpout[], i
 template<typename T>
 void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[], T* x, T* kpMats[], T* y,
                   uint M, uint /*N*/, uint K, uint KP_MAT_N[], uint KP_MAT_K[],
-                  uint64_t strideX, uint64_t strideZ, uint64_t strideF[], uint64_t strideY, int batchCount,
+                  uint64_t strideX, uint64_t strideZ, uint64_t strideF[], uint64_t strideY, uint64_t strideIntermediates[], int batchCount,
                   fastKronOp opx, fastKronOp opfs, T alpha, T beta) {
   for (int b = 0; b < batchCount; b++) {
   uint secFacRowMulSize = 1;
   uint rowsTillNow = 1;
   uint colsTillNow = 1;
   uint resultCols = 0;
+
   for (uint kp = 0; kp < NUM_KP_MATS; kp++) {
     T* prevKPMatmul = (kp == 0) ? x : kpMatmulResult[NUM_KP_MATS - 1 - (kp - 1)];
     uint kpSecondK = KP_MAT_K[NUM_KP_MATS - 1 - kp];
@@ -267,7 +268,7 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
             }
 
             T v1;
-            uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
+            uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideIntermediates[NUM_KP_MATS - 1 - kp];
             if (opx == fastKronOp_T && kp == 0)
               v1 = prevKPMatmul[b * stridePrevKPMatmul + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M + i];
             else
@@ -275,7 +276,7 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
             r += v1 * v2;
           }
           if (kp < NUM_KP_MATS - 1)
-            kpMatmulResult[NUM_KP_MATS - 1 - (kp)][b*strideZ + i*resultCols + j] = r;
+            kpMatmulResult[NUM_KP_MATS - 1 - (kp)][b*strideIntermediates[NUM_KP_MATS - 1 - kp-1] + i*resultCols + j] = r;
           else {
             kpMatmulResult[NUM_KP_MATS - 1 - (kp)][b*strideZ + i*resultCols + j] = alpha * r + beta*y[b*strideY + i*resultCols + j];
           }
@@ -298,15 +299,16 @@ void slicedMatmul(FastKronMMType kmmtype, uint NUM_KP_MATS, T* kpMatmulResult[],
             }
 
             T v1;
-            uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideZ;
+            uint32_t stridePrevKPMatmul = (kp == 0) ? strideX : strideIntermediates[NUM_KP_MATS - 1 - kp];
             if (opx == fastKronOp_T && kp == 0)
               v1 = prevKPMatmul[b * stridePrevKPMatmul + i* prevKPMatmulCols + ((j*kpSecondK)%prevKPMatmulCols + kp_k)];
             else
               v1 = prevKPMatmul[b * stridePrevKPMatmul + i + ((j*kpSecondK)%prevKPMatmulCols + kp_k) * M];
             r += v1 * v2;
           }
-          if (kp < NUM_KP_MATS - 1)
-            kpMatmulResult[NUM_KP_MATS - 1-(kp)][b*strideZ + i + j * M] = r;
+          if (kp < NUM_KP_MATS - 1) {
+            kpMatmulResult[NUM_KP_MATS - 1-(kp)][b*strideIntermediates[NUM_KP_MATS - 1 - kp-1] + i + j * M] = r;
+          }
           else {
             kpMatmulResult[NUM_KP_MATS - 1 -(kp)][b*strideZ + i + j * M] = alpha * r + beta*y[b*strideY + i + j * M];
           }
@@ -389,8 +391,8 @@ static void kronGEMMForward(fastKronHandle handle, const fastKronBackend backend
                      uint32_t batchCount, uint64_t strideX, uint64_t strideZ, uint64_t strideF[],
                      uint64_t strideY) {
   if (batchCount > 1) {
-    uint64_t strideIntermediates[NUM_KP_MATS] = {0};
-    for (uint32_t i = 0; i < NUM_KP_MATS; i++) strideIntermediates[i] = strideY;
+    uint64_t* strideIntermediates = nullptr;
+
     if (kronmatmulType == FastKronMMType::MKM) {
       if (std::is_same<T, float>::value) {
         FastKronCHECK(smkmForwardStridedBatched(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
@@ -756,8 +758,9 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
         FastKronCHECK(backendMalloc(backend, (void**)&dIntermediates[g * (NUM_KP_MATS-1) + i], batchCountZ*intermediateSizes[i]));
       }
       FastKronCHECK(backendMalloc(backend, (void**)&dResult[g * NUM_KP_MATS + 0], batchCountZ*resultSize));
+      printf("intermediates: ");
       for (uint32_t i = 0; i < NUM_KP_MATS - 1; i++)
-        printf("727 %p ",dIntermediates[g * (NUM_KP_MATS-1) + i]);
+        printf("%p ",dIntermediates[g * (NUM_KP_MATS-1) + i]);
       printf(" %p\n", dResult[g * NUM_KP_MATS + 0]);
     } else {
       FastKronCHECK(backendMalloc(backend, (void**)&dTemp1[g], batchCountZ*tempSize));
@@ -790,8 +793,20 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
       }
 
       hKpMatmulResult[0] = new T[batchCountZ*resultSize * gpus];
-      slicedMatmul(kronmatmulType, NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, strideY, batchCountZ, opx, opfs, alpha, beta);
+      uint64_t* strideIntermediates = new uint64_t[NUM_KP_MATS];
+      if (isforward) {
+        for (uint i = 0; i < NUM_KP_MATS - 1; i++) {
+          strideIntermediates[i] = intermediateSizes[i]/sizeof(T);
+        }
+      } else {
+        for (uint i = 0; i < NUM_KP_MATS - 1; i++) {
+          strideIntermediates[i] = tempSize/sizeof(T);
+        }
+      }
+
+      slicedMatmul(kronmatmulType, NUM_KP_MATS, hKpMatmulResult, hX, hKpMats, hY, M, N, K, KP_MAT_N, KP_MAT_K, strideX, strideZ, strideF, strideY, strideIntermediates, batchCountZ, opx, opfs, alpha, beta);
       hResult = hKpMatmulResult[0];
+      delete[] strideIntermediates;
     }
     printf("540\n");
     if (verbose) printf("running kron gemm\n");

@@ -190,6 +190,7 @@ class FastKronHandle {
    */
   fastKronError gekmmSizes(KMMProblem problem, size_t* resultSize, size_t* tempSize);
   fastKronError gekmmSizesForward(KMMProblem problem, size_t* resultSize, size_t* intermediateSizes);
+
   /**
    * FastKronHandle::gekmmIntermediate() - Initialize GeKMM result and temporary matrix with shapes
    * @problem: The GeKMM problem as an object of KMMProblem
@@ -198,10 +199,10 @@ class FastKronHandle {
    *
    * Return - fastKronError representing the error in the operation
    */
-  fastKronError gekmmIntermediates(KMMProblem problem, void* ptrs[], Matrix* intermediates);
+  fastKronError gekmmIntermediates(KMMProblem problem, void* ptrs[], KMMProblem::Matrices& intermediates);
   fastKronError gekmmIntermediates(KMMProblemStridedBatched problem, void* ptrs[],
                                    uint64_t strideIntermediates[],
-                                   StridedBatchMatrix* intermediates);
+                                   KMMProblemStridedBatched::Matrices& intermediates);
 
   fastKronError gekmmResultTemp(KMMProblem problem, Matrix& result, Matrix& maxTemp);
   fastKronError gekmmResultTemp(KMMProblemStridedBatched problem, StridedBatchMatrix& result,
