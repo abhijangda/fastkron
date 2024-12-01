@@ -273,7 +273,6 @@ fastKronError FastKronHandle::xgemmStridedBatched(bool isforward, KMMProblemStri
         KMMKernel* selectedKernel = kernel.kernel;
         assert(rstart == kernel.end);
         epilogueParams.isLastFactor = kernel.end == subProblem.n()-1;
-        printf("290 %d ; %d %d %p ;  %d %d %p\n", rstart, subProblem.x().batchStride(), subProblem.x().n(), subProblem.x().data(), subProblem.y().batchStride(), subProblem.y().n(), subProblem.y().data());
         err = kernelDb->invokeKernel(selectedKernel, subProblem, 
                                      rstart, intermediates, epilogueParams,
                                      KernelModeNormal);

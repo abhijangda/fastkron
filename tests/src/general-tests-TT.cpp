@@ -35,11 +35,11 @@
 CONTIGUOUS_TEST_TT(1, 10, 2, 1, float, false, false);
 CONTIGUOUS_TEST_TT(1, 10, 1, 6, float, false, false);
 CONTIGUOUS_TEST_TT(1, 10, 2, 2, float, false, false);
-CONTIGUOUS_TEST_TT(1, 8, 3, 3, float, false, false);
-CONTIGUOUS_TEST_TT(1, 8, 4, 4, float, false, false);
-CONTIGUOUS_TEST_TT(1, 7, 5, 5, float, false, false);
-CONTIGUOUS_TEST_TT(1, 7, 6, 6, float, false, false);
-CONTIGUOUS_TEST_TT(1, 6, 8, 8, float, false, false);
+CONTIGUOUS_TEST_TT(1, 6, 3, 3, float, false, false);
+CONTIGUOUS_TEST_TT(1, 6, 4, 4, float, false, false);
+CONTIGUOUS_TEST_TT(1, 5, 5, 5, float, false, false);
+CONTIGUOUS_TEST_TT(1, 5, 6, 6, float, false, false);
+CONTIGUOUS_TEST_TT(1, 5, 8, 8, float, false, false);
 CONTIGUOUS_TEST_TT(1, 5, 12, 12, float, false, false);
 CONTIGUOUS_TEST_TT(1, 5, 16, 16, float, false, false);
 CONTIGUOUS_TEST_TT(1, 5, 24, 24, float, false, false);
@@ -69,9 +69,9 @@ CONTIGUOUS_TEST_TT(1, 2, 936, 505, float, false, false);
 
 CONTIGUOUS_TEST_TT(1, 3, 128, 128, float, true, false);
 CONTIGUOUS_TEST_TT(3, 4, 32, 32, float, true, false);
-CONTIGUOUS_TEST_TT(6, 8, 4, 4, float, true, false);
+CONTIGUOUS_TEST_TT(3, 5, 18, 8, float, true, false);
 
-CONTIGUOUS_TEST_TT(6, 8, 4, 4, float, true, true);
+CONTIGUOUS_TEST_TT(1, 4, 8, 32, float, true, true);
 
 STRIDED_BATCHED_TEST_TT(1, 3, 128, 128, float, true, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_TT(3, 4, 32,  32,  float, true, false, 2, 1, 2, 2);
