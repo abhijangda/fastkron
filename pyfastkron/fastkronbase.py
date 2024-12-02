@@ -165,7 +165,7 @@ class FastKronBase:
 
     return tuple(reversed(finalShape))
 
-  def gekmmSizes(self, mmtype, x, fs, trX = False, trF = False):
+  def gekmmSizes(self, mmtype, x, fs, trX = False, trF = False, intermediates = False):
     self.checkShapeAndTypes(mmtype, x, fs, None, None, trX, trF)
 
     device_type = self.device_type(x)
@@ -173,19 +173,21 @@ class FastKronBase:
     rs, ts = None, None
 
     if self.supportedSystem() and self.supportedProcessor():
+      fn = None
       if device_type == 'cpu':
         if fastkronX86 != None:
-          rs, ts = fastkronX86.gekmmSizes((self.m(mmtype, x, trX), self.k(mmtype, x, trX)), 
-                                          self.ps(mmtype,  fs, trF),
-                                          self.qs(mmtype, fs, trF))
+          fn = fastkronX86.gekmmSizes if not intermediates else fastkronX86.gekmmSizesForward 
         else:
           raise ValueError(f"Device type '{device_type}' not supported")
       elif device_type == 'cuda':
-        rs, ts = fastkronCUDA.gekmmSizes((self.m(mmtype, x, trX), self.k(mmtype, x, trX)),
-                                          self.ps(mmtype, fs, trF),
-                                          self.qs(mmtype, fs, trF))
+        fn = fastkronCUDA.gekmmSizes if not intermediates else fastkronCUDA.gekmmSizesForward
+
+      rs,ts = fn((self.m(mmtype, x, trX), self.k(mmtype, x, trX)),
+                 self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF))  
     else:
-      rs, ts = (self.matrixShape(x, trX)[0] * product(self.qs([self.matrixShape(f, trF) for f in fs]))), -1
+      rs, ts = (self.matrixShape(x, trX)[0] * \
+                product(self.qs([self.matrixShape(f, trF) for f in fs]))),\
+                -1
 
     zbroadcastshape = self.broadcastShape(xbatch, fbatch)
     zshape = []
@@ -193,9 +195,23 @@ class FastKronBase:
       zshape = (self.m(mmtype, x, trX), rs//self.m(mmtype, x, trX))
     elif mmtype == FastKronBase.MMTypeKMM:
       zshape = (rs//self.m(mmtype, x, trX), self.m(mmtype, x, trX))
+    
+    if not intermediates:
+      return zbroadcastshape + zshape, \
+            (1 if len(zbroadcastshape) == 0 else product(zbroadcastshape))*ts
+    else:
+      intermediateShapes = []
+      for s in ts:
+        if mmtype == FastKronBase.MMTypeMKM:
+          m = self.m(mmtype, x, trX)
+          shape = zbroadcastshape + (m, s//m)
+        elif mmtype == FastKronBase.MMTypeKMM:
+          m = self.m(mmtype, x, trX)
+          shape = zbroadcastshape + (s//m, m)
 
-    return self.broadcastShape(xbatch, fbatch) + zshape, \
-          (1 if len(zbroadcastshape) == 0 else product(zbroadcastshape))*ts
+        intermediateShapes += [shape]
+
+      return zbroadcastshape + zshape, intermediateShapes
 
   def checkShapeAndTypes(self, mmtype, x, fs, z, y, trX, trF):
     # Only operate on 2-dims matrices
@@ -237,8 +253,8 @@ class FastKronBase:
   def device_type(self, x):
     raise NotImplementedError()
 
-  def xgemm(self, handle, mmtype, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, temp1, temp2,
-            trX = False, trF = False):
+  def xgemm(self, handle, mmtype, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, intermediates,
+            trX = False, trF = False, writeIntermediates=False):
 
     self.checkShapeAndTypes(mmtype, x, fs, z, y, trX, trF)
 
@@ -264,16 +280,27 @@ class FastKronBase:
       if len(xbatch) > 0:
         m = m * product(xbatch)
 
-      handlefn = handle.xgemkm if mmtype == FastKronBase.MMTypeMKM else handle.xgekmm
+      if not writeIntermediates:
+        handlefn = handle.xgemkm if mmtype == FastKronBase.MMTypeMKM else handle.xgekmm
 
-      handlefn(fn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
-               self.tensor_data_ptr(x), 
-               self.fptrs(fs),
-               self.tensor_data_ptr(z), alpha, beta, 
-               self.tensor_data_ptr(y),
-               self.tensor_data_ptr(temp1), 
-               self.tensor_data_ptr(temp2), 
-               trX, trF)
+        handlefn(fn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
+                self.tensor_data_ptr(x), 
+                self.fptrs(fs),
+                self.tensor_data_ptr(z), alpha, beta, 
+                self.tensor_data_ptr(y),
+                self.tensor_data_ptr(intermediates[0]), 
+                self.tensor_data_ptr(intermediates[1]), 
+                trX, trF)
+      else:
+        handlefn = handle.xmkmForward if mmtype == FastKronBase.MMTypeMKM else \
+                   handle.xkmmForward
+
+        handlefn(fn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
+                self.tensor_data_ptr(x), 
+                self.fptrs(fs),
+                self.tensor_data_ptr(z),
+                self.tensor_data_ptr(intermediates), 
+                trX, trF)
     else:
       xbatch, fbatch = self.batchedDims(x, fs[0], addPadding = True)
       if y is not None:
@@ -283,7 +310,11 @@ class FastKronBase:
 
       z = z.reshape((product(z.shape[:-2]),)+z.shape[-2:])
       x = x.reshape((product(xbatch),)+x.shape[-2:])
-
+      if writeIntermediates:
+        intermediates = [i.reshape((product(z.shape[:-2]),) + i.shape[-2:]) \
+                         for i in intermediates]
+      fs = list(fs)
+    
       for i in range(len(fs)):
         fs[i] = fs[i].reshape((product(fbatch),)+fs[i].shape[-2:])
       #After above reshape a tensor made by slicing a parent tensor, like [0:M:N]
@@ -304,6 +335,8 @@ class FastKronBase:
         xidx = fidx = zidx = yidx = None
         strideX = strideF = strideZ = strideY = 0
         strideZ = self.stride(z)[0]
+        if writeIntermediates:
+          strideIntermediates = [self.stride(i)[0] for i in intermediates]
         zidx = yidx = batchLinearIdxZ
         
         xidx = 0
@@ -352,16 +385,31 @@ class FastKronBase:
           raise ValueError(f"Output 'z' {z.shape} cannot be broadcastable to 'y' {y.shape}")
         
         m = self.m(mmtype, x, trX)
-        handlefn = handle.xgemkmStridedBatched if mmtype == FastKronBase.MMTypeMKM else handle.xgekmmStridedBatched
-        #Apply StridedBatched on the last dimension
-        handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
-                self.tensor_data_ptr(x[xidx, :]), strideX,
-                self.fptrs([f[fidx,:] for f in fs]), strideF,
-                batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ, alpha, beta, 
-                self.tensor_data_ptr(y[yidx, :]) if y is not None else 0, strideY,
-                self.tensor_data_ptr(temp1), 
-                self.tensor_data_ptr(temp2), 
-                trX, trF)
+        if not writeIntermediates:
+          handlefn = handle.xgemkmStridedBatched if mmtype == FastKronBase.MMTypeMKM else\
+                    handle.xgekmmStridedBatched
+
+          #Apply StridedBatched on the last dimension
+          handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
+                  self.tensor_data_ptr(x[xidx, :]), strideX,
+                  self.fptrs([f[fidx,:] for f in fs]), strideF,
+                  batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ, alpha, beta, 
+                  self.tensor_data_ptr(y[yidx, :]) if y is not None else 0, strideY,
+                  self.tensor_data_ptr(intermediates[0]), 
+                  self.tensor_data_ptr(intermediates[1]), 
+                  trX, trF)
+        else:
+          handlefn = handle.xmkmForwardStridedBatched if mmtype == FastKronBase.MMTypeMKM else\
+                     handle.xkmmForwardStridedBatched
+          interSlice = [i[zidx, :] for i in intermediates]
+          print(405, stridedBatchedFn, m,batchCount,  zidx, strideZ, "f", fidx, strideF, "x", xidx, strideX, "i", strideIntermediates)
+          #Apply StridedBatched on the last dimension
+          handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
+                  self.tensor_data_ptr(x[xidx, :]), strideX,
+                  self.fptrs([f[fidx,:] for f in fs]), strideF,
+                  batchCount, self.tensor_data_ptr(z[zidx, :]), strideZ,
+                  self.tensor_data_ptr(interSlice), strideIntermediates,
+                  trX, trF)
         
         batchLinearIdxZ += zbatch[dim]
 

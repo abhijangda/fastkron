@@ -38,6 +38,9 @@ class FastKronHandle:
   def gekmmSizes(self, xshape, ps, qs):
     return self.libFastKron.gekmmSizes(self.handle, xshape[0], len(ps), ps, qs)
 
+  def gekmmSizesForward(self, xshape, ps, qs):
+    return self.libFastKron.gekmmSizesForward(self.handle, xshape[0], len(ps), ps, qs)
+
   def xgemkm(self, fn, m, n, ps, qs, x, fs, z, alpha, beta, y, 
              temp1, temp2, trX = False, trF = False):
     fn(self.handle, self.backend, m, n, ps, qs,
@@ -77,3 +80,35 @@ class FastKronHandle:
        z, strideZ,
        alpha, beta, batchCount, y, strideY,
        temp1, temp2)
+  
+
+  def xmkmForward(self, fn, m, n, ps, qs, x, fs, z,
+                  intermediates, trX = False, trF = False):
+    fn(self.handle, self.backend, m, n, ps, qs,
+       x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T,
+       fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T,
+       z, intermediates)
+
+  #TODO: Change argument order according to cublas API see comment in pywapper.cpp
+  def xmkmForwardStridedBatched(self, fn, m, n, ps, qs, x, strideX, fs, strideFs,
+                           batchCount, z, strideZ, intermediates, strideIntermediates,
+                           trX = False, trF = False):
+    fn(self.handle, self.backend, m, n, ps, qs,
+       x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T, strideX,
+       fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T, strideFs,
+       z, strideZ, batchCount, intermediates, strideIntermediates)
+  
+  def xkmmForward(self, fn, m, n, ps, qs, x, fs, z, intermediates, trX = False, trF = False):
+    fn(self.handle, self.backend, n, qs, ps, m,
+       fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T,
+       x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T,
+       z, intermediates)
+
+  #TODO: Change argument order according to cublas API see comment in pywapper.cpp
+  def xkmmForwardStridedBatched(self, fn, m, n, ps, qs, x, strideX, fs, strideFs,
+                           batchCount, z, strideZ, intermediates, strideIntermediates,
+                           trX = False, trF = False):
+    fn(self.handle, self.backend, n, qs, ps, m,
+       fs, self.libFastKron.Op.N if not trF else self.libFastKron.Op.T, strideFs,
+       x, self.libFastKron.Op.N if not trX else self.libFastKron.Op.T, strideX,
+       z, strideZ, batchCount, intermediates, strideIntermediates)

@@ -261,6 +261,14 @@ PYBIND11_MODULE(FastKron, m)
     THROW_ERROR(err);
   }, "Perform GeKMM on using 64-bit double floating point operations on input matrices");
 
+  m.def("gekmmSizesForward", [](fastKronHandle handle, uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs) {
+    size_t resultSize;
+    std::vector<size_t> intermediateSizes(std::max(N-1, 1U), 0);
+    auto err = gekmmSizesForward(handle, M, N, Ps.data(), Qs.data(), &resultSize, intermediateSizes.data());
+    THROW_ERROR(err);
+    return py::make_tuple(resultSize, intermediateSizes);
+  }, "Returns a tuple of number of elements of the result matrix and temporary matrices for GeKMM.");
+
   m.def("skmmForward", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
                      uint32_t M, 
