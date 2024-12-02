@@ -402,7 +402,7 @@ class FastKronBase:
           handlefn = handle.xmkmForwardStridedBatched if mmtype == FastKronBase.MMTypeMKM else\
                      handle.xkmmForwardStridedBatched
           interSlice = [i[zidx, :] for i in intermediates]
-          print(405, stridedBatchedFn, m,batchCount,  zidx, strideZ, "f", fidx, strideF, "x", xidx, strideX, "i", strideIntermediates)
+
           #Apply StridedBatched on the last dimension
           handlefn(stridedBatchedFn, m, len(fs), self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF),
                   self.tensor_data_ptr(x[xidx, :]), strideX,

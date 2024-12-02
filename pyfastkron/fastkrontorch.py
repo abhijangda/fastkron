@@ -137,7 +137,6 @@ class FastKronTorch(FastKronBase):
 
     fn = None
     stridedBatchedFn = None
-    print(140)
     if x.dtype == torch.float:
       fn = self.handle(x).libFastKron.smkmForward
       stridedBatchedFn = self.handle(x).libFastKron.smkmForwardStridedBatched
@@ -161,6 +160,9 @@ class FastKronTorch(FastKronBase):
 
   def mkmBackward(self, grad_z, x, fs, zs):
     trX,x, trF, fs = fastkrontorch.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
+    return self.__mkmBackward(grad_z, x, fs, zs, trX, trF)
+
+  def __mkmBackward(self, grad_z, x, fs, zs, trX, trF):
     is_vec = grad_z.ndim == 1
     if is_vec:
       grad_z = grad_z.unsqueeze(0)
@@ -168,44 +170,40 @@ class FastKronTorch(FastKronBase):
     grad_fs = []
     grad_zs = [grad_z]
     zbatchShape = grad_z.shape[:-2]
-    print(172, [z1.shape for z1 in zs])
     zs = tuple(zs) + (x,)
-    print(173, [f.shape for f in fs], [z1.shape for z1 in zs], x.shape)
     for z,f in zip(zs, fs):
       prev_grad_z = grad_zs[-1]
       orig_fshape = f.shape
       fp = self.p(FastKronBase.MMTypeMKM, f, trF)
       fq = self.q(FastKronBase.MMTypeMKM, f, trF)
-      print(179, f.shape, prev_grad_z.shape, z.shape)
+      #[m,k] -> [m,q,k/q]
       prev_grad_z = prev_grad_z.reshape((prev_grad_z.shape[:-2] + (prev_grad_z.shape[-2],)) + \
                                        (fq, prev_grad_z.shape[-1]//fq))
-      print(182, prev_grad_z.shape)
+
+      #->[m,k/q,q]
       prev_grad_z = prev_grad_z.transpose(-1,-2)
-      print(183, prev_grad_z.shape)
+
+      #->[m*k/q,q]
       prev_grad_z = prev_grad_z.reshape(prev_grad_z.shape[:-3] + \
                                         (prev_grad_z.shape[-3] * prev_grad_z.shape[-2],\
                                         prev_grad_z.shape[-1]))
-      
       #Backward pass for z
-      if x.data_ptr() != z.data_ptr() or x.requires_grad or True:
-        print(189, prev_grad_z.shape)
-        grad_z = torch.matmul(prev_grad_z, f.mT) #(f if trF else f.mT))
+      if x.data_ptr() != z.data_ptr() or x.requires_grad:
+        grad_z = torch.matmul(prev_grad_z, (f if trF else f.mT))
         grad_z = grad_z.reshape(zbatchShape + z.shape[-2:])
         grad_zs += [grad_z]
 
       #Backward pass for f
-      # if f.requires_grad:
-      orig_zshape = z.shape
-      z = z.reshape(z.shape[:-2] + ((z.shape[-2] * z.shape[-1])//fp, fp))
-      print(186, prev_grad_z.shape, z.shape)
-      trZ = z.mT
-      grad_f = trZ @ prev_grad_z
-      print(203, trZ.shape, prev_grad_z.shape, grad_f.shape)
-      grad_fs += [grad_f]
-      z = z.reshape(orig_zshape)
-      # else:
-        # grad_fs += [None]
-    print(208, x.requires_grad, len(grad_fs))
+      if f.requires_grad:
+        orig_zshape = z.shape
+        z = z.reshape(z.shape[:-2] + ((z.shape[-2] * z.shape[-1])//fp, fp))
+        trZ = z.mT
+        grad_f = trZ @ prev_grad_z
+        grad_fs += [grad_f]
+        z = z.reshape(orig_zshape)
+      else:
+        grad_fs += [None]
+
     return (grad_zs[-1] if x.requires_grad else None,) + tuple(grad_fs)
 
   def gekmm(self, requires_grad, fs, x,
@@ -240,12 +238,10 @@ class FastKronTorch(FastKronBase):
       stridedBatchedFn = self.handle(x).libFastKron.dgekmmStridedBatched
 
     zs = []
-    print(239)
     rs, ts = fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
     temp1 = x.new_empty(ts)
     temp2 = x.new_empty(ts) if rs != ts else None
     z = x.new_empty(size=rs, dtype=x.dtype)
-    print(244, x.shape, [f.shape for f in fs], temp1.shape, temp2.shape)
     super().xgemm(self.handle(x), FastKronBase.MMTypeKMM, fn, stridedBatchedFn,\
                   x, fs, z, alpha, beta, y, [temp1, temp2], trX, trF)
     z = z.reshape(rs)
@@ -285,9 +281,7 @@ class FastKronTorch(FastKronBase):
       stridedBatchedFn = self.handle(x).libFastKron.dkmmForwardStridedBatched
 
     zs = []
-    print(239)
     rs, ts = self.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF, intermediates=True)
-    print(286, ts)
     zs = [x.new_empty(s) for s in ts]
     z = x.new_empty(size=rs)
     super().xgemm(self.handle(x), FastKronBase.MMTypeKMM, fn, stridedBatchedFn,\
@@ -305,51 +299,11 @@ class FastKronTorch(FastKronBase):
     grad_zs = [grad_z]
     zbatchShape = zs[0].shape[:-2]
     zs = tuple(z.mT for z in zs)
-    grads = self.mkmBackward(grad_z.mT, x.mT, [f.mT for f in fs], zs)
+    grads = self.__mkmBackward(grad_z.mT, x.mT, [f if trF else f.mT for f in fs], zs, trX, trF)
 
-    return (grads[0].mT if grads[0] is not None else None,) + tuple(g.mT for g in grads[1:])
+    return tuple(g.mT if g is not None else None for g in grads)
 
-    print(172, [z1.shape for z1 in zs])
-    print(173, [f.shape for f in fs])
 
-    for z,f in zip(zs, fs):
-      prev_grad_z = grad_zs[-1]
-      orig_fshape = f.shape
-      fp = self.p(FastKronBase.MMTypeKMM, f, trF)
-      fq = self.q(FastKronBase.MMTypeKMM, f, trF)
-      print(179, f.shape, fp, fq, prev_grad_z.shape, z.shape)
-
-      prev_grad_z = prev_grad_z.reshape(prev_grad_z.shape[:-2] + \
-                                        (prev_grad_z.shape[-2]//fq, fq, prev_grad_z.shape[-1]))
-      print(182, prev_grad_z.shape)
-      prev_grad_z = prev_grad_z.transpose(-2, -3)
-      print(183, prev_grad_z.shape)
-      prev_grad_z = prev_grad_z.reshape(prev_grad_z.shape[:-3] + \
-                                        (prev_grad_z.shape[-2] * prev_grad_z.shape[-1],
-                                        prev_grad_z.shape[-3]))
-
-      #Backward pass for z
-      if x.data_ptr() != z.data_ptr() or x.requires_grad:
-        print(189, prev_grad_z.shape)
-        grad_z = torch.matmul(prev_grad_z, f)
-        print(330, grad_z.shape)
-        grad_z = grad_z.reshape(grad_z.shape[:-2] + (grad_z.shape[-2]//fq, fq, grad_z.shape[-1]))
-        print(332, grad_z.shape)
-        grad_z = grad_z.reshape(zbatchShape + z.shape[-2:])
-        print(325, grad_z.shape)
-        grad_zs += [grad_z]
-
-      #Backward pass for f
-      # orig_zshape = z.shape
-      # z = z.reshape(z.shape[:-2] + (fp, (z.shape[-2] * z.shape[-1])//fp))
-      # print(186, prev_grad_z.shape, z.shape)
-      # trZ = z.mT
-      # grad_f = prev_grad_z @ trZ
-      grad_fs += [None]
-      # z = z.reshape(orig_zshape)
-
-    return (grad_zs[-1] if x.requires_grad else None,) + tuple(grad_fs)
-  
   def shuffleGeMM(self, mmtype, x, fs, 
                   y = None, alpha = 1, beta = 0, stream = None):
     if type(x) is not torch.Tensor:
@@ -406,7 +360,6 @@ class GeMKM(torch.autograd.Function):
 class GeKMM(torch.autograd.Function):
   @staticmethod
   def forward(ctx, x, *fs) -> torch.Tensor:
-    print(398)
     z, zs = fastkrontorch.kmmForward(True, fs, x)
     ctx.save_for_backward(x, *fs, *zs)
     ctx.num_facs = len(fs)
@@ -421,14 +374,14 @@ class GeKMM(torch.autograd.Function):
     return fastkrontorch.kmmBackward(grad_z, x, fs, zs)
 
 # from torch.autograd import gradcheck
-# # torch.set_printoptions(sci_mode=False)
-# # torch.set_printoptions(profile="full")
-# x = torch.randn((64,2), dtype=torch.double,requires_grad=True)
-# f1 = torch.randn((4,4),dtype=torch.double,requires_grad=False)
-# f2 = torch.randn((4,4),dtype=torch.double,requires_grad=False)
+# # # torch.set_printoptions(sci_mode=False)
+# # # torch.set_printoptions(profile="full")
+# x = torch.randn((4,3), dtype=torch.double,requires_grad=True)
+# f1 = torch.randn((2,2),dtype=torch.double,requires_grad=False)
+# f2 = torch.randn((2,2),dtype=torch.double,requires_grad=False)
 # f3 = torch.randn((4,4),dtype=torch.double,requires_grad=False)
-# # f3 = torch.randn((2,2),dtype=torch.double,requires_grad=True)
-# test = gradcheck(GeKMM.apply, (x,f1,f2,f3), eps=1e-5, atol=1e-4)
+# # # f3 = torch.randn((2,2),dtype=torch.double,requires_grad=True)
+# test = gradcheck(GeKMM.apply, (x,f1,f2), eps=1e-5, atol=1e-4)
 # print(test)
 
 def gemkm(x : torch.Tensor, fs : List[torch.Tensor]) -> torch.Tensor:
