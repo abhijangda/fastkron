@@ -80,6 +80,12 @@ class FastKronTorch(FastKronBase):
     for i,f in enumerate(fs):
       if type(f) is not torch.Tensor:
         raise ValueError(f"Input fs[{i}] should be a Tensor")
+
+    if requires_grad:
+      if alpha != 1: raise ValueError(f"When requires_grad is True alpha should be 1 but is {alpha}")
+      if beta != 0: raise ValueError(f"When requires_grad is True beta should be 0 but is {beta}")
+      if y != None: raise ValueError(f"When requires_grad is True y should be None")
+
     if y != None and type(y) is not torch.Tensor:
       raise ValueError(f"Input 'y' should be a 2D Tensor")
     
@@ -122,7 +128,7 @@ class FastKronTorch(FastKronBase):
       raise ValueError("Input 'fs' should be a list of Tensor")
     for i,f in enumerate(fs):
       if type(f) is not torch.Tensor:
-        raise ValueError(f"Input fs[{i}] should be a Tensor")
+        raise ValueError(f"Input fs[{i}] should be a Tensor but is {type(fs[i])}")
   
     is_vec = x.ndim == 1
     alpha = 1
@@ -160,9 +166,9 @@ class FastKronTorch(FastKronBase):
 
   def mkmBackward(self, grad_z, x, fs, zs):
     trX,x, trF, fs = fastkrontorch.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
-    return self.__mkmBackward(grad_z, x, fs, zs, trX, trF)
+    return self.__mkmBackward(grad_z, x, fs, zs, trX, trF, x.requires_grad, [f.requires_grad for f in fs])
 
-  def __mkmBackward(self, grad_z, x, fs, zs, trX, trF):
+  def __mkmBackward(self, grad_z, x, fs, zs, trX, trF, x_requires_grad, fs_requires_grad):
     is_vec = grad_z.ndim == 1
     if is_vec:
       grad_z = grad_z.unsqueeze(0)
@@ -171,7 +177,7 @@ class FastKronTorch(FastKronBase):
     grad_zs = [grad_z]
     zbatchShape = grad_z.shape[:-2]
     zs = tuple(zs) + (x,)
-    for z,f in zip(zs, fs):
+    for z,f,f_requires_grad in zip(zs, fs, fs_requires_grad):
       prev_grad_z = grad_zs[-1]
       orig_fshape = f.shape
       fp = self.p(FastKronBase.MMTypeMKM, f, trF)
@@ -188,13 +194,13 @@ class FastKronTorch(FastKronBase):
                                         (prev_grad_z.shape[-3] * prev_grad_z.shape[-2],\
                                         prev_grad_z.shape[-1]))
       #Backward pass for z
-      if x.data_ptr() != z.data_ptr() or x.requires_grad:
-        grad_z = torch.matmul(prev_grad_z, (f if trF else f.mT))
+      if x.data_ptr() != z.data_ptr() or x_requires_grad:
+        grad_z = torch.matmul(prev_grad_z, f.mT)
         grad_z = grad_z.reshape(zbatchShape + z.shape[-2:])
         grad_zs += [grad_z]
 
       #Backward pass for f
-      if f.requires_grad:
+      if f_requires_grad:
         orig_zshape = z.shape
         z = z.reshape(z.shape[:-2] + ((z.shape[-2] * z.shape[-1])//fp, fp))
         trZ = z.mT
@@ -204,7 +210,7 @@ class FastKronTorch(FastKronBase):
       else:
         grad_fs += [None]
 
-    return (grad_zs[-1] if x.requires_grad else None,) + tuple(grad_fs)
+    return (grad_zs[-1] if x_requires_grad else None,) + tuple(grad_fs)
 
   def gekmm(self, requires_grad, fs, x,
             y = None, alpha = 1, beta = 0, 
@@ -216,6 +222,12 @@ class FastKronTorch(FastKronBase):
     for i,f in enumerate(fs):
       if type(f) is not torch.Tensor:
         raise ValueError(f"Input fs[{i}] should be a Tensor")
+
+    if requires_grad:
+      if alpha != 1: raise ValueError(f"When requires_grad is True alpha should be 1 but is {alpha}")
+      if beta != 0: raise ValueError(f"When requires_grad is True beta should be 0 but is {beta}")
+      if y != None: raise ValueError(f"When requires_grad is True y should be None")
+
     if y != None and type(y) is not torch.Tensor:
       raise ValueError(f"Input 'y' should be a 2D Tensor")
 
@@ -299,10 +311,14 @@ class FastKronTorch(FastKronBase):
     grad_zs = [grad_z]
     zbatchShape = zs[0].shape[:-2]
     zs = tuple(z.mT for z in zs)
-    grads = self.__mkmBackward(grad_z.mT, x.mT, [f if trF else f.mT for f in fs], zs, trX, trF)
 
-    return tuple(g.mT if g is not None else None for g in grads)
+    grads = self.__mkmBackward(grad_z.mT, x.mT, [f.mT for f in fs], zs, trX, trF,
+                               x.requires_grad, [f.requires_grad for f in fs])
+    grad_x = grads[0]
+    grad_fs = grads[1:]
 
+    return (grad_x.mT if grad_x is not None else None, ) + \
+           tuple(g.mT if g is not None else None for g in grad_fs)
 
   def shuffleGeMM(self, mmtype, x, fs, 
                   y = None, alpha = 1, beta = 0, stream = None):
@@ -373,7 +389,6 @@ class GeKMM(torch.autograd.Function):
     zs = ctx.saved_tensors[num_facs+1:]
     return fastkrontorch.kmmBackward(grad_z, x, fs, zs)
 
-# from torch.autograd import gradcheck
 # # # torch.set_printoptions(sci_mode=False)
 # # # torch.set_printoptions(profile="full")
 # x = torch.randn((4,3), dtype=torch.double,requires_grad=True)
@@ -384,7 +399,8 @@ class GeKMM(torch.autograd.Function):
 # test = gradcheck(GeKMM.apply, (x,f1,f2), eps=1e-5, atol=1e-4)
 # print(test)
 
-def gemkm(x : torch.Tensor, fs : List[torch.Tensor]) -> torch.Tensor:
+def gemkm(x : torch.Tensor, fs : List[torch.Tensor],
+          alpha=1.0, beta=0.0, y=None) -> torch.Tensor:
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -396,7 +412,7 @@ def gemkm(x : torch.Tensor, fs : List[torch.Tensor]) -> torch.Tensor:
   fs : A list of 2D torch tensor
   alpha and beta: constants
   y  : 2D torch tensor
-  trX: Transpose x before computing GeKMM
+  trX: Transpose   x before computing GeKMM
   trF: Transpose each element of fs before computing GeKMM
 
   Returns
@@ -404,7 +420,7 @@ def gemkm(x : torch.Tensor, fs : List[torch.Tensor]) -> torch.Tensor:
   z : 2D torch tensor
   '''
   if not fastkrontorch.isSupported(x, fs):
-    return fastkrontorch.shuffleGeMKM(x, fs)
+    return fastkrontorch.shuffleGeMKM(x, fs, y, alpha, beta)
   
   requires_grad = [f.requires_grad for f in fs if f.requires_grad]
   if len(requires_grad) > 0: requires_grad = True
@@ -413,7 +429,7 @@ def gemkm(x : torch.Tensor, fs : List[torch.Tensor]) -> torch.Tensor:
   if requires_grad:
     return GeMKM.apply(x, *tuple(fs))
   else:
-    return fastkrontorch.gemkm(False, x, fs)[0]
+    return fastkrontorch.gemkm(False, x, fs, y, alpha, beta)[0]
 
 def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   '''
@@ -435,14 +451,14 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   z : 2D torch tensor
   '''
   if not fastkrontorch.isSupported(x, fs):
-    return fastkrontorch.shuffleGeKMM(fs, x)
+    return fastkrontorch.shuffleGeKMM(fs, x, y, alpha, beta)
 
   requires_grad = [f.requires_grad for f in fs if f.requires_grad]
   if len(requires_grad) > 0: requires_grad = True
   else: requires_grad = x.requires_grad
 
-  if True or requires_grad:
+  if requires_grad:
     return GeKMM.apply(x, *tuple(fs))
   else:
-    return fastkrontorch.gekmm(False, fs, x)[0]
+    return fastkrontorch.gekmm(False, fs, x, y, alpha, beta)[0]
   

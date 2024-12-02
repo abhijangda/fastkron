@@ -1,5 +1,6 @@
 from functools import reduce
 import torch
+import torch.autograd
 
 import pyfastkron.fastkrontorch as fk
 
@@ -9,7 +10,7 @@ def product(values):
 def transpose(m):
   axis = tuple(range(len(m.shape[:-2]))) + \
          (len(m.shape) - 1, len(m.shape) - 2)
-  return torch.transpose(m, -2, -1)
+  return m.mT #torch.transpose(m, -2, -1)
 
 def reference(mmtype, x, fs, device):
   batchKron = fs[0].shape[:-2]
@@ -19,8 +20,7 @@ def reference(mmtype, x, fs, device):
         outputKron = torch.kron(outputKron, m)
   else:
     batchDims = product(batchKron)
-    for i,f in enumerate(fs):
-      fs[i] = fs[i].reshape((batchDims,) + f.shape[-2:])
+    fs = [f.reshape((batchDims,) + f.shape[-2:]) for f in fs]
 
     output = fs[0]
     for f in fs[1:]:
@@ -38,7 +38,8 @@ def reference(mmtype, x, fs, device):
     return torch.matmul(outputKron, x)
 
 def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
-        high=5, batchDimX=[], batchDimFPre=[], batchDimZ=[]):
+        high=5, batchDimX=[], batchDimFPre=[], batchDimZ=[],
+        gradcheck=False):
 
   if type(ps) is int:
     ps = [ps]
@@ -85,21 +86,33 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
   if trF:
     fs = [transpose(f) for f in fs]
 
-  alpha = 3.0
-  beta = 1.0
+  fs = tuple(fs)
 
-  if mmtype == "mkm":
-    y = fk.gemkm(x, fs, alpha, beta, z)
-  elif mmtype == "kmm":
-    y = fk.gekmm(fs, x, alpha, beta, z)
+  if not gradcheck:
+    alpha = 3.0
+    beta = 1.0
+    if mmtype == "mkm":
+      y = fk.gemkm(x, fs, alpha, beta, z)
+    elif mmtype == "kmm":
+      y = fk.gekmm(fs, x, alpha, beta, z)
+    if x.device.type == "cuda":
+      torch.cuda.synchronize()
+    ref = alpha * reference(mmtype, x, fs, device)
+    if z != None:
+      ref += beta * z
 
-  ref = alpha * reference(mmtype, x, fs, device)
-  if z != None:
-    ref += beta * z
-
-  val = torch.isclose(y, ref).all().item()
-  print(101)
-  assert val
+    val = torch.isclose(y, ref).all().item()
+    print(101)
+    assert val
+  else:
+    x.requires_grad = True
+    for f in fs:
+      f.requires_grad = True
+    if mmtype == "kmm":
+      torch.autograd.gradcheck(fk.GeKMM.apply, (x,*fs), eps=1e-5, atol=1e-4)
+    elif mmtype == "mkm":
+      torch.autograd.gradcheck(fk.GeMKM.apply, (x,*fs), eps=1e-5, atol=1e-4)
+    print(116)
 
 def device_tests(device):
   with torch.no_grad():
@@ -118,7 +131,7 @@ def device_tests(device):
 
       run(mmtype, 16, 4, 16, 8, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[])
       run(mmtype, 32, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[3,])
-      run(mmtype,13, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
+      run(mmtype, 13, 5, 8, 8, torch.float32, device, True, True, batchDimX=[2,1,], batchDimFPre=[2,4,])
       run(mmtype, 19, 3, 8, 32, torch.float32, device, True, True, batchDimX=[2,], batchDimFPre=[3,2,])
 
       #double
@@ -133,12 +146,16 @@ def device_tests(device):
       run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,1,], batchDimFPre=[3,])
       run(mmtype, 10, 3, 16, 8, torch.float16, device, True, False, high=2)
 
+  for mmtype in ["mkm", "kmm"]: 
+    run(mmtype, 5, 4, 6, 6, torch.double, device, False, False, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
+    run(mmtype, 5, 4, 4, 6, torch.double, device, True, True, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
+
 def test_cuda():
-  if fk.__fastkrontorch.hasCUDA():
+  if fk.fastkrontorch.hasCUDA():
     device_tests("cuda")
 
 def test_cpu():
-  if fk.__fastkrontorch.hasX86():
+  if fk.fastkrontorch.hasX86():
     device_tests("cpu")
 
 if __name__ == "__main__":

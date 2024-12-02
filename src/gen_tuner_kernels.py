@@ -613,12 +613,18 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                       aalign = x_mem_vector_len(tM, tK, opx, kmmtype, elem_type)
                                       kronalign = f_mem_vector_len(tP, tQ, opF, kmmtype, elem_type)
                                       if kmmtype == "mkm":
-                                        if opt_level <= 1 or aalign == 1:
-                                          new_aalign = aalign
-                                        elif opt_level == 2:
-                                          new_aalign = min(aalign, kronalign)
-                                        else:
-                                          new_aalign = aalign
+                                        if opx == "N":
+                                          if opt_level <= 1 or aalign == 1:
+                                            new_aalign = aalign
+                                          elif opt_level <= 2:
+                                              new_aalign = min(aalign, kronalign)
+                                          else:
+                                            new_aalign = aalign
+                                        elif opx == "T":
+                                          if opt_level <= 2:
+                                            new_aalign = 1
+                                          else:
+                                            new_aalign = aalign
                                       elif kmmtype == "kmm":
                                         if opt_level <= 2: new_aalign = 1
                                         else: new_aalign = aalign

@@ -25,6 +25,7 @@
 
 #define CONTIGUOUS_TEST_TT(MinN, MaxN, P, Q, Type, Tune, IsForward) \
     GENERAL_TEST_TT(MKM, 16, MinN, MaxN, P, Q, Type, Tune, IsForward, 1, 1, 1, 1); \
+    GENERAL_TEST_TT(MKM, 13, MinN, MaxN, P, Q, Type, Tune, IsForward, 1, 1, 1, 1); \
     GENERAL_TEST_TT(KMM, 1, MinN, MaxN, P, Q, Type, Tune, IsForward, 1, 1, 1, 1); \
     GENERAL_TEST_TT(KMM, 17, MinN, MaxN, P, Q, Type, Tune, IsForward, 1, 1, 1, 1); \
 

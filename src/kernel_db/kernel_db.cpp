@@ -231,7 +231,6 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
       }
 
       auto numFusedToKernels = filterFastestFusedKernels(problem, kernels);
-
       if (firstOpTKernelFound && !numFusedToKernels.empty()) {
         //From above filtered kernels find the kernel series using a greedy approach.
         //The approach always selects the kernel with the maximum number of fusion
@@ -373,14 +372,11 @@ std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>>
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> numFusedToKernels;
 
   for (auto kernel : kernels) {
-    if (kernel->getFusedFacs() == 1) {
-      //Always add a single fac kernel
-      if (numFusedToKernels.find(1) == numFusedToKernels.end())
-        numFusedToKernels[1] = {};
-      numFusedToKernels[1].push_back(kernel);
-      continue;
-    }
-
+    //Always add a single fac kernel
+    if (numFusedToKernels.find(1) == numFusedToKernels.end())
+      numFusedToKernels[1] = {};
+    numFusedToKernels[1].push_back(kernel);
+    
     for (uint32_t numFusedFacs = 2; numFusedFacs <= kernel->getFusedFacs(); numFusedFacs++) {
       bool addFusedKernel = isFastFusedKernel(problem, kernel, numFusedFacs);
       if (addFusedKernel && numFusedFacs <= problem.n()) {
