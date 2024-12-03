@@ -191,7 +191,7 @@ public:
   bool canCompute(KMMProblemStridedBatched problem, const HardwareDetails* hw, 
                   bool p2p, bool exactFuse = true) {
     return canCompute(problem.batchProblem(0), hw, p2p, KernelBatchType::StridedBatched, 
-           exactFuse);
+                      exactFuse);
   }
   /**
    * backend - Return backend (X86, CUDA, ARM, HIP) as string of the kernel.

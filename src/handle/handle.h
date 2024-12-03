@@ -156,8 +156,8 @@ class FastKronHandle {
   fastKronError setStream(fastKronBackend backends, void* ptrToStream);
 
   /**
-   * FastKronHandle::xgemm() - Perform GeKMM or GeMKM
-   * @problem: The GeKMM/GeMKM problem as an object of KMMProblem
+   * FastKronHandle::xgemm() - Perform GeKMM or GeMKM for KMMProblem/KMMProblemStridedBatched using temporaries
+   * @problem: The GeKMM/GeMKM problem as an object of KMMProblem/KMMProblemStridedBatched
    * @backend: the `fastKronBackend` of kernels
    * @temp1: Temporary array to use
    * @temp2: Temporary array to use
@@ -168,18 +168,30 @@ class FastKronHandle {
   fastKronError xgemm(KMMProblem problem, const fastKronBackend backend,
                       void* temp1, void* temp2, EpilogueParams epilogueParams);
 
-  fastKronError xgemm(bool isforward, KMMProblem problem, const fastKronBackend backend,
-                      void** intermediates, EpilogueParams epilogueParams);
-
   fastKronError xgemmStridedBatched(KMMProblemStridedBatched problem, 
                                     const fastKronBackend backend,
                                     void* temp1, void* temp2,
                                     EpilogueStridedBatchedParams epilogueParams);
 
-  fastKronError xgemmStridedBatched(bool isforward, KMMProblemStridedBatched problem, 
+  /**
+   * FastKronHandle::xgemm() - Perform GeKMM or GeMKM for KMMProblem/KMMProblemStridedBatched
+   * @keepIntermediates: Keep intermediates or reuse temporary buffers.
+   * @problem: The GeKMM/GeMKM problem as an object of KMMProblem/KMMProblemStridedBatched
+   * @backend: the `fastKronBackend` of kernels
+   * @intermediates: Array of pointers to intermediates
+   * @strideIntermediates: Array of stride of intermediates
+   * @epilogueParams: Epilogue parameters
+   *
+   * Return - fastKronError representing the error occurred in the operation
+   */
+  fastKronError xgemm(bool keepIntermediates, KMMProblem problem, const fastKronBackend backend,
+                      void** intermediates, EpilogueParams epilogueParams);
+
+  fastKronError xgemmStridedBatched(bool keepIntermediates, KMMProblemStridedBatched problem, 
                                     const fastKronBackend backend,
                                     void** intermediates, uint64_t strideIntermediates[],
                                     EpilogueStridedBatchedParams epilogueParams);
+  
   /**
    * FastKronHandle::gekmmSizes() - Obtain GeKMM result and temporary sizes
    * @problem: The GeKMM problem as an object of KMMProblem

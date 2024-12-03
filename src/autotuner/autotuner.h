@@ -99,6 +99,9 @@ class Autotuner {
    * @tunedKernelsMap: A map of tuned kernels and KMMProblems
    */
   TunedKernelsMap<KMMProblem> tunedKernelsMap;
+  /**
+   * @tunedKernelsMapStridedBatched: A map of tuned kernels and KMMProblemStridedBatched
+   */
   TunedKernelsMap<KMMProblemStridedBatched> tunedKernelsMapStridedBatched;
 
   /**
@@ -106,6 +109,10 @@ class Autotuner {
    * Maps each KMMProblem to tuned kernel series for each backend.
    */
   std::unordered_map<KernelDatabase*, std::unordered_map<KMMProblem, TunedKernelsSeries>> tunedProblemCache;
+  /**
+   * @tunedProblemCacheStridedBatched: A cache of already tuned full KMMProblemStridedBatcheds.
+   * Maps each KMMProblemStridedBatched to tuned kernel series for each backend.
+   */
   std::unordered_map<KernelDatabase*, std::unordered_map<KMMProblemStridedBatched, TunedKernelsSeries>> tunedProblemCacheStridedBatched;
 
   /**
@@ -135,6 +142,12 @@ public:
                      const fastKronBackend backend, 
                      TunedKernelsSeries& retKernelSeries);
 
+  /**
+   * tune() - Find the best performing kernel series for a KMMProblemStridedBatched on a backend
+   * @problem: KMMProblemStridedBatched
+   * @backend: fastKronBackend containing kernels
+   * @retKernelSeries: [OUT] the tuned kernel series 
+   */
   fastKronError tune(KMMProblemStridedBatched problem,
                      const fastKronBackend backend,
                      TunedKernelsSeries& retKernelSeries);

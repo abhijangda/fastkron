@@ -69,7 +69,106 @@ bool checkDistributedKronSizes(const KMMProblem problem,
   return correct;
 }
 
-/*MKM Algorithm functions*/
+fastKronError getIntermediates(bool keepIntermediates, const KMMProblem problem,
+                               void* tmps[], uint32_t length,
+                               std::function<uint (const KMMProblem)> next,
+                               typename KMMProblem::Matrices& intermediates) {
+  if (problem.n() == 1) {
+    intermediates.push_back(problem.y());
+    intermediates.push_back(problem.x());
+    return fastKronSuccess;
+  }
+
+  if (tmps && not keepIntermediates) {
+    if (tmps[1] == nullptr) {
+      if (length % 2 == 1) {
+        tmps[1] = tmps[0];
+        tmps[0] = problem.y().data();
+      } else {
+        tmps[0] = tmps[0];
+        tmps[1] = problem.y().data();
+      }
+    }
+  }
+
+  int t = 0;
+
+  for (uint32_t i = 0; i < problem.n(); i++)
+    intermediates.push_back(KMMProblem::Matrix());
+
+  auto err = executeGeMM(problem, KMMProblem::Matrices({}), next, 
+                        [&](const KMMProblem subProb, int32_t rstart, KMMProblem::Matrices) {
+                          void* ptr;
+                          if (keepIntermediates) {
+                            ptr = tmps != nullptr ? tmps[rstart - 1] : nullptr;
+                          } else {
+                            ptr = tmps != nullptr ? tmps[t] : nullptr;
+                            t = t ^ 1;
+                          }
+                          intermediates[rstart-subProb.n()+1] = subProb.y().like(ptr);
+                          return fastKronSuccess;
+                        });
+
+  intermediates.push_back(problem.x());
+  
+  return err;
+}
+
+fastKronError getIntermediates(bool keepIntermediates, const KMMProblemStridedBatched problem,
+                               void* tmps[], uint64_t* strideIntermediates, uint32_t length,
+                               std::function<uint (const KMMProblemStridedBatched)> next,
+                               typename KMMProblemStridedBatched::Matrices& intermediates) {
+  if (problem.n() == 1) {
+    intermediates.push_back(problem.y());
+    intermediates.push_back(problem.x());
+    return fastKronSuccess;
+  }
+
+  if (tmps && not keepIntermediates) {
+    if (tmps[1] == nullptr) {
+      if (length % 2 == 1) {
+        tmps[1] = tmps[0];
+        tmps[0] = problem.y().data();
+      } else {
+        tmps[0] = tmps[0];
+        tmps[1] = problem.y().data();
+      }
+    }
+  }
+
+  int t = 0;
+
+  for (uint32_t i = 0; i < problem.n(); i++)
+    intermediates.push_back(typename KMMProblemStridedBatched::Matrix());
+
+  auto err = executeGeMM(problem, KMMProblemStridedBatched::Matrices({}), next, 
+                        [&](const KMMProblemStridedBatched subProb, int32_t rstart, KMMProblemStridedBatched::Matrices) {
+                          void* ptr;
+                          if (keepIntermediates) {
+                            ptr = tmps != nullptr ? tmps[rstart - 1] : nullptr;
+                          } else {
+                            ptr = tmps != nullptr ? tmps[t] : nullptr;
+                            t = t ^ 1;
+                          }
+                          uint64_t stride;
+                          if (strideIntermediates) {
+                            stride = strideIntermediates[rstart - 1];
+                          } else {
+                            stride = subProb.y().numel();
+                          }
+                          intermediates[rstart-subProb.n()+1] = subProb.y().like(ptr).diffBatchStride(stride);
+                          return fastKronSuccess;
+                        });
+  //Since next can return anyvalue, we do not know if rstart is for the last kernel call.
+  //So, stride for result of GeMM in intermediates can be wrong.
+  //Fortunately, there is no need to set correct stride for last intermediate, i.e., result of GeMM, because the 
+  //executeGeMM always write to problem.y() not intermediates[0].
+  intermediates.push_back(problem.x());
+  
+  return err;
+}
+
+
 template<typename KMMProblemType>
 fastKronError executeGeMM(KMMProblemType problem, typename KMMProblemType::Matrices tmps,
                           std::function<uint (const KMMProblemType)> next,

@@ -256,7 +256,8 @@ private:
   bool findAllFusedKernels(KMMProblem problem, bool useP2PStore, 
                            std::vector<KMMKernel*>& kernels,
                            KernelBatchType::Ty batchType = KernelBatchType::Normal);
-  bool findAllFusedKernels(KMMProblemStridedBatched problem, bool useP2PStore, std::vector<KMMKernel*>& kernels);
+  bool findAllFusedKernels(KMMProblemStridedBatched problem, bool useP2PStore,
+                           std::vector<KMMKernel*>& kernels);
   
   /**
    * findAllKernels() - Find all kernels (fused or non-fused) that can compute the given problem.
@@ -339,8 +340,10 @@ protected:
    *
    * Return - The best kernel found for the opt level.
    */
-  virtual KMMKernel* findKernelAtOptLevel(KMMProblem subProblem, const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
-  virtual KMMKernel* findKernelAtOptLevel(KMMProblemStridedBatched subProblem, const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblem               subProblem, 
+                                          const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblemStridedBatched subProblem,
+                                          const std::vector<KMMKernel*>& kernelsForOptLevel) = 0;
 
   /**
    * getMapNumFusedProbsToKernels() - Filter all fused kernels to find fastest fused kernels for a problem.
@@ -350,11 +353,14 @@ protected:
    * Return - A map of number of fused problems -> a vector of all fused kernels for the number.
    */
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
-          filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
-  virtual bool isFastFusedKernel(const KMMProblem& /*problem*/, const KMMKernel* /*kernel*/, uint32_t /*fusedFacs*/) {return true;}
+          filterFastestFusedKernels(const KMMProblem& problem,
+                                    const std::vector<KMMKernel*>& kernels);
+  virtual bool isFastFusedKernel(const KMMProblem& /*problem*/, const KMMKernel* /*kernel*/,
+                                 uint32_t /*fusedFacs*/) {return true;}
 
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
-          filterFastestFusedKernels(const KMMProblemStridedBatched& problem, const std::vector<KMMKernel*>& kernels) {
+          filterFastestFusedKernels(const KMMProblemStridedBatched& problem,
+                                    const std::vector<KMMKernel*>& kernels) {
     return filterFastestFusedKernels(problem.batchProblem(0), kernels);
   }
   /***************************************************************************/

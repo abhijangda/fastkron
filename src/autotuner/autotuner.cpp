@@ -31,7 +31,9 @@ static float minExecTimeOfSeries(KMMProblem problem, uint32_t startF, bool isDis
   TunedKernelFromStart minPrologueKernel;
 
   //Obtain the subproblem starting at startF
-  auto subProblem = problem.sub(startF, problem.n() - startF);//(problem.mmtype() == FastKronMMType::MKM) ? 
+  auto subProblem = problem.sub(startF, problem.n() - startF);
+  //Keeping the case for reverse execution that will be needed for backward
+  //(problem.mmtype() == FastKronMMType::MKM) ? 
                       // problem.sub(startF, problem.n() - startF) :
                       // problem.rsub(startF, problem.n() - (problem.n() - 1 - startF));
 
@@ -42,15 +44,21 @@ static float minExecTimeOfSeries(KMMProblem problem, uint32_t startF, bool isDis
   reverseExecuteGeMM(subProblem, nullptr, typename KMMProblem::Matrix(), 
                       [](const KMMProblem){return 1;},
     [&](const KMMProblem, int32_t rstart, typename KMMProblem::Matrix) {
-      const int32_t subn = rstart + 1;//(problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
+      const int32_t subn = rstart + 1;
+      //Reverse execution
+      //(problem.mmtype() == FastKronMMType::MKM) ? rstart + 1 :
                             // subProblem.n() - rstart;
 
-      auto firstPart = problem.sub(startF, subn) ;//(problem.mmtype() == FastKronMMType::MKM) ?
+      auto firstPart = problem.sub(startF, subn);
+      //Reverse execution
+      //(problem.mmtype() == FastKronMMType::MKM) ?
                         // problem.sub(startF, subn) :
                         // problem.rsub(startF, subn);
 
       //Is this the first multiplication of X with the factor?
-      bool mulWithFirstFactor = startF + subn == problem.n();// (problem.mmtype() == FastKronMMType::MKM) ?
+      bool mulWithFirstFactor = startF + subn == problem.n();
+      //Reverse execution
+      // (problem.mmtype() == FastKronMMType::MKM) ?
                                 //  startF + subn == problem.n() : 
                                 //  startF + 1 == subn;
 
@@ -70,14 +78,18 @@ static float minExecTimeOfSeries(KMMProblem problem, uint32_t startF, bool isDis
         TunedKernelsSeries epilogueKernels;
         float kernelTime = tunedKernelsMap.getKernelTime(firstPart, isP2P);
         float epilogueTime = minExecTimeOfSeries(problem, 
-                                                 startF + subn,//((problem.mmtype() == FastKronMMType::MKM) ? 
-                                                //  startF + subn : startF - subn),
+                                                 startF + subn,
+        //Reverse execution
+        //((problem.mmtype() == FastKronMMType::MKM) ? 
+        //  startF + subn : startF - subn),
                                                  isDistributed,
                                                  epilogueKernels, tunedKernelsMap);
         if (minTime > kernelTime + epilogueTime) {
           minTime = kernelTime + epilogueTime;
           minEpilogueKernels = epilogueKernels;
-          int32_t endF = startF + rstart;//((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1);
+          int32_t endF = startF + rstart;
+          //Reverse execution
+          //((problem.mmtype() == FastKronMMType::MKM) ? startF + rstart : startF - subn + 1);
           minPrologueKernel = TunedKernelFromStart(tunedKernelsMap.getKernel(firstPart, isP2P),
                                                    startF, endF,
                                                    firstPart.k(), kernelTime);
@@ -175,6 +187,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
     //For performance eval we do not need these to contain any specific value
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
+    //Allocate largest required matrix
     if (result.numel() > temp1[p].numel()) {
       temp1[p] = result;
       temp2[p] = result;
@@ -345,6 +358,15 @@ fastKronError Autotuner::tune(KMMProblemStridedBatched problem, const fastKronBa
     //For performance eval we do not need these to contain any specific value
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
+    //Allocate largest required matrix
+    if (result.numel() > temp1[p].numel()) {
+      temp1[p] = result;
+      temp2[p] = result;
+    }
+    if (problem.x().numel() > temp1[p].numel()) {
+      temp1[p] = problem.x();
+      temp2[p] = problem.x();
+    }
     kernelDb->procMalloc(p, problem.type(), temp1[p], problem.batchCount());
     kernelDb->procMalloc(p, problem.type(), temp2[p], problem.batchCount());
     kernelDb->procMemset(p, temp1[p], problem.batchCount(), 1.0f);

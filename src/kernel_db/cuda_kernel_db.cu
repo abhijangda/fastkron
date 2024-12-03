@@ -264,6 +264,7 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
   const uint32_t MaxGridZ = (1<<16) - 1;
   dim3 grid = kernelInfo.grid(problem);
 
+  //Divide a large grid into smaller sub grids
   for (uint32_t grid_z = 0; grid_z < grid.z; grid_z += MaxGridZ) {
   for (uint32_t grid_x = 0; grid_x < grid.x; grid_x += MaxGridX) {
   for (uint32_t grid_y = 0; grid_y < grid.y; grid_y += MaxGridY) {
@@ -356,7 +357,7 @@ fastKronError CUDAKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem pro
                                                EpilogueParams epilogueParams,
                                                KernelMode execMode) {
   if (kernel->getBatchType() == KernelBatchType::StridedBatched) {
-    //Execute a single batch problem using a strided batched kernel
+    //If kernel is strided batched then execute the problem as a single stridedbatched problem
     KMMProblemStridedBatched stridedProblem(problem);
     EpilogueStridedBatchedParams stridedEpilogue(epilogueParams, problem.y());
     KMMProblemStridedBatched::Matrix stridedIntermediatesArr[intermediates.len()];
@@ -393,22 +394,28 @@ fastKronError CUDAKernelDatabase::invokeP2PStoreKernel(KMMKernel* kernel,
   switch (problem.n()) {
     case 1:
       return invoke(cudaKernel, problem.template factorSlice<1>(),
-                    fidx, intermediates.template sliceOrEmpty<1>(0), distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<1>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 2:
       return invoke(cudaKernel, problem.template factorSlice<2>(),
-                    fidx, intermediates.template sliceOrEmpty<2>(0), distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<2>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 3:
       return invoke(cudaKernel, problem.template factorSlice<3>(),
-                    fidx, intermediates.template sliceOrEmpty<3>(0), distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<3>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 4:
       return invoke(cudaKernel, problem.template factorSlice<4>(),
-                    fidx, intermediates.template sliceOrEmpty<4>(0), distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<4>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 5:
       return invoke(cudaKernel, problem.template factorSlice<5>(),
-                    fidx, intermediates.template sliceOrEmpty<5>(0), distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<5>(0),
+                    distParams, epilogueParams, execMode, stream);
     case 6:
       return invoke(cudaKernel, problem.template factorSlice<6>(),
-                    fidx, intermediates.template sliceOrEmpty<6>(0), distParams, epilogueParams, execMode, stream);
+                    fidx, intermediates.template sliceOrEmpty<6>(0),
+                    distParams, epilogueParams, execMode, stream);
     default:
       Logger(LogLevel::Debug) << "Invalid number of fused kernels: " << problem.n() << std::endl;
   }
