@@ -334,7 +334,7 @@ class FastKronTorch(FastKronBase):
     
     is_vec = x.ndim == 1
 
-    trX,x, trF,fs = fastkrontorch.reshapeInput(mmtype, x, fs)
+    trX,x, trF,fs = self.reshapeInput(mmtype, x, fs)
 
     if x.device.type == "cuda" and stream is None:
       stream = torch.cuda.current_stream()
@@ -388,16 +388,6 @@ class GeKMM(torch.autograd.Function):
     fs = ctx.saved_tensors[1:num_facs + 1]
     zs = ctx.saved_tensors[num_facs+1:]
     return fastkrontorch.kmmBackward(grad_z, x, fs, zs)
-
-# # # torch.set_printoptions(sci_mode=False)
-# # # torch.set_printoptions(profile="full")
-# x = torch.randn((4,3), dtype=torch.double,requires_grad=True)
-# f1 = torch.randn((2,2),dtype=torch.double,requires_grad=False)
-# f2 = torch.randn((2,2),dtype=torch.double,requires_grad=False)
-# f3 = torch.randn((4,4),dtype=torch.double,requires_grad=False)
-# # # f3 = torch.randn((2,2),dtype=torch.double,requires_grad=True)
-# test = gradcheck(GeKMM.apply, (x,f1,f2), eps=1e-5, atol=1e-4)
-# print(test)
 
 def gemkm(x : torch.Tensor, fs : List[torch.Tensor],
           alpha=1.0, beta=0.0, y=None) -> torch.Tensor:

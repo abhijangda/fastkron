@@ -42,8 +42,16 @@ class FastKronNumpy(FastKronBase):
   def device_type(self, x):
     return "cpu"
 
-  def gemkm(self, x, fs, z, alpha, beta, y, temp1, temp2,
-            trX = False, trF = False):
+  def gemkm(self, x, fs, alpha, beta, y):
+    if type(x) is not np.ndarray:
+      raise ValueError("Input 'x' should be a ndarray")
+    if type(fs) is not list:
+      raise ValueError("Input 'fs' should be a list of np.ndarray")
+    for i,f in enumerate(fs):
+      if type(f) is not np.ndarray:
+        raise ValueError(f"Input fs[{i}] should be a ndarray")
+
+    trX,x, trF,fs = self.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
 
     fn = None
     stridedBatchedFn = None
@@ -54,22 +62,28 @@ class FastKronNumpy(FastKronBase):
     elif x.dtype == np.double:
       fn = fastkronX86.libFastKron.dgemkm
       stridedBatchedFn = fastkronX86.libFastKron.dgemkmStridedBatched
-
-    if temp1 is None:
-      raise ValueError("Operand temp1 must be valid 2D Tensor")
-
-    if z is None:
-      raise ValueError("Operand z must be valid 2D Tensor")
-
-    if y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
-      if temp2 is None:
-        raise ValueError("Operand temp2 must be a valid Tensor when z == y")
+    
+    rs, ts = self.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
+    temp1 = np.ndarray(ts, dtype=x.dtype)
+    requires_temp2 = rs != ts or (y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y))
+    temp2 = np.ndarray(ts, dtype=x.dtype) if requires_temp2 else None
+    z = np.ndarray(shape=rs, dtype=x.dtype)
 
     super().xgemm(fastkronX86, FastKronBase.MMTypeMKM, fn, stridedBatchedFn,
-                   x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
+                   x, fs, z, alpha, beta, y, [temp1, temp2], trX, trF)
+    
+    z = z.reshape(rs)
+    return z
 
-  def gekmm(self, fs, x, z, alpha, beta, y, temp1, temp2,
-            trX = False, trF = False):
+  def gekmm(self, fs, x, alpha=1, beta=0, y=None):
+
+    if type(x) is not np.ndarray:
+      raise ValueError("Input 'x' should be a ndarray")
+    if type(fs) is not list:
+      raise ValueError("Input 'fs' should be a list of np.ndarray")
+    for i,f in enumerate(fs):
+      if type(f) is not np.ndarray:
+        raise ValueError(f"Input fs[{i}] should be a ndarray")
 
     fn = None
     stridedBatchedFn = None
@@ -81,20 +95,49 @@ class FastKronNumpy(FastKronBase):
       fn = fastkronX86.libFastKron.dgekmm
       stridedBatchedFn = fastkronX86.libFastKron.dgekmmStridedBatched
 
-    if temp1 is None:
-      raise ValueError("Operand temp1 must be valid 2D Tensor")
+    trX,x, trF,fs = self.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
 
-    if z is None:
-      raise ValueError("Operand z must be valid 2D Tensor")
-
-    if y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y):
-      if temp2 is None:
-        raise ValueError("Operand temp2 must be a valid Tensor when z == y")
-
+    rs, ts = self.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
+    temp1 = np.ndarray(ts, dtype=x.dtype)
+    requires_temp2 = rs != ts or (y is not None and self.tensor_data_ptr(z) == self.tensor_data_ptr(y))
+    temp2 = np.ndarray(ts, dtype=x.dtype) if requires_temp2 else None
+    z = np.ndarray(shape=rs, dtype=x.dtype)
     super().xgemm(fastkronX86, FastKronBase.MMTypeKMM, fn, stridedBatchedFn,
-                   x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
+                  x, fs, z, alpha, beta, y, [temp1, temp2], trX, trF)
+    z = z.reshape(rs)
 
-__fastkronnumpy = FastKronNumpy()
+    return z
+
+  def shuffleGeMM(self, mmtype, x, fs, 
+                  y = None, alpha = 1, beta = 0):
+    if type(x) is not np.ndarray:
+      raise ValueError("Input 'x' should be a ndarray")
+    if type(fs) is not list:
+      raise ValueError("Input 'fs' should be a list of np.ndarray")
+    for i,f in enumerate(fs):
+      if type(f) is not np.ndarray:
+        raise ValueError(f"Input fs[{i}] should be a ndarray")
+    if y is not None and type(y) is not np.ndarray:
+      raise ValueError(f"Input 'y' should be a ndarray")
+    
+    is_vec = x.ndim == 1
+
+    trX,x, trF,fs = self.reshapeInput(mmtype, x, fs)
+
+    z = super().shuffleGeMM(False, np, mmtype, x, fs, alpha, beta, y, trX, trF)
+    
+    if is_vec and z.ndim > 1:
+      z = z.squeeze()
+
+    return z
+
+  def shuffleGeMKM(self, x, fs, alpha = 1, beta = 0, y = None):
+    return self.shuffleGeMM(FastKronBase.MMTypeMKM, x, fs, y, alpha, beta)
+  
+  def shuffleGeKMM(self, fs, x, alpha = 1, beta = 0, y = None):
+    return self.shuffleGeMM(FastKronBase.MMTypeKMM, x, fs, y, alpha, beta)
+
+fastkronnumpy = FastKronNumpy()
 
 def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
   '''
@@ -116,27 +159,10 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
   z : 2D numpy array
   '''
 
-  if type(x) is not np.ndarray:
-    raise ValueError("Input 'x' should be a ndarray")
-  if type(fs) is not list:
-    raise ValueError("Input 'fs' should be a list of np.ndarray")
-  for i,f in enumerate(fs):
-    if type(f) is not np.ndarray:
-      raise ValueError(f"Input fs[{i}] should be a ndarray")
-
-  trX,x, trF,fs = __fastkronnumpy.reshapeInput(x, fs)
-
-  if not __fastkronnumpy.isSupported(x, fs):
-    z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, trX, trF)
-  else:
-    rs, ts = __fastkronnumpy.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
-    temp1 = np.ndarray(ts, dtype=x.dtype)
-    temp2 = np.ndarray(ts, dtype=x.dtype) if rs != ts else None
-    z = np.ndarray(shape=rs, dtype=x.dtype)
-    __fastkronnumpy.gemkm(x, fs, z, alpha, beta, y, temp1, temp2, trX, trF)
-    z = z.reshape(rs)
-
-  return z
+  if not fastkronnumpy.isSupported(x, fs):
+    return fastkronnumpy.shuffleGeMKM(x, fs, alpha, beta, y)
+    
+  return fastkronnumpy.gemkm(x, fs, alpha, beta, y)
 
 def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   '''
@@ -158,25 +184,7 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
   z : 2D numpy array
   '''
 
-  if type(x) is not np.ndarray:
-    raise ValueError("Input 'x' should be a ndarray")
-  if type(fs) is not list:
-    raise ValueError("Input 'fs' should be a list of np.ndarray")
-  for i,f in enumerate(fs):
-    if type(f) is not np.ndarray:
-      raise ValueError(f"Input fs[{i}] should be a ndarray")
-
-  trX,x, trF,fs = __fastkronnumpy.reshapeInput(x, fs)
-
-  if not __fastkronnumpy.isSupported(x, fs):
-    z = __fastkronnumpy.shuffleGeMM(np, FastKronBase.MMTypeKMM, x, fs, alpha, beta, 
-                                    y, trX, trF)
-  else:
-    rs, ts = __fastkronnumpy.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
-    temp1 = np.ndarray(ts, dtype=x.dtype)
-    temp2 = np.ndarray(ts, dtype=x.dtype) if rs != ts else None
-    z = np.ndarray(shape=rs, dtype=x.dtype)
-    __fastkronnumpy.gekmm(fs, x, z, alpha, beta, y, temp1, temp2, trX, trF)
-    z = z.reshape(rs)
-
-  return z
+  if not fastkronnumpy.isSupported(x, fs):
+    return fastkronnumpy.shuffleGeKMM(fs, x, alpha, beta, y)
+    
+  return fastkronnumpy.gekmm(fs, x, alpha, beta, y)
