@@ -1,5 +1,6 @@
 //cuda-example.cu
 #include <fastkron.h>
+#include <iostream>
 
 int main() {
   //Define Problem Sizes
@@ -8,10 +9,10 @@ int main() {
   uint32_t Ps[5] = {8,8,8,8,8}, Qs[5] = {8,8,8,8,8};
 
   //Allocate inputs and output
-  float* x, *fs[N], *y;
+  float* x, *fs[N], *z;
   cudaMalloc(&x, M * (int)powf(Ps[0], N) * sizeof(float));
   for (int i = 0; i < N; i++) cudaMalloc(&fs[i], Ps[0]*Qs[0] * sizeof(float));
-  cudaMalloc(&y, M * (int)powf(Qs[0], N) * sizeof(float));
+  cudaMalloc(&z, M * (int)powf(Qs[0], N) * sizeof(float));
   
   //Initialize FastKron with CUDA
   fastKronHandle handle;
@@ -31,8 +32,8 @@ int main() {
 
   //Do KronMatmul using the tuned kernel
 
-  sgekmm(handle, fastKronBackend_CUDA, M, N, Ps, Qs,
-         x, fastKronOp_N, fs, fastKronOp_N, y, 1, 0, nullptr, 
+  sgemkm(handle, fastKronBackend_CUDA, M, N, Ps, Qs,
+         x, fastKronOp_N, fs, fastKronOp_N, z, 1, 0, nullptr, 
          temp, nullptr);
   
   //Destroy FastKron

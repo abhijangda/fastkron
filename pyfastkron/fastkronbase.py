@@ -258,7 +258,7 @@ class FastKronBase:
 
     self.checkShapeAndTypes(mmtype, x, fs, z, y, trX, trF)
 
-    if beta != 0.0 and y == None:
+    if beta != 0.0 and y is None:
       raise ValueError(f"When beta != 0 {beta} then y should not be None")
 
     orig_xshape = x.shape
