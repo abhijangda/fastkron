@@ -167,11 +167,14 @@ if(ENABLE_CUDA)
       ${CUDA}/shared-loads.cuh
       ${CUDA}/register-loads.cuh
       ${CUDA}/kernel.cuh
+      ${CUDA}/fixed-shape-tensor.cuh
+      ${CUDA}/mma.cuh
       ${CUDA}/otherkernels.cuh
       ${SRC}/kernel_db/cuda_kernel_db.h
       ${SRC}/kernel_db/cuda_kernel_db.cu
       ${SRC}/kernels/gpu_kmmkernel.cu
       ${SRC}/kernels/gpu_kmmkernel.h
+      ${SRC}/kernels/cuda_kmmkernel.h
       ${SRC}/kernels/cuda_kmmkernel.h
       ${CUDA_KERNELS})
 else()
@@ -186,9 +189,7 @@ if(ENABLE_X86)
   include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
   if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc) 
     set(X86_HEADER_FILES
-        ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc
-        ${KERNELS}/cpu/vector-types.h
-        ${KERNELS}/cpu/tensor.h)
+        ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc)
   else()
     set(X86_HEADER_FILES)
   endif()
@@ -198,6 +199,10 @@ if(ENABLE_X86)
       ${SRC}/kernels/cpu_kmmkernel.h
       ${SRC}/kernel_db/cpu_kernel_db.cpp
       ${SRC}/kernel_db/cpu_kernel_db.h
+      ${KERNELS}/cpu/vector-types.h
+      ${KERNELS}/cpu/tensor.h
+      ${KERNELS}/cpu/kernel.h
+      ${KERNELS}/cpu/memory-store.h
       ${X86_KERNELS})
 else()
   set(X86_HEADER_FILES)
@@ -222,9 +227,15 @@ set(HEADER_FILES
     ${SRC}/handle/op.h 
     ${SRC}/kernels/kmmkernel.h
     ${SRC}/kernels/kernel_opt.h
-    ${SRC}/kernel_db/kernel_defs.h
+    ${SRC}/kernels/get_batched_data.h
+    ${SRC}/kernels/hw_details.h
+    ${SRC}/kernels/params.h
+    ${SRC}/kernel_db/kernel_db.h
+    ${SRC}/kernel_db/kernel_db.inline.h
     ${SRC}/kmm/kmmalgo.h
     ${SRC}/kmm/matrix.h
+    ${SRC}/kmm/coord.h
+    ${SRC}/kmm/stackarray.h
     ${SRC}/utils/thread_pool.h
     ${SRC}/utils/utils.h
     ${SRC}/utils/logger.h)
@@ -237,7 +248,8 @@ set(SOURCES
     ${SRC}/kernel_db/kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
     ${SRC}/kmm/matrix.cpp
-    ${SRC}/kernels/kmmkernel.cpp)
+    ${SRC}/kernels/kmmkernel.cpp
+    ${SRC}/utils/utils.cpp)
 
 if (ENABLE_CUDA AND ENABLE_MULTI_GPU)
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cu)
