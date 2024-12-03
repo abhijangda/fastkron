@@ -1,6 +1,7 @@
 from .fastkronbase import fastkronX86, FastKronBase
 
 import platform
+from typing import List, Optional, Union
 
 try:
   import numpy as np
@@ -11,17 +12,18 @@ class FastKronNumpy(FastKronBase):
   def __init__(self):
     super().__init__(True, False)
 
-  def tensor_data_ptr(self, tensor):
+  def tensor_data_ptr(self, tensor : np.ndarray):
     if tensor is None: return 0
     return tensor.ctypes.data
 
-  def supportedDevice(self, x):
+  def supportedDevice(self, x : np.ndarray):
     return True
 
-  def supportedTypes(self, x, fs):
+  def supportedTypes(self, x : np.ndarray, fs : List[np.ndarray]):
     return x.dtype in [np.float32, np.double]
 
-  def trLastTwoDims(self, mmtype, x):
+  def trLastTwoDims(self, mmtype : Union[FastKronBase.MMTypeMKM, FastKronBase.MMTypeKMM],
+                    x : np.ndarray):
     if mmtype == FastKronBase.MMTypeMKM:
       axes = list(range(len(x.shape) - 2)) + [len(x.shape) - 1, len(x.shape) - 2]
     elif mmtype == FastKronBase.MMTypeKMM:
@@ -36,13 +38,15 @@ class FastKronNumpy(FastKronBase):
        strides[-1] == x.shape[-2] * 1: return True, x
     return False, x.ascontiguousarray()
   
-  def stride(self, x):
+  def stride(self, x : np.ndarray):
     return [s//x.dtype.itemsize for s in x.strides]
 
-  def device_type(self, x):
+  def device_type(self, x : np.ndarray):
     return "cpu"
 
-  def gemkm(self, x, fs, alpha, beta, y):
+  def gemkm(self, x : np.ndarray, fs : List[np.ndarray],
+            alpha : float = 1, beta : float = 0,
+            y : Optional[np.ndarray] = None) -> np.ndarray:
     if type(x) is not np.ndarray:
       raise ValueError("Input 'x' should be a ndarray")
     if type(fs) is not list:
@@ -75,7 +79,9 @@ class FastKronNumpy(FastKronBase):
     z = z.reshape(rs)
     return z
 
-  def gekmm(self, fs, x, alpha=1, beta=0, y=None):
+  def gekmm(self, fs : List[np.ndarray], x : np.ndarray,
+            alpha : float = 1, beta : float = 0,
+            y : Optional[np.ndarray] = None) -> np.ndarray:
 
     if type(x) is not np.ndarray:
       raise ValueError("Input 'x' should be a ndarray")
@@ -108,8 +114,9 @@ class FastKronNumpy(FastKronBase):
 
     return z
 
-  def shuffleGeMM(self, mmtype, x, fs, 
-                  y = None, alpha = 1, beta = 0):
+  def shuffleGeMM(self, x : np.ndarray, fs : List[np.ndarray],
+                   alpha : float = 1, beta : float = 0,
+                   y : Optional[np.ndarray] = None) -> np.ndarray:
     if type(x) is not np.ndarray:
       raise ValueError("Input 'x' should be a ndarray")
     if type(fs) is not list:
@@ -131,15 +138,21 @@ class FastKronNumpy(FastKronBase):
 
     return z
 
-  def shuffleGeMKM(self, x, fs, alpha = 1, beta = 0, y = None):
-    return self.shuffleGeMM(FastKronBase.MMTypeMKM, x, fs, y, alpha, beta)
+  def shuffleGeMKM(self, x : np.ndarray, fs : List[np.ndarray],
+                   alpha : float = 1, beta : float = 0,
+                   y : Optional[np.ndarray] = None) -> np.ndarray:
+    return self.shuffleGeMM(FastKronBase.MMTypeMKM, x, fs, alpha, beta, y)
   
-  def shuffleGeKMM(self, fs, x, alpha = 1, beta = 0, y = None):
-    return self.shuffleGeMM(FastKronBase.MMTypeKMM, x, fs, y, alpha, beta)
+  def shuffleGeKMM(self, fs : List[np.ndarray], x : np.ndarray,
+                   alpha : float = 1, beta : float = 0,
+                   y : Optional[np.ndarray] = None) -> np.ndarray:
+    return self.shuffleGeMM(FastKronBase.MMTypeKMM, x, fs, alpha, beta, y)
 
 fastkronnumpy = FastKronNumpy()
 
-def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
+def gemkm(x : np.ndarray, fs : List[np.ndarray],
+          alpha : float = 1.0, beta : float = 0.0,
+          y : Optional[np.ndarray] = None) -> np.ndarray:
   '''
   Perform Generalized Matrix Kronecker-Matrix Multiplication :
   
@@ -147,16 +160,14 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
 
   Parameters
   ----------
-  x  : 2D numpy array
-  fs : A list of 2D numpy array
+  x  : numpy array
+  fs : A list of numpy array
   alpha and beta: constants
-  y  : 2D numpy array 
-  trX: Transpose x before computing GeKMM
-  trF: Transpose each element of fs before computing GeKMM
+  y  : numpy array 
 
   Returns
   -------
-  z : 2D numpy array
+  z : numpy array
   '''
 
   if not fastkronnumpy.isSupported(x, fs):
@@ -164,7 +175,9 @@ def gemkm(x, fs, alpha=1.0, beta=0.0, y=None):
     
   return fastkronnumpy.gemkm(x, fs, alpha, beta, y)
 
-def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
+def gekmm(fs : List[np.ndarray], x : np.ndarray,
+          alpha : float = 1.0, beta : float = 0.0,
+          y : Optional[np.ndarray] = None) -> np.ndarray:
   '''
   Perform Generalized Kronecker-Matrix Matrix Multiplication :
   
@@ -172,16 +185,14 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
 
   Parameters
   ----------
-  x  : 2D numpy array
-  fs : A list of 2D numpy array
+  x  : numpy array
+  fs : A list of numpy array
   alpha and beta: constants
-  y  : 2D numpy array 
-  trX: Transpose x before computing GeKMM
-  trF: Transpose each element of fs before computing GeKMM
+  y  : numpy array 
 
   Returns
   -------
-  z : 2D numpy array
+  z : numpy array
   '''
 
   if not fastkronnumpy.isSupported(x, fs):
