@@ -175,6 +175,14 @@ fastKronError Autotuner::tune(KMMProblem problem,
     //For performance eval we do not need these to contain any specific value
     fastKron.gekmmResultTemp(problem, result, temp1[p]);
     fastKron.gekmmResultTemp(problem, result, temp2[p]);
+    if (result.numel() > temp1[p].numel()) {
+      temp1[p] = result;
+      temp2[p] = result;
+    }
+    if (problem.x().numel() > temp1[p].numel()) {
+      temp1[p] = problem.x();
+      temp2[p] = problem.x();
+    }
     kernelDb->procMalloc(p, problem.type(), temp1[p]);
     kernelDb->procMalloc(p, problem.type(), temp2[p]);
     kernelDb->procMemset(p, temp1[p], 1.0f);

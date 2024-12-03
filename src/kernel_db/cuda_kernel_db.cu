@@ -224,7 +224,6 @@ fastKronError CUDAKernelDatabase::procMalloc(uint32_t proc, size_t size, void*& 
   CUDA_CHECK(cudaSetDevice(proc));
   CUDA_CHECK(cudaMalloc(&ptr, size));
   CUDA_CHECK(cudaMemset(ptr, 1, size));
-
   return fastKronSuccess;
 }
 
