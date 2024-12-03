@@ -22,8 +22,10 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
   }
 
   bool storeFusedIntermediate = (fac > 0 && fusedParams.intermediates[fac].data() != nullptr);
-
+  
   if (storeFusedIntermediate || storeY) {
+    Matrix output = (storeFusedIntermediate) ? FusedIntermediate : Y;
+
     YReg.apply([&](X86VecT& e, const uint32_t rm, const uint32_t rk, const uint32_t rq) {
       constexpr bool kQMultipleOfTileQ = KernelOptimizations::IsQMultipleOfTileQ(OptLevel);
       constexpr bool kKMultipleOfTileK = KernelOptimizations::IsKMultipleOfTileK(OptLevel);
@@ -75,11 +77,7 @@ void store(const KernelParams& /*params*/, const FusedParams& fusedParams, const
           e.fmadd(beta, z);
         }
         uint32_t yM = tileM + y.m() + rm*YReg.mvec();
-        if (storeFusedIntermediate) {
-          e.store(FusedIntermediate.data<ElemT>(yM, yN, YReg.layout()), numElems);
-        } else {
-          e.store(Y.data<ElemT>(yM, yN, YReg.layout()), numElems);
-        }
+        e.store(output.data<ElemT>(yM, yN, YReg.layout()), numElems);
     }});
   }
 }
