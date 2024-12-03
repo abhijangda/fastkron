@@ -22,7 +22,7 @@
  * a series of kernels that minimizes the total execution time of the base problem.
  */
 template<typename KMMProblem, typename TunedKernelsMap>
-static float minExecTimeOfSeries(KMMProblem problem, int32_t startF, bool isDistributed,
+static float minExecTimeOfSeries(KMMProblem problem, uint32_t startF, bool isDistributed,
                                  TunedKernelsSeries& tunedKernels,
                                  TunedKernelsMap tunedKernelsMap) {
   if (startF >= problem.n()) return 0;

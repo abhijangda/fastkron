@@ -548,7 +548,7 @@ fastKronError getIntermediates(bool keepIntermediates, const KMMProblemType prob
   for (uint32_t i = 0; i < problem.n(); i++)
     intermediates.push_back(typename KMMProblemType::Matrix());
 
-  auto err = executeGeMM(keepIntermediates, problem, typename KMMProblemType::Matrices({}), length, next, 
+  auto err = executeGeMM(problem, typename KMMProblemType::Matrices({}), next, 
                         [&](const KMMProblem subProb, int32_t rstart, KMMProblem::Matrices) {
                           void* ptr;
                           if (keepIntermediates) {
@@ -596,7 +596,7 @@ fastKronError getIntermediates(bool keepIntermediates, const KMMProblemType prob
   for (uint32_t i = 0; i < problem.n(); i++)
     intermediates.push_back(typename KMMProblemType::Matrix());
 
-  auto err = executeGeMM(keepIntermediates, problem, typename KMMProblemType::Matrices({}), length, next, 
+  auto err = executeGeMM(problem, typename KMMProblemType::Matrices({}), next, 
                         [&](const KMMProblemType subProb, int32_t rstart, typename KMMProblemType::Matrices) {
                           void* ptr;
                           if (keepIntermediates) {
@@ -635,15 +635,13 @@ fastKronError getIntermediates(bool keepIntermediates, const KMMProblemType prob
  * Return - fastKronSuccess if succesfull otherwise the error.
  */
 
-fastKronError executeGeMM(bool keepIntermediates, const KMMProblem problem, KMMProblem::Matrices temps,
-                          uint32_t swaps,
+fastKronError executeGeMM(const KMMProblem problem, KMMProblem::Matrices temps,
                           std::function<uint (const KMMProblem)> next,
                           std::function<fastKronError (const KMMProblem, int, typename KMMProblem::Matrices)> func);
 
-fastKronError executeGeMM(bool keepIntermediates, const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Matrices temps,
-                           uint32_t swaps,
-                           std::function<uint (const KMMProblemStridedBatched)> next,
-                           std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrices)> func);
+fastKronError executeGeMM(const KMMProblemStridedBatched problem, KMMProblemStridedBatched::Matrices temps,
+                          std::function<uint (const KMMProblemStridedBatched)> next,
+                          std::function<fastKronError (const KMMProblemStridedBatched, int, typename KMMProblemStridedBatched::Matrices)> func);
 
 /**
  * reverseExecuteGeMM() - Execute a function on the problem using the reverse MKM/KMM algorithm

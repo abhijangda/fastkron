@@ -351,7 +351,7 @@ protected:
    */
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
           filterFastestFusedKernels(const KMMProblem& problem, const std::vector<KMMKernel*>& kernels);
-  virtual bool isFastFusedKernel(const KMMProblem& problem, const KMMKernel* kernel, uint32_t fusedFacs) {return true;}
+  virtual bool isFastFusedKernel(const KMMProblem& /*problem*/, const KMMKernel* /*kernel*/, uint32_t /*fusedFacs*/) {return true;}
 
   std::map<uint32_t, std::vector<KMMKernel*>, std::greater<int>> 
           filterFastestFusedKernels(const KMMProblemStridedBatched& problem, const std::vector<KMMKernel*>& kernels) {

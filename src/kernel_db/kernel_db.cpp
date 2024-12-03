@@ -236,7 +236,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
         //The approach always selects the kernel with the maximum number of fusion
         auto fusedIter = numFusedToKernels.begin();
 
-        executeGeMM(false, problem, emptyIntermediates, problem.n(),
+        executeGeMM(problem, emptyIntermediates,
           [&fusedIter](const KMMProblemT) {
             return fusedIter->first;
           },
@@ -265,7 +265,7 @@ TunedKernelsSeries KernelDatabase::kernelSeriesForProblem(KMMProblemT problem, K
 
     //No Fused kernel case found
     {
-      executeGeMM(false, problem, emptyIntermediates, problem.n(),
+      executeGeMM(problem, emptyIntermediates,
         [](const KMMProblemT) {return 1;},
         [&kernelSeries, this]
           (const KMMProblemT subProblem, int rstart, typename KMMProblemT::Matrices) {

@@ -150,17 +150,6 @@ fastKronError sgemkm(fastKronHandle handle, fastKronBackend backend, uint M, uin
                                            EpilogueParams::create<float>(alpha, beta, Z));
 }
 
-fastKronError igemkm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const int* X,
-                   fastKronOp opX, const int* const Fs[], fastKronOp opFs, int* Y,
-                   int alpha, int beta, const int *Z, int* temp1, int* temp2) {
-  KMMProblem problem(FastKronMMType::MKM, FastKronInt,
-                     Matrix(M, KMMProblem::getK(Ps, N), (void*)X), opX,
-                     KMMProblem::Factors(N, Ps, Qs, (void**)Fs), opFs,
-                     Matrix(M, KMMProblem::getL(Qs, N), (void*)Y));
-  // return ((FastKronHandle*)handle)->xgemm(problem, backend, (void*)temp1, (void*)temp2, 
-                                          //  EpilogueParams::create<int>(alpha, beta, Z));
-}
-
 fastKronError dgemkm(fastKronHandle handle, fastKronBackend backend, uint M, uint N, uint Ps[], uint Qs[], const double* X,
                    fastKronOp opX, const double* const Fs[], fastKronOp opFs, double* Y,
                    double alpha, double beta, const double *Z, double* temp1, double* temp2) {
@@ -241,20 +230,6 @@ fastKronError sgemkmStridedBatched(fastKronHandle handle, fastKronBackend backen
                                                          std::get<1>(problem));
 }
 
-fastKronError igemkmStridedBatched(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
-                     const int* X, fastKronOp opX, uint64_t strideX,
-                     const int* const Fs[], fastKronOp opFs, uint64_t strideF[],
-                     int* Y, uint64_t strideY, int alpha, int beta,
-                     uint32_t batchCount, const int *Z, uint64_t strideZ, int* temp1, int* temp2) {
-  auto problem = createStridedBatchedProblem(FastKronMMType::MKM, FastKronInt,
-                                             M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF,
-                                             Y, strideY, alpha, beta, batchCount, Z, strideZ);
-  return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
-                                                         temp1, temp2,
-                                                         std::get<1>(problem));
-}
-
 fastKronError dgemkmStridedBatched(fastKronHandle handle, fastKronBackend backend,
                      uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
                      const double* X, fastKronOp opX, uint64_t strideX,
@@ -278,21 +253,6 @@ fastKronError sgekmmStridedBatched(fastKronHandle handle, fastKronBackend backen
                      float* temp1, float* temp2) {
   auto problem = createStridedBatchedProblem(FastKronMMType::KMM, FastKronFloat,
                                              M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF, 
-                                             Y, strideY, alpha, beta, batchCount, Z, strideZ);
-  return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
-                                                        temp1, temp2,
-                                                        std::get<1>(problem));
-}
-
-fastKronError igekmmStridedBatched(fastKronHandle handle, fastKronBackend backend,
-                     uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
-                     const int* const Fs[], fastKronOp opFs, uint64_t strideF[],
-                     const int* X, fastKronOp opX, uint64_t strideX,
-                     int* Y, uint64_t strideY, int alpha, int beta,
-                     uint32_t batchCount, const int *Z, uint64_t strideZ,
-                     int* temp1, int* temp2) {
-  auto problem = createStridedBatchedProblem(FastKronMMType::KMM, FastKronInt,
-                                             M, N, Ps, Qs, X, opX, strideX, Fs, opFs, strideF,
                                              Y, strideY, alpha, beta, batchCount, Z, strideZ);
   return ((FastKronHandle*)handle)->xgemmStridedBatched(std::get<0>(problem), backend,
                                                         temp1, temp2,

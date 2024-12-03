@@ -359,9 +359,6 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
                       (const float*)x, opx, (const float**)kpMats, opfs, (float*)y,
                       alpha, beta, (const float*)z, (float*)temp1, (float*)temp2));
     } else if (std::is_same<T, int>::value) {
-      FastKronCHECK(igemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
-                      (const int*)x, opx, (const int**)kpMats, opfs, (int*)y,
-                      alpha, beta, (const int*)z, (int*)temp1, (int*)temp2));
     } else if (std::is_same<T, double>::value) {
       FastKronCHECK(dgemkm(handle, backend, M, NUM_KP_MATS, KP_MAT_K, KP_MAT_N,  
                       (const double*)x, opx, (const double**)kpMats, opfs, (double*)y,
@@ -386,9 +383,9 @@ static void kronGEMM(fastKronHandle handle, const fastKronBackend backend, FastK
 }
 
 template<typename T>
-static void kronGEMMForward(fastKronHandle handle, const fastKronBackend backend, FastKronMMType kronmatmulType, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* z, T* y, T* intermediates[], T /*alpha*/, T /*beta*/,
+static void kronGEMMForward(fastKronHandle handle, const fastKronBackend backend, FastKronMMType kronmatmulType, const uint NUM_KP_MATS, T* x, fastKronOp opx, T* kpMats[], fastKronOp opfs, T* /*z*/, T* y, T* intermediates[], T /*alpha*/, T /*beta*/,
                      uint M, uint/*N*/, uint/*K*/, uint KP_MAT_N[], uint KP_MAT_K[], 
-                     uint32_t batchCount, uint64_t strideX, uint64_t strideZ, uint64_t strideF[],
+                     uint32_t batchCount, uint64_t strideX, uint64_t /*strideZ*/, uint64_t strideF[],
                      uint64_t strideY) {
   if (batchCount > 1) {
     uint64_t* strideIntermediates = nullptr;

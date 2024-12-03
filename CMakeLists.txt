@@ -60,7 +60,7 @@ endif()
 
 set(PKG_CONFIG_FILE libFastKron.pc)
 
-if(CMAKE_COMPILER_IS_GNUCXX)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
   set(WARNING_FLAGS "-Wall -Wextra -Wno-unknown-pragmas") 
 endif()
 

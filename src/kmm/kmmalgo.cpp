@@ -59,7 +59,7 @@ bool checkDistributedKronSizes(const KMMProblem problem,
   
   bool correct = true;
   KMMProblem::Matrices emptyIntermediates;
-  executeGeMM(false, problem, emptyIntermediates, 0,
+  executeGeMM(problem, emptyIntermediates,
     [](const KMMProblem /*kmm*/) {return 1;},
     [&correct, gpusInK](const KMMProblem kmm, int /*rstart*/, KMMProblem::Matrices /*results*/) {
       correct = correct && (kmm.l() % gpusInK == 0);
@@ -71,10 +71,10 @@ bool checkDistributedKronSizes(const KMMProblem problem,
 
 /*MKM Algorithm functions*/
 template<typename KMMProblemType>
-fastKronError executeGeMM(bool keepIntermediates, KMMProblemType problem, typename KMMProblemType::Matrices tmps, uint32_t swaps,
-                           std::function<uint (const KMMProblemType)> next,
-                           std::function<fastKronError (const KMMProblemType, int rstart,
-                                                        typename KMMProblemType::Matrices)> func) {
+fastKronError executeGeMM(KMMProblemType problem, typename KMMProblemType::Matrices tmps,
+                          std::function<uint (const KMMProblemType)> next,
+                          std::function<fastKronError (const KMMProblemType, int rstart,
+                                                       typename KMMProblemType::Matrices)> func) {
   int nextF = 1;
 
   typename KMMProblemType::Matrix result = problem.y();
@@ -105,32 +105,27 @@ fastKronError executeGeMM(bool keepIntermediates, KMMProblemType problem, typena
     typename KMMProblemType::Matrices results({});
     if (tmps.len() > 0)
       results = tmps.slice(i - nextF + 1, nextF);
-    //TODO: Remove this statement after running tests
-    // subProblem.initMMIter(i, i == problem.n() - 1, i < nextF);
+
     subProblem.setOpX(opX);
     err = func(subProblem, i, results);
     if (err != fastKronSuccess) break;
-    // if (!keepIntermediates && tmps.len() > 0)
-    //   problem.swap(tmps[0].data(), tmps[1].data());
   }
 
   return err;
 }
 
-fastKronError executeGeMM(bool keepIntermediates, const KMMProblem problem, typename KMMProblem::Matrices temps,
-                           uint32_t swaps,
-                           std::function<uint (const KMMProblem)> next,
-                           std::function<fastKronError (const KMMProblem, int,
+fastKronError executeGeMM(const KMMProblem problem, typename KMMProblem::Matrices temps,
+                          std::function<uint (const KMMProblem)> next,
+                          std::function<fastKronError (const KMMProblem, int,
                                          typename KMMProblem::Matrices)> func) {
-  return executeGeMM<KMMProblem>(keepIntermediates, problem, temps, swaps, next, func);
+  return executeGeMM<KMMProblem>(problem, temps, next, func);
 }
 
-fastKronError executeGeMM(bool keepIntermediates, const KMMProblemStridedBatched problem, typename KMMProblemStridedBatched::Matrices temps,
-                           uint32_t swaps,
-                           std::function<uint (const KMMProblemStridedBatched)> next,
-                           std::function<fastKronError (const KMMProblemStridedBatched, int, 
-                                         typename KMMProblemStridedBatched::Matrices)> func) {
-  return executeGeMM<KMMProblemStridedBatched>(keepIntermediates, problem, temps, swaps, next, func);
+fastKronError executeGeMM(const KMMProblemStridedBatched problem, typename KMMProblemStridedBatched::Matrices temps,
+                          std::function<uint (const KMMProblemStridedBatched)> next,
+                          std::function<fastKronError (const KMMProblemStridedBatched, int, 
+                                        typename KMMProblemStridedBatched::Matrices)> func) {
+  return executeGeMM<KMMProblemStridedBatched>(problem, temps, next, func);
 }
 
 //TODO: Change to forwardGeKMM

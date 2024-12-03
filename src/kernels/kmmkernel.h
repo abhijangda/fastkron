@@ -233,13 +233,3 @@ struct TunedKernelFromStart {
 };
 
 typedef std::vector<TunedKernelFromStart> TunedKernelsSeries;
-
-static std::vector<uint32_t> iterIncrementsFromKernelSeries(TunedKernelsSeries& series) {
-  std::vector<uint32_t> increments;
-
-  for (auto k : series) {
-    increments.push_back(k.end - k.start + 1);
-  }
-
-  return increments;
-}

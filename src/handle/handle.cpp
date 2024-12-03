@@ -175,7 +175,7 @@ fastKronError FastKronHandle::xgemm(bool isforward, KMMProblem problem,
   auto kernelSeriesIter = kernelSeries.begin();
 
   //Execute GeKMM algorithm using above kernels
-  err = executeGeMM(isforward, problem, intermediates, kernelSeries.size(),
+  err = executeGeMM(problem, intermediates,
     [&kernelSeriesIter](const KMMProblem)
       {return kernelSeriesIter->end - kernelSeriesIter->start + 1;},
     [&kernelSeriesIter, &epilogueParams, kernelDb, problem, this]
@@ -228,7 +228,6 @@ fastKronError FastKronHandle::xgemmStridedBatched(bool isforward, KMMProblemStri
   fastKronError err = fastKronSuccess;
   TunedKernelsSeries kernelSeries;
 
-  using StridedBatchMatrix = KMMProblemStridedBatched::Matrix;
   using StridedBatchMatrices = KMMProblemStridedBatched::Matrices;
 
   auto kernelDb = getKernelDb(backend);
@@ -262,7 +261,7 @@ fastKronError FastKronHandle::xgemmStridedBatched(bool isforward, KMMProblemStri
   }
 
   //Execute GeKMM algorithm using above kernels
-  err = executeGeMM(isforward, problem, intermediates, kernelSeries.size(),
+  err = executeGeMM(problem, intermediates,
     [&kernelSeriesIter](const KMMProblemStridedBatched) 
       {return kernelSeriesIter->end - kernelSeriesIter->start + 1;},
     [&kernelSeriesIter, &epilogueParams, kernelDb, problem, this]
