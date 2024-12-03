@@ -109,9 +109,9 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
     for f in fs:
       f.requires_grad = True
     if mmtype == "kmm":
-      torch.autograd.gradcheck(fk.GeKMM.apply, (x,*fs), eps=1e-5, atol=1e-4)
+      torch.autograd.gradcheck(fk.KMM.apply, (x,*fs), eps=1e-5, atol=1e-4)
     elif mmtype == "mkm":
-      torch.autograd.gradcheck(fk.GeMKM.apply, (x,*fs), eps=1e-5, atol=1e-4)
+      torch.autograd.gradcheck(fk.MKM.apply, (x,*fs), eps=1e-5, atol=1e-4)
     print(116)
 
 def device_tests(device):

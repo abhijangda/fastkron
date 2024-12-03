@@ -97,16 +97,6 @@ PYBIND11_MODULE(FastKron, m)
     THROW_ERROR(err);
   }, "Perform GeKMM on using 32-bit floating point operations on input matrices.");
 
-  m.def("igemkm", [](fastKronHandle handle, fastKronBackend backend, 
-                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
-                     uint64_t X, fastKronOp opX,
-                     std::vector<uint64_t> Fs, fastKronOp opFs,
-                     uint64_t Y, int alpha, int beta,
-                     uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    auto err = igemkm(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, (const int**)Fs.data(), opFs, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
-    THROW_ERROR(err);
-  }, "igemkm");
-
   m.def("dgemkm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
                      uint64_t X, fastKronOp opX,
@@ -127,17 +117,6 @@ PYBIND11_MODULE(FastKron, m)
     auto err = sgekmm(handle, backend, N, Qs.data(), Ps.data(), M, (const float**)Fs.data(), opFs, (const float*)X, opX, (float*)Y, alpha, beta, (float*)Z, (float*)temp1, (float*)temp2);
     THROW_ERROR(err);
   }, "Perform GeKMM on using 32-bit floating point operations on input matrices.");
-
-  // m.def("igekmm", [](fastKronHandle handle, fastKronBackend backend, 
-  //                    uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
-  //                    uint32_t M,
-  //                    std::vector<uint64_t> Fs, fastKronOp opFs,
-  //                    uint64_t X, fastKronOp opX,
-  //                    uint64_t Y, int alpha, int beta,
-  //                    uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    // auto err = igekmm(handle, backend, N, Qs.data(), Ps.data(), M, (const int**)Fs.data(), opFs, (const int*)X, opX, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
-  //   THROW_ERROR(err);
-  // }, "igekmm");
 
   m.def("dgekmm", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
@@ -164,19 +143,6 @@ PYBIND11_MODULE(FastKron, m)
     THROW_ERROR(err);
   }, "Perform GeKMM Strided Batched on using 32-bit floating point operations on input matrices.");
 
-  m.def("igemkmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
-                                    uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
-                                    uint64_t X, fastKronOp opX, uint64_t strideX,
-                                    std::vector<uint64_t> Fs, fastKronOp opFs, std::vector<uint64_t> strideF,
-                                    uint64_t Y, uint64_t strideY, uint64_t alpha, uint64_t beta,
-                                    uint32_t batchCount, uint64_t Z, uint64_t strideZ,
-                                    uint64_t temp1, uint64_t temp2) {
-    auto err = igemkmStridedBatched(handle, backend, M, N, Ps.data(), Qs.data(), (const int*)X, opX, strideX,
-                                    (const int**)Fs.data(), opFs, strideF.data(), (int*)Y, strideY, 
-                                    alpha, beta, batchCount, (int*)Z, strideZ,
-                                    (int*)temp1, (int*)temp2);
-    THROW_ERROR(err);
-  }, "Perform GeKMM Strided Batched on using 32-bit integer point operations on input matrices.");
   //TODO: make the order of arguments same as in cublas API m,n,k,alpha,x,f,z,beta,y
   m.def("dgemkmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
                                     uint32_t M, uint32_t N, std::vector<uint32_t> Ps, std::vector<uint32_t> Qs,
@@ -209,21 +175,6 @@ PYBIND11_MODULE(FastKron, m)
     THROW_ERROR(err);
   }, "Perform GeKMM Strided Batched on using 32-bit floating point operations on input matrices.");
 
-  // m.def("igekmmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
-  //                                   uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
-  //                                   uint32_t M,
-  //                                   std::vector<uint64_t> Fs, fastKronOp opFs, std::vector<uint64_t> strideF,
-  //                                   uint64_t X, fastKronOp opX, uint64_t strideX,
-  //                                   uint64_t Y, uint64_t strideY, uint64_t alpha, uint64_t beta,
-  //                                   uint32_t batchCount, uint64_t Z, uint64_t strideZ,
-  //                                   uint64_t temp1, uint64_t temp2) {
-  //   // auto err = igekmmStridedBatched(handle, backend, N, Qs.data(), Ps.data(),
-  //   //                                 (const int**)Fs.data(), opFs, strideF.data(), 
-  //   //                                 (const int*)X, opX, strideX, (int*)Y, strideY, 
-  //   //                                 alpha, beta, batchCount, (int*)Z, strideZ,
-  //   //                                 (int*)temp1, (int*)temp2);
-  //   THROW_ERROR(err);
-  // }, "Perform GeKMM Strided Batched on using 32-bit integer point operations on input matrices.");
   //TODO: make the order of arguments same as in cublas API m,n,k,alpha,x,f,z,beta,y
   m.def("dgekmmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
                                     uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
@@ -279,17 +230,6 @@ PYBIND11_MODULE(FastKron, m)
     THROW_ERROR(err);
   }, "Perform GeKMM on using 32-bit floating point operations on input matrices.");
 
-  // m.def("igekmm", [](fastKronHandle handle, fastKronBackend backend, 
-  //                    uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
-  //                    uint32_t M,
-  //                    std::vector<uint64_t> Fs, fastKronOp opFs,
-  //                    uint64_t X, fastKronOp opX,
-  //                    uint64_t Y, int alpha, int beta,
-  //                    uint64_t Z, uint64_t temp1, uint64_t temp2) {
-    // auto err = igekmm(handle, backend, N, Qs.data(), Ps.data(), M, (const int**)Fs.data(), opFs, (const int*)X, opX, (int*)Y, alpha, beta, (int*)Z, (int*)temp1, (int*)temp2);
-  //   THROW_ERROR(err);
-  // }, "igekmm");
-
   m.def("dkmmForward", [](fastKronHandle handle, fastKronBackend backend, 
                      uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
                      uint32_t M,
@@ -340,21 +280,6 @@ PYBIND11_MODULE(FastKron, m)
     THROW_ERROR(err);
   }, "Perform GeKMM Strided Batched on using 32-bit floating point operations on input matrices.");
 
-  // m.def("igekmmStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
-  //                                   uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,
-  //                                   uint32_t M,
-  //                                   std::vector<uint64_t> Fs, fastKronOp opFs, std::vector<uint64_t> strideF,
-  //                                   uint64_t X, fastKronOp opX, uint64_t strideX,
-  //                                   uint64_t Y, uint64_t strideY, uint64_t alpha, uint64_t beta,
-  //                                   uint32_t batchCount, uint64_t Z, uint64_t strideZ,
-  //                                   uint64_t temp1, uint64_t temp2) {
-  //   // auto err = igekmmStridedBatched(handle, backend, N, Qs.data(), Ps.data(),
-  //   //                                 (const int**)Fs.data(), opFs, strideF.data(), 
-  //   //                                 (const int*)X, opX, strideX, (int*)Y, strideY, 
-  //   //                                 alpha, beta, batchCount, (int*)Z, strideZ,
-  //   //                                 (int*)temp1, (int*)temp2);
-  //   THROW_ERROR(err);
-  // }, "Perform GeKMM Strided Batched on using 32-bit integer point operations on input matrices.");
   //TODO: make the order of arguments same as in cublas API m,n,k,alpha,x,f,z,beta,y
   m.def("dkmmForwardStridedBatched", [](fastKronHandle handle, fastKronBackend backend, 
                                     uint32_t N, std::vector<uint32_t> Qs, std::vector<uint32_t> Ps,

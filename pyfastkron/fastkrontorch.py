@@ -1,7 +1,7 @@
 from .fastkronbase import fastkronX86, fastkronCUDA, FastKronBase, product
 
 import platform
-from typing import List
+from typing import List, Optional, Union
 
 try:
   import torch
@@ -18,17 +18,20 @@ class FastKronTorch(FastKronBase):
 
     super().__init__(True, cuda)
 
-  def tensor_data_ptr(self, tensor):
+  def tensor_data_ptr(self, tensor : torch.Tensor):
     if tensor is None: return 0
     if type(tensor) is list or type(tensor) is tuple:
       return [t.data_ptr() for t in tensor]
     return tensor.data_ptr()
 
-  def supportedDevice(self, x):
+  def supportedDevice(self, x : torch.Tensor):
     return (x.device.type == 'cuda' and torch.version.hip == None) or \
            (x.device.type == 'cpu')
 
-  def check(self, x, fs, y, z, stream):
+  def check(self, x : torch.Tensor, fs : List[torch.Tensor],
+            y : Optional[torch.Tensor] = None,
+            z : Optional[torch.Tensor] = None,
+            stream : Optional[torch.cuda.Stream] = None):
     devices = [x.device] + [f.device for f in fs]
     if y is not None:
       devices += [y.device]
@@ -44,35 +47,39 @@ class FastKronTorch(FastKronBase):
       if stream.device != x.device:
         raise RuntimeError(f"Expected stream to be on same device as tensors, but found {stream.device} and {x.device} are different")
 
-  def supportedTypes(self, x, fs):
+  def supportedTypes(self, x : torch.Tensor, fs : List[torch.Tensor]):
     return x.dtype in [torch.float32, torch.float64]
 
-  def trLastTwoDims(self, mmtype, x):
+  def trLastTwoDims(self, mmtype : Union[FastKronBase.MMTypeMKM, FastKronBase.MMTypeKMM],
+                    x : torch.Tensor):
     if mmtype == FastKronBase.MMTypeMKM:
       return x.transpose(-1, -2)
     elif mmtype == FastKronBase.MMTypeKMM:
       return x.transpose(-2, -3)
 
-  def device_type(self, x):
+  def device_type(self, x : torch.Tensor):
     return x.device.type
 
-  def handle(self, x):
+  def handle(self, x : torch.Tensor):
     if self.device_type(x) == "cpu":
       return fastkronX86
     elif self.device_type(x) == "cuda":
       return fastkronCUDA
 
-  def asContiguousTensor(self, x, forceContiguous=False):
+  def asContiguousTensor(self, x : torch.Tensor, forceContiguous : bool = False):
     if forceContiguous: return False, x.contiguous()
     if x.is_contiguous(): return False, x
     if x.ndim > 1 and x.stride()[-2] == 1 and x.stride()[-1] == x.shape[-2]: return True, x
     return False, x.contiguous()
 
-  def stride(self, x):
+  def stride(self, x : torch.Tensor):
     return x.stride()
 
-  def gemkm(self, requires_grad, x, fs, 
-            y = None, alpha = 1, beta = 0, stream = None):
+  def gemkm(self, requires_grad : bool, 
+            x : torch.Tensor, fs : List[torch.Tensor],
+            alpha : float = 1.0, beta : float = 0.0,
+            y : Optional[torch.Tensor] = None, 
+            stream : Optional[torch.cuda.Stream] = None):
     if type(x) is not torch.Tensor:
       raise ValueError("Input 'x' should be a Tensor")
     if type(fs) is not list and type(fs) is not tuple:
@@ -101,74 +108,56 @@ class FastKronTorch(FastKronBase):
     fn = None
     stridedBatchedFn = None
     
-    if x.dtype == torch.float:
-      fn = self.handle(x).libFastKron.sgemkm
-      stridedBatchedFn = self.handle(x).libFastKron.sgemkmStridedBatched
-    elif x.dtype == torch.double:
-      fn = self.handle(x).libFastKron.dgemkm
-      stridedBatchedFn = self.handle(x).libFastKron.dgemkmStridedBatched
+    if requires_grad:
+      if x.dtype == torch.float:
+        fn = self.handle(x).libFastKron.smkmForward
+        stridedBatchedFn = self.handle(x).libFastKron.smkmForwardStridedBatched
+      elif x.dtype == torch.double:
+        fn = self.handle(x).libFastKron.dmkmForward
+        stridedBatchedFn = self.handle(x).libFastKron.dmkmForwardStridedBatched  
+    else:
+      if x.dtype == torch.float:
+        fn = self.handle(x).libFastKron.sgemkm
+        stridedBatchedFn = self.handle(x).libFastKron.sgemkmStridedBatched
+      elif x.dtype == torch.double:
+        fn = self.handle(x).libFastKron.dgemkm
+        stridedBatchedFn = self.handle(x).libFastKron.dgemkmStridedBatched
 
     zs = []
-    rs, ts = self.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF)
+    rs, ts = self.gekmmSizes(FastKronBase.MMTypeMKM, x, fs, trX=trX, trF=trF, intermediates=requires_grad)
     z = x.new_empty(rs)
-    temp1 = x.new_empty(ts)
-    temp2 = x.new_empty(ts) if rs != ts else None
-    super().xgemm(self.handle(x), FastKronBase.MMTypeMKM, fn, stridedBatchedFn, x, fs, z, alpha, beta, y, [temp1, temp2], trX, trF)
+    if requires_grad:
+      zs = [x.new_empty(s) for s in ts]
+    else:
+      temp1 = x.new_empty(ts)
+      temp2 = x.new_empty(ts) if rs != ts else None
+      zs = [temp1, temp2]
+
+    super().xgemm(self.handle(x), FastKronBase.MMTypeMKM,
+                  fn, stridedBatchedFn, 
+                  x, fs, z, alpha, beta, y, zs, 
+                  trX, trF, writeIntermediates=requires_grad)
     z = z.reshape(rs)
+
+    if requires_grad:
+      zs = [inter.reshape(s) for inter,s in zip(zs,ts)]
 
     if is_vec and z.ndim > 1:
       z = z.squeeze()
 
     return z, zs
-  
-  def mkmForward(self, requires_grad, x, fs, stream = None):
-    if type(x) is not torch.Tensor:
-      raise ValueError("Input 'x' should be a Tensor")
-    if type(fs) is not list and type(fs) is not tuple:
-      raise ValueError("Input 'fs' should be a list of Tensor")
-    for i,f in enumerate(fs):
-      if type(f) is not torch.Tensor:
-        raise ValueError(f"Input fs[{i}] should be a Tensor but is {type(fs[i])}")
-  
-    is_vec = x.ndim == 1
-    alpha = 1
-    beta = 0
 
-    trX,x, trF,fs = fastkrontorch.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
-
-    if x.device.type == "cuda" and stream is None:
-      stream = torch.cuda.current_stream()
-
-    self.check(x, fs, None, None, stream)
-
-    fn = None
-    stridedBatchedFn = None
-    if x.dtype == torch.float:
-      fn = self.handle(x).libFastKron.smkmForward
-      stridedBatchedFn = self.handle(x).libFastKron.smkmForwardStridedBatched
-    elif x.dtype == torch.double:
-      fn = self.handle(x).libFastKron.dmkmForward
-      stridedBatchedFn = self.handle(x).libFastKron.dmkmForwardStridedBatched
-
-    zs = []
-    rs, ts = self.gekmmSizes(FastKronBase.MMTypeMKM,\
-                             x, fs, trX=trX, trF=trF, intermediates=True)
-
-    z = x.new_empty(rs)
-    zs = [x.new_empty(s) for s in ts]
-    super().xgemm(self.handle(x), FastKronBase.MMTypeMKM, fn, stridedBatchedFn, x, fs, z, 1.0, 0.0, None, zs, trX, trF, writeIntermediates=True)
-    z = z.reshape(rs)
-    zs = [inter.reshape(s) for inter,s in zip(zs,ts)]
-    if is_vec and z.ndim > 1:
-      z = z.squeeze()
-
-    return z, zs
-
-  def mkmBackward(self, grad_z, x, fs, zs):
+  def mkmBackward(self, grad_z : torch.Tensor,
+                  x : torch.Tensor, fs : List[torch.Tensor],
+                  zs : List[torch.Tensor]):
     trX,x, trF, fs = fastkrontorch.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
     return self.__mkmBackward(grad_z, x, fs, zs, trX, trF, x.requires_grad, [f.requires_grad for f in fs])
 
-  def __mkmBackward(self, grad_z, x, fs, zs, trX, trF, x_requires_grad, fs_requires_grad):
+  def __mkmBackward(self, grad_z : torch.Tensor, 
+                    x : torch.Tensor, fs : List[torch.Tensor],
+                    zs : List[torch.Tensor], 
+                    trX : bool, trF : bool, 
+                    x_requires_grad : bool, fs_requires_grad : bool):
     is_vec = grad_z.ndim == 1
     if is_vec:
       grad_z = grad_z.unsqueeze(0)
@@ -212,9 +201,11 @@ class FastKronTorch(FastKronBase):
 
     return (grad_zs[-1] if x_requires_grad else None,) + tuple(grad_fs)
 
-  def gekmm(self, requires_grad, fs, x,
-            y = None, alpha = 1, beta = 0, 
-            stream = None):
+  def gekmm(self, requires_grad : bool, 
+            fs : List[torch.Tensor], x : torch.Tensor,
+            alpha : float = 1.0, beta : float = 0.0,
+            y : Optional[torch.Tensor] = None, 
+            stream : Optional[torch.cuda.Stream] = None):
     if type(x) is not torch.Tensor:
       raise ValueError("Input 'x' should be a Tensor")
     if type(fs) is not list and type(fs) is not tuple:
@@ -242,70 +233,46 @@ class FastKronTorch(FastKronBase):
     fn = None
     stridedBatchedFn = None
     
-    if x.dtype == torch.float:
-      fn = self.handle(x).libFastKron.sgekmm
-      stridedBatchedFn = self.handle(x).libFastKron.sgekmmStridedBatched
-    elif x.dtype == torch.double:
-      fn = self.handle(x).libFastKron.dgekmm
-      stridedBatchedFn = self.handle(x).libFastKron.dgekmmStridedBatched
+    if requires_grad:
+      if x.dtype == torch.float:
+        fn = self.handle(x).libFastKron.skmmForward
+        stridedBatchedFn = self.handle(x).libFastKron.skmmForwardStridedBatched
+      elif x.dtype == torch.double:
+        fn = self.handle(x).libFastKron.dkmmForward
+        stridedBatchedFn = self.handle(x).libFastKron.dkmmForwardStridedBatched
+    else:
+      if x.dtype == torch.float:
+        fn = self.handle(x).libFastKron.sgekmm
+        stridedBatchedFn = self.handle(x).libFastKron.sgekmmStridedBatched
+      elif x.dtype == torch.double:
+        fn = self.handle(x).libFastKron.dgekmm
+        stridedBatchedFn = self.handle(x).libFastKron.dgekmmStridedBatched
 
-    zs = []
-    rs, ts = fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF)
-    temp1 = x.new_empty(ts)
-    temp2 = x.new_empty(ts) if rs != ts else None
-    z = x.new_empty(size=rs, dtype=x.dtype)
-    super().xgemm(self.handle(x), FastKronBase.MMTypeKMM, fn, stridedBatchedFn,\
-                  x, fs, z, alpha, beta, y, [temp1, temp2], trX, trF)
-    z = z.reshape(rs)
-    
-    if is_vec and z.ndim > 1:
-      z = z.squeeze()
-
-    return z, zs
-
-  def kmmForward(self, requires_grad, fs, x, stream = None):
-    if type(x) is not torch.Tensor:
-      raise ValueError("Input 'x' should be a Tensor")
-    if type(fs) is not list and type(fs) is not tuple:
-      raise ValueError("Input 'fs' should be a list of Tensor")
-    for i,f in enumerate(fs):
-      if type(f) is not torch.Tensor:
-        raise ValueError(f"Input fs[{i}] should be a Tensor")
-
-    if x.device.type == "cuda" and stream is None:
-      stream = torch.cuda.current_stream()
-
-    self.check(x, fs, None, None, stream)
-
-    is_vec = x.ndim == 1
-    alpha = 1
-    beta = 0
-
-    trX,x, trF,fs = fastkrontorch.reshapeInput(FastKronBase.MMTypeKMM, x, fs)
-    fn = None
-    stridedBatchedFn = None
-    
-    if x.dtype == torch.float:
-      fn = self.handle(x).libFastKron.skmmForward
-      stridedBatchedFn = self.handle(x).libFastKron.skmmForwardStridedBatched
-    elif x.dtype == torch.double:
-      fn = self.handle(x).libFastKron.dkmmForward
-      stridedBatchedFn = self.handle(x).libFastKron.dkmmForwardStridedBatched
-
-    zs = []
-    rs, ts = self.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF, intermediates=True)
-    zs = [x.new_empty(s) for s in ts]
+    rs, ts = fastkrontorch.gekmmSizes(FastKronBase.MMTypeKMM, x, fs, trX=trX, trF=trF, intermediates=requires_grad)
     z = x.new_empty(size=rs)
-    super().xgemm(self.handle(x), FastKronBase.MMTypeKMM, fn, stridedBatchedFn,\
-                  x, fs, z, 1.0, 0.0, None, zs, trX, trF, writeIntermediates=True)
+
+    if requires_grad:
+      zs = [x.new_empty(s) for s in ts]
+    else:
+      temp1 = x.new_empty(ts)
+      temp2 = x.new_empty(ts) if rs != ts else None
+      zs = [temp1, temp2]
+    
+    super().xgemm(self.handle(x), FastKronBase.MMTypeKMM,
+                  fn, stridedBatchedFn,
+                  x, fs, z, alpha, beta, y, zs, trX, trF,
+                  writeIntermediates=requires_grad)
+    if requires_grad:
+      zs = [inter.reshape(s) for inter,s in zip(zs,ts)]
+
     z = z.reshape(rs)
-    zs = [inter.reshape(s) for inter,s in zip(zs,ts)]
+    
     if is_vec and z.ndim > 1:
       z = z.squeeze()
 
     return z, zs
 
-  def kmmBackward(self, grad_z, x, fs, zs):
+  def kmmBackward(self, grad_z : torch.Tensor, x : torch.Tensor, fs : List[torch.Tensor], zs : List[torch.Tensor]):
     trX,x, trF, fs = fastkrontorch.reshapeInput(FastKronBase.MMTypeKMM, x, fs)
     grad_fs = []
     grad_zs = [grad_z]
@@ -320,8 +287,11 @@ class FastKronTorch(FastKronBase):
     return (grad_x.mT if grad_x is not None else None, ) + \
            tuple(g.mT if g is not None else None for g in grad_fs)
 
-  def shuffleGeMM(self, mmtype, x, fs, 
-                  y = None, alpha = 1, beta = 0, stream = None):
+  def shuffleGeMM(self, mmtype : Union[FastKronBase.MMTypeMKM, FastKronBase.MMTypeKMM],
+                  x : torch.Tensor, fs : List[torch.Tensor],
+                  alpha : float = 1.0, beta : float = 0.0,
+                  y : Optional[torch.Tensor] = None, 
+                  stream : Optional[torch.cuda.Stream] = None):
     if type(x) is not torch.Tensor:
       raise ValueError("Input 'x' should be a Tensor")
     if type(fs) is not list and type(fs) is not tuple:
@@ -348,41 +318,47 @@ class FastKronTorch(FastKronBase):
 
     return z
   
-  def shuffleGeMKM(self, x, fs, y = None, alpha = 1, beta = 0, stream = None):
-    return self.shuffleGeMM(FastKronBase.MMTypeMKM, x, fs, y, alpha, beta, stream)
+  def shuffleGeMKM(self, x : torch.Tensor, fs : List[torch.Tensor],
+                   alpha : float = 1.0, beta : float = 0.0,
+                   y : Optional[torch.Tensor] = None, 
+                   stream : Optional[torch.cuda.Stream] = None):
+    return self.shuffleGeMM(FastKronBase.MMTypeMKM, x, fs, alpha, beta, y, stream)
   
-  def shuffleGeKMM(self, fs, x, y = None, alpha = 1, beta = 0, stream = None):
-    return self.shuffleGeMM(FastKronBase.MMTypeKMM, x, fs, y, alpha, beta, stream)
+  def shuffleGeKMM(self, fs : List[torch.Tensor], x : torch.Tensor,
+                   alpha : float = 1.0, beta : float = 0.0,
+                   y : Optional[torch.Tensor] = None,
+                   stream : Optional[torch.cuda.Stream] = None):
+    return self.shuffleGeMM(FastKronBase.MMTypeKMM, x, fs, alpha, beta, y, stream)
   
 
 fastkrontorch = FastKronTorch()
 
-class GeMKM(torch.autograd.Function):
+class MKM(torch.autograd.Function):
   @staticmethod
-  def forward(ctx, x, *fs) -> torch.Tensor:
-    z, zs = fastkrontorch.mkmForward(True, x, fs)
+  def forward(ctx, x : torch.Tensor, *fs : torch.Tensor) -> torch.Tensor:
+    z, zs = fastkrontorch.gemkm(True, x, fs)
     ctx.save_for_backward(x, *fs, *zs)
     ctx.num_facs = len(fs)
     return z
 
   @staticmethod
-  def backward(ctx, grad_z):
+  def backward(ctx, grad_z : torch.Tensor):
     num_facs = ctx.num_facs
     x = ctx.saved_tensors[0]
     fs = ctx.saved_tensors[1:num_facs + 1]
     zs = ctx.saved_tensors[num_facs+1:]
     return fastkrontorch.mkmBackward(grad_z, x, fs, zs)
 
-class GeKMM(torch.autograd.Function):
+class KMM(torch.autograd.Function):
   @staticmethod
-  def forward(ctx, x, *fs) -> torch.Tensor:
-    z, zs = fastkrontorch.kmmForward(True, fs, x)
+  def forward(ctx, x : torch.Tensor, *fs : torch.Tensor) -> torch.Tensor:
+    z, zs = fastkrontorch.gekmm(True, fs, x)
     ctx.save_for_backward(x, *fs, *zs)
     ctx.num_facs = len(fs)
     return z
 
   @staticmethod
-  def backward(ctx, grad_z):
+  def backward(ctx, grad_z : torch.Tensor):
     num_facs = ctx.num_facs
     x = ctx.saved_tensors[0]
     fs = ctx.saved_tensors[1:num_facs + 1]
@@ -390,7 +366,8 @@ class GeKMM(torch.autograd.Function):
     return fastkrontorch.kmmBackward(grad_z, x, fs, zs)
 
 def gemkm(x : torch.Tensor, fs : List[torch.Tensor],
-          alpha=1.0, beta=0.0, y=None) -> torch.Tensor:
+          alpha : float = 1.0, beta : float = 0.0,
+          y : Optional[torch.Tensor] = None) -> torch.Tensor:
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -410,18 +387,20 @@ def gemkm(x : torch.Tensor, fs : List[torch.Tensor],
   z : 2D torch tensor
   '''
   if not fastkrontorch.isSupported(x, fs):
-    return fastkrontorch.shuffleGeMKM(x, fs, y, alpha, beta)
+    return fastkrontorch.shuffleGeMKM(x, fs, alpha, beta, y)
   
   requires_grad = [f.requires_grad for f in fs if f.requires_grad]
   if len(requires_grad) > 0: requires_grad = True
   else: requires_grad = x.requires_grad
     
   if requires_grad:
-    return GeMKM.apply(x, *tuple(fs))
+    return MKM.apply(x, *tuple(fs))
   else:
-    return fastkrontorch.gemkm(False, x, fs, y, alpha, beta)[0]
+    return fastkrontorch.gemkm(False, x, fs, alpha, beta, y)[0]
 
-def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
+def gekmm(fs : List[torch.Tensor], x : torch.Tensor,
+          alpha : float = 1.0, beta : float = 0.0,
+          y : Optional[torch.Tensor] = None) -> torch.Tensor:
   '''
   Perform Generalized Kronecker-Matrix Multiplication:
   
@@ -429,26 +408,24 @@ def gekmm(fs, x, alpha=1.0, beta=0.0, y=None):
 
   Parameters
   ----------
-  x  : 2D torch tensor 
-  fs : A list of 2D torch tensor
+  x  : torch tensor 
+  fs : A list of torch tensor
   alpha and beta: constants
-  y  : 2D torch tensor
-  trX: Transpose x before computing GeKMM
-  trF: Transpose each element of fs before computing GeKMM
+  y  : torch tensor
 
   Returns
   -------
-  z : 2D torch tensor
+  z : torch tensor
   '''
   if not fastkrontorch.isSupported(x, fs):
-    return fastkrontorch.shuffleGeKMM(fs, x, y, alpha, beta)
+    return fastkrontorch.shuffleGeKMM(fs, x, alpha, beta, y)
 
   requires_grad = [f.requires_grad for f in fs if f.requires_grad]
   if len(requires_grad) > 0: requires_grad = True
   else: requires_grad = x.requires_grad
 
   if requires_grad:
-    return GeKMM.apply(x, *tuple(fs))
+    return KMM.apply(x, *tuple(fs))
   else:
-    return fastkrontorch.gekmm(False, fs, x, y, alpha, beta)[0]
+    return fastkrontorch.gekmm(False, fs, x, alpha, beta, y)[0]
   
