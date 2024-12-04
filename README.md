@@ -42,7 +42,15 @@ The future roadmap is as follows in terms of priority: Windows, SM80+ Double Ten
 
 # Example
 The directory `example/` pinclude examples of using FastKron's CUDA and x86 backend using both C++ and Python.
-Before using an example, follow below instructions to build FastKron. 
+Before using an example, follow below instructions to build FastKron.
+
+# Installation
+
+PyFastKron can be installed using pip.
+
+```pip install pyfastkron```
+
+PyFastKron's CUDA backend is built with CUDA 12.3 but is compatible with CUDA 11.8 and above.
 
 # Build
 Build the C++ library, libFastKron.so, to use with C++ programs or the Python library, PyFastKron, to use with PyTorch or Numpy programs.
@@ -57,7 +65,7 @@ sudo apt update && sudo apt install gcc linux-headers-$(uname -r) make g++ git p
 Install CUDA 11+ from https://developer.nvidia.com/cuda/ .
 
 ### Clone repository
-Clone repository with submodules using 
+Clone repository with submodules using
 ```
 git clone --recurse-submodules https://github.com/abhijangda/fastkron.git
 ```
@@ -68,7 +76,7 @@ git submodule update --init --recursive
 ```
 
 ### libFastKron
-Build FastKron as C++ library using below commands: 
+Build FastKron as C++ library using below commands:
 
 ```mkdir build/
 cd build/
@@ -81,12 +89,12 @@ To install run
 
 By default both x86 and CUDA backends are built. use CMAKE option `-DENABLE_CUDA=OFF` to disable CUDA backend or `-DENABLE_X86=OFF` to disable x86 backend.
 
-Run X86 CPU tests using 
+Run X86 CPU tests using
 ```
 make run-x86-tests
 ```
 
-Run CUDA tests using 
+Run CUDA tests using
 ```
 make run-cuda-tests
 ```
@@ -100,7 +108,7 @@ pip install .
 
 To disable a backend add `--config-settings=cmake.define.ENABLE_<backend>=OFF` as argument to above command.
 
-Run tests using 
+Run tests using
 ```
 pytest
 ```
@@ -116,6 +124,8 @@ Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/
 Performance: [documents/performance.md](https://github.com/abhijangda/FastKron/blob/main/documents/performance.md)
 
 Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)
+
+Contributing:
 
 # Citation
 

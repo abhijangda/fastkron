@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(FastKron 
+project(FastKron
   VERSION 1.0
   LANGUAGES CXX)
 
@@ -61,7 +61,7 @@ endif()
 set(PKG_CONFIG_FILE libFastKron.pc)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
-  set(WARNING_FLAGS "-Wall -Wextra -Wno-unknown-pragmas") 
+  set(WARNING_FLAGS "-Wall -Wextra -Wno-unknown-pragmas")
 endif()
 
 add_compile_definitions (FASTKRON_VERSION=${CMAKE_PROJECT_VERSION})
@@ -86,7 +86,7 @@ if(ENABLE_CUDA)
     find_package(CUDAToolkit REQUIRED)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED True)
-  
+
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 ${WARNING_FLAGS}")
     if (CMAKE_BUILD_TYPE MATCHES "Debug")
       set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G ${WARNING_FLAGS}")
@@ -95,7 +95,7 @@ if(ENABLE_CUDA)
   else()
      set(ENABLE_CUDA OFF)
      set(ENABLE_MULTI_GPU OFF)
-     message(WARNING "Cannot find CUDA. Disabling CUDA backend.") 
+     message(WARNING "Cannot find CUDA. Disabling CUDA backend.")
   endif()
 endif()
 
@@ -133,7 +133,7 @@ set(CUDA ${SRC}/kernels/cuda)
 set(KERNELS ${SRC}/kernels)
 
 ##### FastKron ################
-set(KERNEL_HEADER_FILES 
+set(KERNEL_HEADER_FILES
     ${KERNELS}/kmmkernel.h
     ${KERNELS}/params.h)
 
@@ -163,7 +163,7 @@ if(ENABLE_CUDA)
 
   set(CUDA_HEADER_FILES
       ${CUDA_HEADER_FILES}
-      ${CUDA}/utils.cuh 
+      ${CUDA}/utils.cuh
       ${CUDA}/shared-loads.cuh
       ${CUDA}/register-loads.cuh
       ${CUDA}/kernel.cuh
@@ -184,10 +184,10 @@ endif()
 if(ENABLE_X86)
   if (FULL_TUNE)
   else()
-    execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend x86 -archs sisd avx -mm-type mkm kmm -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -batch-type strided -match-configs-file ${SRC}/kernels/best-kernels/x86-avx-kernels ${SRC}/kernels/best-kernels/kmm-x86-avx-kernels)
+    execute_process(COMMAND python3 ${SRC}/gen_tuner_kernels.py -backend x86 -archs sisd avx avx512 -mm-type mkm kmm -same-factors 2 128,128 -same-factors 2 64,64 -same-factors 3 32,32 -same-factors 5 16,16 -same-factors 7 8,8 -same-factors 10 4,4 -same-factors 20 2,2 -opX N T -opF N T -types float double -batch-type strided -match-configs-file ${SRC}/kernels/best-kernels/x86-avx-kernels ${SRC}/kernels/best-kernels/kmm-x86-avx-kernels)
   endif()
   include(${KERNELS}/cpu/x86/kron-kernels/kernels.cmake)
-  if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc) 
+  if (EXISTS ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc)
     set(X86_HEADER_FILES
         ${KERNELS}/cpu/x86/kron-kernels/kernel_decl.inc)
   else()
@@ -210,7 +210,7 @@ endif()
 
 if(ENABLE_HIP)
   include(${KERNELS}/hip/kron-kernels/kernels.cmake)
-  set(HIP_HEADER_FILES 
+  set(HIP_HEADER_FILES
       ${KERNELS}/hip/kron-kernels/kernel_decl.inc
       ${SRC}/kernel_db/hip_kernel_db.hip
       ${SRC}/kernel_db/hip_kernel_db.h
@@ -219,12 +219,12 @@ else()
   set(HIP_HEADER_FILES)
 endif()
 
-set(HEADER_FILES 
-    ${SRC}/env/env.h 
+set(HEADER_FILES
+    ${SRC}/env/env.h
     ${SRC}/autotuner/autotuner.h
     ${SRC}/handle/handle.h
     ${SRC}/handle/handle.inline.h
-    ${SRC}/handle/op.h 
+    ${SRC}/handle/op.h
     ${SRC}/kernels/kmmkernel.h
     ${SRC}/kernels/kernel_opt.h
     ${SRC}/kernels/get_batched_data.h
@@ -243,7 +243,7 @@ set(HEADER_FILES
 set(SOURCES
     ${SRC}/fastkron.cpp
     ${SRC}/env/env.cpp
-    ${SRC}/autotuner/autotuner.cpp 
+    ${SRC}/autotuner/autotuner.cpp
     ${SRC}/handle/handle.cpp
     ${SRC}/kernel_db/kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
@@ -294,10 +294,10 @@ else()
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libFastKron.pc.in ${PKG_CONFIG_FILE} @ONLY)
   add_custom_target(install_pkgconfig
                     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${PKG_CONFIG_FILE} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
-  
+
   set(PUBLIC_HEADERS include/fastkron.h)
-  
-  if (ENABLE_MULTI_GPU AND ENABLE_CUDA) 
+
+  if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
     set (PUBLIC_HEADERS ${PUBLIC_HEADERS} include/fastkronMg.h)
   endif()
 
@@ -311,8 +311,8 @@ if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
   target_link_libraries(${FastKron_NAME} PRIVATE nccl)
 endif()
 
-target_include_directories(${FastKron_NAME} 
-                           PRIVATE 
+target_include_directories(${FastKron_NAME}
+                           PRIVATE
                               ${SRC}/
                            PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
