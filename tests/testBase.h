@@ -663,7 +663,8 @@ static inline bool run(FastKronMMType kronmatmulType, const uint M, const uint N
   uint32_t options = 0;
   if (useFusion) options = options | fastKronOptionsUseFusion;
   if (tune) options = options | fastKronOptionsTune;
-  fastKronSetOptions(handle, options);
+  if (options != 0)
+    fastKronSetOptions(handle, options);
 
   switch (backend) {
     case fastKronBackend_CUDA:

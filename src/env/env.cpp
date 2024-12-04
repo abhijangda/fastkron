@@ -10,6 +10,7 @@ namespace env {
 
   static char COMM[]      = ENV_FASTKRON("COMM");
   static char LOGLEVEL[]  = ENV_FASTKRON("LOG");
+  static char USETUNE[]   = ENV_FASTKRON("TUNE");
 
   char* strupr(char* str) {
     char *s = str;
@@ -61,6 +62,18 @@ namespace env {
     if (strcmp(val, "DEBUG") == 0) return LogLevel::Debug;
     Logger(LogLevel::Info) << "Invalid " << LOGLEVEL << "=" << val << std::endl;
     return LogLevel::Nothing;
+  }
+
+  /**
+   * getUseTune() - Get UseTune value from environemtn value of USETUNE
+   */
+  bool getUseTune() {
+    char *val = getenv(USETUNE);
+    if (val == nullptr)        return false;
+    if (strcmp(val, "0") == 0) return false;
+    if (strcmp(val, "1") == 0) return true;
+    Logger(LogLevel::Info) << "Invalid " << USETUNE << " = " << val << std::endl;
+    return false;
   }
 }
 

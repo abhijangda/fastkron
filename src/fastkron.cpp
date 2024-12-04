@@ -79,6 +79,8 @@ fastKronError fastKronInit(fastKronHandle* handle, uint32_t backends) {
   FastKronHandle* h = new FastKronHandle(backends);
   *handle = (fastKronHandle)h;
   uint32_t fastKronOptionsAll = fastKronOptionsUseFusion;
+  if (env::getUseTune()) fastKronOptionsAll |= fastKronOptionsTune;
+
   fastKronSetOptions(*handle, fastKronOptionsAll);
 
   if ((backends & fastKronGetBackends()) != backends)

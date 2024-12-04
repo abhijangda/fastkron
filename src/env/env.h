@@ -18,4 +18,5 @@ enum LogLevel {
 namespace env {
   DistComm getDistComm();
   LogLevel getLogLevel();
+  bool     getUseTune();
 }

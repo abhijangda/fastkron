@@ -1,7 +1,7 @@
 from .fastkronbase import fastkronX86, FastKronBase
 
 import platform
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 
 try:
   import numpy as np
@@ -12,25 +12,25 @@ class FastKronNumpy(FastKronBase):
   def __init__(self):
     super().__init__(True, False)
 
-  def tensor_data_ptr(self, tensor : np.ndarray):
+  def tensor_data_ptr(self, tensor : np.ndarray) -> int:
     if tensor is None: return 0
     return tensor.ctypes.data
 
-  def supportedDevice(self, x : np.ndarray):
+  def supportedDevice(self, x : np.ndarray) -> bool:
     return True
 
-  def supportedTypes(self, x : np.ndarray, fs : List[np.ndarray]):
+  def supportedTypes(self, x : np.ndarray, fs : List[np.ndarray]) -> bool:
     return x.dtype in [np.float32, np.double]
 
   def trLastTwoDims(self, mmtype : Union[FastKronBase.MMTypeMKM, FastKronBase.MMTypeKMM],
-                    x : np.ndarray):
+                    x : np.ndarray) -> np.ndarray:
     if mmtype == FastKronBase.MMTypeMKM:
       axes = list(range(len(x.shape) - 2)) + [len(x.shape) - 1, len(x.shape) - 2]
     elif mmtype == FastKronBase.MMTypeKMM:
       axes = list(range(len(x.shape) - 3)) + [len(x.shape) - 2, len(x.shape) - 3, len(x.shape) - 1]
     return x.transpose(axes)
 
-  def asContiguousTensor(self, x, forceContiguous=False):
+  def asContiguousTensor(self, x, forceContiguous=False) -> Tuple[bool, np.ndarray]:
     if forceContiguous: return False, x.ascontiguousarray()
     if x.data.c_contiguous: return False, x
     strides = self.stride(x)
@@ -38,10 +38,10 @@ class FastKronNumpy(FastKronBase):
        strides[-1] == x.shape[-2] * 1: return True, x
     return False, x.ascontiguousarray()
   
-  def stride(self, x : np.ndarray):
+  def stride(self, x : np.ndarray) -> List[int]:
     return [s//x.dtype.itemsize for s in x.strides]
 
-  def device_type(self, x : np.ndarray):
+  def device_type(self, x : np.ndarray) -> str:
     return "cpu"
 
   def gemkm(self, x : np.ndarray, fs : List[np.ndarray],
@@ -114,9 +114,10 @@ class FastKronNumpy(FastKronBase):
 
     return z
 
-  def shuffleGeMM(self, x : np.ndarray, fs : List[np.ndarray],
-                   alpha : float = 1, beta : float = 0,
-                   y : Optional[np.ndarray] = None) -> np.ndarray:
+  def shuffleGeMM(self, mmtype : Union[FastKronBase.MMTypeMKM, FastKronBase.MMTypeKMM],
+                  x : np.ndarray, fs : List[np.ndarray],
+                  alpha : float = 1, beta : float = 0,
+                  y : Optional[np.ndarray] = None) -> np.ndarray:
     if type(x) is not np.ndarray:
       raise ValueError("Input 'x' should be a ndarray")
     if type(fs) is not list:
