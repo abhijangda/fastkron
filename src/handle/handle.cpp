@@ -325,10 +325,10 @@ fastKronError FastKronHandle::gekmmResultTemp(KMMProblem problem,
   
   if (e == fastKronSuccess) {
   #if defined(ENABLE_CUDA) && defined(ENABLE_MULTI_GPU)
-    size_t tempCols, resultCols;
+    uint tempCols, resultCols;
     uint gpuM = problem.m();
-    getDistributedSizes(problem.m(), maxTemp.l(), gpuM, tempCols);
-    getDistributedSizes(problem.m(), result.l(),  gpuM, resultCols);
+    getDistributedSizes(problem.m(), maxTemp.n(), gpuM, tempCols);
+    getDistributedSizes(problem.m(), result.n(),  gpuM, resultCols);
     if (cudaKernels.isDistributed_ and cudaKernels.distComm_ == DistComm::NCCL)
       //Include size of send and recv buffers 
       tempCols = tempCols * 2;

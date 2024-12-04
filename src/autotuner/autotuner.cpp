@@ -178,7 +178,6 @@ fastKronError Autotuner::tune(KMMProblem problem,
   } else if (fastKron.hasBackend(fastKronBackend_X86)) {
       devicesPerProc = 1;
   }
-
   Matrix temp1[devicesPerProc];
   Matrix temp2[devicesPerProc];
   //TODO: Make this FactorArray
@@ -265,7 +264,7 @@ fastKronError Autotuner::tune(KMMProblem problem,
     auto tmpProblem = KMMProblem(problem.mmtype(), problem.type(), Matrix(gpuM, gpuK,  temp1[0].data()), 
                                  problem.opX(), problem.n(), &Fs[0][0], problem.opFs(),
                                  Matrix(gpuM, problem.y().n()/fastKron.cudaKernels.gpusInK_, temp2[0].data()));
-
+    std::cout << 268 << " " << tmpProblem << std::endl;
     for (int i = problem.n() - 1; i >= 0; i -= MaxLocalKrons) {
       const uint LocalKrons = std::min(MaxLocalKrons, i + 1);
       //TODO: any way to avoid declaring ps, qs, and fs on stack

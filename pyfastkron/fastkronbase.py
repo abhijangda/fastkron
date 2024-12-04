@@ -122,9 +122,12 @@ class FastKronBase:
     if len(set(trFs)) > 1:
       #When factors have different values of trF then 
       #make all factors contiguous and set trF to False
+      newFs = []
       for i,f in enumerate(fs):
-        fs[i] = self.asContiguousTensor(f, forceContiguous=True)
+        newFs += [self.asContiguousTensor(f, forceContiguous=True)[1]]
         trFs[i] = False
+
+      fs = newFs
 
     for i,f in enumerate(fs):
       trF = trFs[i]
