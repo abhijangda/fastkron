@@ -208,7 +208,7 @@ The function writes to `yElems` and `tmpElems`.
                       double* temp1, double* temp2)`
 
 Perform GeKMM using MKM on 32-bit floating point or 64-bit double floating point input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
-These functions require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points to the same memory location then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
+These functions require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points to the same memory location or size of Z is less than size of temporary then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
 All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
 
 * **Parameters**:
@@ -255,7 +255,7 @@ All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GP
                       double* temp1, double* temp2)`
 
 Perform GeKMM using MKM on 32-bit floating point or 64-bit double floating point input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
-These functions require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points to the same memory location then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
+These functions require atleast temporary storage obtained using `gekmmSizes`. If Z and Y points to the same memory location or size of Z is less than size of temp1 then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
 All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
 
 * **Parameters**:
@@ -307,7 +307,7 @@ These functions are perform batched KMM and MKM. In addition to above functions,
                                     double* temp1, double* temp2)`
 
 Perform GeKMM using MKM on 32-bit floating point or 64-bit double floating point input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
-These functions require atleast temporary storage obtained using `gekmmSizes` and multiplied with `batchCount`. If Z and Y points to the same memory location then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
+These functions require atleast temporary storage obtained using `gekmmSizes` and multiplied with `batchCount`. If Z and Y points to the same memory location or size of Z is less than size of temp1 then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
 All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
 
 * **Parameters**:
@@ -358,7 +358,7 @@ All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GP
                                     double* temp1, double* temp2)`
 
 Perform GeKMM using MKM on 32-bit floating point or 64-bit double floating point input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
-These functions require atleast temporary storage obtained using `gekmmSizes` and multiplied with `batchCount`. If Z and Y points to the same memory location then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
+These functions require atleast temporary storage obtained using `gekmmSizes` and multiplied with `batchCount`. If Z and Y points to the same memory location or size of Z is less than size of temp1 then both temp1 and temp2 must be passed as valid memory pointers. Otherwise, only temp1 needs to be a valid memory pointer and temp2 can be NULL.
 All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
 
 * **Parameters**:
@@ -383,3 +383,168 @@ All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GP
 
 * **Returns**
     Write result of GeKMM to `Z`. Return `fastKronSuccess` for no error or the error occurred.
+
+## KMM and MKM Forward Functions
+Forward pass functions store intermediate matrices that can be used for backward pass. These functions support MKM and KMM, which are non generalized versions, i.e., MKM and KMM multiplies a matrix with kronecker product.
+
+`fastKronError gekmmSizesForward(fastKronHandle handle, uint32_t M, uint32_t N,
+                                uint32_t Ps[], uint32_t Qs[],
+                                size_t* yElems, size_t* intermediateElems)`
+
+Obtain the number of elements of the result matrix and intermediates for GeKMM or GeMKM. The function writes to `yElems` and `intermediateElems`.
+
+* **Parameters**:
+    * @handle: is an initialized variable of fastKronHandle.
+    * @M: is number of rows of $X$, $Y$, and $Z$.
+    * @N: is number of Kronecker factors, $F^i$ s.
+    * @Ps: is an array containing rows of all N Kronecker factors. * @Qs: is an array containing columns of all N Kronecker factors.
+    * @yElems: [OUT] is a pointer to the number of elements of $Y$.
+    * @intermediateElems: [OUT] is an array of N-1 intermediates' number of elements.
+
+* **Returns**
+      Write values to `yElems` and `intermediateElems`. Return `fastKronSuccess` for no error or the error occurred.
+
+--
+
+`fastKronError smkmForward(fastKronHandle handle, fastKronBackend backend, 
+                           uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                           const float* X, fastKronOp opX,
+                           const float* const Fs[], fastKronOp opFs,
+                           float* Z, float* Intermediates[])`
+
+`fastKronError dmkmForward(fastKronHandle handle, fastKronBackend backend,
+                           uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                           const double* X, fastKronOp opX,
+                           const double* const Fs[], fastKronOp opFs,
+                           double* Z, double* Intermediates[])`
+
+Perform forward pass of MKM using 32-bit floating point or 64-bit double floating point operations on input matrices, $X$, $F^i$ s, and write the result to $Z$ with intermediates to $Intermediate$. All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+* **Parameters**:
+    * smkmForward(), dmkmForward() - Perform MKM and store all intermediate matrices.
+    * @handle: is an initialized variable of fastKronHandle.
+    * @backend: is the `fastKronBackend` to use to perform the computation.
+    * @M: is number of rows of $X$, $Y$, and $Z$.
+    * @N: is the number of Kronecker factors, $F^i$ s.
+    * @Ps: is an array containing rows of all N Kronecker factors.
+    * @Qs: is an array containing columns of all N Kronecker factors.
+    * @X: is the pointer to $X$.
+    * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+    * @Fs: is an array of N pointers for each $F^i$ s.
+    * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+    * @Z: [OUT] is pointer to the result of MKM.
+    * @Intermediates: [OUT] is an array of N-1 pointers to intermediate matrices.
+
+* **Returns**:
+    Write result of MKM to `Z` and intermediate to `Intermediates`. Return `fastKronSuccess` for no error or the error occurred.
+
+
+`fastKronError skmmForward(fastKronHandle handle, fastKronBackend backend, 
+                            uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                            const float* const Fs[], fastKronOp opFs,
+                            const float* X, fastKronOp opX,
+                            float* Z, float* Intermediates[])`
+
+`fastKronError dkmmForward(fastKronHandle handle, fastKronBackend backend, 
+                            uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                            const double* const Fs[], fastKronOp opFs,
+                            const double* X, fastKronOp opX,
+                            double* Z, double* Intermediates[])`
+
+Perform forward pass of KMM using 32-bit floating point or 64-bit double floating point operations on input matrices, $X$, $F^i$ s, and write the output to $Z$ with intermediate matrices to $Intermediate$. All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+* **Parameters**:
+    * @handle: is an initialized variable of fastKronHandle.
+    * @backend: is the `fastKronBackend` to use to perform the computation.
+    * @M: is number of rows of $X$, $Y$, and $Z$.
+    * @Qs: is an array containing columns of all N Kronecker factors.
+    * @Ps: is an array containing rows of all N Kronecker factors.
+    * @N: is the number of Kronecker factors, $F^i$ s.
+    * @Fs: is an array of N pointers for each $F^i$ s.
+    * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+    * @X: is the pointer to $X$.
+    * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+    * @Z: [OUT] is pointer to the result of MKM.
+    * @Intermediates: [OUT] is an array of N-1 pointers for intermediate matrices.
+
+* **Return**:
+ Write result of KMM to `Z` and `Intermediates`. Return `fastKronSuccess` for no error or the error occurred.
+
+
+
+`fastKronError smkmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+                                          uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                          const float* X, fastKronOp opX, uint64_t strideX,
+                                          const float* const Fs[], fastKronOp opFs, uint64_t strideF[],
+                                          float* Z, uint64_t strideZ, uint32_t batchCount, 
+                                          float* Intermediates[], uint64_t strideIntermediates[])
+
+fastKronError dmkmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                                          uint32_t M, uint32_t N, uint32_t Ps[], uint32_t Qs[],
+                                          const double* X, fastKronOp opX, uint64_t strideX,
+                                          const double* const Fs[], fastKronOp opFs, uint64_t strideF[], 
+                                          double* Z, uint64_t strideZ, uint32_t batchCount,
+                                          double* Intermediates[], uint64_t strideIntermediates[])`
+
+Perform forward pass of batched MKM with strides using 32-bit floating point or 64-bit double floating point operations on input matrices, $X$, $F^i$ s, and write the output to $Z$ with intermediates to $Intermediates$. If strideIntermediate is NULL then stride of an intermediate is set as number of elements of the intermediate. All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+* **Parametesr**:
+    * smkmForwardStridedBatched, dmkmForwardStridedBatched - Strided Batched MKM Forward
+    * @handle: is an initialized variable of fastKronHandle.
+    * @backend: is the `fastKronBackend` to use to perform the computation.
+    * @M: is number of rows of $X$, $Y$, and $Z$.
+    * @N: is the number of Kronecker factors, $F^i$ s.
+    * @Ps: is an array containing rows of all N Kronecker factors.
+    * @Qs: is an array containing columns of all N Kronecker factors.
+    * @X: is the pointer to $X$.
+    * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+    * @strideX: stride of each batch for $X$.
+    * @Fs: is an array of N pointers for each $F^i$ s.
+    * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+    * @strideF: is stride of batch for each factor.
+    * @Z: [OUT] is pointer to the result of KMM.
+    * @strideZ: stride of batch of Z.
+    * @Intermediates: [OUT] is an array of N-1 pointers for intermediate matrices.
+    * @strideIntermeidates: Either an array of N-1 strides for intermediate matrices or NULL
+
+
+* **Return**:
+    Write result of MKM to `Z` and `Intermediates`. Return `fastKronSuccess` for no error or the error occurred.
+
+`fastKronError skmmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend, 
+                                          uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                          const float* const Fs[], fastKronOp opFs, uint64_t strideF[],
+                                          const float* X, fastKronOp opX, uint64_t strideX,
+                                          float* Z, uint64_t strideZ, uint32_t batchCount,
+                                          float* Intermediates[], uint64_t strideIntermediates[])`
+
+`fastKronError dkmmForwardStridedBatched(fastKronHandle handle, fastKronBackend backend,
+                                          uint32_t N, uint32_t Qs[], uint32_t Ps[], uint32_t M,
+                                          const double* const Fs[], fastKronOp opFs, uint64_t strideF[],
+                                          const double* X, fastKronOp opX, uint64_t strideX, 
+                                          double* Z, uint64_t strideZ, uint32_t batchCount,
+                                          double* Intermediates[], uint64_t strideIntermediates[])`
+
+Perform forward pass of batched KMM with strides using 32-bit floating point or 64-bit double floating point operations on input matrices, $X$, $F^i$ s, and write the output to $Z$. If strideIntermediate is NULL then stride of an intermediate is set as number of elements of the intermediate. All pointers should point to either x86 CPU RAM if `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
+
+* **Parameters**:
+    * skmmForwardStridedBatched, dkmmForwardStridedBatched - Strided Batched KMM Forward
+    * @handle: is an initialized variable of fastKronHandle.
+    * @backend: is the `fastKronBackend` to use to perform the computation.
+    * @N: is the number of Kronecker factors, $F^i$ s.
+    * @Qs: is an array containing columns of all N Kronecker factors.
+    * @Ps: is an array containing rows of all N Kronecker factors.
+    * @M: is number of rows of $X$, $Y$, and $Z$.
+    * @Fs: is an array of N pointers for each $F^i$ s.
+    * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
+    * @strideF: is stride of batch for each factor.
+    * @X: is the pointer to $X$.
+    * @opX: is operation on $X$ so that $op(X)$ is a row-major matrix.
+    * @strideX: stride of each batch for $X$.
+    * @Z: [OUT] is pointer to the result of KMM.
+    * @strideZ: stride of batch of Z.
+    * @Intermediates: [OUT] is an array of N-1 pointers for intermediate matrices.
+    * @strideIntermeidates: Either an array of N-1 strides for intermediate matrices or NULL
+ 
+* **Return**
+ Write result of KMM to `Z` and `Intermediates`. Return `fastKronSuccess` for no error or the error occurred.

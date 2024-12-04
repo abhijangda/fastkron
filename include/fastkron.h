@@ -486,8 +486,8 @@ fastKronError gekmmSizesForward(fastKronHandle handle, uint32_t M, uint32_t N,
  * @Z: [OUT] is pointer to the result of MKM.
  * @Intermediates: [OUT] is an array of N-1 pointers to intermediate matrices.
 
- * Perform MKM using 32-bit floating point or 64-bit double floating point operations on 
- * input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
+ * Perform forward pass of MKM using 32-bit floating point or 64-bit double floating point operations on 
+ * input matrices, $X$, $F^i$ s, and write the output to $Z$ with intermediate matrices to $Intermediates$.
  * All pointers should point to either x86 CPU RAM if 
  * `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
 
@@ -521,7 +521,7 @@ fastKronError dmkmForward(fastKronHandle handle, fastKronBackend backend,
  * @Z: [OUT] is pointer to the result of MKM.
  * @Intermediates: [OUT] is an array of N-1 pointers for intermediate matrices.
 
- * Perform GeKMM using 32-bit floating point or 64-bit double floating point operations on 
+ * Perform forward pass of KMM using 32-bit floating point or 64-bit double floating point operations on 
  * input matrices, $X$, $F^i$ s, and $Z$, and write the output to $Y$.
  * All pointers should point to either x86 CPU RAM if 
  * `backend` is x86 or NVIDIA GPU RAM if `backend` is CUDA.
@@ -556,7 +556,7 @@ fastKronError dkmmForward(fastKronHandle handle, fastKronBackend backend,
  * @Fs: is an array of N pointers for each $F^i$ s.
  * @opFs: is operation on each $F^i$ so that $op(F^i)$ is a row-major matrix.
  * @strideF: is stride of batch for each factor.
- * @Z: [OUT] is pointer to the result of GeKMM.
+ * @Z: [OUT] is pointer to the result of KMM.
  * @strideZ: stride of batch of Z.
  * @Intermediates: [OUT] is an array of N-1 pointers for intermediate matrices.
  * @strideIntermeidates: Either an array of N-1 strides for intermediate matrices or NULL
