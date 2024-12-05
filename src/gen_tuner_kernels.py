@@ -211,13 +211,13 @@ CXX_PRAGMA_ARCH_{targetArch}'''
                       '#include "utils/utils.h"',
                       self.pragmaTargetArch(), "",
                       '#include "../../kernel.h"', "",
-                      self.getKernelFuncDecl()+"{",
-                      f"  return (void*)&{self.kernelDecl()};",
-                      "}",
+                      "CXX_PRAGMA_POP_OPTIONS","",
                       self.hostFuncDecl()+"{",
                       f"  {self.kernelDecl()}(params, fusedParams, distParams, epilogueParams);",
-                      "}",
-                      "CXX_PRAGMA_POP_OPTIONS"])
+                      "}","",
+                      self.getKernelFuncDecl()+"{",
+                      f"  return (void*)&{self.kernelDecl()};",
+                      "}"])
 
   def kernelInfo(self):
     return f"{self.backend.upper()}KMMKernel{{" + f"X86SIMD::{self.arch.upper()}"+"," + self.constructorArgs() + "}"

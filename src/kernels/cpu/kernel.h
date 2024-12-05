@@ -18,7 +18,7 @@ enum EpilogueKind {
 
 #pragma once
 
-template<typename ElemT, typename X86VecT, 
+template<typename ElemT, typename X86VecT,
          fastKronOp OpX, fastKronOp OpF, fastKronOp OpY,
          uint OptLevel, uint32_t EpilogueKindVal, uint FusedFacs,
          typename OptF, typename OptTileF, typename OptTileX,
@@ -58,7 +58,7 @@ void threadWork(KernelParams& params,
   }
 
   for (int fac = ((FusedFacs == 1) ? 1 : params.problem.n()) - 1; fac >= 0; fac--) {
-    TransposedDirectShared3D<ElemT, OpY, OptTileX, OptF, OptTileF> 
+    TransposedDirectShared3D<ElemT, OpY, OptTileX, OptF, OptTileF>
       TrXCache((ElemT*)params.caches->TileXs[tid]);
 
     bool isLastFactor = epilogueParams.isLastFactor && fac == 0;
@@ -110,9 +110,9 @@ void threadWork(KernelParams& params,
   }
 }
 
-template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP, 
-         uint TileQ, uint kTileK, uint TileM, uint FusedFacs, 
-         uint RegM, uint RegK, uint RegQ, uint OptLevel, 
+template<typename ElemT, typename X86VecT, uint MaxP, uint MaxQ, uint TileP,
+         uint TileQ, uint kTileK, uint TileM, uint FusedFacs,
+         uint RegM, uint RegK, uint RegQ, uint OptLevel,
          int XAlignment, int FAlignment,
          fastKronOp kOpX, fastKronOp kOpF, FastKronMMType MMType,
          KernelBatchType::Ty KernelBatch,
@@ -129,7 +129,7 @@ void cpuKernel(KernelParams& params,
   using OptTileF = FixedShapeFactor<OpF, ElemT, TileP, TileQ>;
   //TODO: YRegisters should have VectorLen for both M and K.
   //TODO: Instead of VectorLen use MVectorLen or KVectorLen in code
-  using YRegs = typename std::conditional<MMType == FastKronMMType::MKM, 
+  using YRegs = typename std::conditional<MMType == FastKronMMType::MKM,
                           YRegisters<OpY, X86VecT, RegM, RegK, RegQ, 1, X86VecT::VectorLen>,
                           YRegisters<OpY, X86VecT, RegM, RegK, RegQ, X86VecT::VectorLen, 1>>::type;
   using OptTileX = FixedShapeMatrix<OpX, ElemT, TileM, kTileK>;
@@ -155,7 +155,7 @@ void cpuKernel(KernelParams& params,
   // const uint XSlices   = getXSlices  <OptLevel, MaxQ>(Y, params);
   const uint TileK     = getXTileK   <OptLevel, kTileK>(params);
   const bool hasAlpha  = epilogueParams.template getAlpha<ElemT>() != (ElemT)1.0f;
-  const bool hasBeta   = epilogueParams.template getD<ElemT>() != nullptr && 
+  const bool hasBeta   = epilogueParams.template getD<ElemT>() != nullptr &&
                          epilogueParams.template getBeta<ElemT>() != (ElemT)0;
   const bool notLastFactor = not epilogueParams.isLastFactor;
 
