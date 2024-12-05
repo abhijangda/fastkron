@@ -10,19 +10,27 @@ FastKron provides fast implementations for float and double data type, while Num
 For more details look [Fast Kronecker Matrix-Matrix Multiplication on GPUs](https://dl.acm.org/doi/abs/10.1145/3627535.3638489).
 
 # Performance
-We compare FastKron's GeMKM with state-of-the-art baselines of existing algorithms.
-GPyTorch implements the traditional shuffle algorithm that uses matrix multiplication and transpose. GPyTorch runs on NVIDIA GPUs and x86 CPUs.
-NVIDIA cuTensor and TCCG (https://github.com/HPAC/tccg) are tensor contraction engines for NVIDIA GPUs and x86 CPUs respectively.
-Graphs below shows the performance of FastKron against these baselines.
-FastKron obtains upto 90% of the maximum FLOPs of a NVIDIA Tesla A100 and same FLOPs as Intel MKL of an AMD EPYC 7742 64-Core with AVX256.
+We compare FastKron's GeMKM and GeKMM with the existing shuffle algorithm in GPyTorch based on PyTorch 2.5.1.
+Below table shows the range of speedup on different hardware and data types.
 
-[[TODO: Update]]
-| NVIDIA A100 SXM 80GB | AMD 7742 64-Core with AVX2|
-|-|-|
-| ![](https://github.com/abhijangda/fastkron/blob/main/tests/benchmarks/single-a100-flops.png?raw=true)|![](https://github.com/abhijangda/fastkron/blob/main/tests/benchmarks/single-x86-flops.png?raw=true)|
+### GeMKM
 
-The graphs above multiplies a matrix of shape [M, P<sup>N</sup>] with a Kronecker Product of N matrices of size [P, Q].
-FastKron performs significantly better than existing baselines.
+| Hardware | Float    | Double |
+|----------|----------|--------|
+| AMD 64-Core CPU with AVX| 9.3-45x| 5.8-21x|
+| AMD 64-Core CPU with AVX512| | |
+| NVIDIA A100 80 GB| | |
+| NVIDIA V100 16 GB| 2.5-10x| 1.9-11x|
+
+### GeKMM
+
+| Hardware | Float    | Double |
+|----------|----------|--------|
+| AMD 64-Core CPU with AVX| 2.7-13.7x| 1.5-7x|
+| AMD 64-Core CPU with AVX512| | |
+| NVIDIA A100 80 GB| | |
+| NVIDIA V100 16 GB| 1.4-6.4x|2-7.8x |
+
 For more information see [documents/performance.md](https://github.com/abhijangda/FastKron/blob/main/documents/performance.md)
 
 # Hardware and OS Support
@@ -119,9 +127,9 @@ pytest
 
 # Documentation
 
-FastKron C++ API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/cpp-api.md)
+FastKron C++ API: [documents/cpp-api.md](https://github.com/abhijangda/FastKron/blob/main/documents/cpp-api.md)
 
-FastKron Python API: [documents/api.md](https://github.com/abhijangda/FastKron/blob/main/documents/python-api.md)
+FastKron Python API: [documents/python-api.md](https://github.com/abhijangda/FastKron/blob/main/documents/python-api.md)
 
 Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)
 
@@ -129,7 +137,7 @@ Performance: [documents/performance.md](https://github.com/abhijangda/FastKron/b
 
 Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)
 
-Contributing:
+Contributing: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)
 
 # Citation
 
