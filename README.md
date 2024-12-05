@@ -18,7 +18,7 @@ Below table shows the range of speedup on different hardware and data types.
 | Hardware | Float    | Double |
 |----------|----------|--------|
 | AMD 64-Core CPU with AVX| 9.3-45x| 5.8-21x|
-| AMD 64-Core CPU with AVX512| | |
+| AMD 64-Core CPU with AVX512| 9.7-38x| 6.3-21x|
 | NVIDIA A100 80 GB| 1.5-9.5x| 1.1-9.5x|
 | NVIDIA V100 16 GB| 2.5-10x| 1.9-11x|
 
@@ -27,7 +27,7 @@ Below table shows the range of speedup on different hardware and data types.
 | Hardware | Float    | Double |
 |----------|----------|--------|
 | AMD 64-Core CPU with AVX| 2.7-13.7x| 1.5-7x|
-| AMD 64-Core CPU with AVX512| | |
+| AMD 64-Core CPU with AVX512| 2.2-14x| 2-7x|
 | NVIDIA A100 80 GB|1.3-4.6x |0.9-4.5x |
 | NVIDIA V100 16 GB| 1.4-6.4x|2-7.8x |
 

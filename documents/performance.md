@@ -4,7 +4,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 ## NVIDIA A100 80GB
 <b> MKM FLOAT OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  3409.436 | 5852.703 | 763.094 | 7.670
 1024_8x8^6  |  3553.610 | 6157.745 | 646.565 | 9.524
@@ -24,7 +24,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 --------------------
 <b> MKM FLOAT  OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  3302.982 | 4805.036 | 930.603 | 5.163
 1024_8x8^6  |  3465.595 | 5259.087 | 959.237 | 5.483
@@ -44,7 +44,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 -------------------------
 <b> MKM DOUBLE OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  1745.470 | 3356.203 | 386.201 | 8.690
 1024_8x8^6  |  1766.724 | 3643.161 | 381.557 | 9.548
@@ -64,7 +64,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 ---------------------------------
 <b>  MKM DOUBLE OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  1688.329 | 2549.555 | 457.646 | 5.571
 1024_8x8^6  |  1718.586 | 2841.198 | 462.281 | 6.146
@@ -84,7 +84,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 ------------------------
 <b> KMM FLOAT OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  3209.096 | 3712.318 | 935.133 | 3.970
 1024_8x8^6  |  3328.425 | 3893.090 | 959.956 | 4.055
@@ -104,7 +104,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 --------------------------
 <b>  KMM FLOAT OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  3155.209 | 3894.732 | 766.805 | 5.079
 1024_8x8^6  |  3275.254 | 3957.744 | 646.851 | 6.118
@@ -124,7 +124,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 -------------------------
 <b> KMM DOUBLE  OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  1650.882 | 2010.758 | 458.701 | 4.384
 1024_8x8^6  |  1698.419 | 2114.674 | 462.432 | 4.573
@@ -144,7 +144,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 -----------------------
 <b> KMM DOUBLE OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 1024_8x8^5  |  1588.423 | 1913.256 | 386.960 | 4.944
 1024_8x8^6  |  1640.095 | 2028.033 | 381.677 | 5.313
@@ -165,7 +165,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 ## NVIDIA V100 16GB
 
 <b> MKM Float OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  1683.405 | 3751.038 | 375.437 | 9.991
 256_16x16^5  |  3346.651 | 5450.749 | 755.190 | 7.218
@@ -174,7 +174,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  11277.279 | 11277.279 | 4593.815 | 2.455
 
 <b> MKM Float  OpX=T OpF=T</b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  1666.631 | 2941.795 | 620.949 | 4.738
 256_16x16^5  |  3139.310 | 4855.850 | 1504.183 | 3.228
@@ -183,7 +183,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  9163.544 | 9163.544 | 8792.515 | 1.042
 
 <b> MKM Double OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  846.328 | 2310.013 | 196.134 | 11.778
 256_16x16^5  |  1657.223 | 2395.805 | 364.473 | 6.573
@@ -192,7 +192,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  5436.299 | 5436.299 | 2871.772 | 1.893
 
 <b> MKM Double OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  834.441 | 1594.787 | 252.848 | 6.307
 256_16x16^5  |  1637.819 | 2339.475 | 665.392 | 3.516
@@ -201,7 +201,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  4334.606 | 4334.606 | 4411.487 | 1.1
 
 <b> KMM Float OpX=N OpX=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  1580.502 | 3968.443 | 623.175 | 6.368
 256_16x16^5  |  3160.147 | 4883.716 | 1496.531 | 3.263
@@ -210,7 +210,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  12068.812 | 12068.812 | 8785.851 | 1.374
 
 <b> KMM Float OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  1403.923 | 3056.745 | 376.250 | 8.124
 256_16x16^5  |  2712.493 | 3987.880 | 754.110 | 5.288
@@ -219,7 +219,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  10779.005 | 10779.005 | 4624.590 | 2.331
 
 <b> KMM Double OpX=N OpF=N </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  821.358 | 1586.475 | 253.348 | 6.262
 256_16x16^5  |  1590.090 | 2382.887 | 661.463 | 3.602
@@ -228,7 +228,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  5935.151 | 5935.151 | 4407.493 | 1.2
 
 <b> KMM Double OpX=T OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^6  |  802.816 | 1530.923 | 196.505 | 7.791
 256_16x16^5  |  1561.879 | 2344.966 | 365.990 | 6.407
@@ -240,7 +240,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 <b>MKM Float OpX=N and OpF=N</b>
 
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 | 256_8x8^5      | 773.198   | 773.198 | 16.941 | 45.641|
 | 256_8x8^6      | 516.399   | 516.399 | 33.180 | 15.563|
@@ -256,7 +256,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 <b> MKM Float OpX=T and OpF=T</b>
 
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^5  |  63.268 | 63.268 | 36.134 | 1.751
 256_8x8^6  |  62.314 | 62.314 | 20.761 | 3.001
@@ -270,9 +270,9 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 128_128x128^3  |  394.863 | 394.863 | 126.114 | 3.131
 ---------------------------------------------
 
-<b> MKM Double OpX=N and OpF=N</b> 
+<b> MKM Double OpX=N and OpF=N</b>
 
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^5  |  404.058 | 404.058 | 18.538 | 21.796
 256_8x8^6  |  262.676 | 262.676 | 18.789 | 13.980
@@ -289,7 +289,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 ---------------------
 <b> KMM Float  OpX=N and OpF=N</b>
 
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^5  |  453.020 | 453.020 | 32.933 | 13.756
 256_8x8^6  |  473.112 | 473.112 | 47.450 | 9.971
@@ -305,7 +305,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 -----------------------
 
 <b> KMM Float OpX=T and OpF=T </b>
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^5  |  382.543 | 382.543 | 18.812 | 20.335
 256_8x8^6  |  397.076 | 397.076 | 33.388 | 11.893
@@ -320,8 +320,8 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 -----------------------
 
-<b> KMM Double OpX=N and OpF=N </b> 
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+<b> KMM Double OpX=N and OpF=N </b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^5  |  213.357 | 213.357 | 47.517 | 4.490
 256_8x8^6  |  242.528 | 242.528 | 34.702 | 6.989
@@ -338,7 +338,7 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 
 <b> KMM Double OpX=T and OpF=T</b>
 
-| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup| 
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
 |----------------|-----------|--------|---------|-------|
 256_8x8^5  |  185.425 | 185.425 | 18.706 | 9.913
 256_8x8^6  |  223.118 | 223.118 | 18.999 | 11.744
@@ -350,3 +350,131 @@ The last column of speedup shows that FastKron performs orders of magnitude fast
 256_64x64^3  |  521.852 | 521.852 | 105.072 | 4.967
 256_128x128^2  |  708.799 | 708.799 | 105.410 | 6.724
 128_128x128^3  |  868.333 | 868.333 | 199.416 | 4.354
+
+## AMD EPYC 9554 64-Core with AVX512
+
+<b> MKM FLOAT  OpX=N OpF=N </b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  861.987 | 808.113 | 23.740 | 34.040
+256_8x8^6  |  1828.224 | 1763.371 | 45.561 | 38.704
+256_16x16^4  |  1983.664 | 1858.734 | 60.485 | 30.730
+256_16x16^5  |  1535.883 | 1520.168 | 94.904 | 16.018
+256_32x32^3  |  1687.114 | 1644.825 | 59.549 | 27.621
+256_32x32^4  |  2719.807 | 2662.600 | 155.625 | 17.109
+256_64x64^2  |  1095.274 | 1095.274 | 70.786 | 15.473
+256_64x64^3  |  3970.696 | 3970.696 | 230.410 | 17.233
+256_128x128^2  |  2207.981 | 2207.981 | 146.499 | 15.072
+128_128x128^3  |  4118.224 | 4118.224 | 425.253 | 9.684
+
+-------
+<b> MKM FLOAT  OpX=T OpF=T</b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  456.993 | 668.545 | 73.985 | 9.036
+256_8x8^6  |  1152.851 | 985.269 | 74.670 | 13.195
+256_16x16^4  |  1103.094 | 1379.095 | 126.817 | 10.875
+256_16x16^5  |  1399.798 | 1396.727 | 255.716 | 5.462
+256_32x32^3  |  1657.558 | 1745.752 | 245.143 | 7.121
+256_32x32^4  |  2321.623 | 2294.176 | 463.993 | 4.944
+256_64x64^2  |  902.076 | 902.076 | 308.838 | 2.921
+256_64x64^3  |  3724.143 | 3724.143 | 720.051 | 5.172
+256_128x128^2  |  1647.591 | 1647.591 | 636.803 | 2.587
+128_128x128^3  |  3877.873 | 3877.873 | 1006.149 | 3.854
+16_8x8^8  |  725.972 | 700.658 | 132.661 | 5.282
+16_16x16^6  |  934.832 | 900.416 | 255.216 | 3.528
+16_32x32^5  |  2200.856 | 2216.109 | 418.041 | 5.301
+16_64x64^4  |  3169.570 | 3169.570 | 782.214 | 4.052
+16_128x128^3  |  2860.882 | 2860.882 | 789.547 | 3.623
+
+<b> MKM DOUBLE OpX=N OpF=N </b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  733.332 | 508.927 | 23.690 | 21.483
+256_8x8^6  |  719.335 | 649.458 | 33.257 | 19.528
+256_16x16^4  |  1462.410 | 1383.907 | 56.292 | 24.584
+256_16x16^5  |  735.686 | 729.576 | 61.099 | 11.941
+256_32x32^3  |  1314.956 | 1245.896 | 77.133 | 16.153
+256_32x32^4  |  1311.112 | 1301.478 | 102.714 | 12.671
+256_64x64^2  |  634.011 | 634.011 | 54.221 | 11.693
+256_64x64^3  |  1722.227 | 1722.227 | 163.319 | 10.545
+256_128x128^2  |  1716.459 | 1716.459 | 143.046 | 11.999
+128_128x128^3  |  1888.327 | 1888.327 | 297.792 | 6.341
+
+-------
+
+<b> MKM DOUBLE OpX=T OpF=T</b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  443.956 | 234.263 | 89.587 | 2.615
+256_8x8^6  |  438.860 | 491.857 | 85.891 | 5.727
+256_16x16^4  |  856.283 | 491.535 | 204.505 | 2.404
+256_16x16^5  |  681.703 | 620.554 | 176.323 | 3.519
+256_32x32^3  |  1154.914 | 1286.068 | 302.830 | 4.247
+256_32x32^4  |  1101.924 | 1095.693 | 328.908 | 3.331
+256_64x64^2  |  432.852 | 432.852 | 254.429 | 1.701
+256_64x64^3  |  1332.985 | 1332.985 | 628.759 | 2.120
+256_128x128^2  |  1605.625 | 1605.625 | 796.604 | 2.016
+128_128x128^3  |  1876.462 | 1876.462 | 1021.801 | 1.836
+16_8x8^8  |  454.649 | 449.349 | 65.415 | 6.869
+
+-------
+<b> KMM FLOAT OpX=N OpF=N </b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  420.842 | 500.121 | 68.627 | 7.288
+256_8x8^6  |  1030.196 | 992.839 | 67.313 | 14.750
+256_16x16^4  |  1576.806 | 1271.075 | 132.196 | 9.615
+256_16x16^5  |  1287.072 | 1193.908 | 269.336 | 4.433
+256_32x32^3  |  1337.324 | 1030.646 | 273.409 | 3.770
+256_32x32^4  |  1628.113 | 1404.065 | 471.987 | 2.975
+256_64x64^2  |  713.806 | 713.806 | 323.349 | 2.208
+256_64x64^3  |  1789.224 | 1789.224 | 691.239 | 2.588
+256_128x128^2  |  2329.162 | 2329.162 | 653.122 | 3.566
+128_128x128^3  |  4289.726 | 4289.726 | 1014.225 | 4.230
+
+-------
+<b> KMM FLOAT OpX=T OpF=T </b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  405.127 | 497.876 | 28.923 | 17.214
+256_8x8^6  |  891.389 | 829.811 | 48.426 | 17.136
+256_16x16^4  |  692.173 | 1008.153 | 59.995 | 16.804
+256_16x16^5  |  1218.202 | 993.694 | 94.884 | 10.473
+256_32x32^3  |  1245.039 | 1019.412 | 62.101 | 16.415
+256_32x32^4  |  1733.693 | 1367.983 | 158.412 | 8.636
+256_64x64^2  |  681.958 | 681.958 | 73.760 | 9.246
+256_64x64^3  |  1786.016 | 1786.016 | 243.329 | 7.340
+256_128x128^2  |  2130.730 | 2130.730 | 160.879 | 13.244
+128_128x128^3  |  4139.328 | 4139.328 | 428.718 | 9.655
+
+-------
+<b> KMM DOUBLE OpX=N OpF=N </b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  137.334 | 355.449 | 90.209 | 3.940
+256_8x8^6  |  588.442 | 602.507 | 86.103 | 6.997
+256_16x16^4  |  331.979 | 449.838 | 206.878 | 2.174
+256_16x16^5  |  697.520 | 599.861 | 169.456 | 3.540
+256_32x32^3  |  582.063 | 649.579 | 303.006 | 2.144
+256_32x32^4  |  907.121 | 890.380 | 328.768 | 2.708
+256_64x64^2  |  586.203 | 586.203 | 257.631 | 2.275
+256_64x64^3  |  1373.891 | 1373.891 | 634.591 | 2.165
+256_128x128^2  |  1649.482 | 1649.482 | 824.790 | 2.000
+128_128x128^3  |  2062.284 | 2062.284 | 1023.296 | 2.015
+
+-------
+
+<b>KMM DOUBLE OpX=T OpF=T</b>
+| Shape          | FK-no-fuse|FastKron| GPyTorch|Speedup|
+|----------------|-----------|--------|---------|-------|
+256_8x8^5  |  128.451 | 334.598 | 23.871 | 14.017
+256_8x8^6  |  685.020 | 449.745 | 32.487 | 13.844
+256_16x16^4  |  991.336 | 757.621 | 56.133 | 13.497
+256_16x16^5  |  807.151 | 681.131 | 61.376 | 11.098
+256_32x32^3  |  745.210 | 662.348 | 76.801 | 8.624
+256_32x32^4  |  880.639 | 862.566 | 101.946 | 8.461
+256_64x64^2  |  553.689 | 553.689 | 53.693 | 10.312
+256_64x64^3  |  1368.693 | 1368.693 | 158.982 | 8.609
+256_128x128^2  |  1654.926 | 1654.926 | 142.911 | 11.580
+128_128x128^3  |  1942.861 | 1942.861 | 302.616 | 6.420
