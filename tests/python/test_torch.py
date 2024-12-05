@@ -46,14 +46,14 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
 
   if len(ps) == 1:
     ps = [ps[0]]*n
-  
+
   if type(qs) is int:
     qs = [qs]
 
   if len(qs) == 1:
     qs = [qs[0]]*n
 
-  #Using integer values instead of real numbers because 
+  #Using integer values instead of real numbers because
   #floating point is not associative
   if mmtype == "mkm":
     xshape = [m, product(ps)] if not trX else [product(ps), m]
@@ -66,7 +66,7 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
     fshape = [[ps[i], qs[i]] if not trF else [qs[i], ps[i]] for i in range(n)]
   elif mmtype == "kmm":
     fshape = [[qs[i], ps[i]] if not trF else [ps[i], qs[i]] for i in range(n)]
-  
+
   fshape = [list(batchDimFPre) + fshape[i] for i in range(n)]
 
   zshape = list(batchDimZ)
@@ -95,6 +95,7 @@ def run(mmtype, m, n, ps, qs, dtype, device, trX, trF,
       y = fk.gemkm(x, fs, alpha, beta, z)
     elif mmtype == "kmm":
       y = fk.gekmm(fs, x, alpha, beta, z)
+
     if x.device.type == "cuda":
       torch.cuda.synchronize()
     ref = alpha * reference(mmtype, x, fs, device)
@@ -146,16 +147,15 @@ def device_tests(device):
       run(mmtype, 102, 4, 8, 8, torch.float16, device, False, False, high=2, batchDimX=[2,1,], batchDimFPre=[3,])
       run(mmtype, 10, 3, 16, 8, torch.float16, device, True, False, high=2)
 
-  for mmtype in ["mkm", "kmm"]: 
+  for mmtype in ["mkm", "kmm"]:
     run(mmtype, 5, 4, 6, 6, torch.double, device, False, False, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
     run(mmtype, 5, 4, 4, 6, torch.double, device, True, True, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
 
 def test_cuda():
-  if fk.fastkrontorch.hasCUDA():
+  if torch.cuda.is_available():
     device_tests("cuda")
 
 def test_cpu():
-  if fk.fastkrontorch.hasX86():
     device_tests("cpu")
 
 if __name__ == "__main__":

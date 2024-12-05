@@ -4,11 +4,13 @@ import platform
 from .fastkronhandle import FastKronHandle
 
 if platform.system() == "Linux":
+    fastkronX86 = None
     if platform.machine() == "x86_64" or platform.machine() == "AMD64":
-        from . import FastKronX86
-        fastkronX86 = FastKronHandle("x86", FastKronX86)
-    else:
-        fastkronX86 = None
+        try:
+            from . import FastKronX86
+            fastkronX86 = FastKronHandle("x86", FastKronX86)
+        except:
+            pass
 
     fastkronCUDA = None
     try:
@@ -40,11 +42,13 @@ class FastKronBase:
         return self.cuda
 
     def supportedSystem(self):
-        return platform.system() == "Linux"
+        return platform.system() == "Linux" and \
+               (self.x86 == True or self.cuda == True)
 
     def supportedProcessor(self):
-        return platform.processor() == "x86_64" or \
-               platform.machine() == "AMD64"
+        return (platform.processor() == "x86_64" or
+                platform.machine() == "AMD64") and \
+                self.x86 == True
 
     def isSupported(self, x, fs):
         return self.supportedSystem() and self.supportedProcessor() and \
@@ -196,8 +200,8 @@ class FastKronBase:
             rs, ts = fn((self.m(mmtype, x, trX), self.k(mmtype, x, trX)),
                         self.ps(mmtype, fs, trF), self.qs(mmtype, fs, trF))
         else:
-            rsN = product(self.qs([self.matrixShape(f, trF) for f in fs]))
-            rs, ts = (self.matrixShape(x, trX)[0] * rsN), -1
+            rsN = product(self.qs(mmtype, fs, trF))
+            rs, ts = (self.m(mmtype, x, trX) * rsN), -1
 
         zbroadcastshape = self.broadcastShape(xbatch, fbatch)
         zshape = []
@@ -478,7 +482,6 @@ class FastKronBase:
 
         rs, _ = self.gekmmSizes(mmtype, x, fs, trX=trX, trF=trF)
         m,  k = self.m(mmtype, x, trX), self.k(mmtype, x, trX)
-
         z = x
         zs = []
 
@@ -506,7 +509,7 @@ class FastKronBase:
             if requires_grad:
                 zs += [z.reshape(zbatchShape + grad_zshape)]
             k = (k//fp) * fq
-
+        z = z.reshape(rs)
         if alpha is not None and alpha != 1:
             z = alpha * (z.reshape(rs))
         if beta is not None and beta != 0 and y is not None:

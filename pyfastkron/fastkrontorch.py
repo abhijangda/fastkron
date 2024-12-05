@@ -17,8 +17,9 @@ class FastKronTorch(FastKronBase):
         return tensor.data_ptr()
 
     def supportedDevice(self, x: torch.Tensor) -> str:
-        return (x.device.type == 'cuda' and torch.version.hip is None) or \
-               (x.device.type == 'cpu')
+        return (x.device.type == 'cuda' and torch.version.hip is None and \
+                fastkronCUDA is not None) or \
+               (x.device.type == 'cpu') and fastkronX86 is not None
 
     def check(self, x: torch.Tensor, fs: List[torch.Tensor],
               y: Optional[torch.Tensor] = None,

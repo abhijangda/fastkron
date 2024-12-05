@@ -14,7 +14,7 @@ class FastKronNumpy(FastKronBase):
         return tensor.ctypes.data
 
     def supportedDevice(self, x: np.ndarray) -> bool:
-        return True
+        return fastkronX86 is not None
 
     def supportedTypes(self, x: np.ndarray, fs: List[np.ndarray]) -> bool:
         return x.dtype in [np.float32, np.double]
