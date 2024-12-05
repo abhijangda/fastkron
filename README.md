@@ -28,19 +28,19 @@ For more information see [documents/performance.md](https://github.com/abhijangd
 # Hardware and OS Support
 |  | Linux | WSL2 | Windows | Mac |
 |----------|----------|----------|-------|-----|
-| x86   | ✅   | ✅ | :snake: | :snake: |
-| ARM   | :snake: | :snake: | :snake: | :snake: |
-| AVX256   | :white_check_mark: | :white_check_mark: | :snake: | :snake: |
-| AVX512   | :white_check_mark: |:white_check_mark: | :snake: | :snake:|
-| SM50+ CUDA cores    |:white_check_mark: | :white_check_mark: | :snake: | :snake: |
-| SM80+ Tensor cores  | :x: | :x: | :snake: | :snake: |
-| AMD RoCM | :snake: | :snake: | :snake: | :snake: |
+| x86   | ✅   | ✅ | 🐍 | 🐍 |
+| ARM   | 🐍 | 🐍 | 🐍 | 🐍 |
+| AVX256   | ✅ | ✅ | 🐍 | 🐍 |
+| AVX512   | ✅ |✅ | 🐍 | 🐍|
+| SM50+ CUDA cores    |✅ | ✅ | 🐍 | 🐍 |
+| SM80+ Tensor cores  | ❌ | ❌ | 🐍 | 🐍 |
+| AMD RoCM | 🐍 | 🐍 | 🐍 | 🐍 |
 
-:white_check_mark: FastKron supports optimized implementations for AVX256 and AVX512 CPUs and NVIDIA GPUs.
+✅ FastKron supports optimized implementations for AVX256 and AVX512 CPUs and NVIDIA GPUs.
 
-:x: Tensor cores for double are not supported.
+❌ Tensor cores for double are not supported.
 
-:snake: x86 CPUs older than GLIBC x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not supported in C++ API but PyFastKron *fallbacks* to the shuffle algorithm in Numpy or PyTorch.
+🐍 Supported in Python module. x86 CPUs older than GLIBC x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not supported in C++ API but PyFastKron *fallbacks* to the shuffle algorithm in Numpy or PyTorch.
 
 The future roadmap is as follows in terms of priority: Windows, SM80+ Double Tensor cores, AMD GPUs, ARM CPUs.
 
