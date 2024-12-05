@@ -28,7 +28,7 @@ For more information see [documents/performance.md](https://github.com/abhijangd
 # Hardware and OS Support
 |  | Linux | WSL2 | Windows | Mac |
 |----------|----------|----------|-------|-----|
-| x86   | :white_check_mark:   | :white_check_mark: | :snake: | :snake: |
+| x86   | ✅   | ✅ | :snake: | :snake: |
 | ARM   | :snake: | :snake: | :snake: | :snake: |
 | AVX256   | :white_check_mark: | :white_check_mark: | :snake: | :snake: |
 | AVX512   | :white_check_mark: |:white_check_mark: | :snake: | :snake:|
