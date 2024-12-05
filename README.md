@@ -36,8 +36,12 @@ For more information see [documents/performance.md](https://github.com/abhijangd
 | SM80+ Tensor cores  | :x: | :x: | :snake: | :snake: |
 | AMD RoCM | :snake: | :snake: | :snake: | :snake: |
 
-FastKron supports optimized implementations for AVX256 and AVX512 CPUs and NVIDIA GPUs.
-x86 CPUs older than GLIBC x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not supported in C++ API but PyFastKron *fallbacks* to the shuffle algorithm in Numpy or PyTorch.
+:white_check_mark: FastKron supports optimized implementations for AVX256 and AVX512 CPUs and NVIDIA GPUs.
+
+:x: Tensor cores for double are not supported.
+
+:snake: x86 CPUs older than GLIBC x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not supported in C++ API but PyFastKron *fallbacks* to the shuffle algorithm in Numpy or PyTorch.
+
 The future roadmap is as follows in terms of priority: Windows, SM80+ Double Tensor cores, AMD GPUs, ARM CPUs.
 
 # Example
