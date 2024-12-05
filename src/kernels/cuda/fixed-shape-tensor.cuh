@@ -187,7 +187,7 @@ public:
   static constexpr fastKronOp layout() {return Layout;}
   CUDA_DEVICE_HOST
   void zero() {Base::zero(data);}
-  
+
   CUDA_DEVICE_HOST
   T& at(uint32_t i, uint32_t j, uint32_t k) {
     return Base::at(data, i, j, k);
@@ -289,18 +289,18 @@ public:
       }
     }
   }
-  
+
   CUDA_DEVICE_HOST
-  void store_row(uint32_t row, uint32_t num, const T* ptr) {
-    memcpy(&((Layout == fastKronOp_N) ? at(row, 0) : at(0, row)), ptr, num * sizeof(T));
+  void store_row(uint32_t row, uint32_t num, const T* __restrict__  ptr) {
+    memcpy(((Layout == fastKronOp_N) ? &at(row, 0) : &at(0, row)), ptr, num * sizeof(T));
     if (num < Base::shape(1)) {
-      memset(&((Layout == fastKronOp_N) ? at(row, num) : at(num, row)), 0, (Base::shape(1) - num)*sizeof(T));
+      memset(((Layout == fastKronOp_N) ? &at(row, num) : &at(num, row)), 0, (Base::shape(1) - num)*sizeof(T));
     }
   }
 
   CUDA_DEVICE_HOST
   void zero_row(uint32_t row) {
-    memset(&((Layout == fastKronOp_N) ? at(row, 0) : at(0, row)), 0, Base::shape(1) * sizeof(T));
+    memset(((Layout == fastKronOp_N) ? &at(row, 0) : &at(0, row)), 0, Base::shape(1) * sizeof(T));
   }
 
   CUDA_DEVICE_HOST
@@ -312,14 +312,14 @@ public:
   const T& at(uint32_t row, uint32_t col) const {
     return Base::at(data, row, col);
   }
-  
+
   CUDA_DEVICE_HOST
   uint32_t p() const {return TileP;}
   CUDA_DEVICE_HOST
   uint32_t q() const {return TileQ;}
 };
 
-template<fastKronOp Layout, typename T, bool kXshSlicesSame, 
+template<fastKronOp Layout, typename T, bool kXshSlicesSame,
          uint32_t kM, uint32_t kSlices, uint32_t kP>
 class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
@@ -331,7 +331,7 @@ public:
   ShiftShared(T* data, uint32_t ShTileK) : data(data), ShTileK(ShTileK) {}
 
   CUDA_DEVICE_HOST
-  void store(uint32_t startRow, uint32_t startCol, uint32_t RegK, 
+  void store(uint32_t startRow, uint32_t startCol, uint32_t RegK,
               uint32_t numElems, T* elems, fastKronOp elemOp) {
     #pragma unroll
     for (uint i = 0; i < numElems; i++) {
@@ -381,7 +381,7 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  void store(uint32_t row, uint32_t slice, uint32_t elem, uint32_t RegK, 
+  void store(uint32_t row, uint32_t slice, uint32_t elem, uint32_t RegK,
              uint32_t numElems, T* elems) {
     //Only works for numElems == 1
     #pragma unroll
@@ -402,7 +402,7 @@ public:
 
   CUDA_DEVICE_HOST
   uint32_t numel() const {return m() * n();}
-  
+
   CUDA_DEVICE_HOST
   uint32_t slices() const {return (kXshSlicesSame) ? kSlices : ShTileK/kP;}
 
@@ -415,7 +415,7 @@ public:
 };
 
 //Register Tensors
-template<fastKronOp Layout, typename T, uint32_t M, uint32_t K, uint32_t Q, 
+template<fastKronOp Layout, typename T, uint32_t M, uint32_t K, uint32_t Q,
          uint32_t MVectorLen = 1, uint32_t KVectorLen = 1>
 class YRegisters : public FixedShapeTensor3D<Layout, T, M/MVectorLen, K/KVectorLen, Q> {
   using Base = FixedShapeTensor3D<Layout, T, M/MVectorLen, K/KVectorLen, Q>;
@@ -425,7 +425,7 @@ public:
   YRegisters() {Base::zero();}
 
   CUDA_DEVICE_HOST
-  static constexpr uint32_t kvec() {return KVectorLen;} 
+  static constexpr uint32_t kvec() {return KVectorLen;}
   CUDA_DEVICE_HOST
   static constexpr uint32_t mvec() {return MVectorLen;}
   CUDA_DEVICE_HOST
