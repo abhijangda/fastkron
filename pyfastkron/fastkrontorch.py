@@ -46,8 +46,7 @@ class FastKronTorch(FastKronBase):
     def supportedTypes(self, x: torch.Tensor, fs: List[torch.Tensor]) -> bool:
         return x.dtype in [torch.float32, torch.float64]
 
-    def trLastTwoDims(self, mmtype: Union[FastKronBase.MMTypeMKM,
-                                          FastKronBase.MMTypeKMM],
+    def trLastTwoDims(self, mmtype: int,
                       x: torch.Tensor) -> torch.Tensor:
         if mmtype == FastKronBase.MMTypeMKM:
             return x.transpose(-1, -2)
@@ -317,8 +316,7 @@ class FastKronTorch(FastKronBase):
         return (grad_x.mT if grad_x is not None else None, ) + \
             tuple(g.mT if g is not None else None for g in grad_fs)
 
-    def shuffleGeMM(self, mmtype: Union[FastKronBase.MMTypeMKM,
-                                        FastKronBase.MMTypeKMM],
+    def shuffleGeMM(self, mmtype: int,
                     x: torch.Tensor, fs: List[torch.Tensor],
                     alpha: float = 1.0, beta: float = 0.0,
                     y: Optional[torch.Tensor] = None) -> torch.Tensor:

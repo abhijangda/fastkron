@@ -40,7 +40,7 @@ class build_ext(build_ext_orig):
           cmake_args += ['-DENABLE_CUDA=OFF', '-DENABLE_X86=ON']
         elif 'CUDA' in ext.name:
           cmake_args += ['-DENABLE_CUDA=ON', '-DENABLE_X86=OFF']
-        
+
         cmake_args += [f'-DPYTHON_EXECUTABLE={sys.executable}']
 
         # example of build args
@@ -52,7 +52,7 @@ class build_ext(build_ext_orig):
         self.spawn(['cmake', str(cwd)] + cmake_args)
         if not self.dry_run:
             self.spawn(['cmake', '--build', '.'] + build_args)
-        # Troubleshooting: if fail on line above then delete all possible 
+        # Troubleshooting: if fail on line above then delete all possible
         # temporary CMake files including "CMakeCache.txt" in top level dir.
         os.chdir(str(cwd))
 

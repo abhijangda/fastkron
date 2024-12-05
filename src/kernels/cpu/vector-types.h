@@ -96,7 +96,7 @@ inline void vectorBroadcast(const double* ptr, double& data) {
 
 template<>
 inline void vectorGather(const float* base, const uint32_t* gatherIdxs, float& data) {
-  data = base[gatherIdxs[0]]; 
+  data = base[gatherIdxs[0]];
 }
 
 template<>
@@ -179,7 +179,7 @@ inline void vectorBroadcast(const double* ptr, __m256d& data) {
 template<>
 inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m256& data) {
   __m256i vidx = _mm256_loadu_si256((__m256i*)gatherIdxs);
-  data = _mm256_i32gather_ps(base, vidx, sizeof(float)); 
+  data = _mm256_i32gather_ps(base, vidx, sizeof(float));
 }
 
 template<>
@@ -263,7 +263,7 @@ inline void vectorBroadcast(const double* ptr, __m512d& data) {
 template<>
 inline void vectorGather(const float* base, const uint32_t* gatherIdxs, __m512& data) {
   __m512i vidx = _mm512_loadu_si512((__m512i*)gatherIdxs);
-  data = _mm512_i32gather_ps(vidx, base, sizeof(float)); 
+  data = _mm512_i32gather_ps(vidx, base, sizeof(float));
 }
 
 template<>
@@ -277,7 +277,7 @@ template<typename ElemT, typename VecT>
 class X86Vector {
 private:
   using VecWrapper = VecT;
-  using UnderlyingVecT = typename VecT::VecT; 
+  using UnderlyingVecT = typename VecT::VecT;
   VecT vec;
 
 public:
@@ -303,7 +303,7 @@ public:
   void store(ElemT* ptr) const {
     vectorStore<ElemT, UnderlyingVecT>(ptr, vec.data);
   }
-  
+
   void store(ElemT* ptr, uint32_t sz) const {
     if (sz == VectorLen)
       store(ptr);
@@ -325,7 +325,7 @@ public:
   void fmadd(const X86Vector<ElemT, VecT>& a, const X86Vector<ElemT, VecT>& b) {
     vectorFMA<UnderlyingVecT>(a.vec.data, b.vec.data, vec.data);
   }
-  
+
   void fmadd(const ElemT& a, const X86Vector<ElemT, VecT>& b) {
     X86Vector<ElemT, VecT> avec;
     avec.broadcast(&a);
@@ -369,7 +369,7 @@ public:
 class AVXFloat : public X86Vector<float, AVXFloatWrapper> {
 public:
   AVXFloat(AVXFloatWrapper::VecT v) : X86Vector<float, AVXFloatWrapper>(v) {}
-  AVXFloat() {}
+  AVXFloat() {this->zero();}
   AVXFloat(float /*zero*/) {this->zero();}
 
   static void transpose(AVXFloat rows[]) {
@@ -406,7 +406,7 @@ public:
 class AVXDouble : public X86Vector<double, AVXDoubleWrapper> {
 public:
   AVXDouble(AVXDoubleWrapper::VecT v) : X86Vector<double, AVXDoubleWrapper>(v) {}
-  AVXDouble() {}
+  AVXDouble() {this->zero();}
   AVXDouble(double /*zero*/) {this->zero();}
 
   static void transpose(AVXDouble rows[]) {
@@ -427,7 +427,7 @@ public:
 class AVX512Float : public X86Vector<float, AVX512FloatWrapper> {
 public:
   AVX512Float(AVX512FloatWrapper::VecT v) : X86Vector<float, AVX512FloatWrapper>(v) {}
-  AVX512Float() {}
+  AVX512Float() {this->zero();}
   AVX512Float(float /*zero*/) {this->zero();}
 
   static void transpose(AVX512Float rows[]) {
@@ -505,7 +505,7 @@ public:
 class AVX512Double : public X86Vector<double, AVX512DoubleWrapper> {
 public:
   AVX512Double(AVX512DoubleWrapper::VecT v) : X86Vector<double, AVX512DoubleWrapper>(v) {}
-  AVX512Double() {}
+  AVX512Double() {this->zero();}
   AVX512Double(double /*zero*/) {this->zero();}
 
   static void transpose(AVX512Double rows[]) {

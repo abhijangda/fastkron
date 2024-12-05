@@ -1,5 +1,5 @@
 import argparse
-import math 
+import math
 import sys
 import os
 import shutil
@@ -64,7 +64,7 @@ def elem_type_to_fastkron_type(elem_type: str) -> str:
   assert false, f"{elem_type} not in FastKron"
 
 def factors(n):
-  return list(set(functools.reduce(list.__add__, 
+  return list(set(functools.reduce(list.__add__,
               ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0))))
 
 def isPowerOfTwo(x):
@@ -97,7 +97,7 @@ class KronMatMulShape:
 WARP_SIZE=32
 
 class Kernel:
-  def __init__(self, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int, 
+  def __init__(self, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, tileQ : int, tileP : int, tileM : int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, rm : int, rk : int, rq : int, allPowersOf2: int, opX : str, opF : str,
                kernelBatchType: str):
     self.kmmtype = kmmtype
@@ -180,10 +180,10 @@ class CPUKMMKernel(Kernel):
 
   def __repr__(self):
     return f"{self.kmmtype}_{self.backend}_{self.arch}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}"
-  
+
   def filename(self):
     return f"{self.kernelname()}.cpp"
-  
+
   def templateDecl(self):
     return f"{self.elemType}, {self.arch.upper()}{self.elemType[0].upper() + self.elemType[1:]}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.mmType()}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
 
@@ -203,7 +203,6 @@ class CPUKMMKernel(Kernel):
       targetArch = 'SISD'
 
     return f'''CXX_PRAGMA_PUSH_OPTIONS
-CXX_PRAGMA_O3
 CXX_PRAGMA_ARCH_{targetArch}'''
 
 
@@ -280,7 +279,7 @@ CXX_PRAGMA_ARCH_{targetArch}'''
     return cond
 
 class GPUKMMKernel(Kernel):
-  def __init__(self, backend : str, arch : str, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int, 
+  def __init__(self, backend : str, arch : str, kmmtype : str, shape : KronMatMulShape, problem : KronMatMulShape, kron_rows : int, kron_cols : int,
                tileQ : int, tileP : int, tileM: int,
                regM: int, cRegRows: int, cRegCols: int,
                FusedKernel : int, dist: int, elemType : str, opt_level : int, aalign: int, kalign: int,
@@ -302,14 +301,14 @@ class GPUKMMKernel(Kernel):
     """Compute several constants of kernel
        Corresponds to line numbers in kernel.cuh
     """
-    self.wsz = (self.shape.k//self.shape.p)//self.rk 
+    self.wsz = (self.shape.k//self.shape.p)//self.rk
     self.shared_mem_usage = (self.tileM * ((self.shape.k/self.shape.p)*self.tileP) + self.tileP * self.tileQ)*element_size(elemType)
 
   def threads(self):
     if self.num_threads%WARP_SIZE != 0:
       return (self.num_threads//WARP_SIZE + 1)*WARP_SIZE
     return self.num_threads
-  
+
   def __repr__(self):
     return f"{self.kmmtype}_{self.backend}_{self.arch}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
 
@@ -328,7 +327,7 @@ class GPUKMMKernel(Kernel):
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
-  
+
   def optimizedCUDAArch(self):
     smXX = ""
     if self.arch == "ampere" or self.arch == "hopper":
@@ -370,7 +369,7 @@ class GPUKMMKernel(Kernel):
            self.dist in [0, 1] and \
            self.rq <= 32 and \
            self.rm * self.rk * self.rq <= 64# and self.opt_level == 3
-  
+
 def all_sliced_mults(mmtype, m, k, n, opX, ps, qs):
   sliced_mults = []
   prevTmpK = k
@@ -397,7 +396,7 @@ def parseRegTile(rep):
 class KernelTemplate:
   def __init__(self, template):
     self.parse(template)
-  
+
   def parse(self, template):
     parts = iter(template.split('_'))
     self.mmtype = next(parts)
@@ -435,7 +434,7 @@ class KernelTemplate:
       self.opt_level = next(parts, "*")
     else:
       self.opX = self.opF = self.batch_type = self.opt_level = "*"
-    
+
 
   def is_template_of_kernel(self, kernel):
     if not (self.mmtype == '*' or self.mmtype == kernel.kmmtype):
@@ -492,7 +491,7 @@ def simd_lengths(backend: str, arch : str, elem_type: str):
     lengths += [256 // (element_size(elem_type) * 8)]
   if arch == "avx512":
     lengths += [512 // (element_size(elem_type) * 8)]
-  
+
   # assert False, f"Invalid {arch}"
   return lengths
 
@@ -515,14 +514,14 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
     kernel_dir = os.path.join(all_kernels_dir, f'{backend}','kron-kernels')
   elif backend == 'x86':
     kernel_dir = os.path.join(all_kernels_dir, 'cpu','x86','kron-kernels')
-  
+
   kernelTemplates = {}
   for config in onlySpecificConfigs:
     template = KernelTemplate(config)
     if str(template.f) not in kernelTemplates:
       kernelTemplates[str(template.f)] = []
     kernelTemplates[str(template.f)] += [template]
-  
+
   empty_dir(kernel_dir)
   configs = {}
   for batch_type in batch_types:
@@ -568,7 +567,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                         else:
                           if t.tileF[1] not in TileQs:
                             TileQs[t.tileF[1]] = []
-                          TileQs[t.tileF[1]] += [t] 
+                          TileQs[t.tileF[1]] += [t]
 
                     if len(TileQs) == 0:
                       TileQs = {f : [] for f in factors(q)}
@@ -585,7 +584,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                           else:
                             if t.tileX[1] not in TileKs:
                               TileKs[t.tileX[1]] = []
-                            TileKs[t.tileX[1]] += [t] 
+                            TileKs[t.tileX[1]] += [t]
 
                       if len(TileKs) == 0:
                         TileKs = [f for f in factors(currK) if f % p == 0]
@@ -631,7 +630,7 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
 
                                       distKernels = [0, 1] if useDistKernels else [0]
                                       for dist in distKernels:
-                                        config = GPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q), 
+                                        config = GPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q),
                                                               KronMatMulShape(m, k, n, ps, qs),
                                                               p, q, tQ, tP, tM, regM, regRows, regCols,
                                                               numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,
@@ -644,27 +643,27 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                       kronalign = f_simd_len(backend, arch, tQ, elem_type)
                                       config = CPUKMMKernel(backend, arch, kmmtype, KronMatMulShape(m, tK, n, p, q),
                                                               KronMatMulShape(m, k, n, ps, qs),
-                                                              p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns, 
+                                                              p, q, tQ, tP, tM, regM, regRows, regCols, numFusedKerns,
                                                               dist, elem_type, opt_level, aalign, kronalign, allSameShapes, opx, opF, batch_type)
                                       if config.isValid():
                                         __configs += [config]
                                   configs[shape] += __configs
 
   print("Generated configs:\n" + "\n".join([str(k) + "-> %d"%len(configs[k]) for k in configs]))
-  
+
   #Filter only valid configs
   validConfigs = {}
   for k in configs:
     validConfigs[k] = []
     for config in configs[k]:
       validConfigs[k] += [config]
-  
+
   print("Valid configs", sum([len(validConfigs[k]) for k in validConfigs]))
 
   uniqueConfigs = {k : list(set(validConfigs[k])) for k in validConfigs}
 
   print("Unique configs", sum([len(uniqueConfigs[k]) for k in uniqueConfigs]))
-  
+
   combinedConfigs = []
   for k in uniqueConfigs:
     configs = uniqueConfigs[k]
@@ -675,8 +674,8 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
           factorHash = str((config.shape.p, config.shape.q))
           if factorHash in kernelTemplates:
             for template in kernelTemplates[factorHash]:
-              
-                          
+
+
               if template.is_template_of_kernel(config):
                 __configs += [config]
                 break
@@ -701,18 +700,18 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
   for config in combinedConfigs:
     host_decls += config.hostFuncDecl() + ";\n" + config.getKernelFuncDecl() + ";\n"
   host_decls += "\n"
-  
+
   kernel_infos = f"#define ALL_{backend.upper()}_KERNELS \\\n"
   for config in combinedConfigs:
     kernel_infos += config.kernelInfo() + ",\\\n"
-  
+
   kernel_infos = kernel_infos[:kernel_infos.rfind(",")]
   kernel_infos += "\n"
   with open(os.path.join(kernel_dir, "kernel_decl.inc"), "w") as f:
     #Remove last comma and backslash
     f.write(host_decls)
     f.write(kernel_infos)
-  
+
   kernels_cmake = f"set({backend.upper()}_KERNELS "
   for config in combinedConfigs:
     #CMake works with forward slash path
@@ -740,12 +739,12 @@ def parse_distinct_factors(case):
   assert len(case[1:]) == n
   ps = []
   qs = []
-  
+
   for pq in case[1:]:
     split = pq.split(',')
     ps += [int(split[0])]
     qs += [int(split[1])]
-  
+
   k = compute_k(ps, qs)
   return (m, k, n, ps, qs)
 
@@ -756,7 +755,7 @@ def parse_same_factors(case):
   split = case[1].split(',')
   ps = [int(split[0]) for i in range(n)]
   qs = [int(split[1]) for i in range(n)]
-  
+
   k = compute_k(ps, qs)
   return (m, k, n, ps, qs)
 
@@ -769,7 +768,7 @@ if __name__ == "__main__":
   parser.add_argument('-same-factors'      , required=False, type=str, nargs="+", action='append',
                                              help = "Number of factors with same rows and columns: N P,Q")
   parser.add_argument('-opX'               , required=True , type=str, nargs="+",
-                                             help = "Space separated operations on input matrix X.\n" 
+                                             help = "Space separated operations on input matrix X.\n"
                                                     "   Valid values: N T")
   parser.add_argument('-opF'               , required=True , type=str, nargs="+",
                                              help = "Space separated operations on factors Fi.\n"
@@ -816,7 +815,7 @@ if __name__ == "__main__":
         print(e)
         sys.exit(0)
 
-  if args.same_factors is not None:  
+  if args.same_factors is not None:
     for case in args.same_factors:
       try:
         parsed_cases += [parse_same_factors(case)]
@@ -824,7 +823,7 @@ if __name__ == "__main__":
         print(f"Invalid case: {case}")
         print(e)
         sys.exit(0)
-  
+
   if args.backend is None or args.backend.lower() not in ['cuda', 'x86', 'hip', 'arm']:
     print(f"Invalid backend: {args.backend}")
     sys.exit(0)
@@ -863,7 +862,7 @@ if __name__ == "__main__":
       for line in contents:
         if line.strip() != "":
           match_configs += [line]
-  
-  generate_kernel_decls(parsed_cases, args.mm_type, args.opX, args.opF, args.types, not args.no_fuse, 
+
+  generate_kernel_decls(parsed_cases, args.mm_type, args.opX, args.opF, args.types, not args.no_fuse,
                         args.dist_kernels, args.num_kernels, match_configs, args.backend, args.archs,
                         args.opt_levels, args.batch_type)

@@ -63,8 +63,8 @@
 #define CUDA_WARP_SIZE 32U
 #define NULL_CHECK(x) if ((x) == nullptr) return fastKronInvalidArgument;
 
-static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
-static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
+// static constexpr int log2(uint n) {return 31 - __builtin_clz(n);}
+// static constexpr int log2(int n) {return 31 - __builtin_clz(n);}
 
 static inline double convertTimeValToDouble(struct timeval _time) {
   return ((double)_time.tv_sec)*1e6 + ((double)_time.tv_usec);
@@ -86,9 +86,9 @@ static inline double getCurrTime() {
   return convertTimeValToDouble(getTimeOfDay());
 }
 
-static inline int ilog2(uint x) {
-  return sizeof(uint32_t) * CHAR_BIT - __builtin_clz(x) - 1;
-}
+// static inline int ilog2(uint x) {
+//   return sizeof(uint32_t) * CHAR_BIT - __builtin_clz(x) - 1;
+// }
 
 static inline bool isPowerOf2(uint x) {
     return (x & (x - 1)) == 0;

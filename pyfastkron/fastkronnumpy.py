@@ -19,8 +19,7 @@ class FastKronNumpy(FastKronBase):
     def supportedTypes(self, x: np.ndarray, fs: List[np.ndarray]) -> bool:
         return x.dtype in [np.float32, np.double]
 
-    def trLastTwoDims(self, mmtype: Union[FastKronBase.MMTypeMKM,
-                                          FastKronBase.MMTypeKMM],
+    def trLastTwoDims(self, mmtype: int,
                       x: np.ndarray) -> np.ndarray:
         if mmtype == FastKronBase.MMTypeMKM:
             axes = list(range(len(x.shape) - 2)) +\
@@ -121,8 +120,7 @@ class FastKronNumpy(FastKronBase):
 
         return z
 
-    def shuffleGeMM(self, mmtype: Union[FastKronBase.MMTypeMKM,
-                                        FastKronBase.MMTypeKMM],
+    def shuffleGeMM(self, mmtype: int,
                     x: np.ndarray, fs: List[np.ndarray],
                     alpha: float = 1, beta: float = 0,
                     y: Optional[np.ndarray] = None) -> np.ndarray:

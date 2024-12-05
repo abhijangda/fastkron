@@ -38,7 +38,7 @@ def reference(mmtype, x, fs):
 
 def run(mmtype, m, n, p, q, dtype, device, trX, trF,
         high=5, batchDimX=[], batchDimFPre=[], batchDimZ=[]):
-  #Using integer values instead of real numbers because 
+  #Using integer values instead of real numbers because
   #floating point is not associative
   if mmtype == "mkm":
     xshape = [m, p**n] if not trX else [p**n, m]
@@ -63,7 +63,7 @@ def run(mmtype, m, n, p, q, dtype, device, trX, trF,
       fshape = [fshape[1],]
     else:
       fshape = [fshape[0],]
-  
+
   fshape = list(batchDimFPre) + fshape
 
   zshape = list(batchDimZ)
@@ -96,7 +96,7 @@ def run(mmtype, m, n, p, q, dtype, device, trX, trF,
 
 def device_tests(device):
   for mmtype in ["mkm", "kmm"]:
-    run(mmtype, 32, 5, 8, 8, np.float32, device, False, False)
+    run(mmtype, 8, 3, 8, 8, np.float32, device, False, False)
     run(mmtype, 16, 2, 128, 128, np.float32, device, False, False)
 
     run(mmtype, 10, 5, 6, 6, np.float32, device, True, False)

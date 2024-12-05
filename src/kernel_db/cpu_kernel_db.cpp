@@ -24,7 +24,7 @@ X86KMMKernel AllX86Kernels[] = {
 #endif
 };
 
-CPUKernelDatabase::CPUKernelDatabase() : 
+CPUKernelDatabase::CPUKernelDatabase() :
   KernelDatabase(), TileXs(), TileYs(), TileFs()
  {}
 
@@ -53,7 +53,7 @@ fastKronError CPUKernelDatabase::procMemset(uint32_t, Matrix& m, float val) {
 
 fastKronError CPUKernelDatabase::procMalloc(uint32_t, size_t size, void*& ptr) {
   ptr = new char[size];
-  return ptr != nullptr ? fastKronSuccess : fastKronInvalidArgument; 
+  return ptr != nullptr ? fastKronSuccess : fastKronInvalidArgument;
 }
 
 fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
@@ -63,7 +63,7 @@ fastKronError CPUKernelDatabase::procFree(uint32_t, void* ptr) {
 }
 
 template<typename KMMProblem, typename EpilogueParams>
-fastKronError invoke(CPUKMMKernel& kernelInfo, 
+fastKronError invoke(CPUKMMKernel& kernelInfo,
                      Matrix kernelTileX, Factor kernelTileF,
                      KMMProblem problem,
                      const uint fidx, CPUCaches& caches,
@@ -71,7 +71,7 @@ fastKronError invoke(CPUKMMKernel& kernelInfo,
                      DistributedParams distParams,
                      EpilogueParams epilogueParams,
                      KernelMode execMode) {
-  KernelParams<KMMProblem> params (problem, &caches, kernelTileX, kernelTileF, 
+  KernelParams<KMMProblem> params (problem, &caches, kernelTileX, kernelTileF,
                                               fidx, execMode);
   FusedParams<KMMProblem> fusedParams (problem, intermediates, kernelInfo.getMaxTileX().n());
   //TODO: change this to kernel.invoke
@@ -92,7 +92,7 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblem prob
   CPUCaches caches = {TileXs.ptr, TileFs.ptr, TileYs.ptr};
   Matrix kernelTileX = kernel->getTileX(problem);
   Factor kernelTileF = kernel->getTileF(problem);
-  
+
   if (problem.n() > kernel->getFusedFacs()) {
     Logger(LogLevel::Debug) << "Kernel with " << kernel->getFusedFacs()      <<
                                " fused factors cannot compute problem with " <<
@@ -169,11 +169,11 @@ fastKronError CPUKernelDatabase::invokeKernel(KMMKernel* kernel, KMMProblemStrid
 }
 
 template<typename KMMProblemT, typename EpilogueParamsT>
-fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT problem, 
-                                            const uint fidx, 
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT problem,
+                                            const uint fidx,
                                             DistributedParams /*distParams*/,
                                             EpilogueParamsT epilogueParams,
-                                            KernelMode execMode, 
+                                            KernelMode execMode,
                                             bool useP2PStore,
                                             int /*warmups*/, int runs,
                                             float& runtime) {
@@ -184,7 +184,7 @@ fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT probl
   }
   std::vector<typename KMMProblemT::Matrix> vecIntermediates(10);
   typename KMMProblemT::Matrices fakeIntermediates(vecIntermediates.data(), vecIntermediates.size());
- 
+
   fastKronError status;
   for (int sample = 0; sample < 10; sample++) {
     float avgtime = 0;
@@ -216,32 +216,32 @@ fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemT probl
 
     runtime = std::min(avgtime/runs, runtime);
   }
-  
+
   return status;
 }
 
-fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem problem, 
-                                            const uint fidx, 
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblem problem,
+                                            const uint fidx,
                                             DistributedParams distParams,
                                             EpilogueParams epilogueParams,
-                                            KernelMode execMode, 
+                                            KernelMode execMode,
                                             bool useP2PStore,
                                             int warmups, int runs,
                                             float& runtime) {
-  return timeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, distParams, epilogueParams, 
+  return timeKernel<KMMProblem, EpilogueParams>(kernel, problem, fidx, distParams, epilogueParams,
                                                 execMode, useP2PStore, warmups, runs, runtime);
 }
-  
-fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem, 
-                                            const uint fidx, 
+
+fastKronError CPUKernelDatabase::timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                            const uint fidx,
                                             DistributedParams distParams,
                                             EpilogueStridedBatchedParams epilogueParams,
-                                            KernelMode execMode, 
+                                            KernelMode execMode,
                                             bool useP2PStore,
                                             int warmups, int runs,
                                             float& runtime) {
   return timeKernel<KMMProblemStridedBatched, EpilogueStridedBatchedParams>(
-      kernel, problem, fidx, distParams, epilogueParams, 
+      kernel, problem, fidx, distParams, epilogueParams,
       execMode, useP2PStore, warmups, runs, runtime);
 }
 
@@ -255,7 +255,7 @@ void cpuid(uint32_t in, uint32_t regs[4], uint32_t ecx = 0) {
 #endif
 }
 
-X86KernelDatabase::X86KernelDatabase() {  
+X86KernelDatabase::X86KernelDatabase() {
   unsigned cpuidregs[4];
 
   // Get vendor
@@ -294,7 +294,7 @@ X86KernelDatabase::X86KernelDatabase() {
 
       model += std::string(name, 16);
   }
-  
+
   //Get L1 cache size in KB
   uint32_t l1Size = 0;
   if (cpuVendor == "AuthenticAMD") {
@@ -306,7 +306,7 @@ X86KernelDatabase::X86KernelDatabase() {
     uint32_t partitions = (cpuidregs[1] >> 12) & ((1 << 10) - 1); //EBX[21:12]
     uint32_t sets = cpuidregs[2]; //ECX[31:0]
     uint32_t linesize = cpuidregs[1] & ((1<<12)-1); //EBX[11:0]
-    //This size in bytes 
+    //This size in bytes
     l1Size = (ways + 1) * (partitions + 1) * (linesize + 1) * (sets + 1);
     l1Size = l1Size / 1024;
   } else {
@@ -330,19 +330,19 @@ X86KernelDatabase::X86KernelDatabase() {
     uint32_t partitions = (cpuidregs[1] >> 12) & ((1 << 10) - 1); //EBX[21:12]
     uint32_t sets = cpuidregs[2]; //ECX[31:0]
     uint32_t linesize = cpuidregs[1] & ((1<<12)-1); //EBX[11:0]
-    //This size in bytes 
+    //This size in bytes
     l3Size = (ways + 1) * (partitions + 1) * (linesize + 1) * (sets + 1);
     l3Size = l3Size / 1024;
   }
 
   //Get number of cpu sockets
-  uint32_t sockets = 0; 
+  uint32_t sockets = 0;
   {
     //TODO: Only for linux
     std::set<std::string> socketset;
     std::filesystem::path syscpu = "/sys/devices/system/cpu/";
-    
-    if (!std::filesystem::exists(syscpu) or 
+
+    if (!std::filesystem::exists(syscpu) or
         !std::filesystem::is_directory(syscpu)) {
       //TODO: What to do?
       std::cout << "Error " << syscpu << " not a directory" << std::endl;
@@ -385,7 +385,7 @@ X86KernelDatabase::X86KernelDatabase() {
     }
   }
 
-  auto detail = new X86ArchDetails(cpuVendor, model, l1Size, l2Size, l3Size, 
+  auto detail = new X86ArchDetails(cpuVendor, model, l1Size, l2Size, l3Size,
                                    sockets, cores, simd);
   hardware.push_back(detail);
 
@@ -410,7 +410,7 @@ KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem,
     std::vector<KMMKernel*> kernelsWithSamePOrQ;
     std::copy_if(kernelsForOptLevel.begin(), kernelsForOptLevel.end(),
                  std::back_inserter(kernelsWithSamePOrQ),
-                 [subProblem](auto& kernel){return kernel->getMaxFactor().p() == subProblem.f(0).p() or 
+                 [subProblem](auto& kernel){return kernel->getMaxFactor().p() == subProblem.f(0).p() or
                                             kernel->getMaxFactor().q() == subProblem.f(0).q();});
     std::vector<KMMKernel*> filteredKernels;
     if (kernelsWithSamePOrQ.size() > 0) {
@@ -422,10 +422,10 @@ KMMKernel* X86KernelDatabase::findKernelAtOptLevel(KMMProblemT subProblem,
 
     X86SIMD simd = getX86CPUProperties().simd;
     std::vector<KMMKernel*> kernelsForArch;
-    std::copy_if(filteredKernels.begin(), filteredKernels.end(), 
+    std::copy_if(filteredKernels.begin(), filteredKernels.end(),
                  std::back_inserter(kernelsForArch),
                  [simd, subProblem](auto& kernel){
-                   return kernel->getFusedFacs() > 1 || 
+                   return kernel->getFusedFacs() > 1 ||
                    //TODO: write conversion function kernel.asX86Kernel()
                     (((X86KMMKernel*)kernel)->getSIMD() == simd);
                  });
