@@ -44,10 +44,8 @@ For more information see [documents/performance.md](https://github.com/abhijangd
 | SM80+ Tensor cores  | ❌ | ❌ | 🐍 | 🐍 |
 | AMD RoCM | 🐍 | 🐍 | 🐍 | 🐍 |
 
-✅ FastKron supports optimized implementations for AVX256 and AVX512 CPUs and NVIDIA GPUs.
-
-❌ Tensor cores for double are not supported.
-
+✅ FastKron supports optimized implementations for AVX256 and AVX512 CPUs and NVIDIA GPUs.\
+❌ Tensor cores for double are not supported.\
 🐍 Supported in Python module. x86 CPUs older than GLIBC x86-64-v2, ARM CPUs, AMD GPUs, Windows, and Mac OS are not supported in C++ API but PyFastKron *fallbacks* to the shuffle algorithm in Numpy or PyTorch.
 
 The future roadmap is as follows in terms of priority: Windows, SM80+ Double Tensor cores, AMD GPUs, ARM CPUs.
@@ -118,8 +116,6 @@ Install PyFastKron using pip
 pip install .
 ```
 
-To disable a backend add `--config-settings=cmake.define.ENABLE_<backend>=OFF` as argument to above command.
-
 Run tests using
 ```
 pytest
@@ -127,17 +123,12 @@ pytest
 
 # Documentation
 
-FastKron C++ API: [documents/cpp-api.md](https://github.com/abhijangda/FastKron/blob/main/documents/cpp-api.md)
-
-FastKron Python API: [documents/python-api.md](https://github.com/abhijangda/FastKron/blob/main/documents/python-api.md)
-
-Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)
-
-Performance: [documents/performance.md](https://github.com/abhijangda/FastKron/blob/main/documents/performance.md)
-
-Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)
-
-Contributing: [documents/contributing.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)
+C++ API: [documents/cpp-api.md](https://github.com/abhijangda/FastKron/blob/main/documents/cpp-api.md)\
+Python API: [documents/python-api.md](https://github.com/abhijangda/FastKron/blob/main/documents/python-api.md)\
+Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)\
+Performance: [documents/performance.md](https://github.com/abhijangda/FastKron/blob/main/documents/performance.md)\
+Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)\
+Contributing: [documents/contributing.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)\
 
 # Citation
 

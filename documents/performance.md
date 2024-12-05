@@ -1,4 +1,4 @@
-Below tables show the TFLOPs achieved by FastKron without fusion, FastKron, GPyTorch (using Shuffle Algorithm), and speedup.
+Below tables show the throughput in Tera FLOPs achieved by FastKron without fusion, FastKron, GPyTorch (using Shuffle Algorithm), and speedup.
 First column shows the shape of KMM/MKM in the format M_PxQ^N, such that, M is the number of rows of $X$ in MKM or columns of $X$ in KMM, PxQ is the size of each Kronecker Factor and N is the number of Kronecker Factors.
 The last column of speedup shows that FastKron performs orders of magnitude faster than GPyTorch on different sizes, float and double data types, operation on X and Factors (N for no-transpose and T for transpose), when running on wide range of CPUs and GPUs.
 
