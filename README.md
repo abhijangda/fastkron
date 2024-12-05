@@ -19,7 +19,7 @@ Below table shows the range of speedup on different hardware and data types.
 |----------|----------|--------|
 | AMD 64-Core CPU with AVX| 9.3-45x| 5.8-21x|
 | AMD 64-Core CPU with AVX512| | |
-| NVIDIA A100 80 GB| | |
+| NVIDIA A100 80 GB| 1.5-9.5x| 1.1-9.5x|
 | NVIDIA V100 16 GB| 2.5-10x| 1.9-11x|
 
 ### GeKMM
@@ -28,7 +28,7 @@ Below table shows the range of speedup on different hardware and data types.
 |----------|----------|--------|
 | AMD 64-Core CPU with AVX| 2.7-13.7x| 1.5-7x|
 | AMD 64-Core CPU with AVX512| | |
-| NVIDIA A100 80 GB| | |
+| NVIDIA A100 80 GB|1.3-4.6x |0.9-4.5x |
 | NVIDIA V100 16 GB| 1.4-6.4x|2-7.8x |
 
 For more information see [documents/performance.md](https://github.com/abhijangda/FastKron/blob/main/documents/performance.md)
@@ -137,7 +137,7 @@ Performance: [documents/performance.md](https://github.com/abhijangda/FastKron/b
 
 Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)
 
-Contributing: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)
+Contributing: [documents/contributing.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)
 
 # Citation
 
