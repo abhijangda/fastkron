@@ -35,7 +35,9 @@ def test_wheel(python_version):
   python_dir = f"/opt/python/cp{python_version}-cp{python_version}/bin/"
   pip = os.path.join(python_dir, "pip")
   python = os.path.join(python_dir, "python")
-  (s, o) = run_command(f"{docker_exec} {pip} install {docker_bdist_dir}/pyfastkron-1.0-cp{python_version}-cp{python_version}-manylinux_2_28_x86_64.whl")
+  for f in os.listdir(os.path.join(host_fk_dir, bdist_dir)):
+    if f"cp{python_version}-manylinux_x86_64.whl" in f:
+      (s, o) = run_command(f"{docker_exec} {pip} install {docker_bdist_dir}/{f}")
 
   (s, o) = run_command(f"{docker_exec} {python} {docker_fk_dir}/tests/python/test_wheels.py")
 
