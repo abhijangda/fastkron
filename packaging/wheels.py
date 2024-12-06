@@ -33,6 +33,9 @@ def run_command(command):
 def build_wheel(python_version):
   (s, o) = run_command(f"{docker_exec} sh {docker_packaging}/manylinux_docker_build.sh cp{python_version} {docker_fk_dir}")
 
+def build_any_wheel():
+  (s, o) = run_command(f"{docker_exec} BUILD_ANY_WHEEL=1 python setup.py bdist_wheel")
+
 def test_wheel(python_version):
   python_dir = f"/opt/python/cp{python_version}-cp{python_version}/bin/"
   pip = os.path.join(python_dir, "pip")
@@ -54,25 +57,26 @@ if __name__ == "__main__":
   parser.add_argument('-python-version', required=True, type=str, nargs="+")
 
   args = parser.parse_args()
-  if len(args.python_version) > 0:
-    print("Create container")
+  print("Create container")
 
-    run_command(docker_create_container)
-    run_command(docker_install_git)
-    run_command(docker_git_add_safe_dir)
+  run_command(docker_create_container)
+  run_command(docker_install_git)
+  run_command(docker_git_add_safe_dir)
 
-    print(f"Building for Python versions: {args.python_version}")
-    for py in args.python_version:
-      print(f"Building for Python {py}")
-      build_wheel(py)
+  print(f"Building for Python versions: {args.python_version}")
+  for py in args.python_version:
+    print(f"Building for Python {py}")
+    build_wheel(py)
 
-    print(f"Auditing wheels")
-    for py in args.python_version:
-      audit_wheel(py)
+  build_any_wheel()
 
-    print(f"Test wheels")
-    for py in args.python_version:
-      test_wheel(py)
+  print(f"Auditing wheels")
+  for py in args.python_version:
+    audit_wheel(py)
 
-    run_command(docker_kill_container)
-    run_command(docker_rm_container)
+  print(f"Test wheels")
+  for py in args.python_version:
+    test_wheel(py)
+
+  run_command(docker_kill_container)
+  run_command(docker_rm_container)
