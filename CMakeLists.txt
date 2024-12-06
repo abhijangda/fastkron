@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(FastKron
-  VERSION 1.0
+  VERSION 1.0.0
   LANGUAGES CXX)
 
 if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
