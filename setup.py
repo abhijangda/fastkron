@@ -68,7 +68,7 @@ def find_version(*file_paths):
 setup(
     packages=['pyfastkron'],
     ext_modules=[CMakeExtension('pyfastkron.FastKronX86')],
-                #  CMakeExtension('pyfastkron.FastKronCUDA')],
+                 CMakeExtension('pyfastkron.FastKronCUDA')],
     version=find_version("pyfastkron", "version.py"),
     cmdclass={
         'build_ext': build_ext,
