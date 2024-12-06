@@ -10,6 +10,9 @@ docker_create_container = "docker run -d -v $(pwd):/fastkron --name fastkron_bui
 docker_kill_container = "docker kill fastkron_build"
 docker_rm_container = "docker rm fastkron_build"
 docker_exec = f"docker exec fastkron_build"
+docker_remove_gcc_12 = f"{docker_exec} yum remove gcc-toolset-12* -y"
+docker_install_gcc_11 = f"{docker_exec} yum install gcc-toolset-11* -y"
+gcc_11_path = "PATH=/opt/rh/gcc-toolset-11/root/usr/bin:$PATH"
 
 host_fk_dir = os.getcwd()
 bdist_dir = "dist"
@@ -34,7 +37,7 @@ def test_wheel(python_version):
   python = os.path.join(python_dir, "python")
   (s, o) = run_command(f"{docker_exec} {pip} install {docker_bdist_dir}/pyfastkron-1.0-cp{python_version}-cp{python_version}-manylinux_2_28_x86_64.whl")
 
-  (s, o) = run_command(f"{docker_exec} {python} {docker_fk_dir}/tests/python/test_wheels.py")
+  (s, o) = run_command(f"{docker_exec} {python} {docker_fk_dir}/tests/python/test_numpy.py")
 
 def audit_wheel(python_version):
   for f in os.listdir(os.path.join(host_fk_dir, bdist_dir)):

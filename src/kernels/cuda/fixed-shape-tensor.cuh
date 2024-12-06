@@ -291,16 +291,19 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  void store_row(uint32_t row, uint32_t num, const T* __restrict__  ptr) {
-    memcpy(((Layout == fastKronOp_N) ? &at(row, 0) : &at(0, row)), ptr, num * sizeof(T));
+  void store_row(uint32_t row, uint32_t num, const T* __restrict__ ptr) {
+    T* __restrict__ dst = ((Layout == fastKronOp_N) ? &at(row, 0) : &at(0, row));
+    memcpy(dst, ptr, num * sizeof(T));
     if (num < Base::shape(1)) {
-      memset(((Layout == fastKronOp_N) ? &at(row, num) : &at(num, row)), 0, (Base::shape(1) - num)*sizeof(T));
+      T* __restrict__ dst = ((Layout == fastKronOp_N) ? &at(row, num) : &at(num, row));
+      memset(dst, 0, (Base::shape(1) - num)*sizeof(T));
     }
   }
 
   CUDA_DEVICE_HOST
   void zero_row(uint32_t row) {
-    memset(((Layout == fastKronOp_N) ? &at(row, 0) : &at(0, row)), 0, Base::shape(1) * sizeof(T));
+    T* dst = ((Layout == fastKronOp_N) ? &at(row, 0) : &at(0, row));
+    memset(dst, 0, Base::shape(1) * sizeof(T));
   }
 
   CUDA_DEVICE_HOST

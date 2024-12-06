@@ -5,7 +5,7 @@
 #include "kernel_db/kernel_db.h"
 
 /**
- * CPUCache - Create a per thread buffer that can fit in L1/L2 cache 
+ * CPUCache - Create a per thread buffer that can fit in L1/L2 cache
  *            and is aligned to the page size
  */
 struct CPUCache {
@@ -30,7 +30,7 @@ public:
   void alloc(uint32_t threads, uint32_t size) {
     this->threads = threads;
     uint32_t pageSize = getpagesize();
-    this->size = (size/pageSize + 1) * pageSize;
+    this->size = ((size + pageSize - 1)/pageSize) * pageSize;
     ptr = (void**)malloc(threads * sizeof(void*));
     for (uint32_t i = 0; i < threads; i++) {
       ptr[i] = aligned_alloc(pageSize, this->size);
@@ -42,7 +42,6 @@ public:
     for (uint32_t i = 0; i < threads; i++) {
       free(ptr[i]);
     }
-
     free(ptr);
     ptr = nullptr;
     threads = 0;
@@ -99,7 +98,7 @@ public:
    * procMemset() - Overriding KernelDatabase::procMemset.
    */
   virtual fastKronError procMemset(uint32_t proc, Matrix& m, float val);
-  
+
 protected:
   /**
    * procMalloc() - Overriding KernelDatabase::procMalloc.
@@ -115,7 +114,7 @@ public:
    * initTune() - Overriding KernelDatabase::initTune.
    */
   virtual fastKronError initTune() {return fastKronSuccess;}
-  
+
   /**
    * invokeKernel() - Overriding KernelDatabase::invokeKernel
    */
@@ -135,7 +134,7 @@ public:
    */
   virtual fastKronError invokeP2PStoreKernel(KMMKernel*, KMMProblem,
                                              const uint,
-                                             DistributedParams, 
+                                             DistributedParams,
                                              EpilogueParams,
                                              KernelMode) {return fastKronSuccess;}
 private:
@@ -150,37 +149,37 @@ public:
    * timeKernel() - Overriding KernelDatabase::timeKernel
    */
 
-  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblem problem, 
-                                   const uint fidx, 
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblem problem,
+                                   const uint fidx,
                                    DistributedParams distParams,
                                    EpilogueParams epilogueParams,
-                                   KernelMode execMode, 
+                                   KernelMode execMode,
                                    bool useP2PStore,
                                    int warmups, int runs,
                                    float& runtime);
-  
-  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem, 
-                                   const uint fidx, 
+
+  virtual fastKronError timeKernel(KMMKernel* kernel, KMMProblemStridedBatched problem,
+                                   const uint fidx,
                                    DistributedParams distParams,
                                    EpilogueStridedBatchedParams epilogueParams,
-                                   KernelMode execMode, 
+                                   KernelMode execMode,
                                    bool useP2PStore,
                                    int warmups, int runs,
                                    float& runtime);
 private:
   template<typename KMMProblemT, typename EpilogueParamsT>
-  fastKronError timeKernel(KMMKernel* kernel, KMMProblemT problem, 
-                           const uint fidx, 
+  fastKronError timeKernel(KMMKernel* kernel, KMMProblemT problem,
+                           const uint fidx,
                            DistributedParams distParams,
                            EpilogueParamsT epilogueParams,
-                           KernelMode execMode, 
+                           KernelMode execMode,
                            bool useP2PStore,
                            int warmups, int runs,
                            float& runtime);
 protected:
   /**
    * occupancyDetails() - Overriding KernelDatabase::occupancyDetails.
-   */ 
+   */
   virtual std::string occupancyDetails(KMMKernel*, KMMProblem) {return "";}
   virtual std::string occupancyDetails(KMMKernel*, KMMProblemStridedBatched) {return "";}
 };
@@ -206,12 +205,12 @@ protected:
                                            const std::vector<KMMKernel*>& kernels) {
     return findKernelAtOptLevel<KMMProblem>(subProblem, kernels);
   }
-  virtual KMMKernel* findKernelAtOptLevel(KMMProblemStridedBatched subProblem, 
+  virtual KMMKernel* findKernelAtOptLevel(KMMProblemStridedBatched subProblem,
                                           const std::vector<KMMKernel*>& kernels) {
     return findKernelAtOptLevel<KMMProblemStridedBatched>(subProblem, kernels);
   }
   /**
-   * findKernelAtOptLevel() - The template implementation of both findKernelAtOptLevel 
+   * findKernelAtOptLevel() - The template implementation of both findKernelAtOptLevel
    *                          virtual methods.
    */
   template<typename KMMProblemT>

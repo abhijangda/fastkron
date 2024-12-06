@@ -305,7 +305,9 @@ else()
   install(TARGETS ${FastKron_NAME})
 endif()
 
-set_target_properties(${FastKron_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+# For GCC 12 and 13, setting LTO=TRUE for PYMODULE=ON leads to illegal instruction, where memcpy/memset executs AVX512 instructions.
+# For now set LTO=FALSE.
+set_target_properties(${FastKron_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 if (ENABLE_MULTI_GPU AND ENABLE_CUDA)
   target_link_libraries(${FastKron_NAME} PRIVATE nccl)

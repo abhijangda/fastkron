@@ -62,13 +62,13 @@ struct EpilogueParams {
 
   template<typename ElemT>
   static EpilogueParams create() {
-    return EpilogueParams(AllTypes((ElemT)1.0f), 
+    return EpilogueParams(AllTypes((ElemT)1.0f),
                           AllTypes((ElemT)0.0f),
                           nullptr);
   }
 
   template<typename ElemT>
-  static EpilogueParams create(const ElemT alpha, 
+  static EpilogueParams create(const ElemT alpha,
                                const ElemT beta,
                                const ElemT* glD) {
     return EpilogueParams(AllTypes(alpha),
@@ -80,15 +80,15 @@ struct EpilogueParams {
   template<typename ElemT>
   CUDA_DEVICE_HOST
   ElemT        getAlpha() const {return alpha.get((ElemT)0);}
-  
+
   template<typename ElemT>
   CUDA_DEVICE_HOST
   ElemT        getBeta()  const {return beta.get((ElemT)0);}
-  
+
   template<typename ElemT>
   CUDA_DEVICE_HOST
   const ElemT* getD()     const {return (const ElemT*)glD;}
-  
+
   template<typename ElemT>
   CUDA_DEVICE_HOST
   const ElemT* z()     const {return (const ElemT*)glD;}
@@ -101,7 +101,7 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
   StridedBatchMatrix Z;
 
   EpilogueStridedBatchedParams() : EpilogueParams(), Z() {}
-  EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, StridedBatchMatrix Z) : 
+  EpilogueStridedBatchedParams(AllTypes alpha, AllTypes beta, StridedBatchMatrix Z) :
     EpilogueParams(alpha, beta, Z.data()), Z(Z) {}
 
   EpilogueStridedBatchedParams(EpilogueParams params, Matrix Y) :
@@ -112,7 +112,7 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
 
   template<typename ElemT>
   static EpilogueStridedBatchedParams create() {
-    return EpilogueStridedBatchedParams(AllTypes((ElemT)1.0f), 
+    return EpilogueStridedBatchedParams(AllTypes((ElemT)1.0f),
                           AllTypes((ElemT)0.0f), StridedBatchMatrix());
   }
 
@@ -127,26 +127,26 @@ struct EpilogueStridedBatchedParams : public EpilogueParams {
 };
 
 struct CPUCaches {
-  void** TileXs, **TileYs, **TileFs;
+  void** TileXs, **TileFs, **TileYs;
 
-  CPUCaches(void** TileXs, void** TileFs, void** TileYs) : 
-          TileXs(TileXs), TileYs(TileYs), TileFs(TileFs) {}
+  CPUCaches(void** TileXs, void** TileFs, void** TileYs) :
+          TileXs(TileXs), TileFs(TileFs), TileYs(TileYs) {}
 };
 
 template<typename KMMProblemT>
 struct KernelParams {
   KMMProblemT problem;
-  
+
   Matrix tileX;
   Factor tileF;
-  
+
   uint32_t XshSlices;
   uint32_t XSlices;
-  
+
   const uint kp_idx;
   KernelMode execMode;
   CPUCaches* caches;
-  
+
   uint32_t startGridx;
   uint32_t startGridy;
   uint32_t startGridz;
@@ -154,7 +154,7 @@ struct KernelParams {
   KernelParams(KMMProblemT problem_, CPUCaches* caches,
                Matrix tileX, Factor tileF, uint kp_idx, KernelMode execMode,
                uint32_t startGridx = 0, uint32_t startGridy = 0, uint32_t startGridz = 0) :
-               problem(problem_), 
+               problem(problem_),
                tileX(tileX), tileF(tileF),
                XshSlices(tileX.n()/problem_.f(0).p()),
                XSlices(problem_.x().n()/problem_.f(0).p()),
@@ -173,7 +173,7 @@ struct FusedParams {
     intermediates(intermediates) {
     for (int i = problem.n() - 1; i >= 0; i--) {
       const Factor factorPower = std::reduce(problem.fs() + i, problem.fs() + problem.n(),
-                                             Factor(1,1), 
+                                             Factor(1,1),
                                              [](Factor prev, Factor curr) {
                                                return Factor(prev.p() * curr.p(), prev.q() * curr.q());
                                              });
@@ -187,14 +187,14 @@ struct FusedParams {
 struct DistributedParams {
   //TODO: Set gpuResults for 16 GPUs
   void* gpuResults0;
-  void* gpuResults1; 
+  void* gpuResults1;
   void* gpuResults2;
   void* gpuResults3;
   void* gpuResults4;
-  void* gpuResults5; 
+  void* gpuResults5;
   void* gpuResults6;
   void* gpuResults7;
- 
+
   const uint gr, gc;
   const uint gpusInK;
   const uint ColsA;
@@ -213,15 +213,15 @@ struct DistributedParams {
   uint ColsCByKronRowsPower;
   uint ColsCByKronColsPower;
 
-  DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {} 
-  
-  DistributedParams(const uint gr_, const uint gc_, const uint gpusInK_,   
-                    const uint ColsA_, const uint ColsC_, 
-                    const uint PerGPUK_, const uint PerGPUN_, 
+  DistributedParams() : gr(0), gc(0), gpusInK(1), ColsA(0), ColsC(0), LocalKrons(1) {}
+
+  DistributedParams(const uint gr_, const uint gc_, const uint gpusInK_,
+                    const uint ColsA_, const uint ColsC_,
+                    const uint PerGPUK_, const uint PerGPUN_,
                     const Factor* Factors, const uint LocalKrons_) :
     gr(gr_), gc(gc_), gpusInK(gpusInK_), ColsA(ColsA_), ColsC(ColsC_),
     LocalKrons(LocalKrons_) {
-    
+
     const Factor factorPower = std::reduce(Factors, Factors + LocalKrons_, Factor(1,1), [](Factor prev, Factor curr) {
       return Factor(prev.p() * curr.p(), prev.q() * curr.q());
     });

@@ -9,8 +9,8 @@ void directCache(const Factor& F, DirectTileF& TileF, uint32_t tileP, uint32_t t
   for (uint32_t row = 0; row < TileF.shape(0); row++) {
     if ((OpF == fastKronOp_N && (kPMultipleOfTileP || tileP + row < F.p())) ||
         (OpF == fastKronOp_T && (kQMultipleOfTileQ || tileQ + row < F.q()))) {
-      uint32_t row_elems;
-      ElemT* Fptr;
+      uint32_t row_elems = 0;
+      ElemT* Fptr = nullptr;
       if (OpF == fastKronOp_N) {
         row_elems = kQMultipleOfTileQ ? TileF.q() : MIN(TileF.q(), F.q() - tileQ);
         Fptr = F.data<ElemT>(tileP + row, tileQ, OpF);
