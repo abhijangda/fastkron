@@ -56,13 +56,20 @@ class build_ext(build_ext_orig):
         # temporary CMake files including "CMakeCache.txt" in top level dir.
         os.chdir(str(cwd))
 
+def find_version(*file_paths):
+    try:
+        with io.open(os.path.join(os.path.dirname(__file__), *file_paths), encoding="utf8") as fp:
+            version_file = fp.read()
+        version_match = re.search(r"^__version__ = version = ['\"]([^'\"]*)['\"]", version_file, re.M)
+        return version_match.group(1)
+    except Exception:
+        return None
 
 setup(
-    name='pyfastkron',
-    version='1.0',
     packages=['pyfastkron'],
-    ext_modules=[CMakeExtension('pyfastkron.FastKronX86'),
-                 CMakeExtension('pyfastkron.FastKronCUDA')],
+    ext_modules=[CMakeExtension('pyfastkron.FastKronX86')],
+                #  CMakeExtension('pyfastkron.FastKronCUDA')],
+    version=find_version("pyfastkron", "version.py"),
     cmdclass={
         'build_ext': build_ext,
     }

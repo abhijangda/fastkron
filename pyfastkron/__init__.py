@@ -1,10 +1,5 @@
-from .fastkronbase import fastkronX86, fastkronCUDA
-
-if fastkronX86 is not None and fastkronCUDA is not None:
-    __version__ = fastkronX86.version() + "+" + fastkronCUDA.version()
-elif fastkronX86 is not None:
-    __version__ = fastkronX86.version()
-elif fastkronCUDA is not None:
-    __version__ = fastkronCUDA.version()
-else:
-    __version__ = "1.0+shuffle"
+# Read version number as written by setuptools_scm
+try:
+    from pyfastkron.version import version as __version__  # @manual
+except Exception:  # pragma: no cover
+    __version__ = "Unknown"

@@ -1,13 +1,14 @@
 [build-system]
-requires = ["setuptools", "prebuilt_binaries"]
+requires = ["setuptools", "prebuilt_binaries", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name="pyfastkron"
 authors=[{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
 maintainers = [{name="Abhinav Jangda", email="abhijangda@gmail.com"}]
+description="A library for efficient matrix and kronecker product matrix multiplication on parallel hardware"
+dynamic = ["version"]
 requires-python= ">= 3.9"
-version = "1.0"
 license = {file="LICENSE.txt"}
 readme = "README.md"
 keywords = ["kronecker product", "cuda", "gpu", "kronecker matrix multiplication"]
@@ -27,3 +28,7 @@ minversion = "6.0"
 testpaths = [
     "tests/python",
 ]
+
+[tool.setuptools_scm]
+local_scheme = "node-and-date"
+write_to = "./pyfastkron/version.py"
