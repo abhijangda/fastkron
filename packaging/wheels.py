@@ -12,6 +12,8 @@ docker_rm_container = "docker rm fastkron_build"
 docker_exec = f"docker exec fastkron_build"
 docker_remove_gcc_12 = f"{docker_exec} yum remove gcc-toolset-12* -y"
 docker_install_gcc_11 = f"{docker_exec} yum install gcc-toolset-11* -y"
+docker_install_git = f"{docker_exec} yum install git -y"
+docker_git_add_safe_dir = f"{docker_exec} git config --global --add safe.directory /fastkron"
 gcc_11_path = "PATH=/opt/rh/gcc-toolset-11/root/usr/bin:$PATH"
 
 host_fk_dir = os.getcwd()
@@ -36,7 +38,7 @@ def test_wheel(python_version):
   pip = os.path.join(python_dir, "pip")
   python = os.path.join(python_dir, "python")
   for f in os.listdir(os.path.join(host_fk_dir, bdist_dir)):
-    if f"cp{python_version}-manylinux_x86_64.whl" in f:
+    if f"cp{python_version}-manylinux_2_28_x86_64.whl" in f:
       (s, o) = run_command(f"{docker_exec} {pip} install {docker_bdist_dir}/{f}")
 
   (s, o) = run_command(f"{docker_exec} {python} {docker_fk_dir}/tests/python/test_wheels.py")
@@ -56,6 +58,8 @@ if __name__ == "__main__":
     print("Create container")
 
     run_command(docker_create_container)
+    run_command(docker_install_git)
+    run_command(docker_git_add_safe_dir)
 
     print(f"Building for Python versions: {args.python_version}")
     for py in args.python_version:
