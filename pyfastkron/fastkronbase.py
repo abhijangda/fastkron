@@ -2,9 +2,10 @@ from functools import reduce
 import platform
 
 from .fastkronhandle import FastKronHandle
+fastkronX86 = None
+fastkronCUDA = None
 
 if platform.system() == "Linux":
-    fastkronX86 = None
     if platform.machine() == "x86_64" or platform.machine() == "AMD64":
         try:
             from . import FastKronX86
@@ -12,15 +13,14 @@ if platform.system() == "Linux":
         except:
             pass
 
-    fastkronCUDA = None
     try:
         import torch
         if torch.cuda.is_available():
-            if float(torch.version.cuda) >= 12.0:
+            if float(torch.version.cuda) >= 11.0:
                 from . import FastKronCUDA
                 fastkronCUDA = FastKronHandle("cuda", FastKronCUDA)
     except:
-        fastkronCUDA = None
+        pass
 
 
 def product(values):

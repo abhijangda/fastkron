@@ -65,12 +65,19 @@ def find_version(*file_paths):
     except Exception:
         return None
 
-setup(
-    packages=['pyfastkron'],
-    ext_modules=[CMakeExtension('pyfastkron.FastKronX86'),
-                 CMakeExtension('pyfastkron.FastKronCUDA')],
-    version=find_version("pyfastkron", "version.py"),
-    cmdclass={
-        'build_ext': build_ext,
-    }
-)
+
+if "BUILD_ANY_WHEEL" in os.environ:
+    setup(
+        packages=['pyfastkron'],
+        version=find_version("pyfastkron", "version.py"),
+    )
+else:
+    setup(
+        packages=['pyfastkron'],
+        ext_modules=[CMakeExtension('pyfastkron.FastKronX86'),
+                     CMakeExtension('pyfastkron.FastKronCUDA')],
+        version=find_version("pyfastkron", "version.py"),
+        cmdclass={
+            'build_ext': build_ext,
+        }
+    )
