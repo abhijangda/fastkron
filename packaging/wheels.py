@@ -34,7 +34,7 @@ def build_wheel(python_version):
   (s, o) = run_command(f"{docker_exec} sh {docker_packaging}/manylinux_docker_build.sh cp{python_version} {docker_fk_dir}")
 
 def build_any_wheel():
-  (s, o) = run_command(f"{docker_exec} BUILD_ANY_WHEEL=1 python setup.py bdist_wheel")
+  (s, o) = run_command(f"{docker_exec} sh {docker_packaging}/any_build.sh {docker_fk_dir}")
 
 def test_wheel(python_version):
   python_dir = f"/opt/python/cp{python_version}-cp{python_version}/bin/"
