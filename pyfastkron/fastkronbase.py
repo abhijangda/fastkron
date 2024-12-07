@@ -46,7 +46,7 @@ class FastKronBase:
                (self.x86 == True or self.cuda == True)
 
     def supportedProcessor(self):
-        return (platform.processor() == "x86_64" or
+        return (platform.machine() == "x86_64" or
                 platform.machine() == "AMD64") and \
                 self.x86 == True
 
