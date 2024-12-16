@@ -148,7 +148,7 @@ def device_tests(device):
       run(mmtype, 10, 3, 16, 8, torch.float16, device, True, False, high=2)
 
   for mmtype in ["mkm", "kmm"]:
-    run(mmtype, 5, 4, 6, 6, torch.double, device, False, False, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
+    run(mmtype, 5, 4, 6, 6, torch.double, device, False, True, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
     run(mmtype, 5, 4, 4, 6, torch.double, device, True, True, batchDimX=[1,], batchDimFPre=[2,], gradcheck=True)
 
 def test_cuda():

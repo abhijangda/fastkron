@@ -108,7 +108,6 @@ class FastKronTorch(FastKronBase):
         is_vec = x.ndim == 1
 
         trX, x, trF, fs = self.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
-
         if x.device.type == "cuda" and stream is None:
             stream = torch.cuda.current_stream()
 
@@ -159,19 +158,20 @@ class FastKronTorch(FastKronBase):
         return z, zs
 
     def mkmBackward(self, grad_z: torch.Tensor,
-                    x: torch.Tensor, fs: List[torch.Tensor],
+                    x: torch.Tensor, x_requires_grad: bool,
+                    fs: List[torch.Tensor], fs_requires_grad: List[bool],
                     zs: List[torch.Tensor]) -> torch.Tensor:
         trX, x, trF, fs = self.reshapeInput(FastKronBase.MMTypeMKM, x, fs)
         return self.__mkmBackward(grad_z, x, fs, zs,
                                   trX, trF,
                                   x.requires_grad,
-                                  [f.requires_grad for f in fs])
+                                  fs_requires_grad)
 
     def __mkmBackward(self, grad_z: torch.Tensor,
                       x: torch.Tensor, fs: List[torch.Tensor],
                       zs: List[torch.Tensor],
                       trX: bool, trF: bool,
-                      x_requires_grad: bool, fs_requires_grad: bool) ->\
+                      x_requires_grad: bool, fs_requires_grad: List[bool]) ->\
             Tuple[Optional[torch.Tensor]]:
         is_vec = grad_z.ndim == 1
         if is_vec:
@@ -302,15 +302,15 @@ class FastKronTorch(FastKronBase):
         return z, zs
 
     def kmmBackward(self, grad_z: torch.Tensor,
-                    x: torch.Tensor, fs: List[torch.Tensor],
+                    x: torch.Tensor, x_requires_grad: bool,
+                    fs: List[torch.Tensor], fs_requires_grad: List[bool],
                     zs: List[torch.Tensor]) -> Tuple[torch.Tensor]:
         trX, x, trF, fs = self.reshapeInput(FastKronBase.MMTypeKMM, x, fs)
         zs = tuple(z.mT for z in zs)
 
         grads = self.__mkmBackward(grad_z.mT, x.mT, [f.mT for f in fs], zs,
                                    trX, trF,
-                                   x.requires_grad,
-                                   [f.requires_grad for f in fs])
+                                   x_requires_grad, fs_requires_grad)
         grad_x = grads[0]
         grad_fs = grads[1:]
 
@@ -373,9 +373,12 @@ class MKM(torch.autograd.Function):
     def backward(ctx, grad_z: torch.Tensor):
         num_facs = ctx.num_facs
         x = ctx.saved_tensors[0]
+        x_requires_grad = ctx.needs_input_grad[0]
         fs = ctx.saved_tensors[1:num_facs + 1]
+        fs_requires_grad = ctx.needs_input_grad[1:num_facs + 1]
         zs = ctx.saved_tensors[num_facs+1:]
-        return fastkrontorch.mkmBackward(grad_z, x, fs, zs)
+        return fastkrontorch.mkmBackward(grad_z, x, x_requires_grad,
+                                         fs, fs_requires_grad, zs)
 
 
 class KMM(torch.autograd.Function):
@@ -390,9 +393,12 @@ class KMM(torch.autograd.Function):
     def backward(ctx, grad_z: torch.Tensor):
         num_facs = ctx.num_facs
         x = ctx.saved_tensors[0]
+        x_requires_grad = ctx.needs_input_grad[0]
         fs = ctx.saved_tensors[1:num_facs + 1]
+        fs_requires_grad = ctx.needs_input_grad[1:num_facs + 1]
         zs = ctx.saved_tensors[num_facs+1:]
-        return fastkrontorch.kmmBackward(grad_z, x, fs, zs)
+        return fastkrontorch.kmmBackward(grad_z, x, x_requires_grad,
+                                         fs, fs_requires_grad, zs)
 
 
 def gemkm(x: torch.Tensor, fs: List[torch.Tensor],

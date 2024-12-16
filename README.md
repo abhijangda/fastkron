@@ -128,7 +128,7 @@ Python API: [documents/python-api.md](https://github.com/abhijangda/FastKron/blo
 Kernel Tuning: [documents/autotuning.md](https://github.com/abhijangda/FastKron/blob/main/documents/autotuning.md)\
 Performance: [documents/performance.md](https://github.com/abhijangda/FastKron/blob/main/documents/performance.md)\
 Multi-GPU: [documents/multigpu.md](https://github.com/abhijangda/FastKron/blob/main/documents/multigpu.md)\
-Contributing: [documents/contributing.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)\
+Contributing: [documents/contributing.md](https://github.com/abhijangda/FastKron/blob/main/documents/contributing.md)
 
 # Citation
 
