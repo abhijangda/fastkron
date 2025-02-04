@@ -70,7 +70,7 @@ class GPyTorchEval:
     return r
 
   def _run_kron(self, shape, opX, opFs):
-    import gpytorch as gp
+    from linear_operator import operators
     import torch
     factors = []
     for p,q in zip(shape.ps, shape.qs):
@@ -93,7 +93,7 @@ class GPyTorchEval:
         x = torch.ones(shape.k, shape.m, dtype=self.elemtype)
     if self.backend == 'cuda':
       x = x.cuda()
-    kp = gp.lazy.KroneckerProductLazyTensor(*factors)
+    kp = operators.KroneckerProductLinearOperator(*factors)
     def run_case(r):
         t1 = time.time()
         if self.mmtype == "kmm":
@@ -308,15 +308,8 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
 
   for shape in cases:
     fk = fkeval.run_single_gpu(shape, opX, opF)
-    # try:
-    # except:
-      # fk = (shape, 1, 1)
-#    try:
     gp = GPyTorchEval(device, elemtype, mmtype).run_single_gpu(shape, opX, opF)
-  #  except:
-    #gp = (1, 1)
     print(str(fk[0]), " & ", " & ".join(("%.3f"%p) for p in (fk[1:] + gp + (fk[-1]/gp[-1],))))
-    time.sleep(10) #sleep to let system cool down
 
 def run_nn(device, mode, elemtype, mmtype, dataset, use_pymodule):
   benchmark_single_gpu(device, "N", "N", mode, elemtype, mmtype, dataset, use_pymodule)
@@ -355,7 +348,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('-backends'    , required=True, type=str, nargs="+")
   parser.add_argument('-types'       , required=True, type=str, nargs="+")
-  parser.add_argument("-tune-modes"  , required=True, type=str, nargs="+")
+  parser.add_argument("-tune-modes"  , required=False, default=["NoTune"], type=str, nargs="+")
   parser.add_argument("-dataset"     , required=True, type=str)
   parser.add_argument("-mmtype"      , required=True, type=str, nargs="+")
   parser.add_argument("-use-pymodule", required=False, action='store_true', default=False)
@@ -364,12 +357,12 @@ if __name__ == "__main__":
   
   assert args.dataset in ["large", "full", "small"]
 
-  if args.use_pymodule and (os.getenv("LD_PRELOAD") is None or "tcmalloc" not in os.getenv("LD_PRELOAD")):
+  if "x86" in args.backends and args.use_pymodule and (os.getenv("LD_PRELOAD") is None or "tcmalloc" not in os.getenv("LD_PRELOAD")):
     print(
     """
 It is recommended to use TCMalloc, which caches allocations.
 Using the default GLibc ptmalloc, would decrease performance of CPU code because memory allocations becomes bottleneck.
-Install TCMalloc in your conda env as `conda install conda-forge::gperftools` or in Ubuntu as `sudo apt install gperftools`.
+Install TCMalloc in your conda env as `conda install conda-forge::gperftools` or in Ubuntu as `sudo apt install google-perftools libgoogle-perftools-dev`.
 Then run using `LD_PRELOAD=<path to libtcmalloc.so> TCMALLOC_RELEASE_RATE=0 <python>`
     """
     )
