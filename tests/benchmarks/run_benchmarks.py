@@ -29,19 +29,28 @@ def total_gpu_memory():
 TuningModes = ['FullTune', 'FastTune', 'NoTune']
 
 class Shape:
-  def __init__(self, m, n, p, q):
+  def __init__(self, m, n, p, q, mmtype):
     self.m = m
     self.n = n
     self.ps = [p for i in range(0, n)]
     self.qs = [q for i in range(0, n)]
-    self.k = reduce((lambda a, b: a * b), self.ps)
+    if mmtype == "mkm":
+      self.k = reduce((lambda a, b: a * b), self.ps)
+    elif mmtype == "kmm":
+      self.k = reduce((lambda a, b: a * b), self.qs)
+    self.mmtype = mmtype
 
   def flops(self):
     ops = 0
     k = self.k
-    for p,q in zip(reversed(self.ps),reversed(self.qs)):
-      k = (k/p)*q
-      ops += k * p
+    if self.mmtype == "mkm":
+      for p,q in zip(reversed(self.ps),reversed(self.qs)):
+        k = (k/p)*q
+        ops += k * p
+    elif self.mmtype == "kmm":
+      for p,q in zip(reversed(self.ps),reversed(self.qs)):
+        k = (k/q)*p
+        ops += k * q
     return 2 * self.m * ops
 
   def __repr__(self):
@@ -94,6 +103,7 @@ class GPyTorchEval:
     if self.backend == 'cuda':
       x = x.cuda()
     kp = operators.KroneckerProductLinearOperator(*factors)
+
     def run_case(r):
         t1 = time.time()
         if self.mmtype == "kmm":
@@ -271,26 +281,26 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
       M2 = 128
 
     cases = [
-            Shape(M, 5, 8, 8),     Shape(M, 6, 8, 8),
-            Shape(M, 4, 16, 16),   Shape(M, 5, 16, 16),
-            Shape(M, 3, 32, 32),   Shape(M, 4, 32, 32),
-            Shape(M, 2, 64, 64),   Shape(M, 3, 64, 64),
-            Shape(M, 2, 128, 128), 
-            Shape(M2, 3, 128, 128)
+            Shape(M, 5, 8 , 8 , mmtype),   Shape(M, 6, 8, 8, mmtype),
+            Shape(M, 4, 16, 16, mmtype),   Shape(M, 5, 16, 16, mmtype),
+            Shape(M, 3, 32, 32, mmtype),   Shape(M, 4, 32, 32, mmtype),
+            Shape(M, 2, 64, 64, mmtype),   Shape(M, 3, 64, 64, mmtype),
+            Shape(M, 2, 128, 128, mmtype), 
+            Shape(M2, 3, 128, 128, mmtype)
             ]
 
     if not use_pymodule:
       M = 16
-      cases += [Shape(M, 8, 8, 8),
-              Shape(M, 6, 16, 16),
-              Shape(M, 5, 32, 32),
-              Shape(M, 4, 64, 64),
-              Shape(M, 3, 128, 128)
+      cases += [Shape(M, 8, 8, 8, mmtype),
+              Shape(M, 6, 16, 16, mmtype),
+              Shape(M, 5, 32, 32, mmtype),
+              Shape(M, 4, 64, 64, mmtype),
+              Shape(M, 3, 128, 128, mmtype)
               ]
   elif dataset == "small":
     for M in range(4,16,4):
       for n in range(1,4):
-        cases += [Shape(M, n, 8, 8), Shape(M, n, 16,16), Shape(M, n, 32, 32)]
+        cases += [Shape(M, n, 8, 8, mmtype), Shape(M, n, 16, 16, mmtype), Shape(M, n, 32, 32, mmtype)]
 
   elif dataset == "full":
     MAX_SIZE = 256 * 1024 * 1024 if device == "x86" else 1024*1024*1024
@@ -301,7 +311,7 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
           for m in [2,4,16,64,256]: # + ([] if device == "x86" else [1024]):
             if m*(p**n) > MAX_SIZE//factor or m*(q**n) > MAX_SIZE//factor: # or p**n < 64 or q**n < 64:
               continue
-            cases += [Shape(m, n, p, q)]
+            cases += [Shape(m, n, p, q, mmtype)]
 
   fkeval = FastKronEval(device, mode, elemtype, mmtype, use_python_module=use_pymodule)
   fkeval.setup_cmake()
