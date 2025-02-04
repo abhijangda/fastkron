@@ -313,6 +313,7 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
               continue
             cases += [Shape(m, n, p, q, mmtype)]
 
+  print("M_PxQ^N", " & ", "FK-FLOPS", " & ", "FK-WO-FUSED", " & ", "GPyTorch", " & ", "Speedup")
   fkeval = FastKronEval(device, mode, elemtype, mmtype, use_python_module=use_pymodule)
   fkeval.setup_cmake()
 
