@@ -31,9 +31,11 @@ protected:
    */
   uint alignF;
 
+  CoreType coreType;
+
 public:
   GPUKMMKernel() {}
-  GPUKMMKernel(void* kernelInvoker, FastKronType elemType,
+  GPUKMMKernel(CoreType coreType, void* kernelInvoker, FastKronType elemType,
                Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
                uint regM, uint regK, uint regQ, uint optLevel,
                fastKronOp opX, fastKronOp opF, FastKronMMType mmType, KernelBatchType::Ty kernelBatchType,
@@ -42,7 +44,7 @@ public:
                KMMKernel(kernelInvoker, elemType, f, tileF, tileX,
                          fusedFacs, P2PStore, regM, regK, regQ,
                          optLevel, opX, opF, mmType, kernelBatchType),
-               numThreads(NumThreads), kernel(getKernel()),
+               coreType(coreType), numThreads(NumThreads), kernel(getKernel()),
                alignX(alignX), alignF(alignF) {}
 
   /**

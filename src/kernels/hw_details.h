@@ -15,6 +15,11 @@ enum SMArch {
   maxwell,
 };
 
+enum CoreType {
+  SIMT,
+  Tensor884
+};
+
 static inline std::string smArchToStr(SMArch arch) {
   switch (arch) {
     case SMArch::volta:
@@ -23,6 +28,19 @@ static inline std::string smArchToStr(SMArch arch) {
       return "ampere";
     case SMArch::maxwell:
       return "maxwell";
+    default:
+      return "";
+  }
+
+  return "";
+}
+
+static inline std::string coreTypeToStr(CoreType coreType) {
+  switch (coreType) {
+    case CoreType::SIMT:
+      return "simt";
+    case CoreType::Tensor884:
+      return "tc884";
     default:
       return "";
   }

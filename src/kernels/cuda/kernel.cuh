@@ -4,7 +4,7 @@
 #endif
 
 #include "config.h"
-
+#include "kernels/hw_details.h"
 #include "kernels/params.h"
 #include "kernels/get_batched_data.h"
 
@@ -50,7 +50,7 @@ YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, ui
   return YElem(0,0,0);
 }
 
-template<uint SMArch, typename ElemT, typename Vec2T, typename Vec4T,
+template<uint SMArch, CoreType Core, typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
