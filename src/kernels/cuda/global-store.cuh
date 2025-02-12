@@ -250,7 +250,7 @@ void storeVectorY(const bool isLastFactor, const uint32_t fac, const uint32_t ba
     glK = (yElem.q()   + rq)  * //The index of elems by one column in TileK
             XSlices            + //Scale the index to global column
             tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
-            yElem.k()    + rk;   //The element index within consecutive elems
+            yElem.k()    + rk%2;   //The element index within consecutive elems
     if (TileQ < Q) {
       glK += tileQ * XSlices * TileQ;
   }}
@@ -298,7 +298,7 @@ void storeY(const uint32_t fac, const uint32_t batch,
             const uint32_t tileM, const uint32_t tileK, const uint32_t tileQ,
             const uint32_t P, const uint32_t Q,
             const XTileTy& XTile, const XShared& Xsh,
-            const Matrix& Y, const YElem& yElem, YReg& yReg,
+            const Matrix& Y, YElem yElem, YReg& yReg,
             const KernelParams& params,
             const FusedParams& fusedParams, const DistributedParams& distParams,
             const EpilogueParams& epilogueParams, const GetBatchedData& batchedData) {
@@ -312,7 +312,6 @@ void storeY(const uint32_t fac, const uint32_t batch,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
-      // if (params.kp_idx == 1) {assert(yReg.data[0] == 128); assert(yReg.data[1] == 128);}
       storeVectorY<OpY, StLen, TileQ,
              kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
              (FusedFacs>1), DistributeToGPUs,
@@ -323,6 +322,7 @@ void storeY(const uint32_t fac, const uint32_t batch,
          tileM, tileK, tileQ, P, Q,
          XTile, Xsh, Y, yElem, yReg,
          fusedParams, distParams, epilogueParams, batchedData);
+         yElem = YElem(yElem.m(), yElem.q(), yElem.k() + 8);
     }}}
   } else if (OpY == fastKronOp_T) {
     #pragma unroll

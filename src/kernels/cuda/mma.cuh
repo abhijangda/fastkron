@@ -84,8 +84,8 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
     for (uint rm = 0; rm < Yr.m(); rm++) {
     // if (rm < m) {
       #pragma unroll
-      for (uint rk = 0; rk < 1/*Xr.k()*/; rk++) {
-        uint shXk = yElem.k() + rk + lane/4;
+      for (uint rk = 0; rk < Xr.k(); rk++) {
+        uint shXk = yElem.k() + rk*8/*CoreK*/ + lane/4;
         uint shift = 0;//(yElem.k() / Yr.k());
 
         #pragma unroll
@@ -104,8 +104,17 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
         Fr.set(p, rq, Fsh.at(coreP + p + lane % 4, shFcol));
     }}
 
-    asm volatile ("mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64 {%0,%1}, {%2}, {%3}, {%4,%5};\n" :
-                  "=d"(Yr.data[0]), "=d"(Yr.data[1]) : 
-                  "d"(Xr.data[0]), "d"(Fr.data[0]), "d"(Yr.data[0]), "d"(Yr.data[1]));
+    #pragma unroll
+    for (uint j = 0; j < Yr.q(); j++)
+    #pragma unroll
+    for (uint m = 0; m < Yr.m(); m++)
+    #pragma unroll
+    for (uint i = 0; i < Yr.k(); i += 2)
+    #pragma unroll
+    for (uint p = 0; p < Xr.p(); p++) {
+      asm volatile ("mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64 {%0,%1}, {%2}, {%3}, {%4,%5};\n" :
+                    "=d"(Yr.data[i]), "=d"(Yr.data[i+1]) : 
+                    "d"(Xr.data[i/2]), "d"(Fr.data[j]), "d"(Yr.data[i]), "d"(Yr.data[i+1]));
+    }
   }
 }
