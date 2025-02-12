@@ -36,19 +36,20 @@ YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, ui
     const uint MThreads  = (TileM == 1) ? NumThreads : (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
     const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
     const uint wid = tid/CUDA_WARP_SIZE;
-    const uint QWarps = 2;//QThreads/CUDA_WARP_SIZE;
-
+    const uint QWarps = (kTileK/128)/8;//QThreads/CUDA_WARP_SIZE;
+    // if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0)
+    //   printf("41 %d %d\n", QWarps, kTileK);
     if (FMAInst == FMAInstType::Tensor884) {
       
-      const uint yQ   = (wid / QWarps) * RegQ; //wid / 2 * 8 = 0,0,0,0 ... ,
-      const uint yK   = (wid % QWarps) * RegK; //wid % 2 * 8 = 0,0,..,8,8,...,
+      const uint yQ   = (wid / QWarps) * RegQ; //wid / 1 * 8 = 0,0,0,0, ... 8,8,8,8,.., 
+      const uint yK   = (wid % QWarps) * RegK; //wid % 1 * 8 = 0,0,0,0,0,0,0,0,0
       return YElem(yM, yQ, yK);
 
     } else {
-      const uint wQ   = (wid / QWarps) * 8;
-      const uint wK   = (wid % QWarps) * 8;
-      const uint yQ   = ((tid % CUDA_WARP_SIZE) / 4) * RegQ; //tid / 4 * 1 = 0,0,0,..,1,1,1,2,2,2
-      const uint yK   = ((tid % CUDA_WARP_SIZE) % 4) * RegK; //(tid % 4) * 2 = 0,2,4,..8,
+      const uint wQ   = (wid / QWarps) * 8; //wid / 1 * 8 = 0,0,0,0, ... 8,8,8,8,.., 
+      const uint wK   = (wid % QWarps) * 8; //wid % 1 * 2 = 0,0,0,0,0
+      const uint yQ   = ((tid % CUDA_WARP_SIZE) / 4) * 1; //tid / 4 * 1 = 0,0,0,..,1,1,1,2,2,2
+      const uint yK   = ((tid % CUDA_WARP_SIZE) % 4) * 2; //(tid % 4) * 2 = 0,2,4,..8,
     
       return YElem(yM, wQ + yQ, wK + yK);
     }
@@ -241,13 +242,14 @@ __global__ void cudaKernel(KernelParams params,
   double* warpTr = &transpose[(tid/CUDA_WARP_SIZE)*2*CUDA_WARP_SIZE];
   uint32_t lane = (tid % CUDA_WARP_SIZE);
   ((double2*)warpTr)[lane] = double2{yReg.data[0], yReg.data[1]};
-
+  // if (threadIdx.x <32 && blockIdx.x == 0 && blockIdx.y == 0) printf("245 %.0lf %.0lf\n", yReg.data[0], yReg.data[1]);
   __syncthreads();
 
   YElem yElem2 = getYElem<FMAInstType::SIMT>(tid, OpY, NumThreads, XshSlices/2, MaxP, TileM, kTileK, TileQ, RegM, 2, 1);
 
   yReg.data[0] = warpTr[lane/4 + (lane%4) * 16];
   yReg.data[1] = warpTr[lane/4 + (lane%4) * 16 + 8];
+  // if (threadIdx.x <32 && blockIdx.x == 0 && blockIdx.y == 0) printf("260 %.0lf %.0lf\n", yReg.data[0], yReg.data[1]);
 
   storeY<OpY, RegM, 2, 1, TileQ,
          kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ, FusedFacs, DistributeToGPUs, XAlignment,
