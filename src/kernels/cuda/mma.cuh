@@ -14,65 +14,98 @@ void slicedMMA(XReg& Xr, FReg& Fr, YReg& Yr) {
   }
 }
 
-template<typename XShared, typename FShared, 
+template<FMAInstType core, typename XShared, typename FShared, 
          typename YReg, typename XReg, typename FReg>
 CUDA_DEVICE
-void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem) {
-  //Load shared memory Xsh to registers Xr 
-  if (Xsh.layout() == fastKronOp_N) {
+void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& Fr, const YElem& yElem, uint32_t coreP) {
+  if (core == FMAInstType::SIMT) {
+    //Load shared memory Xsh to registers Xr 
+    if (Xsh.layout() == fastKronOp_N) {
+      #pragma unroll
+      for (uint rm = 0; rm < Yr.m(); rm++) {
+      // if (rm < m) {
+        #pragma unroll
+        for (uint rk = 0; rk < Xr.k(); rk++) {
+          uint shXk = yElem.k() + rk;
+          uint shift = 0;//(yElem.k() / Yr.k());
+
+          #pragma unroll
+          for (uint p = 0; p < Xr.p(); p++) {
+            //TODO: bring shift calculation in Xsh.at
+            auto temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + p);// + (p + shift)%Xr.p());
+            Xr.set(rm, rk, p, temp);
+          // }
+      }}}
+    } else {
+      #pragma unroll
+      for (uint rk = 0; rk < Xr.k(); rk++) {
+        uint shXk = yElem.k() + rk;
+        uint shift = 0;//(yElem.k() / Yr.k());
+
+        #pragma unroll
+        for (uint p = 0; p < Xr.p(); p++) {  
+          #pragma unroll
+          for (uint rm = 0; rm < Yr.m(); rm++) {
+            //TODO: bring shift calculation in Xsh.at
+            auto temp = Xsh.at((yElem.m() + rm + shift)/*%Xsh.m()*/, shXk * Xr.p() + p);
+            Xr.set(rm, rk, p, temp);
+          // }
+      }}}
+    }
+    
+    if (Fsh.layout() == fastKronOp_N) {
+      #pragma unroll
+      for (uint rq = 0; rq < Yr.q(); rq++) {
+        uint shFcol = yElem.q() + rq;
+        #pragma unroll
+        for (uint p = 0; p < Xr.p(); p++) {
+          Fr.set(p, rq, Fsh.at(p, shFcol));
+      }}
+    } else if (Fsh.layout() == fastKronOp_T) {
+      uint32_t qe = yElem.q();
+      #pragma unroll
+      for (uint rq = 0; rq < Yr.q(); rq++) {
+        uint32_t shFcol = qe + rq;
+        #pragma unroll
+        for (uint p = 0; p < Xr.p(); p++) {
+          if (true) {//Padding
+            Fr.set(p, rq, (&Fsh.at(0,0))[shFcol + p*(Fsh.q() + 1)]);
+          }
+      }}
+    }
+
+    slicedMMA(Xr, Fr, Yr);
+  }
+
+  if (core == FMAInstType::Tensor884) {
+    uint lane = threadIdx.x%CUDA_WARP_SIZE;
+
     #pragma unroll
     for (uint rm = 0; rm < Yr.m(); rm++) {
     // if (rm < m) {
       #pragma unroll
-      for (uint rk = 0; rk < Xr.k(); rk++) {
-        uint shXk = yElem.k() + rk;
-        uint shift = (yElem.k() / Yr.k());
+      for (uint rk = 0; rk < 1/*Xr.k()*/; rk++) {
+        uint shXk = yElem.k() + rk + lane/4;
+        uint shift = 0;//(yElem.k() / Yr.k());
 
         #pragma unroll
         for (uint p = 0; p < Xr.p(); p++) {
           //TODO: bring shift calculation in Xsh.at
-          //TODO: use the actual type not float
-          auto temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
+          auto temp = Xsh.at(yElem.m() + rm, shXk * Xsh.p() + coreP + p + lane % 4);// + (p + shift)%Xr.p());
           Xr.set(rm, rk, p, temp);
         // }
     }}}
-  } else {
-    #pragma unroll
-    for (uint rk = 0; rk < Xr.k(); rk++) {
-      uint shXk = yElem.k() + rk;
-      uint shift = 0;//(yElem.k() / Yr.k());
 
-      #pragma unroll
-      for (uint p = 0; p < Xr.p(); p++) {  
-        #pragma unroll
-        for (uint rm = 0; rm < Yr.m(); rm++) {
-          //TODO: bring shift calculation in Xsh.at
-          auto temp = Xsh.at((yElem.m() + rm + shift)/*%Xsh.m()*/, shXk * Xr.p() + p);
-          Xr.set(rm, rk, p, temp);
-        // }
-    }}}
-  }
-  
-  if (Fsh.layout() == fastKronOp_N) {
     #pragma unroll
     for (uint rq = 0; rq < Yr.q(); rq++) {
-      uint shFcol = yElem.q() + rq;
+      uint shFcol = yElem.q() + rq + lane / 4;
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
-        Fr.set(p, rq, Fsh.at(p, shFcol));
+        Fr.set(p, rq, Fsh.at(coreP + p + lane % 4, shFcol));
     }}
-  } else if (Fsh.layout() == fastKronOp_T) {
-    uint32_t qe = yElem.q();
-    #pragma unroll
-    for (uint rq = 0; rq < Yr.q(); rq++) {
-      uint32_t shFcol = qe + rq;
-      #pragma unroll
-      for (uint p = 0; p < Xr.p(); p++) {
-        if (true) {//Padding
-          Fr.set(p, rq, (&Fsh.at(0,0))[shFcol + p*(Fsh.q() + 1)]);
-        }
-    }}
-  }
 
-  slicedMMA(Xr, Fr, Yr);
+    asm volatile ("mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64 {%0,%1}, {%2}, {%3}, {%4,%5};\n" :
+                  "=d"(Yr.data[0]), "=d"(Yr.data[1]) : 
+                  "d"(Xr.data[0]), "d"(Fr.data[0]), "d"(Yr.data[0]), "d"(Yr.data[1]));
+  }
 }

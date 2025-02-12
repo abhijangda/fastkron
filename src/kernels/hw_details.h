@@ -15,7 +15,7 @@ enum SMArch {
   maxwell,
 };
 
-enum CoreType {
+enum FMAInstType {
   SIMT,
   Tensor884
 };
@@ -35,11 +35,11 @@ static inline std::string smArchToStr(SMArch arch) {
   return "";
 }
 
-static inline std::string coreTypeToStr(CoreType coreType) {
-  switch (coreType) {
-    case CoreType::SIMT:
+static inline std::string fmainstToStr(FMAInstType inst) {
+  switch (inst) {
+    case FMAInstType::SIMT:
       return "simt";
-    case CoreType::Tensor884:
+    case FMAInstType::Tensor884:
       return "tc884";
     default:
       return "";

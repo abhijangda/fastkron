@@ -312,6 +312,7 @@ void storeY(const uint32_t fac, const uint32_t batch,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
+      // if (params.kp_idx == 1) {assert(yReg.data[0] == 128); assert(yReg.data[1] == 128);}
       storeVectorY<OpY, StLen, TileQ,
              kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
              (FusedFacs>1), DistributeToGPUs,

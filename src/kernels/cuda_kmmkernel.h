@@ -8,13 +8,13 @@
 struct CUDAKMMKernel : public GPUKMMKernel {
   SMArch sm;
   CUDAKMMKernel() {}
-  CUDAKMMKernel(SMArch sm, CoreType coreType, void* kernelInvoker, FastKronType elemType,
+  CUDAKMMKernel(SMArch sm, FMAInstType fmaInst, void* kernelInvoker, FastKronType elemType,
                Factor f, Factor tileF, Matrix tileX, uint fusedFacs, bool P2PStore,
                uint regM, uint regK, uint regQ, uint optLevel,
                fastKronOp opX, fastKronOp opF, FastKronMMType mmType, KernelBatchType::Ty kernelBatchType,
                void*(*getKernel)(), uint NumThreads,
                uint alignX, uint alignF) :
-               GPUKMMKernel(coreType, kernelInvoker, elemType, f, tileF, tileX,
+               GPUKMMKernel(fmaInst, kernelInvoker, elemType, f, tileF, tileX,
                             fusedFacs, P2PStore, regM, regK, regQ,
                             optLevel, opX, opF, mmType, kernelBatchType, getKernel, 
                             NumThreads, alignX, alignF),
@@ -86,6 +86,6 @@ struct CUDAKMMKernel : public GPUKMMKernel {
    * arch() - Returns SM string.
    */
   virtual std::string arch() const {
-    return smArchToStr(sm) + "_" + coreTypeToStr(coreType) + "_";
+    return smArchToStr(sm) + "_" + fmainstToStr(fmaInst) + "_";
   }
 };

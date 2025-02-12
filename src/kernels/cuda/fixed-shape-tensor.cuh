@@ -89,9 +89,11 @@ public:
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N>
 class FixedShapeTensor2D : public AbstractFixedShapeTensor2D<Layout, T, M, N> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, M, N>;
+public:
+
   T data[M*N];
 
-public:
+// public:
   CUDA_DEVICE_HOST
   FixedShapeTensor2D() : Base() {}
 
@@ -158,7 +160,7 @@ public:
   const T& at(const T data[], uint32_t i, uint32_t j, uint32_t k) const {
     return data[(i*shape(1)+j)*shape(2) + k];
   }
-
+  
   CUDA_DEVICE_HOST
   void add(T data[], uint32_t i, uint32_t j, uint32_t k, T val) {
     set(data, i, j, k, at(data, i, j, k) + val);
@@ -177,6 +179,7 @@ public:
 
 template<fastKronOp Layout, typename T, uint32_t M, uint32_t N, uint32_t K>
 class FixedShapeTensor3D : public AbstractFixedShapeTensor3D<T, M, N, K> {
+  public: 
   T data[M*N*K];
   using Base = AbstractFixedShapeTensor3D<T, M, N, K>;
 
@@ -345,7 +348,7 @@ public:
           uint32_t shCol = startCol + i;
           uint32_t elem  = shCol%p();
           uint32_t slice = shCol/p();
-          uint32_t shift = slice/RegK;
+          uint32_t shift = 0;//slice/RegK;
           //TODO: Do we need shift when TileK/RegK < 32? I do not think
           col = slice*p() + (shift + elem)%p();
           // CUDA_DEVICE_ASSERT(row * n() + col < numel());
@@ -354,7 +357,7 @@ public:
           uint32_t shCol = startCol;
           uint32_t elem  = shCol%p();
           uint32_t slice = shCol/p();
-          uint32_t shift = slice/RegK;
+          uint32_t shift = 0;//slice/RegK;
           //TODO: Do we need shift when TileK/RegK < 32? I do not think
           col = slice*p() + (shift + elem)%p();
           // CUDA_DEVICE_ASSERT(row * n() + col < numel());

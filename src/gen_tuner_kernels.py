@@ -288,6 +288,8 @@ class GPUKMMKernel(Kernel):
     kalign = min(4, kalign)
     super().__init__(kmmtype, shape, problem, kron_rows, kron_cols, tileQ, tileP, tileM, FusedKernel, dist, elemType, opt_level, regM, cRegRows, cRegCols, allPowersOf2, opX, opF, kernelBatchType)
     self.num_threads = (tileM//regM) * ((shape.k//shape.p)//cRegRows) * (tileQ//cRegCols)
+    if core == "tensor884":
+      self.num_threads *= WARP_SIZE
     self.tileQ = tileQ
     self.tileP = tileP
     self.tileM = tileM
@@ -295,7 +297,7 @@ class GPUKMMKernel(Kernel):
     self.kalign = kalign
     self.backend = backend
     self.arch = arch
-    self.core = core
+    self.fmaInst = core
 
     assert backend in ["cuda", "hip"]
 
@@ -311,7 +313,7 @@ class GPUKMMKernel(Kernel):
     return self.num_threads
 
   def __repr__(self):
-    return f"{self.kmmtype}_{self.backend}_{self.arch}_{self.core}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
+    return f"{self.kmmtype}_{self.backend}_{self.arch}_{self.fmaInst}_{self.threads()}_{self.elemType[0]}_{self.shape.p}x{self.shape.q}_{self.tileP}x{self.tileQ}_{self.fused_kernels}_{self.tileM}x{self.shape.k}_{self.rm}x{self.rk}x{self.rq}_{self.opX}{self.opF}_{self.kernelBatchType}_{self.dist}_{self.opt_level}_{self.aalign}_{self.kalign}"
 
   # def kernelname(self):
   #   return f"{super().kernelname()}"
@@ -324,7 +326,7 @@ class GPUKMMKernel(Kernel):
 
   def templateDecl(self):
     #TODO: repr and this should be same
-    return f"{self.optimizedCUDAArch()}, {self.coreTypeStr(self.core)}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.mmType()}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
+    return f"{self.optimizedCUDAArch()}, {self.fmaInstTypeStr(self.fmaInst)}, {self.elemType}, {vec_type(self.elemType, 2)}, {vec_type(self.elemType, 4)}, {self.threads()}, {self.shape.q}, {self.shape.p}, {self.tileP}, {self.tileQ}, {self.shape.k}, {self.tileM}, {self.fused_kernels}, {self.dist}, {self.rm}, {self.rk}, {self.rq}, {self.opt_level}, {self.aalign}, {self.kalign}, fastKronOp_{self.opX}, fastKronOp_{self.opF}, {self.mmType()}, {self.kernelBatchTypeStr()}, KernelParams<{self.kmmProblemType()}>, FusedParams<{self.kmmProblemType()}>, {self.epilogueParamsType()}"
 
   def kernelDecl(self):
     return f"cudaKernel<{self.templateDecl()}>"
@@ -338,11 +340,11 @@ class GPUKMMKernel(Kernel):
     elif self.arch == "maxwell" or self.arch == "pascal":
       return "500"
   
-  def coreTypeStr(self, core):
+  def fmaInstTypeStr(self, core):
     if core == "simt":
-      return "CoreType::SIMT"
+      return "FMAInstType::SIMT"
     if core == "tensor884":
-      return "CoreType::Tensor884"
+      return "FMAInstType::Tensor884"
     
   def hostInvokeFile(self):
     return "\n".join(['#include "kernels/cuda/kernel.cuh"', "",
@@ -359,7 +361,7 @@ class GPUKMMKernel(Kernel):
   def kernelInfo(self):
     #TODO: should be same as tempelDecl, hostFuncDecl, and __repr__
     return f"{self.backend.upper()}KMMKernel{{"+\
-            self.arch+","+self.coreTypeStr(self.core)+","+self.constructorArgs() + ","+\
+            self.arch+","+self.fmaInstTypeStr(self.fmaInst)+","+self.constructorArgs() + ","+\
             f"get_{self.kernelname()}, {self.threads()}, " +\
             f"{self.aalign}, {self.kalign}" + "}"
 
@@ -379,12 +381,13 @@ class GPUKMMKernel(Kernel):
                 self.rq <= 32 and \
                 self.rm * self.rk * self.rq <= 64
            
-    if self.core == "simt":
+    if self.fmaInst == "simt":
       return baseValid and simtValid
     
-    if self.core == "tensor884" and self.elemType == "double":
+    if self.fmaInst == "tensor884" and self.elemType == "double":
       tcValid = self.rm in [1, 2, 4] and self.rk % 8 == 0 and self.rq % 8 == 0 and \
                 (self.rk * self.rq) // WARP_SIZE <= 64
+
       return baseValid and tcValid
 
 def all_sliced_mults(mmtype, m, k, n, opX, ps, qs):
@@ -421,7 +424,7 @@ class KernelTemplate:
     self.arch = next(parts)
     self.arch = self.arch.split('|')
     if self.backend.lower() == "cuda" or self.backend.lower() == "hip":
-      self.core = next(parts)
+      self.fmaInst = next(parts)
       self.num_threads = next(parts)
       if self.num_threads != "*":
         self.num_threads = int(self.num_threads)
@@ -650,8 +653,8 @@ def generate_kernel_decls(cases, mmTypes, opXs, opFs, types, useFusion, useDistK
                                       distKernels = [0, 1] if useDistKernels else [0]
                                       coretypes = ["simt"] if elem_type == "float" else ["simt", "tensor884"]
                                       for dist in distKernels:
-                                        for coretype in coretypes:
-                                          config = GPUKMMKernel(backend, arch, coretype, kmmtype, KronMatMulShape(m, tK, n, p, q),
+                                        for FMAInstType in coretypes:
+                                          config = GPUKMMKernel(backend, arch, FMAInstType, kmmtype, KronMatMulShape(m, tK, n, p, q),
                                                                 KronMatMulShape(m, k, n, ps, qs),
                                                                 p, q, tQ, tP, tM, regM, regRows, regCols,
                                                                 numFusedKerns, dist, elem_type, opt_level, new_aalign, 1 if (opt_level <= 1) else kronalign, allSameShapes,

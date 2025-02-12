@@ -298,6 +298,20 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
     Logger(LogLevel::Debug) << "Error invoking kernel " << kernelInfo.str() << " : "<< 
                                 cudaGetErrorString(status) << std::endl;
 
+  if (false) {
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    double* h = new double[problem.y().numel()];
+    std::cout << "305 " << problem.y().numel() << std::endl;
+    CUDA_CHECK(cudaMemcpy(h, problem.y().data(), problem.y().numel()*sizeof(double), cudaMemcpyDeviceToHost));
+
+    for (uint32_t i = 0; i < 128 /*problem.y().numel()*/; i++) {
+      if (h[i] != 128.0f) {
+        printf("309 %d %lf\n",i , h[i]);
+        // break;
+      }
+    }
+  }
   return (status == cudaSuccess) ? fastKronSuccess : fastKronInvalidArgument;
 }
 

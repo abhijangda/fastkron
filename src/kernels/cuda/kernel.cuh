@@ -26,18 +26,32 @@ CUDA_DEVICE uint32_t getTileQ(uint bid_x, uint QByTileQ) {
   return bid_x%QByTileQ;
 }
 
+template<FMAInstType FMAInst>
 CUDA_DEVICE
 YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, uint32_t QThreads,
-                const uint32_t MaxP,
-                const uint32_t TileM, const uint32_t kTileK, const uint32_t TileQ,
-                  const uint32_t RegM,  const uint32_t RegK,   const uint32_t RegQ) {
+               const uint32_t MaxP,
+               const uint32_t TileM, const uint32_t kTileK, const uint32_t TileQ,
+               const uint32_t RegM,  const uint32_t RegK,   const uint32_t RegQ) {
   if (OpY == fastKronOp_N) {
     const uint MThreads  = (TileM == 1) ? NumThreads : (TileQ/RegQ) * ((kTileK/MaxP)/RegK);
-    const uint yQ   = ((tid % MThreads) / QThreads) * RegQ;
-    const uint yK   = ((tid % MThreads) % QThreads) * RegK;
     const uint yM   = (MThreads >= NumThreads) ? 0 : ((tid / MThreads) * RegM);
-  
-    return YElem(yM, yQ, yK);
+    const uint wid = tid/CUDA_WARP_SIZE;
+    const uint QWarps = 2;//QThreads/CUDA_WARP_SIZE;
+
+    if (FMAInst == FMAInstType::Tensor884) {
+      
+      const uint yQ   = (wid / QWarps) * RegQ; //wid / 2 * 8 = 0,0,0,0 ... ,
+      const uint yK   = (wid % QWarps) * RegK; //wid % 2 * 8 = 0,0,..,8,8,...,
+      return YElem(yM, yQ, yK);
+
+    } else {
+      const uint wQ   = (wid / QWarps) * 8;
+      const uint wK   = (wid % QWarps) * 8;
+      const uint yQ   = ((tid % CUDA_WARP_SIZE) / 4) * RegQ; //tid / 4 * 1 = 0,0,0,..,1,1,1,2,2,2
+      const uint yK   = ((tid % CUDA_WARP_SIZE) % 4) * RegK; //(tid % 4) * 2 = 0,2,4,..8,
+    
+      return YElem(yM, wQ + yQ, wK + yK);
+    }
   } else if (OpY == fastKronOp_T) {
     QThreads = QThreads * (TileM/RegM);
     const uint KThreads  = TileM/RegM;
@@ -50,7 +64,7 @@ YElem getYElem(const uint32_t tid, fastKronOp OpY, const uint32_t NumThreads, ui
   return YElem(0,0,0);
 }
 
-template<uint SMArch, CoreType Core, typename ElemT, typename Vec2T, typename Vec4T,
+template<uint SMArch, FMAInstType FMAInst, typename ElemT, typename Vec2T, typename Vec4T,
          uint NumThreads,
          uint MaxQ, uint MaxP, uint TileP, uint TileQ, uint kTileK,
          uint TileM, uint FusedFacs, bool DistributeToGPUs,
@@ -145,7 +159,7 @@ __global__ void cudaKernel(KernelParams params,
   const uint tileQ = getTileQ(bid_x, QByTileQ);
   const uint tileK = getTileK(bid_x, QByTileQ);
 
-  const YElem yElem = getYElem(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
+  const YElem yElem = getYElem<FMAInst>(tid, OpY, NumThreads, QThreads, MaxP, TileM, kTileK, TileQ, RegM, RegK, RegQ);
   const uint tileM = bid_y * TileM;
 
   if ((tileM >= X.m()) || 
@@ -168,7 +182,11 @@ __global__ void cudaKernel(KernelParams params,
   XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 
-  register YRegisters<fastKronOp_N, ElemT, RegM, RegK, RegQ> yReg; //Layout is not used in CUDA
+  constexpr uint32_t CoreK = (FMAInst == FMAInstType::Tensor884) ? 8 : 1;
+  constexpr uint32_t CoreQ = (FMAInst == FMAInstType::Tensor884) ? 8 : 1;
+  constexpr uint32_t CoreP = (FMAInst == FMAInstType::Tensor884) ? 4 : TileP;
+
+  register YRegisters<fastKronOp_N, ElemT, RegM, 2, 1> yReg; //RegK/CoreK, RegQ/CoreQ> yReg; //Layout is not used in CUDA
 
   for (uint32_t tileP = 0; tileP < P; tileP += TileP) {
     //Loop iterates only once when FusedFacs == 1
@@ -191,10 +209,14 @@ __global__ void cudaKernel(KernelParams params,
            (kQMultipleOfTileQ || yElem.q() < MIN(TileQ, Q - tileQ * TileQ)) &&
            (kMMultipleOfTileM || yElem.m() < XTile.m()))
           ) {
-        /*register*/ XRegisters<fastKronOp_N, ElemT, TileM, RegK, TileP> Xr; //Layout is not used in CUDA
-        /*register*/ FRegisters<ElemT, TileP, RegQ> Fr;
+        for (int coreP = 0; coreP < TileP; coreP += CoreP) {
+          /*register*/ XRegisters<fastKronOp_N, ElemT, TileM, RegK/CoreK, 1> Xr; //Layout is not used in CUDA
+          /*register*/ FRegisters<ElemT, 1, RegQ/CoreQ> Fr;
 
-        mainMMA(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem);
+          mainMMA<FMAInst>(XTile.m(), Xsh, Fsh, yReg, Xr, Fr, yElem, coreP);
+          // if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0)
+          //   printf("216 %d: %lf %lf %lf %lf;\n", params.kp_idx, Xsh.at(0,0), Xsh.at(0,1), Xsh.at(0,2), yReg.data[0]);
+        }
       }
 
       if (FusedFacs > 1 && fac > 0) {
@@ -214,8 +236,21 @@ __global__ void cudaKernel(KernelParams params,
       __syncthreads();
   }}
 
-  storeY<OpY, RegM, RegK, RegQ, TileQ,
+  __shared__ double transpose[64 * 2];
+
+  double* warpTr = &transpose[(tid/CUDA_WARP_SIZE)*2*CUDA_WARP_SIZE];
+  uint32_t lane = (tid % CUDA_WARP_SIZE);
+  ((double2*)warpTr)[lane] = double2{yReg.data[0], yReg.data[1]};
+
+  __syncthreads();
+
+  YElem yElem2 = getYElem<FMAInstType::SIMT>(tid, OpY, NumThreads, XshSlices/2, MaxP, TileM, kTileK, TileQ, RegM, 2, 1);
+
+  yReg.data[0] = warpTr[lane/4 + (lane%4) * 16];
+  yReg.data[1] = warpTr[lane/4 + (lane%4) * 16 + 8];
+
+  storeY<OpY, RegM, 2, 1, TileQ,
          kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ, FusedFacs, DistributeToGPUs, XAlignment,
-         ElemT> (0, batch, XshSlices, XSlices, tileM, tileK, tileQ, P, Q, XTile, Xsh, Y, yElem, yReg,
+         ElemT> (0, batch, XshSlices, XSlices, tileM, tileK, tileQ, P, Q, XTile, Xsh, Y, yElem2, yReg,
                  params, fusedParams, distParams, epilogueParams, batchedData);
 }
