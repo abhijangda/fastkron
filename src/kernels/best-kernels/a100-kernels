@@ -54,7 +54,7 @@ mkm_cuda_ampere_128_d_128x128_32x64_1_1x16384_1x2x32_N*_*_*_*
 mkm_cuda_ampere_128_d_128x128_32x64_1_1x4096_1x2x8_N*_*_*_*
 mkm_cuda_ampere_128_d_128x128_128x16_1_1x2048_1x1x2_N*_*_*_*
 
-mkm_cuda_ampere_128_d_128x128_16x128_1_4x2048_1x4x16_T*_*_*_*
+mkm_cuda_ampere_128_d_128x128_16x128_1_4x2048_2x2x16_T*_*_*_*
 
 mkm_cuda_ampere_128_d_64x64_64x64_1_1x256_1x1x2_N*_*_*_*
 mkm_cuda_ampere_128_d_64x64_32x64_1_1x2048_1x2x8_N*_*_*_*
