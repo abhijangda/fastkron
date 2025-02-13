@@ -324,8 +324,8 @@ public:
 
 template<fastKronOp Layout, typename T, bool kXshSlicesSame,
          uint32_t kM, uint32_t kSlices, uint32_t kP>
-class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP> {
-  using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * kP>;
+class ShiftShared : public AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * (kP + 1)> {
+  using Base = AbstractFixedShapeTensor2D<Layout, T, kM, kSlices * (kP+1)>;
   T* data;
   uint32_t ShTileK;
 
@@ -345,9 +345,9 @@ public:
           uint32_t shCol = startCol + i;
           uint32_t elem  = shCol%p();
           uint32_t slice = shCol/p();
-          uint32_t shift = slice/RegK;
+          uint32_t shift = 0;//slice/RegK;
           //TODO: Do we need shift when TileK/RegK < 32? I do not think
-          col = slice*p() + (shift + elem)%p();
+          col = slice*(p()+1) + elem;//(shift + elem)%p();
           // CUDA_DEVICE_ASSERT(row * n() + col < numel());
           row = startRow;
         } else {
@@ -356,7 +356,7 @@ public:
           uint32_t slice = shCol/p();
           uint32_t shift = slice/RegK;
           //TODO: Do we need shift when TileK/RegK < 32? I do not think
-          col = slice*p() + (shift + elem)%p();
+          col = slice*p() + (elem)%p();
           // CUDA_DEVICE_ASSERT(row * n() + col < numel());
           row = startRow + i;
         }
@@ -404,7 +404,7 @@ public:
   }
 
   CUDA_DEVICE_HOST
-  uint32_t numel() const {return m() * n();}
+  uint32_t numel() const {return m() * n() + slices();}
 
   CUDA_DEVICE_HOST
   uint32_t slices() const {return (kXshSlicesSame) ? kSlices : ShTileK/kP;}
@@ -412,7 +412,7 @@ public:
   CUDA_DEVICE_HOST
   uint32_t m() const {return kM;}
   CUDA_DEVICE_HOST
-  uint32_t n() const {return slices() * p();}
+  uint32_t n() const {return slices()*p();}
   CUDA_DEVICE_HOST
   uint32_t p() const {return kP;}
 };

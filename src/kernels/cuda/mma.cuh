@@ -26,13 +26,13 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
       #pragma unroll
       for (uint rk = 0; rk < Xr.k(); rk++) {
         uint shXk = yElem.k() + rk;
-        uint shift = (yElem.k() / Yr.k());
+        uint shift = 0;//(yElem.k() / Yr.k());
 
         #pragma unroll
         for (uint p = 0; p < Xr.p(); p++) {
           //TODO: bring shift calculation in Xsh.at
           //TODO: use the actual type not float
-          auto temp = Xsh.at(yElem.m() + rm, shXk * Xr.p() + (p + shift)%Xr.p());
+          auto temp = Xsh.at(yElem.m() + rm, shXk * (Xr.p()+1) + (p + shift)%Xr.p());
           Xr.set(rm, rk, p, temp);
         // }
     }}}
@@ -47,7 +47,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
         #pragma unroll
         for (uint rm = 0; rm < Yr.m(); rm++) {
           //TODO: bring shift calculation in Xsh.at
-          auto temp = Xsh.at((yElem.m() + rm + shift)/*%Xsh.m()*/, shXk * Xr.p() + p);
+          auto temp = Xsh.at((yElem.m() + rm + shift)/*%Xsh.m()*/, shXk * (Xr.p()+1) + p);
           Xr.set(rm, rk, p, temp);
         // }
     }}}

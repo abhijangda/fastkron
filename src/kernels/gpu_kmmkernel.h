@@ -98,7 +98,8 @@ public:
   size_t getSharedMemSize(KMMProblem problem) const {
     //TODO: Shouldn't this be MIN? because getTotalTileSize < getMaxTotalTileSize
     return MAX(getTotalTileSize(problem), getMaxTotalTileSize()) + 
-      ((mmType == FastKronMMType::KMM) ? tileF.p() * sizeOfFastKronType(elemType) : 0);
+      ((mmType == FastKronMMType::KMM) ? tileF.p() * sizeOfFastKronType(elemType) : 0) +
+      ((mmType == FastKronMMType::MKM) ? (tileX.n()/f.p()) * sizeOfFastKronType(elemType) : 0);
   }
   size_t getSharedMemSize(KMMProblemStridedBatched problem) const {
     return getSharedMemSize(problem.batchProblem(0));
