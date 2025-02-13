@@ -98,7 +98,7 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
 
     #pragma unroll
     for (uint rq = 0; rq < Yr.q(); rq++) {
-      uint shFcol = yElem.q() + rq + lane / 4;
+      uint shFcol = yElem.q() + rq*8/*CoreQ*/ + lane / 4;
       #pragma unroll
       for (uint p = 0; p < Xr.p(); p++) {
         Fr.set(p, rq, Fsh.at(coreP + p + lane % 4, shFcol));
@@ -113,8 +113,8 @@ void mainMMA(uint32_t m, XShared& Xsh, FShared& Fsh, YReg& Yr, XReg& Xr, FReg& F
     #pragma unroll
     for (uint p = 0; p < Xr.p(); p++) {
       asm volatile ("mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64 {%0,%1}, {%2}, {%3}, {%4,%5};\n" :
-                    "=d"(Yr.data[i]), "=d"(Yr.data[i+1]) : 
-                    "d"(Xr.data[i/2]), "d"(Fr.data[j]), "d"(Yr.data[i]), "d"(Yr.data[i+1]));
+                    "=d"(Yr.data[j*Yr.k() + i]), "=d"(Yr.data[j*Yr.k() + i+1]) : 
+                    "d"(Xr.data[i/2]), "d"(Fr.data[j]), "d"(Yr.data[j*Yr.k() +i]), "d"(Yr.data[j*Yr.k() + i+1]));
     }
   }
 }

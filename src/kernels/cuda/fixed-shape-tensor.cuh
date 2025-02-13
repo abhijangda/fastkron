@@ -455,8 +455,8 @@ public:
   CUDA_DEVICE_HOST
   constexpr uint32_t p() {return P;}
 };
-
 template<typename T, uint32_t TileP, uint32_t RegQ>
+
 class FRegisters : public FixedShapeTensor2D<fastKronOp_N, T, TileP, RegQ>{
   public:
     CUDA_DEVICE_HOST

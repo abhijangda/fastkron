@@ -247,10 +247,10 @@ void storeVectorY(const bool isLastFactor, const uint32_t fac, const uint32_t ba
     glK = fusedYColumn(fusedParams, fac, Y, Xsh, tileK, P, Q, shK);
   } else {
     //Scale element location from within tile to global
-    glK = (yElem.q()   + rq)  * //The index of elems by one column in TileK
+    glK = (yElem.q()   + rq%2)  * //The index of elems by one column in TileK
             XSlices            + //Scale the index to global column
             tileK * XshSlices  + //Index of XshSlices elems produced by a tileK 
-            yElem.k()    + rk%2;   //The element index within consecutive elems
+            yElem.k()    + rk%2 /* CoreK*CoreQ/CUDA_WARP_SIZE*/;   //The element index within consecutive elems
     if (TileQ < Q) {
       glK += tileQ * XSlices * TileQ;
   }}
@@ -312,6 +312,7 @@ void storeY(const uint32_t fac, const uint32_t batch,
     for (uint tq = 0; tq < RegQ; tq++) {
     #pragma unroll
     for (uint tk = 0; tk < RegK; tk += StLen) {
+      YElem yElem2 = YElem(yElem.m(), yElem.q() + tq * 8, yElem.k() + tk/2 * 8 /*CoreK?*/);
       storeVectorY<OpY, StLen, TileQ,
              kMMultipleOfTileM, kKMultipleOfTileK, kQMultipleOfTileQ,
              (FusedFacs>1), DistributeToGPUs,
@@ -320,9 +321,8 @@ void storeY(const uint32_t fac, const uint32_t batch,
          fac, batch,
          rm, tq, tk, XshSlices, XSlices,
          tileM, tileK, tileQ, P, Q,
-         XTile, Xsh, Y, yElem, yReg,
+         XTile, Xsh, Y, yElem2, yReg,
          fusedParams, distParams, epilogueParams, batchedData);
-         yElem = YElem(yElem.m(), yElem.q(), yElem.k() + 8);
     }}}
   } else if (OpY == fastKronOp_T) {
     #pragma unroll
