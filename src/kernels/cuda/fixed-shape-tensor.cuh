@@ -237,9 +237,9 @@ public:
 template<fastKronOp Layout, typename T, uint32_t TileP, uint32_t TileQ>
 class DirectShared : public AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ> {
   using Base = AbstractFixedShapeTensor2D<Layout, T, TileP, TileQ>;
+public:
   T* data;
 
-public:
   CUDA_DEVICE_HOST
   DirectShared(T* data) : data(data) {}
 
@@ -267,7 +267,7 @@ public:
       } else {
         #pragma unroll
         for (uint ve = 0; ve < num; ve++) {
-          uint32_t idx = (row + ve) * Base::shape(1) + col;
+          uint32_t idx = col * Base::shape(0) + row + ve;
           Base::set(data, idx, elems[ve]);
         }
       }

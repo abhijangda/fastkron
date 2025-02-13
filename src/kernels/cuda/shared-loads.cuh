@@ -110,8 +110,8 @@ void directFgToFsh(const uint NumThreads, const uint tid,
   if (Fsh.layout() == fastKronOp_N && (opF == fastKronOp_T || !loadFullFactor)) {
     //MKM
     //Create Fsh.p() thread groups and each group loads 0 to Fsh.q() elements
-    const uint Vecs     = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen;
-    const uint ThGroups = MAX(1, NumThreads/Vecs);
+    const uint Vecs     = ((opF == fastKronOp_N) ? Fsh.q() : Fsh.p())/VecTLen; //8
+    const uint ThGroups = MAX(1, NumThreads/Vecs); //16
     for (uint swid = tid/Vecs; swid < ((opF == fastKronOp_N) ? Fsh.p() : Fsh.q()); swid += ThGroups) {
       for (uint elem = tid%Vecs; elem < Vecs; elem += NumThreads/ThGroups) {
         ElemT regs[VecTLen] = {0};
