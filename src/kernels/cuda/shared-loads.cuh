@@ -132,7 +132,7 @@ void directFgToFsh(const uint NumThreads, const uint tid,
               (kQMultipleOfTileQ || row < F.q()))
             ldGlobalVec(F.data<ElemT>(tileP + col, row, opF), regs, VecTLen);
           
-          Fsh.store(elem * VecTLen, swid, VecTLen, regs, fastKronOp_T);
+          Fsh.store(elem * VecTLen, swid, VecTLen, regs, fastKronOp_N);
         }
 
         //This condition avoids generating this loop giving better performance

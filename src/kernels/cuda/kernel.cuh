@@ -164,7 +164,8 @@ __global__ void cudaKernel(KernelParams params,
   //If X or F are Op_T then transpose then in shared memory
   using XShared = ShiftShared<OpY, ElemT, kXshSlicesSame, 
                               TileM, kTileK/MaxP, TileP>;
-  using FShared = DirectShared<OpY, ElemT, TileP, TileQ>;
+  const fastKronOp OpFsh = (OpY == fastKronOp_N) ? OpF : OpY;
+  using FShared = DirectShared<OpFsh, ElemT, TileP, TileQ>;
   XShared Xsh(&sharedStorage[0], kTileK/MaxP * TileP);
   FShared Fsh(&sharedStorage[Xsh.numel()]);
 

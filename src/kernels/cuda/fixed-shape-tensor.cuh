@@ -265,11 +265,11 @@ public:
           Base::set(data, idx, elems[ve]);
         }
       } else {
-        #pragma unroll
-        for (uint ve = 0; ve < num; ve++) {
-          uint32_t idx = col * Base::shape(0) + row + ve;
-          Base::set(data, idx, elems[ve]);
-        }
+        // #pragma unroll
+        // for (uint ve = 0; ve < num; ve++) {
+          // uint32_t idx = col * Base::shape(0) + row + ve;
+          // Base::set(data, idx, elems[ve]);
+        // }
       }
     } else {
       //CUDA KMM
