@@ -99,10 +99,9 @@ void transposeCache(const Matrix& /*X*/, const Factor& F, uint32_t tileP, uint32
         uint32_t k = 0;
         for (; k < XTile.cols; k += F.p() * VecTLen) {
           const bool UseAVXTrans =
-              VecTLen > 1 &&
+              VecTLen >= 1 &&
               ((kKMultipleOfTileK && kTileKMultipleOfSlices)   || XTile.cols >= VecTLen * F.p() + k) &&
               ((kMMultipleOfTileM && XTile.m() % VecTLen == 0) || XTile.m() >= VecTLen + m);
-
           if (UseAVXTrans) {
             X86VecT slices[VecTLen];
             for (uint32_t s = 0; s < VecTLen; s++) {
@@ -148,6 +147,7 @@ void transposeCache(const Matrix& /*X*/, const Factor& F, uint32_t tileP, uint32
                 (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
               val = alpha * val;
             }
+            printf("131 %f %f\n", val, *ptr);
             Xch.at(m, k/F.p(), p) = val;
           }
         }
