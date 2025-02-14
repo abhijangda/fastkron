@@ -147,7 +147,6 @@ void transposeCache(const Matrix& /*X*/, const Factor& F, uint32_t tileP, uint32
                 (EpilogueKindVal & EpilogueKind::Alpha) == EpilogueKind::Alpha) {
               val = alpha * val;
             }
-            printf("131 %f %f\n", val, *ptr);
             Xch.at(m, k/F.p(), p) = val;
           }
         }
