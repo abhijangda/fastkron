@@ -248,8 +248,7 @@ set(SOURCES
     ${SRC}/kernel_db/kernel_db.cpp
     ${SRC}/kmm/kmmalgo.cpp
     ${SRC}/kmm/matrix.cpp
-    ${SRC}/kernels/kmmkernel.cpp
-    ${SRC}/utils/utils.cpp)
+    ${SRC}/kernels/kmmkernel.cpp)
 
 if (ENABLE_CUDA AND ENABLE_MULTI_GPU)
   set(SOURCES ${SOURCES} ${SRC}/handle/distrib_handle.cu)
