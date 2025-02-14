@@ -84,12 +84,18 @@ public:
     return g.x*g.y*g.z;
   }
 
+  size_t getSharedMemPaddingSize() const {
+    return ((mmType == FastKronMMType::KMM) ? tileF.p() * sizeOfFastKronType(elemType) : 0) +
+           ((mmType == FastKronMMType::MKM && opF == fastKronOp_T) ?
+            tileF.p() * sizeOfFastKronType(elemType) : 0);
+  }
+
   /**
    * getMaxSharedMemSize() - Returns the maximum shared memory size of the kernel.
    *                         Effectively this is the maximum total tile size
    */
   size_t getMaxSharedMemSize() const {
-    return getMaxTotalTileSize();
+    return getMaxTotalTileSize() + getSharedMemPaddingSize();
   }
 
   /**
@@ -97,10 +103,7 @@ public:
    */
   size_t getSharedMemSize(KMMProblem problem) const {
     //TODO: Shouldn't this be MIN? because getTotalTileSize < getMaxTotalTileSize
-    return MAX(getTotalTileSize(problem), getMaxTotalTileSize()) + 
-      ((mmType == FastKronMMType::KMM) ? tileF.p() * sizeOfFastKronType(elemType) : 0) +
-      ((mmType == FastKronMMType::MKM && problem.opFs() == fastKronOp_T) ?
-        tileF.p() * sizeOfFastKronType(elemType) : 0);
+    return MAX(getTotalTileSize(problem) + getSharedMemPaddingSize(), getMaxTotalTileSize());
   }
   size_t getSharedMemSize(KMMProblemStridedBatched problem) const {
     return getSharedMemSize(problem.batchProblem(0));

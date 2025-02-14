@@ -280,11 +280,11 @@ fastKronError invoke(CUDAKMMKernel& kernelInfo, KMMProblemT problem,
     typedef void (*KronMatmulKernelTy)(KernelParams<KMMProblemT>&, FusedParams<KMMProblemT>&, 
                                       DistributedParams&, EpilogueParams&, 
                                       dim3, dim3, uint32_t, cudaStream_t);
-    
+  
     dim3 subGrid = dim3(MIN(grid.x - grid_x, MaxGridX),
                         MIN(grid.y - grid_y, MaxGridY),
                         MIN(grid.z - grid_z, MaxGridZ));
-    
+
     KronMatmulKernelTy(kernelInfo.kernelInvoker)(params, fusedParams, distParams, 
                                                 epilogueParams, 
                                                 subGrid,
