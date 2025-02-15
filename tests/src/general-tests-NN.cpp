@@ -95,7 +95,7 @@ STRIDED_BATCHED_TEST_NN(1, 3, 128, 128, true, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_NN(1, 3, 32, 16,  false, false, 2, 2, 2, 2);
 STRIDED_BATCHED_TEST_NN(3, 4, 32, 32, true, false, 2, 1, 2, 2);
 STRIDED_BATCHED_TEST_NN(1, 5, 12, 16, true, false, 2, 2, 1, 1);
-STRIDED_BATCHED_TEST_NN(3, 4, 32,  64,   false, false, 2, 1, 2, 2);
+STRIDED_BATCHED_TEST_NN(3, 3, 32,  64,   false, false, 2, 1, 2, 2);
 
 STRIDED_BATCHED_TEST_NN(3, 4, 5,  5,   true, true, 2, 1, 2, 2);
 

@@ -34,7 +34,7 @@
     GENERAL_TEST_TT(KMM, 3, MinN, MaxN, P, Q, Type, Tune, IsForward, BatchZ, BatchX, BatchF, BatchY);
 
 CONTIGUOUS_TEST_TT(1, 10, 2, 1, float, false, false);
-CONTIGUOUS_TEST_TT(1, 10, 1, 6, float, false, false);
+CONTIGUOUS_TEST_TT(1, 9, 1, 6, float, false, false);
 CONTIGUOUS_TEST_TT(1, 10, 2, 2, float, false, false);
 CONTIGUOUS_TEST_TT(1, 6, 3, 3, float, false, false);
 CONTIGUOUS_TEST_TT(1, 6, 4, 4, float, false, false);

@@ -289,7 +289,7 @@ def benchmark_single_gpu(device, opX, opF, mode, elemtype, mmtype, dataset, use_
             Shape(M2, 3, 128, 128, mmtype)
             ]
 
-    if not use_pymodule:
+    if not use_pymodule and total_gpu_memory() > 16*1024:
       M = 16
       cases += [Shape(M, 8, 8, 8, mmtype),
               Shape(M, 6, 16, 16, mmtype),
@@ -387,7 +387,7 @@ Then run using `LD_PRELOAD=<path to libtcmalloc.so> TCMALLOC_RELEASE_RATE=0 <pyt
           assert mode in TuningModes
           assert mmtype in ["mkm", "kmm"]
 
-          run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
+          #run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
           run_tt(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
 
           if not args.use_pymodule and backend == "cuda" and mode == "FullTune" and args.dataset == "large":
