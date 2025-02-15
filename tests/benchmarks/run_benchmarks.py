@@ -387,7 +387,7 @@ Then run using `LD_PRELOAD=<path to libtcmalloc.so> TCMALLOC_RELEASE_RATE=0 <pyt
           assert mode in TuningModes
           assert mmtype in ["mkm", "kmm"]
 
-          #run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
+          run_nn(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
           run_tt(backend, mode, elemtype, mmtype, args.dataset, args.use_pymodule)
 
           if not args.use_pymodule and backend == "cuda" and mode == "FullTune" and args.dataset == "large":

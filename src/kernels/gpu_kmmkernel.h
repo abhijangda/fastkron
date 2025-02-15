@@ -103,7 +103,7 @@ public:
    */
   size_t getSharedMemSize(KMMProblem problem) const {
     //TODO: Shouldn't this be MIN? because getTotalTileSize < getMaxTotalTileSize
-    return MAX(getTotalTileSize(problem) + getSharedMemPaddingSize(), getMaxTotalTileSize());
+    return MAX(getTotalTileSize(problem) + getSharedMemPaddingSize(), getMaxSharedMemSize());
   }
   size_t getSharedMemSize(KMMProblemStridedBatched problem) const {
     return getSharedMemSize(problem.batchProblem(0));
