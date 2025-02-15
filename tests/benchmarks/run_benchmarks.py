@@ -359,7 +359,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('-backends'    , required=True, type=str, nargs="+")
   parser.add_argument('-types'       , required=True, type=str, nargs="+")
-  parser.add_argument("-tune-modes"  , required=False, default=["NoTune"], type=str, nargs="+")
+  parser.add_argument("-tune-modes"  , required=False, default=["FastTune"], type=str, nargs="+")
   parser.add_argument("-dataset"     , required=True, type=str)
   parser.add_argument("-mmtype"      , required=True, type=str, nargs="+")
   parser.add_argument("-use-pymodule", required=False, action='store_true', default=False)
